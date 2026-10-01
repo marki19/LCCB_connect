@@ -1,0 +1,4 @@
+﻿[
+  { "id": "c1", "author": "Juan dela Cruz", "initials": "JC", "avatarColor": "#BBF7D0", "text": "This is really impressive! How long did it take to build?", "time": "1h ago" },
+  { "id": "c2", "author": "Angela Reyes",   "initials": "AR", "avatarColor": "#DDD6FE", "text": "Great work! Can you share the GitHub repo?",               "time": "3h ago" }
+]

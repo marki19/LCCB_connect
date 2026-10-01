@@ -1,0 +1,7 @@
+﻿[
+  { "id": "n1", "type": "like",    "userId": "u2", "text": "liked your capstone project.",               "time": "1h", "unread": true,  "section": "Today"              },
+  { "id": "n2", "type": "comment", "userId": "u4", "text": "commented: This is super helpful!",           "time": "3h", "unread": true,  "section": "Today"              },
+  { "id": "n3", "type": "follow",  "userId": "u5", "text": "started following your work.",               "time": "2d", "unread": false, "section": "Earlier this week"  },
+  { "id": "n4", "type": "like",    "userId": "u3", "text": "liked your website portfolio.",              "time": "3d", "unread": false, "section": "Earlier this week"  },
+  { "id": "n5", "type": "like",    "userId": "u6", "text": "liked your website portfolio.",              "time": "3d", "unread": false, "section": "Earlier this week"  }
+]

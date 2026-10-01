@@ -1,0 +1,8 @@
+﻿[
+  { "id": "u1", "name": "Mark Antipo",        "initials": "MA", "avatarColor": "#BFDBFE", "course": "BSIT", "yearLevel": "3rd Year" },
+  { "id": "u2", "name": "Juan dela Cruz",      "initials": "JC", "avatarColor": "#BBF7D0", "course": "BSCS", "yearLevel": "3rd Year" },
+  { "id": "u3", "name": "Angela Reyes",        "initials": "AR", "avatarColor": "#DDD6FE", "course": "BSIS", "yearLevel": "4th Year" },
+  { "id": "u4", "name": "Carlo Mendoza",       "initials": "CM", "avatarColor": "#FED7AA", "course": "BSIT", "yearLevel": "3rd Year" },
+  { "id": "u5", "name": "Trisha Villanueva",   "initials": "TV", "avatarColor": "#FBCFE8", "course": "BSCS", "yearLevel": "4th Year" },
+  { "id": "u6", "name": "Rafael Buenaventura", "initials": "RB", "avatarColor": "#A5F3FC", "course": "BSIS", "yearLevel": "2nd Year" }
+]
