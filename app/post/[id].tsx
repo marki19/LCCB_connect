@@ -1,17 +1,21 @@
-﻿import { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Linking, TextInput } from "react-native";
+import { useState, useEffect } from "react";
+import { View, Text, ScrollView, TouchableOpacity, Linking, TextInput, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming } from "react-native-reanimated";
 import { ArrowLeft, Heart, MessageCircle, Share2, ExternalLink, Send, Tag, Calendar } from "lucide-react-native";
 import { PROTOTYPE_POSTS } from "../../src/data/prototype";
 import rawComments from "../../src/data/mock/comments.json";
+import { supabase } from "../../src/lib/supabase";
+import { useAuth } from "../../src/contexts/AuthContext";
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   website:  { label: "Website",  bg: "#DBEAFE", text: "#1D4ED8" },
   thesis:   { label: "Thesis",   bg: "#EDE9FE", text: "#6D28D9" },
   capstone: { label: "Capstone", bg: "#D1FAE5", text: "#047857" },
   project:  { label: "Project",  bg: "#FEF3C7", text: "#B45309" },
+  text:     { label: "Update",   bg: "#F1F5F9", text: "#475569" },
+  image:    { label: "Image",    bg: "#FCE7F3", text: "#BE185D" },
 };
 
 type Comment = { id: string; author: string; initials: string; avatarColor: string; text: string; time: string };
@@ -19,16 +23,88 @@ type Comment = { id: string; author: string; initials: string; avatarColor: stri
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { profile } = useAuth();
 
-  const post = PROTOTYPE_POSTS.find((p) => p.id === id);
+  const [post, setPost] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [liked, setLiked] = useState(post?.isLiked ?? false);
-  const [likeCount, setLikeCount] = useState(post?.likes ?? 0);
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
   const [commentText, setCommentText] = useState("");
-  const [comments, setComments] = useState<Comment[]>(rawComments as Comment[]);
+  const [comments, setComments] = useState<any[]>([]);
 
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  useEffect(() => {
+    const fetchDetails = async () => {
+      // Fetch post
+      const { data: postData } = await supabase
+        .from('posts')
+        .select('*, author:profiles(*)')
+        .eq('id', id)
+        .single();
+      
+      if (postData) {
+        const authorName = postData.author?.full_name || "Unknown User";
+        setPost({
+          id: postData.id,
+          author: {
+            id: postData.author_id,
+            name: authorName,
+            initials: authorName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase(),
+            avatarColor: "#BFDBFE",
+            course: postData.author?.course || "—",
+            yearLevel: postData.author?.year_level || "—",
+          },
+          title: postData.title,
+          description: postData.description,
+          type: postData.type,
+          tags: postData.tags || [],
+          previewUrl: postData.preview_url,
+          imageUrl: postData.image_url,
+          likes: postData.likes || 0,
+          comments: postData.comments || 0,
+          createdAt: new Date(postData.created_at).toLocaleDateString(),
+          isLiked: false, // We'd need to check the likes table
+        });
+        setLikeCount(postData.likes || 0);
+      }
+
+      // Fetch comments
+      const { data: commentsData } = await supabase
+        .from('comments')
+        .select('*, user:profiles(*)')
+        .eq('post_id', id)
+        .order('created_at', { ascending: false });
+
+      if (commentsData) {
+        setComments(commentsData.map(c => {
+          const cName = c.user?.full_name || "Unknown User";
+          return {
+            id: c.id,
+            author: cName,
+            initials: cName.substring(0, 2).toUpperCase(),
+            avatarColor: "#E2E8F0",
+            text: c.content,
+            time: new Date(c.created_at).toLocaleDateString()
+          };
+        }));
+      }
+
+      setLoading(false);
+    };
+
+    if (id) fetchDetails();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F7FF", alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: "#64748B" }}>Loading post...</Text>
+      </SafeAreaView>
+    );
+  }
 
   if (!post) {
     return (
@@ -41,19 +117,45 @@ export default function PostDetailScreen() {
     );
   }
 
-  const typeConfig = TYPE_CONFIG[post.type];
+  const typeConfig = TYPE_CONFIG[post.type] || TYPE_CONFIG['text'];
 
-  const handleLike = () => {
+  const handleLike = async () => {
+    if (!profile?.id) return;
     scale.value = withSequence(withTiming(1.4, { duration: 110 }), withTiming(0.85, { duration: 80 }), withTiming(1, { duration: 110 }));
     const newLiked = !liked;
     setLiked(newLiked);
     setLikeCount(newLiked ? likeCount + 1 : likeCount - 1);
+
+    if (newLiked) {
+      await supabase.from('likes').insert({ post_id: post.id, user_id: profile.id });
+    } else {
+      await supabase.from('likes').delete().match({ post_id: post.id, user_id: profile.id });
+    }
   };
 
-  const handleComment = () => {
-    if (!commentText.trim()) return;
-    setComments([{ id: String(Date.now()), author: "Mark Antipo", initials: "MA", avatarColor: "#BFDBFE", text: commentText.trim(), time: "Just now" }, ...comments]);
+  const handleComment = async () => {
+    if (!commentText.trim() || !profile?.id) return;
+    
+    const text = commentText.trim();
     setCommentText("");
+    
+    // Optimistic UI update
+    const newComment = { 
+      id: String(Date.now()), 
+      author: profile.full_name || "You", 
+      initials: (profile.full_name || "You").substring(0, 2).toUpperCase(), 
+      avatarColor: "#BFDBFE", 
+      text: text, 
+      time: "Just now" 
+    };
+    setComments([newComment, ...comments]);
+
+    // Save to DB
+    await supabase.from('comments').insert({
+      post_id: post.id,
+      user_id: profile.id,
+      content: text
+    });
   };
 
   return (
@@ -90,9 +192,19 @@ export default function PostDetailScreen() {
           <Text style={{ fontSize: 20, fontWeight: "800", color: "#1E293B", paddingHorizontal: 16, marginBottom: 10, lineHeight: 28 }}>{post.title}</Text>
           <Text style={{ fontSize: 14, color: "#475569", paddingHorizontal: 16, marginBottom: 16, lineHeight: 22 }}>{post.description}</Text>
 
+          {post.imageUrl ? (
+            <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+              <Image 
+                source={{ uri: post.imageUrl }} 
+                style={{ width: "100%", height: 250, borderRadius: 14, backgroundColor: "#F1F5F9" }}
+                resizeMode="cover"
+              />
+            </View>
+          ) : null}
+
           <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, marginBottom: 16, gap: 6, alignItems: "center" }}>
             <Tag size={14} color="#94A3B8" />
-            {post.tags.map((tag) => (
+            {(post.tags || []).map((tag) => (
               <View key={tag} style={{ backgroundColor: "#F1F5F9", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0" }}>
                 <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "500" }}>#{tag}</Text>
               </View>

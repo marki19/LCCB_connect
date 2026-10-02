@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // src/data/prototype.ts
 //
 // This file owns the TypeScript types and assembles the prototype data from
@@ -31,6 +31,7 @@ export type Post = {
   description: string;
   type:        PostType;
   previewUrl?: string;
+  imageUrl?:   string;
   tags:        string[];
   likes:       number;
   comments:    number;

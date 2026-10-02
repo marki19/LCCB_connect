@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, Linking } from "react-native";
+import { View, Text, TouchableOpacity, Linking, Image } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -9,12 +9,16 @@ import Animated, {
 import { Heart, MessageCircle, Share2, ExternalLink } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../data/prototype";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../contexts/AuthContext";
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   website:  { label: "Website",  bg: "#DBEAFE", text: "#1D4ED8" },
   thesis:   { label: "Thesis",   bg: "#EDE9FE", text: "#6D28D9" },
   capstone: { label: "Capstone", bg: "#D1FAE5", text: "#047857" },
   project:  { label: "Project",  bg: "#FEF3C7", text: "#B45309" },
+  text:     { label: "Update",   bg: "#F1F5F9", text: "#475569" },
+  image:    { label: "Image",    bg: "#FCE7F3", text: "#BE185D" },
 };
 
 export default function PostCard({ post }: { post: Post }) {
@@ -27,18 +31,30 @@ export default function PostCard({ post }: { post: Post }) {
     transform: [{ scale: scale.value }],
   }));
 
-  const handleLike = () => {
+  const { profile } = useAuth();
+
+  const handleLike = async () => {
+    if (!profile?.id) return;
+
     scale.value = withSequence(
       withTiming(1.35, { duration: 110 }),
       withTiming(0.88, { duration: 80 }),
       withTiming(1, { duration: 110 })
     );
+
     const newLiked = !liked;
     setLiked(newLiked);
     setLikeCount(newLiked ? likeCount + 1 : likeCount - 1);
+
+    // Save to database
+    if (newLiked) {
+      await supabase.from('likes').insert({ post_id: post.id, user_id: profile.id });
+    } else {
+      await supabase.from('likes').delete().match({ post_id: post.id, user_id: profile.id });
+    }
   };
 
-  const typeConfig = TYPE_CONFIG[post.type];
+  const typeConfig = TYPE_CONFIG[post.type] || TYPE_CONFIG['text'];
 
   return (
     <TouchableOpacity
@@ -77,12 +93,22 @@ export default function PostCard({ post }: { post: Post }) {
         <Text numberOfLines={2} style={{ fontSize: 13, color: "#64748B", lineHeight: 20 }}>{post.description}</Text>
       </View>
 
+      {post.imageUrl ? (
+        <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
+          <Image 
+            source={{ uri: post.imageUrl }} 
+            style={{ width: "100%", height: 200, borderRadius: 12, backgroundColor: "#F1F5F9" }}
+            resizeMode="cover"
+          />
+        </View>
+      ) : null}
+
       {/* Type badge + tags */}
       <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 14, paddingBottom: 12, gap: 6 }}>
         <View style={{ backgroundColor: typeConfig.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
           <Text style={{ fontSize: 11, fontWeight: "700", color: typeConfig.text }}>{typeConfig.label}</Text>
         </View>
-        {post.tags.map((tag) => (
+        {(post.tags || []).map((tag) => (
           <View key={tag} style={{ backgroundColor: "#F1F5F9", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
             <Text style={{ fontSize: 11, color: "#64748B" }}>#{tag}</Text>
           </View>

@@ -1,11 +1,11 @@
-﻿import { Tabs, useRouter } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { Home, Search, Plus, Bell, User } from "lucide-react-native";
+import { Home, Search, Plus, Bell, User, BookOpen } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const TAB_ITEMS = [
   { name: "index", label: "Home", Icon: Home, isAction: false },
-  { name: "search", label: "Search", Icon: Search, isAction: false },
+  { name: "search", label: "Repository", Icon: BookOpen, isAction: false },
   { name: "create", label: "Create", Icon: Plus, isAction: true },
   { name: "notifications", label: "Notifications", Icon: Bell, isAction: false },
   { name: "profile", label: "Profile", Icon: User, isAction: false },

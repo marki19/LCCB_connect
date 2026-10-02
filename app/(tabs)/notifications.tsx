@@ -1,8 +1,8 @@
-﻿import { View, Text, SectionList, TouchableOpacity } from "react-native";
+import { View, Text, SectionList, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Heart, MessageCircle, UserPlus, CheckCheck } from "lucide-react-native";
-import { PROTOTYPE_USERS } from "../src/data/prototype";
-import rawNotifications from "../src/data/mock/notifications.json";
+import { PROTOTYPE_USERS } from "../../src/data/prototype";
+import rawNotifications from "../../src/data/mock/notifications.json";
 
 type RawNotif = { id: string; type: string; userId: string; text: string; time: string; unread: boolean; section: string };
 

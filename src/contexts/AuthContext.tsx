@@ -1,4 +1,4 @@
-﻿import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -11,16 +11,21 @@ export type Profile = {
   course: string | null;
   year_level: string | null;
   role: string | null;
+  skills: string[] | null;
 };
 
-type AuthContextType = { signInAsGuest: () => void; 
+type AuthContextType = { 
+  signInAsGuest: () => void; 
+  signOut: () => Promise<void>;
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   initialized: boolean;
 };
 
-const AuthContext = createContext<AuthContextType>({ signInAsGuest: () => {}, 
+const AuthContext = createContext<AuthContextType>({ 
+  signInAsGuest: () => {}, 
+  signOut: async () => {},
   session: null,
   user: null,
   profile: null,
@@ -33,10 +38,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [initialized, setInitialized] = useState(false);
 
-    const signInAsGuest = () => {
+  const signInAsGuest = () => {
     setSession({ access_token: "guest", refresh_token: "guest", expires_in: 9999, token_type: "bearer", user: { id: "guest", app_metadata: {}, user_metadata: {}, aud: "authenticated", created_at: "" } });
-    setProfile({ id: "guest", username: "guest", full_name: "Guest User (Prototype)", avatar_url: null, bio: "Exploring the prototype.", course: "BSIT", year_level: "3rd Year", role: "student" });
+    setProfile({ id: "guest", username: "guest", full_name: "Guest User", avatar_url: null, bio: "Exploring as a guest.", course: null, year_level: null, role: "guest" });
     setInitialized(true);
+  };
+
+  const signOut = async () => {
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    await supabase.auth.signOut();
   };
 
   const fetchProfile = async (userId: string) => {
@@ -77,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, initialized, signInAsGuest }}>
+    <AuthContext.Provider value={{ session, user, profile, initialized, signInAsGuest, signOut }}>
       {children}
     </AuthContext.Provider>
   );

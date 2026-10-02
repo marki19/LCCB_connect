@@ -1,232 +1,261 @@
-﻿import { View, Text, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Dimensions, ScrollView } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions, ScrollView } from "react-native";
 import { useState, useEffect } from "react";
 import { supabase } from "../../src/lib/supabase";
 import { Link, useRouter } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
-import { Mail, Lock, User, Check, ArrowRight } from "lucide-react-native";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import { Eye, EyeOff, AlertCircle, ChevronDown, CheckCircle2 } from "lucide-react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
 export default function RegisterScreen() {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isWeb, setIsWeb] = useState(false);
   const [role, setRole] = useState("student"); 
+  const [agreed, setAgreed] = useState(false);
+
+  // Validation States
+  const [nameError, setNameError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
+  const [generalError, setGeneralError] = useState("");
+
+  const isValidEmailDomain = email.trim().toLowerCase().endsWith("@lccb.edu.ph");
+  const showEmailFormatError = email.length > 0 && !isValidEmailDomain && role !== "industry_partner";
 
   useEffect(() => {
-    const handleResize = () => setIsWeb(Dimensions.get("window").width > 850);
+    const handleResize = () => setIsWeb(Dimensions.get("window").width > 768);
     handleResize(); 
     const subscription = Dimensions.addEventListener("change", handleResize);
     return () => subscription?.remove();
   }, []);
 
+  // Clear errors when typing
+  useEffect(() => {
+    if (fullName) setNameError("");
+    if (email) setEmailError("");
+    if (password) setPasswordError("");
+    if (confirmPassword) setConfirmError("");
+    setGeneralError("");
+  }, [fullName, email, password, confirmPassword]);
+
   async function signUpWithEmail() {
-    if (!fullName || !email || !password) {
-      Alert.alert("Required", "Please fill in all fields");
-      return;
+    let hasError = false;
+    
+    if (!fullName.trim()) {
+      setNameError("Full Name is required");
+      hasError = true;
     }
-    if (!email.includes("@lccb.edu.ph") && role !== "industry_partner") {
-      Alert.alert("Invalid Email", "Please use your LCCB institutional email.");
-      return;
+    
+    if (!email.trim()) {
+      setEmailError("Email is required");
+      hasError = true;
+    } else if (!isValidEmailDomain && role !== "industry_partner") {
+      setEmailError("Must be an @lccb.edu.ph address");
+      hasError = true;
     }
+    
+    if (!password) {
+      setPasswordError("Password is required");
+      hasError = true;
+    } else if (password.length < 6) {
+      setPasswordError("Password must be at least 6 characters");
+      hasError = true;
+    }
+
+    if (password !== confirmPassword) {
+      setConfirmError("Passwords do not match");
+      hasError = true;
+    }
+
+    if (!agreed) {
+      setGeneralError("Please agree to the Terms & Conditions");
+      hasError = true;
+    }
+
+    if (hasError) return;
+
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: email.trim().toLowerCase(),
       password,
-      options: { data: { full_name: fullName, role: role } },
+      options: { data: { full_name: fullName.trim(), role: role } },
     });
+    
     if (error) {
-      Alert.alert("Registration Error", error.message);
+      setGeneralError(error.message);
     } else {
+      // Fallback: manually insert profile in case Postgres trigger isn't set up yet
       if (data.user) {
-        await supabase.from('profiles').insert({
+        await supabase.from('profiles').upsert({
           id: data.user.id,
-          full_name: fullName,
+          email: email.trim().toLowerCase(),
+          full_name: fullName.trim(),
           role: role,
-        });
+        }, { onConflict: 'id' });
       }
-      Alert.alert("Success", "Account created! You can now log in.");
-      router.back();
+      router.replace("/(auth)/login");
     }
     setLoading(false);
   }
 
-  const LeftPanelContent = () => (
-    <View className="flex-1 justify-between p-12">
-      <View>
-        <Animated.View entering={FadeInDown.duration(600).springify()} className="flex-row items-center mb-16">
-          <View className="w-8 h-8 rounded-lg bg-white/20 items-center justify-center mr-3">
-             <Text className="text-white font-bold text-xl">L</Text>
-          </View>
-          <Text className="text-white font-bold text-xl tracking-widest">LCCB CONNECT</Text>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(100).duration(600).springify()} className="bg-white/20 self-start px-4 py-2 rounded-full mb-6 flex-row items-center">
-          <Text className="text-white font-medium mr-2">Join Us to Build</Text>
-          <Text>🚀</Text>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(200).duration(600).springify()}>
-          <Text className="text-5xl font-bold text-white mb-4">Start your Journey</Text>
-          <Text className="text-blue-100 text-lg">Follow these simple steps to set up your account and start connecting.</Text>
-        </Animated.View>
-      </View>
-
-      <Animated.View entering={FadeInUp.delay(400).duration(800).springify()} className="flex-row space-x-4 mt-12 w-full">
-        <View className="flex-1 bg-white p-5 rounded-3xl shadow-xl shadow-blue-900/20">
-          <View className="w-8 h-8 rounded-full bg-blue-600 items-center justify-center mb-4">
-            <Text className="text-white font-bold">1</Text>
-          </View>
-          <Text className="font-bold text-slate-800">Register account</Text>
-        </View>
-        
-        <View className="flex-1 bg-white/10 border border-white/20 p-5 rounded-3xl">
-          <View className="w-8 h-8 rounded-full bg-white/20 items-center justify-center mb-4">
-            <Text className="text-white font-bold">2</Text>
-          </View>
-          <Text className="font-medium text-white/70">Setup profile</Text>
-        </View>
-
-        <View className="flex-1 bg-white/10 border border-white/20 p-5 rounded-3xl">
-          <View className="w-8 h-8 rounded-full bg-white/20 items-center justify-center mb-4">
-            <Text className="text-white font-bold">3</Text>
-          </View>
-          <Text className="font-medium text-white/70">Verify identity</Text>
-        </View>
-      </Animated.View>
-    </View>
-  );
-
-  const FormContent = () => (
-    <View className="flex-1 justify-center px-8 sm:px-12 w-full max-w-lg mx-auto py-10">
-      <Animated.View entering={FadeInDown.duration(600).springify()} className="mb-10 items-center">
-        <View className="w-16 h-16 bg-blue-50 rounded-2xl items-center justify-center mb-6">
-          <User color="#1D4ED8" size={32} />
-        </View>
-        <Text className="text-3xl font-black text-slate-900 tracking-tight">Create Account</Text>
-        <Text className="text-slate-500 font-medium mt-2">Join the LCCB Connect community</Text>
-      </Animated.View>
-
-      <Animated.View entering={FadeInDown.delay(200).duration(600).springify()} className="space-y-4">
-        <View>
-          <Text className="text-sm font-bold text-slate-700 mb-2 ml-1">Full Name</Text>
-          <View className="flex-row items-center bg-[#F8FAFC] border border-slate-200 rounded-2xl px-5 py-4 focus:border-blue-500">
-            <User color="#94A3B8" size={20} className="mr-3" />
-            <TextInput
-              className="flex-1 text-slate-900 text-base font-medium outline-none"
-              placeholder="Juan Dela Cruz"
-              placeholderTextColor="#94A3B8"
-              value={fullName}
-              onChangeText={setFullName}
-            />
-          </View>
-        </View>
-
-        <View>
-          <Text className="text-sm font-bold text-slate-700 mb-2 ml-1">Institutional Email</Text>
-          <View className="flex-row items-center bg-[#F8FAFC] border border-slate-200 rounded-2xl px-5 py-4 focus:border-blue-500">
-            <Mail color="#94A3B8" size={20} className="mr-3" />
-            <TextInput
-              className="flex-1 text-slate-900 text-base font-medium outline-none"
-              placeholder="student@lccb.edu.ph"
-              placeholderTextColor="#94A3B8"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-            {email.includes("@lccb.edu.ph") && <Check color="#10B981" size={20} />}
-          </View>
-        </View>
-
-        <View>
-          <Text className="text-sm font-bold text-slate-700 mb-2 ml-1">Password</Text>
-          <View className="flex-row items-center bg-[#F8FAFC] border border-slate-200 rounded-2xl px-5 py-4 focus:border-blue-500">
-            <Lock color="#94A3B8" size={20} className="mr-3" />
-            <TextInput
-              className="flex-1 text-slate-900 text-base font-medium outline-none"
-              placeholder="••••••••••••"
-              placeholderTextColor="#94A3B8"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
-          <Text className="text-xs text-slate-400 mt-2 ml-1">Must be at least 6 characters.</Text>
-        </View>
-
-        <TouchableOpacity 
-          className={`w-full py-4 rounded-2xl flex-row justify-center items-center mt-6 shadow-md ${loading ? 'bg-[#3B82F6]/70' : 'bg-[#1D4ED8]'}`}
-          onPress={signUpWithEmail}
-          disabled={loading}
-          activeOpacity={0.8}
-        >
-          <Text className="text-white font-bold text-lg mr-2">
-            {loading ? "Creating Account..." : "Create Account"}
-          </Text>
-          {!loading && <ArrowRight color="#FFFFFF" size={20} />}
-        </TouchableOpacity>
-        
-        <View className="flex-row justify-center mt-6">
-          <Text className="text-slate-500 font-medium">Already have an account? </Text>
-          <Link href="/(auth)/login" asChild>
-            <TouchableOpacity>
-              <Text className="text-[#1D4ED8] font-bold">Log in</Text>
-            </TouchableOpacity>
-          </Link>
-        </View>
-      </Animated.View>
-    </View>
-  );
-
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 bg-[#1A1A1A]">
-      {isWeb ? (
-        <View className="flex-1 justify-center items-center p-8 bg-[#F1F5F9]">
-          <View className="flex-row w-full max-w-[1100px] h-full max-h-[750px] bg-white rounded-[32px] shadow-2xl p-2 overflow-hidden">
-            <LinearGradient
-              colors={['#1D4ED8', '#1E3A8A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              className="flex-[1.1] rounded-[24px] overflow-hidden shadow-lg shadow-blue-500/20"
-            >
-              <LeftPanelContent />
-            </LinearGradient>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 bg-[#F1F5F9]">
+      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} showsVerticalScrollIndicator={false}>
+        <View className={isWeb ? "flex-1 justify-center items-center p-8" : "flex-1 bg-white pt-10"}>
+          <View className={isWeb ? "w-full max-w-[450px] bg-white rounded-[32px] shadow-2xl overflow-hidden py-4" : "w-full flex-1"}>
             
-            <View className="flex-1 justify-center bg-white rounded-r-[24px]">
-              <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} showsVerticalScrollIndicator={false}>
-                <FormContent />
-              </ScrollView>
+            <View className="w-full max-w-md mx-auto py-8 px-6 sm:px-10">
+              
+              {/* Header */}
+              <Animated.View entering={FadeInDown.duration(600).springify()} className="flex-row items-center mb-8">
+                <Link href="/(auth)/login" asChild>
+                  <TouchableOpacity className="mr-4">
+                    <Text className="text-slate-800 text-2xl font-light">←</Text>
+                  </TouchableOpacity>
+                </Link>
+                <Text className="text-slate-900 text-2xl font-medium tracking-tight">Create Account</Text>
+              </Animated.View>
+
+              <Animated.View entering={FadeInDown.delay(100).duration(600).springify()} className="space-y-5">
+                
+                {generalError ? (
+                  <View className="bg-red-50 rounded-2xl p-4 flex-row items-center mb-2">
+                    <AlertCircle color="#EF4444" size={20} />
+                    <Text className="text-red-600 font-medium ml-3 flex-1">{generalError}</Text>
+                  </View>
+                ) : null}
+
+                {/* Full Name */}
+                <View>
+                  <Text className="text-slate-800 font-semibold mb-2 ml-1">Full Name</Text>
+                  <View className={`bg-[#F4F6F8] rounded-full px-5 py-4 flex-row items-center border ${nameError ? 'border-red-400' : 'border-transparent focus:border-blue-500'} transition-colors`}>
+                    <TextInput
+                      className="flex-1 text-slate-900 text-base font-medium outline-none"
+                      placeholder="Juan Dela Cruz"
+                      placeholderTextColor="#94A3B8"
+                      value={fullName}
+                      onChangeText={setFullName}
+                    />
+                  </View>
+                  {nameError ? (
+                    <View className="flex-row items-center mt-2 ml-2">
+                      <AlertCircle color="#F97316" size={14} />
+                      <Text className="text-orange-500 text-xs ml-1 font-medium">{nameError}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Email */}
+                <View>
+                  <Text className="text-slate-800 font-semibold mb-2 ml-1">Institutional Email</Text>
+                  <View className={`bg-[#F4F6F8] rounded-full px-5 py-4 flex-row items-center border ${(emailError || showEmailFormatError) ? 'border-red-400' : 'border-transparent focus:border-blue-500'} transition-colors`}>
+                    <TextInput
+                      className="flex-1 text-slate-900 text-base font-medium outline-none"
+                      placeholder="student@lccb.edu.ph"
+                      placeholderTextColor="#94A3B8"
+                      value={email}
+                      onChangeText={setEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                    />
+                  </View>
+                  {(emailError || showEmailFormatError) && (
+                    <View className="flex-row items-center mt-2 ml-2">
+                      <AlertCircle color="#F97316" size={14} />
+                      <Text className="text-orange-500 text-xs ml-1 font-medium">{emailError || "Please use your professional email address"}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Role Selection (Simplified mock up like reference) */}
+                <View>
+                  <Text className="text-slate-800 font-semibold mb-2 ml-1">Role</Text>
+                  <View className="bg-white rounded-full px-5 py-4 flex-row items-center border border-[#1D4ED8]">
+                    <Text className="flex-1 text-slate-900 text-base font-medium">Student</Text>
+                    <ChevronDown color="#1D4ED8" size={20} />
+                  </View>
+                </View>
+
+                {/* Password */}
+                <View>
+                  <Text className="text-slate-800 font-semibold mb-2 ml-1">Password</Text>
+                  <View className={`bg-[#F4F6F8] rounded-full px-5 py-4 flex-row items-center border ${passwordError ? 'border-red-400' : 'border-transparent focus:border-blue-500'} transition-colors`}>
+                    <TextInput
+                      className="flex-1 text-slate-900 text-base font-medium outline-none pr-2"
+                      placeholder="••••••••••••"
+                      placeholderTextColor="#94A3B8"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="p-1">
+                      {showPassword ? <EyeOff color="#94A3B8" size={20} /> : <Eye color="#94A3B8" size={20} />}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Confirm Password */}
+                <View>
+                  <Text className="text-slate-800 font-semibold mb-2 ml-1">Confirm Password</Text>
+                  <View className={`bg-[#F4F6F8] rounded-full px-5 py-4 flex-row items-center border ${confirmError ? 'border-red-400' : 'border-transparent focus:border-blue-500'} transition-colors`}>
+                    <TextInput
+                      className="flex-1 text-slate-900 text-base font-medium outline-none pr-2"
+                      placeholder="••••••••••••"
+                      placeholderTextColor="#94A3B8"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      secureTextEntry={!showPassword}
+                    />
+                  </View>
+                  {confirmError && (
+                    <View className="flex-row items-center mt-2 ml-2">
+                      <AlertCircle color="#F97316" size={14} />
+                      <Text className="text-orange-500 text-xs ml-1 font-medium">{confirmError}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Terms Agreement */}
+                <TouchableOpacity 
+                  className="flex-row items-center mt-4 mb-2" 
+                  onPress={() => setAgreed(!agreed)}
+                  activeOpacity={0.7}
+                >
+                  {agreed ? (
+                    <CheckCircle2 color="#1D4ED8" size={20} />
+                  ) : (
+                    <View className="w-5 h-5 rounded-full border border-slate-300 bg-[#F4F6F8]" />
+                  )}
+                  <Text className="ml-3 text-slate-600 text-sm">
+                    I agree to the <Text className="text-[#1D4ED8] font-medium">Terms & Conditions</Text> and <Text className="text-[#1D4ED8] font-medium">Privacy Policy</Text>
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Submit Button */}
+                <View className="mt-6 mb-8">
+                  <TouchableOpacity 
+                    className={`w-full py-4 rounded-full flex-row justify-center items-center shadow-lg ${loading ? 'bg-blue-400' : 'bg-[#1D4ED8] shadow-blue-600/30'}`}
+                    onPress={signUpWithEmail}
+                    disabled={loading}
+                    activeOpacity={0.8}
+                  >
+                    <Text className="text-white font-semibold text-lg">
+                      {loading ? "Creating Account..." : "Create Account"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+              </Animated.View>
             </View>
+
           </View>
         </View>
-      ) : (
-        <View className="flex-1 bg-white">
-          <LinearGradient
-            colors={['#1D4ED8', '#1E3A8A']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            className="h-[45%] w-full justify-end px-8 pb-16 absolute top-0"
-          >
-            <Animated.View entering={FadeInDown.duration(600).springify()}>
-              <View className="bg-white/20 self-start px-3 py-1.5 rounded-full mb-4 flex-row items-center">
-                <Text className="text-white font-medium text-xs mr-2">Join Us to Build</Text>
-                <Text className="text-xs">🚀</Text>
-              </View>
-              <Text className="text-4xl font-black text-white mb-2">Start your Journey</Text>
-              <Text className="text-blue-100 font-medium text-base">Set up your account and start connecting.</Text>
-            </Animated.View>
-          </LinearGradient>
-          
-          <View className="flex-1 mt-[60%] bg-white rounded-t-[40px] overflow-hidden shadow-2xl pt-2">
-            <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
-              <FormContent />
-            </ScrollView>
-          </View>
-        </View>
-      )}
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }

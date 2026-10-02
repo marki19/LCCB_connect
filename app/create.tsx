@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -6,6 +6,8 @@ import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, ChevronRight, C
 import Animated, { FadeIn, FadeInRight, FadeOutLeft } from "react-native-reanimated";
 import { useAuth } from "../src/contexts/AuthContext";
 import { PROTOTYPE_POSTS, PROTOTYPE_USERS } from "../src/data/prototype";
+import { supabase } from "../src/lib/supabase";
+import { uploadToStorage, pickImage } from "../src/lib/upload";
 
 type PostType = "text" | "image" | "project" | "capstone" | null;
 
@@ -16,11 +18,12 @@ export default function CreatePostModal() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [postType, setPostType] = useState<PostType>(null);
   
-  // Form State
   const [content, setContent] = useState("");
   const [title, setTitle] = useState("");
   const [technologies, setTechnologies] = useState("");
   const [githubUrl, setGithubUrl] = useState("");
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const handleNext = () => {
     if (step === 1 && !postType) return Alert.alert("Select Type", "Please choose a post type.");
@@ -31,33 +34,38 @@ export default function CreatePostModal() {
     setStep((s) => (s + 1) as 1 | 2 | 3);
   };
 
-  const handlePublish = () => {
-    // In a real app, this would insert into Supabase `posts`
-    // For the prototype, we can just push to the local mock array (in-memory)
-    const newPost = {
-      id: `mock-new-${Date.now()}`,
-      author: {
-        id: profile?.id || "guest",
-        name: profile?.full_name || "Guest User",
-        initials: (profile?.full_name || "GU").substring(0, 2).toUpperCase(),
-        avatarColor: "#BFDBFE",
-        course: profile?.course || "—",
-        yearLevel: profile?.year_level || "—",
-      },
-      content: postType === "text" ? content : `${title}\n\n${content}`,
-      timestamp: "Just now",
-      likes: 0,
-      comments: 0,
-      type: postType,
-      projectDetails: postType === "project" ? { technologies: technologies.split(","), githubUrl } : undefined,
-    };
-    
-    // Add to prototype data (only persists in memory until restart)
-    PROTOTYPE_POSTS.unshift(newPost as any);
-    
-    Alert.alert("Success", "Your post has been published!", [
-      { text: "OK", onPress: () => router.back() }
-    ]);
+  const handlePublish = async () => {
+    if (!profile?.id) return;
+    setIsPublishing(true);
+
+    try {
+      let finalImageUrl = null;
+      if (imageUri) {
+        const path = `posts/${profile.id}-${Date.now()}.jpg`;
+        // Assuming uploadToStorage is imported from '../src/lib/upload'
+        finalImageUrl = await uploadToStorage(imageUri, 'assets', path, 'image/jpeg');
+      }
+
+      const { error } = await supabase.from('posts').insert({
+        author_id: profile.id,
+        title: title || (postType === "text" ? "Update" : "New Post"),
+        description: content,
+        type: postType || "text",
+        tags: technologies ? technologies.split(",").map((t) => t.trim()) : [],
+        preview_url: githubUrl || null,
+        image_url: finalImageUrl,
+      });
+
+      if (error) throw error;
+
+      Alert.alert("Success", "Your post has been published!", [
+        { text: "OK", onPress: () => router.back() }
+      ]);
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   const TypeOption = ({ type, label, icon: Icon, desc }: { type: PostType, label: string, icon: any, desc: string }) => {
@@ -123,6 +131,31 @@ export default function CreatePostModal() {
                 </View>
               )}
               
+              {postType === "image" && (
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#334155", marginBottom: 8 }}>Upload Photo</Text>
+                  <TouchableOpacity 
+                    onPress={async () => {
+                      const file = await pickImage();
+                      if (file) setImageUri(file.uri);
+                    }}
+                    style={{ backgroundColor: "#F8FAFC", height: 160, borderRadius: 12, borderWidth: 2, borderColor: "#E2E8F0", borderStyle: "dashed", alignItems: "center", justifyContent: "center", overflow: "hidden" }}
+                  >
+                    {imageUri ? (
+                      <View style={{ width: '100%', height: '100%' }}>
+                        <Text style={{ position: 'absolute', zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', color: 'white', padding: 4, bottom: 0, width: '100%', textAlign: 'center' }}>Tap to change</Text>
+                        <Animated.Image source={{ uri: imageUri }} style={{ width: '100%', height: '100%' }} />
+                      </View>
+                    ) : (
+                      <>
+                        <ImageIcon size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
+                        <Text style={{ fontSize: 14, color: "#64748B", fontWeight: "600" }}>Tap to browse</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+              
               <View>
                 <Text style={{ fontSize: 14, fontWeight: "700", color: "#334155", marginBottom: 8 }}>{postType === "text" ? "What's on your mind?" : "Description"}</Text>
                 <TextInput 
@@ -179,11 +212,12 @@ export default function CreatePostModal() {
         <View style={{ padding: 20, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
           <TouchableOpacity 
             onPress={step === 3 ? handlePublish : handleNext}
-            style={{ backgroundColor: "#1D4ED8", padding: 16, borderRadius: 16, flexDirection: "row", justifyContent: "center", alignItems: "center" }}
+            disabled={isPublishing}
+            style={{ backgroundColor: isPublishing ? "#94A3B8" : "#1D4ED8", padding: 16, borderRadius: 16, flexDirection: "row", justifyContent: "center", alignItems: "center" }}
             activeOpacity={0.8}
           >
             <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700", marginRight: 8 }}>
-              {step === 3 ? "Publish Post" : "Continue"}
+              {isPublishing ? "Publishing..." : (step === 3 ? "Publish Post" : "Continue")}
             </Text>
             {step !== 3 && <ChevronRight size={20} color="#FFFFFF" />}
           </TouchableOpacity>
