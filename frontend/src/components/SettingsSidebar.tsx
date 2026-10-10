@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, Animated, Dimensions, ScrollView, TouchableWithoutFeedback } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X, UserCircle, Shield, Lock, Palette, BellRing, School, Flag, LogOut, ChevronRight } from "lucide-react-native";
@@ -39,11 +39,11 @@ export default function SettingsSidebar({ visible, onClose }: Props) {
   
   // Safe fallback if profile is missing
   const currentUser = profile || {
-    full_name: "Guest User",
-    username: "guest",
+    full_name: "Mark Antipo",
+    username: "mark_antipo",
     avatar_url: null,
-    course: "—",
-    year_level: "—"
+    course: "BSIT",
+    year_level: "3rd Year"
   };
 
   const getInitials = (name: string | null) => {
