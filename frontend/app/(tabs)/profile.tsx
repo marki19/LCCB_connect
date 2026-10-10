@@ -14,13 +14,13 @@ export default function ProfileScreen() {
   const router = useRouter();
   
   const currentUser = profile || {
-    id: "guest",
-    full_name: "Guest User",
-    username: "guest",
+    id: "u1",
+    full_name: "Mark Antipo",
+    username: "mark_antipo",
     avatar_url: null,
-    course: "—",
-    year_level: "—",
-    bio: "Passionate about UI/UX design and mobile development."
+    course: "BSIT",
+    year_level: "3rd Year",
+    bio: "Full stack developer & capstone project lead."
   };
 
   const getInitials = (name: string | null) => {
