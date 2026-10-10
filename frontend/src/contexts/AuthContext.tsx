@@ -39,8 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [initialized, setInitialized] = useState(false);
 
   const signInAsGuest = () => {
-    setSession({ access_token: "guest", refresh_token: "guest", expires_in: 9999, token_type: "bearer", user: { id: "guest", app_metadata: {}, user_metadata: {}, aud: "authenticated", created_at: "" } });
-    setProfile({ id: "guest", username: "guest", full_name: "Guest User", avatar_url: null, bio: "Exploring as a guest.", course: null, year_level: null, role: "guest" });
+    setSession({ access_token: "guest", refresh_token: "guest", expires_in: 9999, token_type: "bearer", user: { id: "u1", app_metadata: {}, user_metadata: {}, aud: "authenticated", created_at: "" } });
+    setProfile({ id: "u1", username: "mark_antipo", full_name: "Mark Antipo", avatar_url: null, bio: "Full stack developer & capstone project lead.", course: "BSIT", year_level: "3rd Year", role: "student", skills: ["React Native", "PostgreSQL", "Node.js"] });
     setInitialized(true);
   };
 
