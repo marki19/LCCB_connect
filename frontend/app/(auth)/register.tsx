@@ -189,7 +189,7 @@ export default function RegisterScreen() {
               </TouchableOpacity>
 
               {/* Footer Link */}
-              <View style={{ flexDirection: 'row', justifyItems: 'center', justifyContent: 'center', marginTop: 24 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 24 }}>
                 <Text style={{ color: '#64748B', fontWeight: '500', fontSize: 14 }}>Already have an account? </Text>
                 <Link href="/(auth)/login" asChild>
                   <TouchableOpacity>

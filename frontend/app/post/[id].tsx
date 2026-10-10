@@ -204,7 +204,7 @@ export default function PostDetailScreen() {
 
           <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, marginBottom: 16, gap: 6, alignItems: "center" }}>
             <Tag size={14} color="#94A3B8" />
-            {(post.tags || []).map((tag) => (
+            {(post.tags || []).map((tag: string) => (
               <View key={tag} style={{ backgroundColor: "#F1F5F9", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0" }}>
                 <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "500" }}>#{tag}</Text>
               </View>

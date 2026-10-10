@@ -18,9 +18,10 @@ export default function ProfileScreen() {
     full_name: "Mark Antipo",
     username: "mark_antipo",
     avatar_url: null,
+    bio: "Full stack developer & capstone project lead.",
     course: "BSIT",
     year_level: "3rd Year",
-    bio: "Full stack developer & capstone project lead."
+    skills: ["React Native", "PostgreSQL", "Node.js"],
   };
 
   const getInitials = (name: string | null) => {
