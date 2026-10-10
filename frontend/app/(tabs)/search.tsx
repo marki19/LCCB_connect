@@ -15,29 +15,60 @@ export default function SearchScreen() {
 
   const fetchTheses = async () => {
     setLoading(true);
-    let query = supabase.from('theses').select('*, author:profiles(*)').order('created_at', { ascending: false });
-    
-    if (activeFilter !== "All") {
-      query = query.eq('category', activeFilter);
-    }
-    
-    // We do simple text filtering on the client for prototyping, 
-    // but in production, we'd use Supabase text search (ilike or full-text).
-    const { data, error } = await query;
-    if (data) {
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const filtered = data.filter(t => 
-          t.title.toLowerCase().includes(q) || 
-          t.abstract.toLowerCase().includes(q) || 
-          t.author?.full_name?.toLowerCase().includes(q)
-        );
+
+    try {
+      // 1. Fetch from raw SQL backend API
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      const res = await fetch(`${apiUrl}/theses`);
+      if (res.ok) {
+        const data = await res.json();
+        let filtered = data;
+        if (activeFilter !== "All") {
+          filtered = filtered.filter((t: any) => t.category === activeFilter || t.category === "Capstone");
+        }
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          filtered = filtered.filter((t: any) =>
+            t.title?.toLowerCase().includes(q) ||
+            t.abstract?.toLowerCase().includes(q) ||
+            (t.uploader?.full_name || t.author?.full_name)?.toLowerCase().includes(q)
+          );
+        }
         setTheses(filtered);
-      } else {
-        setTheses(data);
+        setLoading(false);
+        return;
       }
+    } catch (err) {
+      console.log("Backend API not reachable, falling back to Supabase client");
     }
-    setLoading(false);
+
+    // 2. Fallback to Supabase client
+    try {
+      let query = supabase.from('theses').select('*, author:profiles(*)').order('created_at', { ascending: false });
+      
+      if (activeFilter !== "All") {
+        query = query.eq('category', activeFilter);
+      }
+      
+      const { data, error } = await query;
+      if (data) {
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const filtered = data.filter(t => 
+            t.title?.toLowerCase().includes(q) || 
+            t.abstract?.toLowerCase().includes(q) || 
+            (t.author?.full_name || t.uploader?.full_name)?.toLowerCase().includes(q)
+          );
+          setTheses(filtered);
+        } else {
+          setTheses(data);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useFocusEffect(
@@ -51,7 +82,9 @@ export default function SearchScreen() {
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
         <View style={{ flex: 1, paddingRight: 12 }}>
           <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B", marginBottom: 4 }}>{item.title}</Text>
-          <Text style={{ fontSize: 13, color: "#64748B", fontWeight: "500" }}>{item.author?.full_name || "Unknown"} • {item.department}</Text>
+          <Text style={{ fontSize: 13, color: "#64748B", fontWeight: "500" }}>
+            {(item.uploader?.full_name || item.author?.full_name || "Unknown User")} • {item.department}
+          </Text>
         </View>
         <View style={{ backgroundColor: item.category === "Graduate Dissertation" ? "#FCE7F3" : "#E0E7FF", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
           <Text style={{ fontSize: 10, fontWeight: "700", color: item.category === "Graduate Dissertation" ? "#BE185D" : "#4338CA" }}>
@@ -65,7 +98,7 @@ export default function SearchScreen() {
       </Text>
       
       <TouchableOpacity 
-        onPress={() => Linking.openURL(item.pdf_url)}
+        onPress={() => item.pdf_url && Linking.openURL(item.pdf_url)}
         style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", backgroundColor: "#F1F5F9", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
       >
         <BookOpen size={16} color="#1A56DB" style={{ marginRight: 6 }} />
