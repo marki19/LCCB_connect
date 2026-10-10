@@ -1,7 +1,1 @@
-﻿[
-  { "id": "conv_0", "userId": "u2", "lastMessage": "That looks awesome! How did you implement the auth?", "time": "Just now", "unread": true  },
-  { "id": "conv_1", "userId": "u3", "lastMessage": "Thanks for sharing the link.",                        "time": "2h ago",  "unread": false },
-  { "id": "conv_2", "userId": "u4", "lastMessage": "That looks awesome! How did you implement the auth?", "time": "3d ago",  "unread": false },
-  { "id": "conv_3", "userId": "u5", "lastMessage": "Thanks for sharing the link.",                        "time": "4d ago",  "unread": false },
-  { "id": "conv_4", "userId": "u6", "lastMessage": "That looks awesome! How did you implement the auth?", "time": "5d ago",  "unread": false }
-]
+[]

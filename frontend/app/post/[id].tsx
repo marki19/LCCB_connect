@@ -4,10 +4,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming } from "react-native-reanimated";
 import { ArrowLeft, Heart, MessageCircle, Share2, ExternalLink, Send, Tag, Calendar } from "lucide-react-native";
-import { PROTOTYPE_POSTS } from "../../src/data/prototype";
-import rawComments from "../../src/data/mock/comments.json";
 import { supabase } from "../../src/lib/supabase";
 import { useAuth } from "../../src/contexts/AuthContext";
+import type { Post } from "../../src/types";
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   website:  { label: "Website",  bg: "#DBEAFE", text: "#1D4ED8" },
@@ -38,12 +37,27 @@ export default function PostDetailScreen() {
 
   useEffect(() => {
     const fetchDetails = async () => {
-      // Fetch post
-      const { data: postData } = await supabase
-        .from('posts')
-        .select('*, author:profiles(*)')
-        .eq('id', id)
-        .single();
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      let postData: any = null;
+
+      // 1. Try raw SQL backend first
+      try {
+        const res = await fetch(`${apiUrl}/posts/${id}`);
+        if (res.ok) {
+          postData = await res.json();
+        }
+      } catch {
+        // Fallback to Supabase
+      }
+
+      if (!postData) {
+        const { data } = await supabase
+          .from('posts')
+          .select('*, author:profiles(*)')
+          .eq('id', id)
+          .single();
+        postData = data;
+      }
       
       if (postData) {
         const authorName = postData.author?.full_name || "Unknown User";

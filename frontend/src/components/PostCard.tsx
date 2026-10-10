@@ -8,7 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Heart, MessageCircle, Share2, ExternalLink } from "lucide-react-native";
 import { useRouter } from "expo-router";
-import type { Post } from "../data/prototype";
+import type { Post } from "../types";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
