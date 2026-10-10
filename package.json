@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "node dev.js",
     "start:backend": "npm start --prefix backend",
     "start:frontend": "npm start --prefix frontend"
   }
