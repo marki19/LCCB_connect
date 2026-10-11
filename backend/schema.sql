@@ -39,11 +39,33 @@ CREATE TABLE IF NOT EXISTS public.theses (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 4. Likes table
+CREATE TABLE IF NOT EXISTS public.likes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(post_id, user_id)
+);
+
+-- 5. Comments table
+CREATE TABLE IF NOT EXISTS public.comments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Enable Row Level Security (optional / public for now)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.theses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow public read-write for profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public read-write for posts" ON public.posts FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public read-write for theses" ON public.theses FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public read-write for likes" ON public.likes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public read-write for comments" ON public.comments FOR ALL USING (true) WITH CHECK (true);

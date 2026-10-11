@@ -52,12 +52,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (data) {
-      setProfile(data as Profile);
-    } else {
-      setProfile(null);
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      const res = await fetch(`${apiUrl}/users/${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data as Profile);
+        return;
+      }
+    } catch (e) {
+      console.error("Failed to fetch profile from raw SQL backend:", e);
     }
+    setProfile(null);
   };
 
   useEffect(() => {

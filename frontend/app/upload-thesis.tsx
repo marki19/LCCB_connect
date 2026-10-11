@@ -6,7 +6,6 @@ import { ArrowLeft, UploadCloud, FileText, CheckCircle2, ChevronRight, BookOpen 
 import * as DocumentPicker from "expo-document-picker";
 import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
-import { supabase } from "../src/lib/supabase";
 import { useAuth } from "../src/contexts/AuthContext";
 import { uploadToStorage } from "../src/lib/upload";
 
@@ -53,16 +52,24 @@ export default function UploadThesisScreen() {
 
       if (!pdfUrl) throw new Error("Failed to upload the file to Supabase Storage.");
 
-      const { error: dbError } = await supabase.from('theses').insert({
-        uploader_id: profile.id,
-        title,
-        abstract,
-        department,
-        category,
-        pdf_url: pdfUrl
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      const res = await fetch(`${apiUrl}/theses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploader_id: profile.id,
+          title,
+          abstract,
+          department,
+          category,
+          pdf_url: pdfUrl,
+        }),
       });
 
-      if (dbError) throw dbError;
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to save manuscript to backend database");
+      }
 
       Alert.alert("Success", "Manuscript successfully uploaded to the repository!");
       router.back();

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MessageSquarePlus } from "lucide-react-native";
-import { supabase } from "../src/lib/supabase";
 import type { User } from "../src/types";
 
 export default function MessagesScreen() {
@@ -30,29 +29,10 @@ export default function MessagesScreen() {
               course: u.course || "BSIT",
               yearLevel: u.year_level || "3rd Year",
             })));
-            setLoading(false);
-            return;
           }
         }
-      } catch {
-        // Fallback
-      }
-
-      // Supabase fallback
-      try {
-        const { data } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
-        if (data && data.length > 0) {
-          setPeers(data.map((u: any) => ({
-            id: u.id,
-            name: u.full_name || u.username || "Peer",
-            initials: getInitials(u.full_name || u.username),
-            avatarColor: "#DBEAFE",
-            course: u.course || "BSIT",
-            yearLevel: u.year_level || "3rd Year",
-          })));
-        }
       } catch (err) {
-        console.error("Failed to load users:", err);
+        console.error("Failed to load peers from SQL backend:", err);
       }
       setLoading(false);
     };

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { View, Text, SectionList, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BookOpen, FileText, CheckCheck, Sparkles } from "lucide-react-native";
-import { supabase } from "../../src/lib/supabase";
 
 type ActivityNotif = {
   id: string;
@@ -73,24 +72,8 @@ export default function NotificationsScreen() {
             });
           });
         }
-      } catch {
-        // Fallback to Supabase if backend unreachable
-        try {
-          const { data: thesesData } = await supabase.from('theses').select('*, author:profiles(*)').limit(5);
-          if (thesesData) {
-            thesesData.forEach((t: any) => {
-              const name = t.author?.full_name || "Academic Author";
-              notifs.push({
-                id: `thesis-${t.id}`,
-                type: "thesis",
-                user: { name, initials: getInitials(name), avatarColor: "#EDE9FE" },
-                text: `deposited manuscript: "${t.title}"`,
-                time: new Date(t.created_at).toLocaleDateString(),
-                unread: true,
-              });
-            });
-          }
-        } catch {}
+      } catch (err) {
+        console.error("Failed to load notifications from SQL backend:", err);
       }
 
       setSections([

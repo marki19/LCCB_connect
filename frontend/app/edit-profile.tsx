@@ -1,7 +1,6 @@
 import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator, Alert } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import { supabase } from "../src/lib/supabase";
 import { useAuth } from "../src/contexts/AuthContext";
 import { pickImage, uploadToStorage } from "../src/lib/upload";
 import { Camera, X, Check } from "lucide-react-native";
@@ -46,16 +45,24 @@ export default function EditProfileScreen() {
         setUploadingImage(false);
       }
 
-      const { error } = await supabase.from('profiles').update({
-        full_name: fullName.trim(),
-        bio: bio.trim(),
-        course: course.trim(),
-        year_level: yearLevel.trim(),
-        skills: skills,
-        avatar_url: finalAvatarUrl,
-      }).eq('id', session.user.id);
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      const res = await fetch(`${apiUrl}/users/${session.user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: fullName.trim(),
+          bio: bio.trim(),
+          course: course.trim(),
+          year_level: yearLevel.trim(),
+          skills: skills,
+          avatar_url: finalAvatarUrl,
+        }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to update profile via backend");
+      }
       
       // Force context to re-fetch would be ideal, but for now we just dismiss modal
       router.back();

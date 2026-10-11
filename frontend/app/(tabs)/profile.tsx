@@ -4,7 +4,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Settings, MapPin, Calendar, LogOut } from "lucide-react-native";
 import PostCard from "../../src/components/PostCard";
 import { useAuth } from "../../src/contexts/AuthContext";
-import { supabase } from "../../src/lib/supabase";
 import type { Post } from "../../src/types";
 
 import { useRouter } from "expo-router";
@@ -50,17 +49,8 @@ export default function ProfileScreen() {
           const allPosts = await res.json();
           posts = allPosts.filter((p: any) => p.author_id === currentUser.id);
         }
-      } catch {
-        // Fallback to Supabase
-      }
-
-      if (posts.length === 0) {
-        const { data } = await supabase
-          .from('posts')
-          .select('*')
-          .eq('author_id', currentUser.id)
-          .order('created_at', { ascending: false });
-        if (data) posts = data;
+      } catch (err) {
+        console.error("Failed to load user posts from SQL backend:", err);
       }
         
       if (posts && posts.length > 0) {
