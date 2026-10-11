@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, currentUser?: User | null) => {
     try {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
       const res = await fetch(`${apiUrl}/users/${userId}`);
@@ -59,6 +59,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         setProfile(data as Profile);
         return;
+      }
+      if (res.status === 404 && currentUser) {
+        const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Student";
+        const username = (currentUser.email?.split("@")[0] || "user") + "_" + Math.floor(Math.random() * 1000);
+        const createRes = await fetch(`${apiUrl}/users`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: userId,
+            username,
+            full_name: fullName,
+            role: "student",
+          }),
+        });
+        if (createRes.ok) {
+          const newProfile = await createRes.json();
+          setProfile(newProfile as Profile);
+          return;
+        }
       }
     } catch (e) {
       console.error("Failed to fetch profile from raw SQL backend:", e);
@@ -71,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setInitialized(true));
+        fetchProfile(session.user.id, session.user).finally(() => setInitialized(true));
       } else {
         setInitialized(true);
       }
@@ -82,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          fetchProfile(session.user.id);
+          fetchProfile(session.user.id, session.user);
         } else {
           setProfile(null);
         }

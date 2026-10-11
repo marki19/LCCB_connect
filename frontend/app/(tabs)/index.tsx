@@ -123,17 +123,6 @@ export default function HomeScreen() {
     } catch (err) {
       console.error("Failed to load theses from SQL backend:", err);
     }
-            previewUrl: t.pdf_url,
-            imageUrl: undefined,
-            likes: 0,
-            comments: 0,
-            createdAt: new Date(t.created_at).toLocaleDateString(),
-            rawDate: new Date(t.created_at).getTime(),
-            isLiked: false,
-          };
-        });
-      }
-    }
 
     // 3. Merge & Filter
     let unified = [...postItems, ...thesisItems].sort((a, b) => b.rawDate - a.rawDate);

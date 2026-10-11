@@ -79,6 +79,24 @@ export default function RegisterScreen() {
     if (error) {
       setGeneralError(error.message);
     } else {
+      if (data?.user) {
+        try {
+          const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+          const username = email.trim().toLowerCase().split("@")[0] + "_" + Math.floor(Math.random() * 1000);
+          await fetch(`${apiUrl}/users`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: data.user.id,
+              username,
+              full_name: fullName.trim(),
+              role: "student",
+            }),
+          });
+        } catch (backendErr) {
+          console.error("Failed to sync profile to SQL backend:", backendErr);
+        }
+      }
       router.replace("/(auth)/login");
     }
     setLoading(false);
