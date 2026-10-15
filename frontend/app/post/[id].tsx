@@ -4,10 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming } from "react-native-reanimated";
 import { ArrowLeft, Heart, MessageCircle, Share2, ExternalLink, Send, Tag, Calendar } from "lucide-react-native";
-import { PROTOTYPE_POSTS } from "../../src/data/prototype";
-import rawComments from "../../src/data/mock/comments.json";
-import { supabase } from "../../src/lib/supabase";
 import { useAuth } from "../../src/contexts/AuthContext";
+import type { Post } from "../../src/types";
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   website:  { label: "Website",  bg: "#DBEAFE", text: "#1D4ED8" },
@@ -38,58 +36,58 @@ export default function PostDetailScreen() {
 
   useEffect(() => {
     const fetchDetails = async () => {
-      // Fetch post
-      const { data: postData } = await supabase
-        .from('posts')
-        .select('*, author:profiles(*)')
-        .eq('id', id)
-        .single();
-      
-      if (postData) {
-        const authorName = postData.author?.full_name || "Unknown User";
-        setPost({
-          id: postData.id,
-          author: {
-            id: postData.author_id,
-            name: authorName,
-            initials: authorName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase(),
-            avatarColor: "#BFDBFE",
-            course: postData.author?.course || "—",
-            yearLevel: postData.author?.year_level || "—",
-          },
-          title: postData.title,
-          description: postData.description,
-          type: postData.type,
-          tags: postData.tags || [],
-          previewUrl: postData.preview_url,
-          imageUrl: postData.image_url,
-          likes: postData.likes || 0,
-          comments: postData.comments || 0,
-          createdAt: new Date(postData.created_at).toLocaleDateString(),
-          isLiked: false, // We'd need to check the likes table
-        });
-        setLikeCount(postData.likes || 0);
-      }
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      try {
+        const res = await fetch(`${apiUrl}/posts/${id}`);
+        if (res.ok) {
+          const postData = await res.json();
+          if (postData) {
+            const authorName = postData.author?.full_name || "Unknown User";
+            setPost({
+              id: postData.id,
+              author: {
+                id: postData.author_id,
+                name: authorName,
+                initials: authorName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase(),
+                avatarColor: "#BFDBFE",
+                course: postData.author?.course || "—",
+                yearLevel: postData.author?.year_level || "—",
+              },
+              title: postData.title,
+              description: postData.content || postData.description || "",
+              type: postData.type || "text",
+              tags: postData.technologies || postData.tags || [],
+              previewUrl: postData.github_url || postData.preview_url,
+              imageUrl: postData.image_url,
+              likes: postData.likes || 0,
+              comments: postData.comments || 0,
+              createdAt: new Date(postData.created_at).toLocaleDateString(),
+              isLiked: false,
+            });
+            setLikeCount(postData.likes || 0);
+          }
+        }
 
-      // Fetch comments
-      const { data: commentsData } = await supabase
-        .from('comments')
-        .select('*, user:profiles(*)')
-        .eq('post_id', id)
-        .order('created_at', { ascending: false });
-
-      if (commentsData) {
-        setComments(commentsData.map(c => {
-          const cName = c.user?.full_name || "Unknown User";
-          return {
-            id: c.id,
-            author: cName,
-            initials: cName.substring(0, 2).toUpperCase(),
-            avatarColor: "#E2E8F0",
-            text: c.content,
-            time: new Date(c.created_at).toLocaleDateString()
-          };
-        }));
+        // Fetch comments from raw SQL backend
+        const resComments = await fetch(`${apiUrl}/posts/${id}/comments`);
+        if (resComments.ok) {
+          const commentsData = await resComments.json();
+          if (commentsData) {
+            setComments(commentsData.map((c: any) => {
+              const cName = c.user?.full_name || "Unknown User";
+              return {
+                id: c.id,
+                author: cName,
+                initials: cName.substring(0, 2).toUpperCase(),
+                avatarColor: "#E2E8F0",
+                text: c.content,
+                time: new Date(c.created_at).toLocaleDateString(),
+              };
+            }));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load post from backend:", err);
       }
 
       setLoading(false);
@@ -126,10 +124,15 @@ export default function PostDetailScreen() {
     setLiked(newLiked);
     setLikeCount(newLiked ? likeCount + 1 : likeCount - 1);
 
-    if (newLiked) {
-      await supabase.from('likes').insert({ post_id: post.id, user_id: profile.id });
-    } else {
-      await supabase.from('likes').delete().match({ post_id: post.id, user_id: profile.id });
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      await fetch(`${apiUrl}/posts/${post.id}/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: profile.id }),
+      });
+    } catch (err) {
+      console.error("Failed to toggle like via backend:", err);
     }
   };
 
@@ -150,12 +153,19 @@ export default function PostDetailScreen() {
     };
     setComments([newComment, ...comments]);
 
-    // Save to DB
-    await supabase.from('comments').insert({
-      post_id: post.id,
-      user_id: profile.id,
-      content: text
-    });
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      await fetch(`${apiUrl}/posts/${post.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: profile.id,
+          content: text,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to post comment via backend:", err);
+    }
   };
 
   return (
@@ -204,7 +214,7 @@ export default function PostDetailScreen() {
 
           <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, marginBottom: 16, gap: 6, alignItems: "center" }}>
             <Tag size={14} color="#94A3B8" />
-            {(post.tags || []).map((tag) => (
+            {(post.tags || []).map((tag: string) => (
               <View key={tag} style={{ backgroundColor: "#F1F5F9", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0" }}>
                 <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "500" }}>#{tag}</Text>
               </View>

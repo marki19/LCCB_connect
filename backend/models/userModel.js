@@ -19,6 +19,9 @@ const createUser = async (userData) => {
   const sql = `
     INSERT INTO profiles (id, username, full_name, avatar_url, bio, course, year_level, role)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    ON CONFLICT (id) DO UPDATE SET
+      full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
+      username = COALESCE(EXCLUDED.username, profiles.username)
     RETURNING *;
   `;
   const values = [id, username, full_name, avatar_url, bio, course, year_level, role || 'student'];
@@ -27,20 +30,31 @@ const createUser = async (userData) => {
 };
 
 const updateUser = async (id, userData) => {
-  const { username, full_name, avatar_url, bio, course, year_level, role } = userData;
+  const { username, full_name, avatar_url, bio, course, year_level, role, skills } = userData;
   const sql = `
     UPDATE profiles
-    SET username = $1,
-        full_name = $2,
-        avatar_url = $3,
-        bio = $4,
-        course = $5,
-        year_level = $6,
-        role = $7
-    WHERE id = $8
+    SET username = COALESCE($1, username),
+        full_name = COALESCE($2, full_name),
+        avatar_url = COALESCE($3, avatar_url),
+        bio = COALESCE($4, bio),
+        course = COALESCE($5, course),
+        year_level = COALESCE($6, year_level),
+        role = COALESCE($7, role),
+        skills = COALESCE($8, skills)
+    WHERE id = $9
     RETURNING *;
   `;
-  const values = [username, full_name, avatar_url, bio, course, year_level, role, id];
+  const values = [
+    username || null,
+    full_name || null,
+    avatar_url || null,
+    bio || null,
+    course || null,
+    year_level || null,
+    role || null,
+    skills || null,
+    id,
+  ];
   const result = await db.query(sql, values);
   return result.rows[0];
 };

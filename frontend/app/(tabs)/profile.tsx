@@ -2,10 +2,9 @@ import { useState, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Settings, MapPin, Calendar, LogOut } from "lucide-react-native";
-import { PROTOTYPE_POSTS } from "../../src/data/prototype";
 import PostCard from "../../src/components/PostCard";
 import { useAuth } from "../../src/contexts/AuthContext";
-import { supabase } from "../../src/lib/supabase";
+import type { Post } from "../../src/types";
 
 import { useRouter } from "expo-router";
 
@@ -18,9 +17,10 @@ export default function ProfileScreen() {
     full_name: "Mark Antipo",
     username: "mark_antipo",
     avatar_url: null,
+    bio: "Full stack developer & capstone project lead.",
     course: "BSIT",
     year_level: "3rd Year",
-    bio: "Full stack developer & capstone project lead."
+    skills: ["React Native", "PostgreSQL", "Node.js"],
   };
 
   const getInitials = (name: string | null) => {
@@ -40,15 +40,21 @@ export default function ProfileScreen() {
     
     const fetchPosts = async () => {
       setLoadingPosts(true);
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('author_id', currentUser.id)
-        .order('created_at', { ascending: false });
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      let posts: any[] = [];
+
+      try {
+        const res = await fetch(`${apiUrl}/posts`);
+        if (res.ok) {
+          const allPosts = await res.json();
+          posts = allPosts.filter((p: any) => p.author_id === currentUser.id);
+        }
+      } catch (err) {
+        console.error("Failed to load user posts from SQL backend:", err);
+      }
         
-      if (!error && data) {
-        // Map Supabase rows to our component's expected format
-        const formattedPosts = data.map((row: any) => ({
+      if (posts && posts.length > 0) {
+        const formattedPosts = posts.map((row: any) => ({
           id: row.id,
           author: {
             id: currentUser.id,
@@ -58,11 +64,11 @@ export default function ProfileScreen() {
             course: currentUser.course,
             yearLevel: currentUser.year_level,
           },
-          title: row.title,
-          description: row.description,
-          type: row.type,
-          tags: row.tags || [],
-          previewUrl: row.preview_url,
+          title: row.title || "Post Update",
+          description: row.content || row.description || "",
+          type: row.type || "text",
+          tags: row.technologies || row.tags || [],
+          previewUrl: row.github_url || row.preview_url,
           imageUrl: row.image_url,
           likes: row.likes || 0,
           comments: row.comments || 0,
@@ -70,6 +76,8 @@ export default function ProfileScreen() {
           isLiked: false,
         }));
         setMyPosts(formattedPosts);
+      } else {
+        setMyPosts([]);
       }
       setLoadingPosts(false);
     };

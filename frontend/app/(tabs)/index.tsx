@@ -4,7 +4,6 @@ import { BookOpen, FolderGit2, MessageSquare, Settings, UploadCloud, Users, Cale
 import HomeHeader from "../../src/components/HomeHeader";
 import PostCard from "../../src/components/PostCard";
 import SettingsSidebar from "../../src/components/SettingsSidebar";
-import { supabase } from "../../src/lib/supabase";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useFocusEffect, useRouter } from "expo-router";
 
@@ -34,21 +33,10 @@ export default function HomeScreen() {
         const users = await res.json();
         if (users && users.length > 0) {
           setActivePeers(users);
-          return;
         }
       }
-    } catch {
-      // fallback
-    }
-
-    // Fallback to Supabase
-    try {
-      const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (data && data.length > 0) {
-        setActivePeers(data);
-      }
     } catch (e) {
-      console.error("Failed to load peers:", e);
+      console.error("Failed to load peers from SQL backend:", e);
     }
   };
 
@@ -96,35 +84,8 @@ export default function HomeScreen() {
           };
         });
       }
-    } catch {
-      const { data } = await supabase.from('posts').select('*, author:profiles(*)').order('created_at', { ascending: false });
-      if (data) {
-        postItems = data.map((row: any) => {
-          const authorName = row.author?.full_name || "Unknown Author";
-          return {
-            id: row.id,
-            author: {
-              id: row.author_id,
-              name: authorName,
-              initials: getInitials(authorName),
-              avatarColor: "#BFDBFE",
-              course: row.author?.course || "—",
-              yearLevel: row.author?.year_level || "—",
-            },
-            title: row.title || "Post Update",
-            description: row.content || row.description || "",
-            type: row.type || "text",
-            tags: row.technologies || row.tags || [],
-            previewUrl: row.github_url || row.preview_url,
-            imageUrl: row.image_url,
-            likes: row.likes || 0,
-            comments: row.comments || 0,
-            createdAt: new Date(row.created_at).toLocaleDateString(),
-            rawDate: new Date(row.created_at).getTime(),
-            isLiked: false,
-          };
-        });
-      }
+    } catch (err) {
+      console.error("Failed to load posts from SQL backend:", err);
     }
 
     // 2. Fetch Theses from raw SQL backend API
@@ -159,35 +120,8 @@ export default function HomeScreen() {
           };
         });
       }
-    } catch {
-      const { data } = await supabase.from('theses').select('*, author:profiles(*)').order('created_at', { ascending: false });
-      if (data) {
-        thesisItems = data.map((t: any) => {
-          const uploaderName = t.author?.full_name || "Academic Author";
-          return {
-            id: t.id,
-            author: {
-              id: t.uploader_id,
-              name: uploaderName,
-              initials: getInitials(uploaderName),
-              avatarColor: "#EDE9FE",
-              course: t.department || "LCCB Research",
-              yearLevel: t.category || "Thesis",
-            },
-            title: `📑 ${t.title}`,
-            description: t.abstract,
-            type: "thesis",
-            tags: [t.department, t.category].filter(Boolean),
-            previewUrl: t.pdf_url,
-            imageUrl: undefined,
-            likes: 0,
-            comments: 0,
-            createdAt: new Date(t.created_at).toLocaleDateString(),
-            rawDate: new Date(t.created_at).getTime(),
-            isLiked: false,
-          };
-        });
-      }
+    } catch (err) {
+      console.error("Failed to load theses from SQL backend:", err);
     }
 
     // 3. Merge & Filter
