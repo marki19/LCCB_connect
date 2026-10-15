@@ -3,7 +3,6 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, FlatList, Linking,
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Search as SearchIcon, Filter, BookOpen, Download, UploadCloud } from "lucide-react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { supabase } from "../../src/lib/supabase";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -35,37 +34,9 @@ export default function SearchScreen() {
           );
         }
         setTheses(filtered);
-        setLoading(false);
-        return;
       }
     } catch (err) {
-      console.log("Backend API not reachable, falling back to Supabase client");
-    }
-
-    // 2. Fallback to Supabase client
-    try {
-      let query = supabase.from('theses').select('*, author:profiles(*)').order('created_at', { ascending: false });
-      
-      if (activeFilter !== "All") {
-        query = query.eq('category', activeFilter);
-      }
-      
-      const { data, error } = await query;
-      if (data) {
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          const filtered = data.filter(t => 
-            t.title?.toLowerCase().includes(q) || 
-            t.abstract?.toLowerCase().includes(q) || 
-            (t.author?.full_name || t.uploader?.full_name)?.toLowerCase().includes(q)
-          );
-          setTheses(filtered);
-        } else {
-          setTheses(data);
-        }
-      }
-    } catch (e) {
-      console.error(e);
+      console.error("Failed to load theses from SQL backend:", err);
     } finally {
       setLoading(false);
     }

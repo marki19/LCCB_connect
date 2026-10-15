@@ -1,13 +1,10 @@
 {
-  "name": "lccb-connect-monorepo",
+  "name": "lccb-connect",
   "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
   "scripts": {
-    "start:backend": "npm start --workspace=backend",
-    "start:frontend": "npm start --workspace=frontend"
+    "dev": "node dev.js",
+    "start:backend": "npm start --prefix backend",
+    "start:frontend": "npm start --prefix frontend"
   }
 }

@@ -6,7 +6,6 @@ import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, ChevronRight, C
 import Animated, { FadeIn, FadeInRight, FadeOutLeft, FadeInDown } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
-import { supabase } from "../src/lib/supabase";
 import { uploadToStorage, pickImage } from "../src/lib/upload";
 
 type PostType = "text" | "image" | "project" | "capstone" | null;
@@ -45,17 +44,25 @@ export default function CreatePostModal() {
         finalImageUrl = await uploadToStorage(imageUri, 'assets', path, 'image/jpeg');
       }
 
-      const { error } = await supabase.from('posts').insert({
-        author_id: profile.id,
-        content: content,
-        type: postType || 'text',
-        title: title || null,
-        technologies: technologies ? technologies.split(',').map(t => t.trim()) : null,
-        github_url: githubUrl || null,
-        image_url: finalImageUrl,
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      const res = await fetch(`${apiUrl}/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          author_id: profile.id,
+          content: content,
+          type: postType || 'text',
+          title: title || null,
+          technologies: technologies ? technologies.split(',').map(t => t.trim()) : null,
+          github_url: githubUrl || null,
+          image_url: finalImageUrl,
+        }),
       });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to create post");
+      }
       
       router.back();
     } catch (err: any) {

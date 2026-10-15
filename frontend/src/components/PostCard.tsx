@@ -8,8 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Heart, MessageCircle, Share2, ExternalLink } from "lucide-react-native";
 import { useRouter } from "expo-router";
-import type { Post } from "../data/prototype";
-import { supabase } from "../lib/supabase";
+import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
@@ -46,11 +45,15 @@ export default function PostCard({ post }: { post: Post }) {
     setLiked(newLiked);
     setLikeCount(newLiked ? likeCount + 1 : likeCount - 1);
 
-    // Save to database
-    if (newLiked) {
-      await supabase.from('likes').insert({ post_id: post.id, user_id: profile.id });
-    } else {
-      await supabase.from('likes').delete().match({ post_id: post.id, user_id: profile.id });
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+      await fetch(`${apiUrl}/posts/${post.id}/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: profile.id }),
+      });
+    } catch (e) {
+      console.error("Failed to toggle like via SQL backend:", e);
     }
   };
 

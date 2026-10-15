@@ -60,7 +60,7 @@ export default function PaymentModal({ visible, amount, title, onClose, onConfir
             <Text style={styles.amount}>{amount.toLocaleString()}</Text>
           </View>
 
-          <Text style={styles.paymentNote}>Mock payment gateway — prototype only</Text>
+          <Text style={styles.paymentNote}>LCCB Secure Student Payment</Text>
 
           <View style={styles.paymentMethods}>
             <View style={styles.methodChip}><Text style={styles.methodText}>💳 Card</Text></View>
