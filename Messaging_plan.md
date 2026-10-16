@@ -1,6 +1,6 @@
 # Messaging, Presence & Social Graph — Implementation Plan
 
-**Status:** Design locked (v3.1) — **Phases 0–3 implemented.** Phase 0: admin-managed catalog (API + admin screen), registration pickers, existing-user completion gate, and the `course`→`department_id` refactor (migrations 004/005 applied live). Phase 1: messaging/friends/requests schema, read-only realtime posture + `supabase_realtime` publication, `realtime.messages` private-channel policies (migrations 006/007 applied live), and the permission engine `canMessage`. Phase 2: the full messaging/social API (conversations, requests, receipts, policy, friends, block, report, device-tokens, presence; migration 008 adds the presence columns) — 116/116 backend tests. Phase 3: realtime plumbing — Postgres Changes on `messages`/`conversations`/`notifications`, the private `presence:campus` channel, per-thread typing Broadcast, and reconnect + `seq` catch-up (`src/lib/realtime.ts`, `src/lib/messages.ts`, `src/contexts/PresenceContext.tsx`, `src/hooks/useConversationRealtime.ts`) — frontend `tsc` + lint clean.
+**Status:** Design locked (v3.1) — **Phases 0–4 implemented.** Phase 0: admin-managed catalog (API + admin screen), registration pickers, existing-user completion gate, and the `course`→`department_id` refactor (migrations 004/005 applied live). Phase 1: messaging/friends/requests schema, read-only realtime posture + `supabase_realtime` publication, `realtime.messages` private-channel policies (migrations 006/007 applied live), and the permission engine `canMessage`. Phase 2: the full messaging/social API (conversations, requests, receipts, policy, friends, block, report, device-tokens, presence; migration 008 adds the presence columns) — 116/116 backend tests. Phase 3: realtime plumbing — Postgres Changes on `messages`/`conversations`/`notifications`, the private `presence:campus` channel, per-thread typing Broadcast, and reconnect + `seq` catch-up (`src/lib/realtime.ts`, `src/lib/messages.ts`, `src/contexts/PresenceContext.tsx`, `src/hooks/useConversationRealtime.ts`) — frontend `tsc` + lint clean. Phase 4: the messaging/friends UI — inbox + Requests tab (`app/messages/index.tsx`), thread with sent/delivered/seen ticks + typing + request banner (`app/messages/[id].tsx`), friends & requests (`app/friends.tsx`), peer directory (`src/components/PeerPicker.tsx`), messaging/presence/policy/blocked settings (`app/settings.tsx`), shared `Avatar`, and the offline outbox (`src/lib/outbox.ts`); new files `tsc` + lint clean.
 **Scope:** `backend/` (Express API + Postgres), `frontend/` (Expo/React Native), Supabase (Realtime + Push)
 **Related:** `Feature_suggestions.md` (A6 connections, A7 messaging, A14 trust & safety), `Security_plan.md` (Phase 3 RLS, Phase 4 validation, Phase 9 API client)
 
@@ -400,14 +400,14 @@ COMMIT
 | `app/complete-profile.tsx` (new) | one-time gate: existing accounts must set department + course before messaging/posting |
 | `app/(admin)/departments.tsx` (new) | **admin catalog management**: add/rename/reorder/deactivate departments & their courses |
 | `app/(tabs)/profile.tsx`, `edit-profile.tsx` | show dept/course; department locked (admin-only) |
-| Settings | "Who can message you": radio + department multi-select (when `selected`) |
-| `app/messages.tsx` | main inbox **+ Requests tab** (accept/ignore) |
-| `app/messages/[id].tsx` | thread: bubbles, sent/delivered/seen ticks, typing, "requested" banner + Accept |
-| `app/friends.tsx` (new) | friends list, requests, add button |
-| `src/components/PeerPicker.tsx` | peer list with Message / **Request** button + dept |
+| Settings **(DONE — Phase 4: `app/settings.tsx`)** | "Who can message you": radio + department multi-select (when `selected`); presence mode; blocked users |
+| `app/messages/index.tsx` **(DONE — Phase 4)** | main inbox **+ Requests tab** (accept/ignore) |
+| `app/messages/[id].tsx` **(DONE — Phase 4)** | thread: bubbles, sent/delivered/seen ticks, typing, "requested" banner + Accept |
+| `app/friends.tsx` **(DONE — Phase 4)** (new) | friends list, requests, add button |
+| `src/components/PeerPicker.tsx` **(DONE — Phase 4)** | peer list with Message / **Request** button + dept |
 | `src/lib/catalog.ts` (new) | fetch + cache departments/courses; invalidate on admin edit |
 | `src/lib/realtime.ts` **(DONE — Phase 3)** | channels: `presence:campus`, messages, notifications; reconnect + catch-up |
-| `src/lib/messages.ts` **(DONE — Phase 3: API client)**, `outbox.ts`, `push.ts`, `friends.ts` | API + offline queue + push |
+| `src/lib/messages.ts` **(DONE — Phase 3: API client + friends)**, `outbox.ts` **(DONE — Phase 4)**, `push.ts` | API + offline queue + push |
 | `src/contexts/PresenceContext.tsx` **(DONE — Phase 3)**, `hooks/useConversationRealtime.ts` **(DONE — Phase 3)** | presence + data wiring |
 | `src/types.ts` | `Department`, `Course`, `Conversation`, `Message`, `MessageStatus`, `PresenceMode`, `MessagePolicy`, `Friend` |
 
@@ -447,7 +447,7 @@ Verify Realtime JS + `expo-notifications` against the installed Expo SDK's versi
 | **1** | Messaging + friends + requests schema, RLS, publication, `realtime.messages` policies, permission engine **(DONE — migrations 006/007 live; `canMessage` + truth-table tests)** | migration live; anon/authed can't write; a non-participant sees nothing; `canMessage` returns direct/request/blocked correctly | 2–3 d |
 | **2** | API: conversations, requests, receipts, policy, friends, block, report, device-tokens, presence + tests **(DONE — migration 008 presence columns live; 39 new tests)** | 401 unauth; non-participant 404; request-vs-direct enforced; validation 400; idempotent send; suite green | 3–4 d |
 | **3** | Realtime plumbing + presence + typing **(DONE — `src/lib/realtime.ts` (db/presence/typing channels), `src/lib/messages.ts` API client, `src/contexts/PresenceContext.tsx` + heartbeat, `src/hooks/useConversationRealtime.ts`; `PresenceProvider` wired in `app/_layout.tsx`; frontend `tsc` + lint clean)** | two devices see messages/typing/status live; reconnect recovers by `seq` | 2–3 d |
-| **4** | Frontend: registration, admin catalog screen, settings policy, inbox+requests, threads, friends | two users DM; request→accept→inbox works; ticks correct; offline queue flushes; typecheck+lint clean | 4–5 d |
+| **4** | Frontend: registration, admin catalog screen, settings policy, inbox+requests, threads, friends **(DONE — `app/messages/index.tsx`, `app/messages/[id].tsx`, `app/friends.tsx`, `app/settings.tsx`, `src/components/PeerPicker.tsx` + `Avatar.tsx`, `src/lib/outbox.ts`; SettingsSidebar + notification routing wired; new files `tsc` + lint clean)** | two users DM; request→accept→inbox works; ticks correct; offline queue flushes; typecheck+lint clean | 4–5 d |
 | **5** | Push (EAS dev build + credentials) | background push arrives; request = quiet; DND suppresses | 1–2 d (+ your setup) |
 | **6** | Trust & safety (block gate + report → moderation queue) | blocked send refused; report reaches queue | 1 d |
 | **7** | Hardening (JWT, rate limits, pre-accept cap switch, retention, load sanity) | limits documented; no policy drift | 1 d |

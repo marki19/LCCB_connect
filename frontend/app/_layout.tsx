@@ -70,6 +70,10 @@ function RouteGuard() {
       <Stack.Screen name="create" options={{ presentation: "modal" }} />
       <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
       <Stack.Screen name="post/[id]" />
+      <Stack.Screen name="messages/index" />
+      <Stack.Screen name="messages/[id]" />
+      <Stack.Screen name="friends" />
+      <Stack.Screen name="settings" options={{ presentation: "modal" }} />
     </Stack>
   );
 }

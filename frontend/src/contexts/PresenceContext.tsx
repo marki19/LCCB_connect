@@ -20,6 +20,7 @@ import {
   type PresenceState,
 } from "../lib/realtime";
 import { heartbeat, setPresence } from "../lib/messages";
+import { startOutbox } from "../lib/outbox";
 import type { PresenceMode } from "../types";
 
 /**
@@ -92,6 +93,8 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
 
   // Bridge the module emitter into React state.
   useEffect(() => {
+    // The offline outbox replays queued sends whenever Realtime (re)connects.
+    startOutbox();
     const offPresence = onPresence((state) => setPresences(state));
     const offStatus = onStatus((next) => {
       setStatus(next);

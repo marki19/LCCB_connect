@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, Animated, Dimensions, ScrollView, TouchableWithoutFeedback } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X, UserCircle, Shield, Lock, Palette, BellRing, School, Flag, LogOut, ChevronRight } from "lucide-react-native";
+import { X, UserCircle, Shield, Lock, Palette, BellRing, School, Flag, LogOut, ChevronRight, Users, MessageSquare } from "lucide-react-native";
+import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 
@@ -32,6 +33,7 @@ function SectionLabel({ label }: { label: string }) {
 
 export default function SettingsSidebar({ visible, onClose }: Props) {
   const insets     = useSafeAreaInsets();
+  const router     = useRouter();
   const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const backdrop   = useRef(new Animated.Value(0)).current;
 
@@ -70,6 +72,11 @@ export default function SettingsSidebar({ visible, onClose }: Props) {
     onClose();
   };
 
+  const go = (path: string) => {
+    onClose();
+    router.push(path as any);
+  };
+
   return (
     <View pointerEvents={visible ? "box-none" : "none"}
       style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}>
@@ -98,9 +105,14 @@ export default function SettingsSidebar({ visible, onClose }: Props) {
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
           <SectionLabel label="Account" />
-          <MenuItem icon={<UserCircle size={20} color="#1A56DB" />} label="Edit Profile" />
-          <MenuItem icon={<Shield size={20} color="#1A56DB" />} label="Privacy" />
+          <MenuItem icon={<UserCircle size={20} color="#1A56DB" />} label="Edit Profile" onPress={() => go("/edit-profile")} />
+          <MenuItem icon={<Shield size={20} color="#1A56DB" />} label="Privacy" onPress={() => go("/settings")} />
           <MenuItem icon={<Lock size={20} color="#1A56DB" />} label="Security" />
+
+          <SectionLabel label="Messages" />
+          <MenuItem icon={<MessageSquare size={20} color="#1A56DB" />} label="Messages" onPress={() => go("/messages")} />
+          <MenuItem icon={<Users size={20} color="#1A56DB" />} label="Friends & Requests" onPress={() => go("/friends")} />
+          <MenuItem icon={<Shield size={20} color="#1A56DB" />} label="Messaging & Presence" onPress={() => go("/settings")} />
 
           <SectionLabel label="App" />
           <MenuItem icon={<Palette size={20} color="#1A56DB" />} label="Appearance" />
