@@ -1,6 +1,6 @@
 # Messaging, Presence & Social Graph — Implementation Plan
 
-**Status:** Design locked (v3.1) — **Phase 0 backend implemented** (migration 004 applied live; catalog API + claim-once rule; 64/64 backend tests). Frontend (registration pickers, completion gate, admin catalog screen) pending.
+**Status:** Design locked (v3.1) — **Phases 0 & 1 implemented.** Phase 0: admin-managed catalog (API + admin screen), registration pickers, existing-user completion gate, and the `course`→`department_id` refactor (migrations 004/005 applied live). Phase 1: messaging/friends/requests schema, read-only realtime posture + `supabase_realtime` publication, `realtime.messages` private-channel policies (migrations 006/007 applied live), and the permission engine `canMessage` (77/77 backend tests).
 **Scope:** `backend/` (Express API + Postgres), `frontend/` (Expo/React Native), Supabase (Realtime + Push)
 **Related:** `Feature_suggestions.md` (A6 connections, A7 messaging, A14 trust & safety), `Security_plan.md` (Phase 3 RLS, Phase 4 validation, Phase 9 API client)
 
@@ -442,7 +442,7 @@ Verify Realtime JS + `expo-notifications` against the installed Expo SDK's versi
 | Phase | Deliverable | Acceptance | Effort |
 |-------|-------------|------------|--------|
 | **0** | Departments + Courses: tables, **admin CRUD (API + admin UI)**, pre-auth picker endpoints, registration pickers, **existing-user completion gate**, admin-only change, **`course`→`department` refactor (DONE)** | admin can add/rename/deactivate dept & courses; both required at signup; existing users gated; non-admin can't change; moderation/notifications scoped by `department_id`, fail-closed | 3–4 d |
-| **1** | Messaging + friends + requests schema, RLS, publication, `realtime.messages` policies, permission engine | migration live; anon/authed can't write; a non-participant sees nothing; `canMessage` returns direct/request/blocked correctly | 2–3 d |
+| **1** | Messaging + friends + requests schema, RLS, publication, `realtime.messages` policies, permission engine **(DONE — migrations 006/007 live; `canMessage` + truth-table tests)** | migration live; anon/authed can't write; a non-participant sees nothing; `canMessage` returns direct/request/blocked correctly | 2–3 d |
 | **2** | API: conversations, requests, receipts, policy, friends, block, report, device-tokens, presence + tests | 401 unauth; non-participant 404; request-vs-direct enforced; validation 400; idempotent send; suite green | 3–4 d |
 | **3** | Realtime plumbing + presence + typing | two devices see messages/typing/status live; reconnect recovers by `seq` | 2–3 d |
 | **4** | Frontend: registration, admin catalog screen, settings policy, inbox+requests, threads, friends | two users DM; request→accept→inbox works; ticks correct; offline queue flushes; typecheck+lint clean | 4–5 d |
@@ -464,7 +464,7 @@ Verify Realtime JS + `expo-notifications` against the installed Expo SDK's versi
 ---
 
 ## 17. Your setup (dashboard / EAS)
-Add tables to the `supabase_realtime` publication; enable Realtime + **disable "Allow public access"**; apply `realtime.messages` policies; set JWT expiry 1 h; create the EAS dev build with FCM/APNs. **Departments/courses are entered in-app by an admin** — no static list to supply.
+Add tables to the `supabase_realtime` publication (**done — migration 006**); apply `realtime.messages` policies (**done — migration 007**); in the dashboard enable Realtime and **disable "Allow public access"**; set JWT expiry 1 h; create the EAS dev build with FCM/APNs. **Departments/courses are entered in-app by an admin** — no static list to supply.
 
 ---
 
