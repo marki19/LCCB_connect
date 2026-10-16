@@ -16,6 +16,10 @@ const messageModel = require("../models/messageModel");
 // at call time, so it sees this stub.
 const query = stub(db, "query");
 
+const notificationService = require("../services/notificationService");
+const notifyUser = stub(notificationService, "notifyUser", async () => {});
+const tx = stub(db, "withTransaction");
+
 const row = (over = {}) => ({
   sender_exists: true,
   recipient_exists: true,
@@ -115,5 +119,164 @@ describe("canMessage wiring", () => {
   it("returns 'direct' for the same-department default policy", async () => {
     query.setImpl(async () => ({ rows: [row()] }));
     assert.equal(await messageModel.canMessage("u1", "u2"), "direct");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sendMessage: the atomic send path (§11). `db.withTransaction` is stubbed to
+// hand the callback a scripted fake client, so the block/participant/idempotency
+// logic is exercised without a database.
+// ---------------------------------------------------------------------------
+
+const CONV = "33333333-3333-4333-8333-333333333333";
+
+const conversationRow = (over = {}) => ({
+  id: CONV,
+  user_a: "u1",
+  user_b: "u2",
+  requester_id: null,
+  status: "active",
+  ...over,
+});
+
+/** A fake client that dispatches on a SQL substring. */
+const fakeClient = (routes) => {
+  const seen = [];
+  return {
+    seen,
+    query: async (text) => {
+      seen.push(text);
+      for (const [needle, fn] of routes) {
+        if (text.includes(needle)) return fn();
+      }
+      throw new Error(`Unexpected SQL in test: ${text}`);
+    },
+  };
+};
+
+describe("sendMessage (atomic send path)", () => {
+  beforeEach(() => {
+    tx.calls.length = 0;
+    notifyUser.calls.length = 0;
+    tx.setImpl(async (fn) => fn(undefined));
+  });
+
+  it("refuses a blocked send before any INSERT", async () => {
+    const client = fakeClient([
+      ["FOR UPDATE", () => ({ rows: [conversationRow()] })],
+      ["is_blocked", () => ({ rows: [row({ is_blocked: true })] })],
+    ]);
+    tx.setImpl(async (fn) => fn(client));
+
+    await assert.rejects(
+      () =>
+        messageModel.sendMessage({
+          conversationId: CONV,
+          senderId: "u1",
+          body: "hi",
+          clientMsgId: "c1",
+          senderName: "Ana",
+        }),
+      (err) => err.status === 403
+    );
+    assert.equal(
+      client.seen.some((sql) => sql.includes("INSERT INTO public.messages")),
+      false
+    );
+  });
+
+  it("404s for a non-participant (conversation lookup returns nothing)", async () => {
+    const client = fakeClient([["FOR UPDATE", () => ({ rows: [] })]]);
+    tx.setImpl(async (fn) => fn(client));
+
+    await assert.rejects(
+      () =>
+        messageModel.sendMessage({
+          conversationId: CONV,
+          senderId: "u1",
+          body: "hi",
+          clientMsgId: "c1",
+          senderName: "Ana",
+        }),
+      (err) => err.status === 404
+    );
+  });
+
+  it("inserts, bumps the thread, and notifies on a direct send", async () => {
+    const message = { id: "m1", conversation_id: CONV, sender_id: "u1", body: "hi" };
+    const client = fakeClient([
+      ["FOR UPDATE", () => ({ rows: [conversationRow()] })],
+      ["is_blocked", () => ({ rows: [row({ is_friend: true })] })],
+      ["INSERT INTO public.messages", () => ({ rows: [message] })],
+      ["SET last_message_at", () => ({ rows: [] })],
+      ["INSERT INTO public.conversation_state", () => ({ rows: [] })],
+    ]);
+    tx.setImpl(async (fn) => fn(client));
+
+    const result = await messageModel.sendMessage({
+      conversationId: CONV,
+      senderId: "u1",
+      body: "hi",
+      clientMsgId: "c1",
+      senderName: "Ana",
+    });
+
+    assert.equal(result.message, message);
+    assert.equal(result.deduped, false);
+    assert.equal(notifyUser.calls.length, 1);
+    assert.equal(notifyUser.calls[0][0].type, "new_message");
+    assert.equal(notifyUser.calls[0][0].userId, "u2");
+  });
+
+  it("replays a duplicate client_msg_id without re-notifying", async () => {
+    const existing = { id: "m0", conversation_id: CONV, sender_id: "u1", body: "hi" };
+    const client = fakeClient([
+      ["FOR UPDATE", () => ({ rows: [conversationRow()] })],
+      ["is_blocked", () => ({ rows: [row({ is_friend: true })] })],
+      ["INSERT INTO public.messages", () => ({ rows: [] })],
+      ["client_msg_id = $2", () => ({ rows: [existing] })],
+    ]);
+    tx.setImpl(async (fn) => fn(client));
+
+    const result = await messageModel.sendMessage({
+      conversationId: CONV,
+      senderId: "u1",
+      body: "hi",
+      clientMsgId: "c1",
+      senderName: "Ana",
+    });
+
+    assert.equal(result.deduped, true);
+    assert.equal(result.message, existing);
+    assert.equal(notifyUser.calls.length, 0);
+  });
+
+  it("implicitly accepts a request when the recipient replies", async () => {
+    const message = { id: "m1", conversation_id: CONV, sender_id: "u2", body: "ok" };
+    const client = fakeClient([
+      ["FOR UPDATE", () => ({
+        rows: [conversationRow({ status: "requested", requester_id: "u1" })],
+      })],
+      ["is_blocked", () => ({ rows: [row()] })],
+      ["SET status = 'active'", () => ({ rows: [] })],
+      ["INSERT INTO public.messages", () => ({ rows: [message] })],
+      ["SET last_message_at", () => ({ rows: [] })],
+      ["INSERT INTO public.conversation_state", () => ({ rows: [] })],
+    ]);
+    tx.setImpl(async (fn) => fn(client));
+
+    const result = await messageModel.sendMessage({
+      conversationId: CONV,
+      senderId: "u2",
+      body: "ok",
+      clientMsgId: "c2",
+      senderName: "Ben",
+    });
+
+    assert.equal(result.status, "active");
+    assert.equal(
+      client.seen.some((sql) => sql.includes("SET status = 'active'")),
+      true
+    );
   });
 });

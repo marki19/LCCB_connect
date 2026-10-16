@@ -17,7 +17,36 @@ pool.on("error", (err) => {
   console.error("Unexpected database error:", err);
 });
 
+/**
+ * Runs `callback(client)` inside a single transaction on one dedicated
+ * connection. The callback receives a `client` whose `.query` participates in
+ * the transaction; anything that must commit atomically (a send + its
+ * notification + the conversation bookkeeping) uses this.
+ *
+ * The connection is always released; a failure rolls back before re-throwing so
+ * the central error handler still sees the original error.
+ */
+const withTransaction = async (callback) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await callback(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // A failed ROLLBACK must not mask the original error.
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   query: (text, params) => pool.query(text, params),
+  withTransaction,
   pool,
 };

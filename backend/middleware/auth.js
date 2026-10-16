@@ -52,6 +52,12 @@ const supabase = createClient(
  */
 async function requireAuth(req, res, next) {
   try {
+    // Idempotent: several routers are mounted on the same path (e.g. /api/users
+    // serves both profile CRUD and the social graph). Once any mount has
+    // verified the token, later mounts reuse `req.user` instead of re-verifying
+    // it against Supabase, so a request costs at most one token check.
+    if (req.user) return next();
+
     const header = req.headers.authorization || "";
     const token = header.startsWith("Bearer ") ? header.slice(7).trim() : null;
     if (!token) {

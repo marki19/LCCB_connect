@@ -163,6 +163,61 @@ const updateProfileSchema = z
   })
   .strict();
 
+// ---- messaging, friends & social settings (Messaging_plan.md §4–§11) -------
+// Identity (sender_id / recipient_id / user_id) is never accepted here: it comes
+// from the verified token. `.strict()` rejects an attempted override.
+
+const createConversationSchema = z.object({ peer_id: requiredUuid() }).strict();
+
+const sendMessageSchema = z
+  .object({
+    body: z.string().trim().min(1).max(4000),
+    client_msg_id: z.string().uuid(),
+  })
+  .strict();
+
+const markReadSchema = z.object({ upto_seq: z.number().int().min(0) }).strict();
+
+// `mute_minutes: null` clears the mute (see messageModel.muteConversation).
+const muteConversationSchema = z
+  .object({ mute_minutes: z.number().int().min(1).max(525600).nullable() })
+  .strict();
+
+const reportMessageSchema = z
+  .object({ reason: z.string().trim().max(500).optional() })
+  .strict();
+
+const messagePolicySchema = z
+  .object({
+    message_policy: z.enum(["everyone", "department", "selected", "nobody"]),
+    department_ids: z.array(z.string().uuid()).max(200).optional(),
+  })
+  .strict();
+
+const presenceModes = ["online", "away", "busy", "dnd", "invisible"];
+
+const presenceSchema = z.object({ mode: z.enum(presenceModes) }).strict();
+
+const heartbeatSchema = z
+  .object({
+    mode: z.enum(presenceModes).optional(),
+    last_seen_visible: z.boolean().optional(),
+  })
+  .strict();
+
+const deviceTokenSchema = z
+  .object({
+    token: z.string().trim().min(1).max(500),
+    platform: z.enum(["ios", "android", "web"]),
+  })
+  .strict();
+
+const deleteDeviceTokenSchema = z
+  .object({ token: z.string().trim().min(1).max(500) })
+  .strict();
+
+const friendRequestSchema = z.object({ addressee_id: requiredUuid() }).strict();
+
 /**
  * Validates `req.body` against `schema`. On success the parsed (typed, trimmed)
  * value replaces `req.body`. On failure returns 400 with per-field messages and
@@ -202,4 +257,15 @@ module.exports = {
   updateDepartmentSchema,
   createCourseSchema,
   updateCourseSchema,
+  createConversationSchema,
+  sendMessageSchema,
+  markReadSchema,
+  muteConversationSchema,
+  reportMessageSchema,
+  messagePolicySchema,
+  presenceSchema,
+  heartbeatSchema,
+  deviceTokenSchema,
+  deleteDeviceTokenSchema,
+  friendRequestSchema,
 };

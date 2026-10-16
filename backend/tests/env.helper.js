@@ -11,3 +11,7 @@ process.env.DATABASE_URL = "postgresql://test:test@127.0.0.1:5432/test";
 // Effectively disable rate limiting so the suite can exercise the routes.
 process.env.RATE_LIMIT_MAX = "1000000";
 process.env.RATE_LIMIT_WRITE_MAX = "1000000";
+process.env.RATE_LIMIT_SEND_MAX = "1000000";
+process.env.RATE_LIMIT_SEND_DAILY_MAX = "1000000";
+process.env.RATE_LIMIT_FRIEND_MAX = "1000000";
+process.env.RATE_LIMIT_REPORT_MAX = "1000000";

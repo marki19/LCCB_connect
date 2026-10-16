@@ -125,7 +125,13 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS department_id UUID REFERENCES public.departments(id),
   ADD COLUMN IF NOT EXISTS course_id UUID REFERENCES public.courses(id),
   ADD COLUMN IF NOT EXISTS message_policy TEXT NOT NULL DEFAULT 'department'
-    CHECK (message_policy IN ('everyone', 'department', 'selected', 'nobody'));
+    CHECK (message_policy IN ('everyone', 'department', 'selected', 'nobody')),
+  -- Presence (Messaging_plan.md §8): selected mode, throttled heartbeat, and the
+  -- last-seen opt-in. See migrations/008_profiles_presence.sql.
+  ADD COLUMN IF NOT EXISTS presence_mode TEXT NOT NULL DEFAULT 'online'
+    CHECK (presence_mode IN ('online', 'away', 'busy', 'dnd', 'invisible')),
+  ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS last_seen_visible BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Department FKs for tables that appear earlier in this file (theses,
 -- notifications). Added here, after the catalog exists, and idempotently so a

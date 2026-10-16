@@ -84,6 +84,13 @@ describe("requireAuth", () => {
       ["post", "/api/theses"],
       ["post", "/api/users"],
       ["get", "/api/moderation"],
+      // Messaging / social graph mounts (Phase 2) — the same real requireAuth.
+      ["get", "/api/conversations"],
+      ["post", "/api/conversations"],
+      ["post", "/api/messages/p1/delivered"],
+      ["get", "/api/friends"],
+      ["get", "/api/users/me/message-policy"],
+      ["post", "/api/users/me/presence"],
     ];
 
     for (const [method, path] of paths) {

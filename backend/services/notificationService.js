@@ -143,9 +143,24 @@ async function notifyAuthorOnAction({ authorId, actorId, message }) {
   }
 }
 
+/**
+ * Inserts a single notification for one user (message, message request, friend
+ * request/accept). `client` lets a caller enlist this insert in its own
+ * transaction so the notification is atomic with the event that caused it.
+ */
+async function notifyUser({ userId, actorId = null, type, targetId = null, message }, client = db) {
+  const run = (text, params) => client.query(text, params);
+  await run(
+    `INSERT INTO public.notifications (user_id, actor_id, type, target_id, message)
+     VALUES ($1, $2, $3, $4, $5);`,
+    [userId, actorId, type, targetId, message]
+  );
+}
+
 module.exports = {
   getTargetAdmins,
   createNotifications,
+  notifyUser,
   notifyAdminsOnPostCreated,
   notifyAdminsOnThesisCreated,
   notifyAdminsOnFlaggedContent,

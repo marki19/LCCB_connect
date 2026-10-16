@@ -14,6 +14,10 @@ const thesisRouter = require("./routes/thesisRouter");
 const moderationRouter = require("./routes/moderationRouter");
 const publicRouter = require("./routes/publicRouter");
 const adminCatalogRouter = require("./routes/adminCatalogRouter");
+const conversationRouter = require("./routes/conversationRouter");
+const messageRouter = require("./routes/messageRouter");
+const friendRouter = require("./routes/friendRouter");
+const socialRouter = require("./routes/socialRouter");
 
 // The Express app is built here and exported WITHOUT listening, so tests can
 // drive it via supertest. `index.js` owns dotenv + boot-time env validation and
@@ -108,6 +112,16 @@ app.use("/api/posts", auth.requireAuth, postRouter);
 app.use("/api/theses", auth.requireAuth, thesisRouter);
 app.use("/api/moderation", auth.requireAuth, moderationRouter);
 
+// Messaging & social graph (Messaging_plan.md §11). `loadProfile` runs where the
+// controller needs the caller's display name / department (notification text).
+app.use("/api/conversations", auth.requireAuth, auth.loadProfile, conversationRouter);
+app.use("/api/messages", auth.requireAuth, auth.loadProfile, messageRouter);
+app.use("/api/friends", auth.requireAuth, auth.loadProfile, friendRouter);
+// Same mount path as `userRouter`; `/me/...` and `/:id/block` are two-segment
+// paths that the profile router never matches, so Express falls through here.
+// requireAuth is idempotent and is not re-run for an already-verified request.
+app.use("/api/users", auth.requireAuth, socialRouter);
+
 // Admin-managed catalog (departments & courses). loadProfile runs before
 // requireRole so the role check has the caller's profile.
 app.use(
@@ -131,9 +145,9 @@ app.use((req, res) => {
 // Centralized error handler — never leak internal/database error details.
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error("[api] Unhandled error:", err);
   const status = err.status || err.statusCode || 500;
   if (status >= 500) {
+    console.error("[api] Unhandled error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
   // body-parser errors carry parser internals in `err.message`; return a
@@ -144,6 +158,7 @@ app.use((err, req, res, next) => {
   if (err.type === "entity.too.large") {
     return res.status(413).json({ error: "Request body too large" });
   }
+  // Expected client errors (401/403/404/409…) surface their message as-is.
   return res.status(status).json({ error: err.message });
 });
 

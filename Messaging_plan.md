@@ -1,6 +1,6 @@
 # Messaging, Presence & Social Graph — Implementation Plan
 
-**Status:** Design locked (v3.1) — **Phases 0 & 1 implemented.** Phase 0: admin-managed catalog (API + admin screen), registration pickers, existing-user completion gate, and the `course`→`department_id` refactor (migrations 004/005 applied live). Phase 1: messaging/friends/requests schema, read-only realtime posture + `supabase_realtime` publication, `realtime.messages` private-channel policies (migrations 006/007 applied live), and the permission engine `canMessage` (77/77 backend tests).
+**Status:** Design locked (v3.1) — **Phases 0–2 implemented.** Phase 0: admin-managed catalog (API + admin screen), registration pickers, existing-user completion gate, and the `course`→`department_id` refactor (migrations 004/005 applied live). Phase 1: messaging/friends/requests schema, read-only realtime posture + `supabase_realtime` publication, `realtime.messages` private-channel policies (migrations 006/007 applied live), and the permission engine `canMessage`. Phase 2: the full messaging/social API (conversations, requests, receipts, policy, friends, block, report, device-tokens, presence; migration 008 adds the presence columns) — 116/116 backend tests.
 **Scope:** `backend/` (Express API + Postgres), `frontend/` (Expo/React Native), Supabase (Realtime + Push)
 **Related:** `Feature_suggestions.md` (A6 connections, A7 messaging, A14 trust & safety), `Security_plan.md` (Phase 3 RLS, Phase 4 validation, Phase 9 API client)
 
@@ -388,6 +388,8 @@ COMMIT
 
 **Rules:** identity from token only; `sender_id`/`recipient_id`/`department_id`/`course_id` never from the body on writes; non-participant → **404**; `clampLimit`; `.strict()` Zod.
 
+**Implemented in Phase 2:** all rows above, plus `GET /api/users/me/blocks` (list your own blocks, for the settings/unblock UI). Per-sender rate limits: sends **20/min** + **200/day**, friend requests **20/min**, reports **10/min** (env-tunable: `RATE_LIMIT_SEND_MAX`, `RATE_LIMIT_SEND_DAILY_MAX`, `RATE_LIMIT_FRIEND_MAX`, `RATE_LIMIT_REPORT_MAX`).
+
 ---
 
 ## 12. Frontend
@@ -443,7 +445,7 @@ Verify Realtime JS + `expo-notifications` against the installed Expo SDK's versi
 |-------|-------------|------------|--------|
 | **0** | Departments + Courses: tables, **admin CRUD (API + admin UI)**, pre-auth picker endpoints, registration pickers, **existing-user completion gate**, admin-only change, **`course`→`department` refactor (DONE)** | admin can add/rename/deactivate dept & courses; both required at signup; existing users gated; non-admin can't change; moderation/notifications scoped by `department_id`, fail-closed | 3–4 d |
 | **1** | Messaging + friends + requests schema, RLS, publication, `realtime.messages` policies, permission engine **(DONE — migrations 006/007 live; `canMessage` + truth-table tests)** | migration live; anon/authed can't write; a non-participant sees nothing; `canMessage` returns direct/request/blocked correctly | 2–3 d |
-| **2** | API: conversations, requests, receipts, policy, friends, block, report, device-tokens, presence + tests | 401 unauth; non-participant 404; request-vs-direct enforced; validation 400; idempotent send; suite green | 3–4 d |
+| **2** | API: conversations, requests, receipts, policy, friends, block, report, device-tokens, presence + tests **(DONE — migration 008 presence columns live; 39 new tests)** | 401 unauth; non-participant 404; request-vs-direct enforced; validation 400; idempotent send; suite green | 3–4 d |
 | **3** | Realtime plumbing + presence + typing | two devices see messages/typing/status live; reconnect recovers by `seq` | 2–3 d |
 | **4** | Frontend: registration, admin catalog screen, settings policy, inbox+requests, threads, friends | two users DM; request→accept→inbox works; ticks correct; offline queue flushes; typecheck+lint clean | 4–5 d |
 | **5** | Push (EAS dev build + credentials) | background push arrives; request = quiet; DND suppresses | 1–2 d (+ your setup) |
