@@ -10,6 +10,8 @@ const request = require("supertest");
 const { stub } = require("./stub.helper");
 const auth = require("../middleware/auth");
 const postModel = require("../models/postModel");
+const thesisModel = require("../models/thesisModel");
+const userModel = require("../models/userModel");
 
 // `requireAuth` calls `supabase.auth.getUser(token)` at request time.
 const getUser = stub(auth.supabase.auth, "getUser", async () => ({
@@ -19,6 +21,8 @@ const getUser = stub(auth.supabase.auth, "getUser", async () => ({
 
 // Route handlers must not touch a database.
 stub(postModel, "getAllPosts", async () => []);
+stub(thesisModel, "getAllTheses", async () => []);
+stub(userModel, "getAllUsers", async () => []);
 
 // Imported only after the stubs are installed.
 const app = require("../app");
@@ -30,7 +34,7 @@ beforeEach(() => {
 
 describe("requireAuth", () => {
   it("401 when there is no Authorization header", async () => {
-    const res = await request(app).get("/api/posts");
+    const res = await request(app).post("/api/posts");
 
     assert.equal(res.status, 401);
     assert.deepEqual(res.body, { error: "Authentication required" });
@@ -38,7 +42,7 @@ describe("requireAuth", () => {
   });
 
   it("401 when the Authorization scheme is not Bearer", async () => {
-    const res = await request(app).get("/api/posts").set("Authorization", "Basic dXNlcjpwYXNz");
+    const res = await request(app).post("/api/posts").set("Authorization", "Basic dXNlcjpwYXNz");
 
     assert.equal(res.status, 401);
     assert.equal(getUser.calls.length, 0);
@@ -47,7 +51,7 @@ describe("requireAuth", () => {
   it("401 when Supabase rejects the token", async () => {
     getUser.setImpl(async () => ({ data: { user: null }, error: { message: "invalid JWT" } }));
 
-    const res = await request(app).get("/api/posts").set("Authorization", "Bearer forged");
+    const res = await request(app).post("/api/posts").set("Authorization", "Bearer forged");
 
     assert.equal(res.status, 401);
     assert.deepEqual(res.body, { error: "Invalid or expired token" });
@@ -57,7 +61,7 @@ describe("requireAuth", () => {
   it("401 when Supabase returns no user even without an error", async () => {
     getUser.setImpl(async () => ({ data: { user: null }, error: null }));
 
-    const res = await request(app).get("/api/posts").set("Authorization", "Bearer anon-key");
+    const res = await request(app).post("/api/posts").set("Authorization", "Bearer anon-key");
 
     assert.equal(res.status, 401);
   });
@@ -72,12 +76,33 @@ describe("requireAuth", () => {
     assert.deepEqual(getUser.calls, [["good"]]);
   });
 
-  it("protects every /api mount", async () => {
-    const paths = ["/api/posts", "/api/posts/abc", "/api/theses", "/api/users", "/api/users/u1"];
+  it("protects mutating actions across all API mounts", async () => {
+    const paths = [
+      ["post", "/api/posts"],
+      ["put", "/api/posts/p1"],
+      ["delete", "/api/posts/p1"],
+      ["post", "/api/theses"],
+      ["post", "/api/users"],
+      ["get", "/api/moderation"],
+    ];
 
-    for (const path of paths) {
+    for (const [method, path] of paths) {
+      const res = await request(app)[method](path);
+      assert.equal(res.status, 401, `${method.toUpperCase()} ${path} should require auth`);
+    }
+  });
+
+  it("keeps the authenticated API closed and serves reads from /api/public", async () => {
+    // The /api/* collections require a bearer token...
+    for (const path of ["/api/posts", "/api/theses", "/api/users"]) {
       const res = await request(app).get(path);
-      assert.equal(res.status, 401, `${path} should require auth`);
+      assert.equal(res.status, 401, `GET ${path} should require auth`);
+    }
+
+    // ...public, read-only browsing is served by the dedicated /api/public router.
+    for (const path of ["/api/public/posts", "/api/public/theses", "/api/public/peers"]) {
+      const res = await request(app).get(path);
+      assert.equal(res.status, 200, `GET ${path} should be publicly readable`);
     }
   });
 

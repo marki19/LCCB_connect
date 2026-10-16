@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, ChevronRight, CheckCircle2, ChevronLeft, SendHorizontal } from "lucide-react-native";
+import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, Globe, RefreshCw, ChevronRight, CheckCircle2, ChevronLeft, SendHorizontal, ExternalLink } from "lucide-react-native";
 import Animated, { FadeIn, FadeInRight, FadeOutLeft, FadeInDown } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
 import { uploadToStorage, pickImage } from "../src/lib/upload";
 import { apiFetch, updatePost } from "../src/lib/api";
+import { fetchLinkPreview, LinkPreviewData } from "../src/lib/linkPreview";
 
-type PostType = "text" | "image" | "project" | "capstone" | null;
+type PostType = "text" | "image" | "project" | "capstone" | "website" | null;
 
 export default function CreatePostModal() {
   const router = useRouter();
@@ -46,11 +47,37 @@ export default function CreatePostModal() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
 
+  const [previewData, setPreviewData] = useState<LinkPreviewData | null>(null);
+  const [fetchingPreview, setFetchingPreview] = useState(false);
+
+  const loadPreview = async (urlToFetch: string) => {
+    const trimmed = (urlToFetch || "").trim();
+    if (!trimmed || (!trimmed.startsWith("http://") && !trimmed.startsWith("https://"))) {
+      Alert.alert("Invalid URL", "Please enter a full URL starting with http:// or https://");
+      return;
+    }
+    setFetchingPreview(true);
+    try {
+      const data = await fetchLinkPreview(trimmed);
+      if (data) {
+        setPreviewData(data);
+        if (!title && data.title) setTitle(data.title);
+        if (!content && data.description) setContent(data.description);
+      } else {
+        Alert.alert("Preview Notice", "Could not automatically fetch metadata for this link. You can still publish it with your own title and description.");
+      }
+    } catch {
+      // Non-blocking
+    } finally {
+      setFetchingPreview(false);
+    }
+  };
 
   const handleNext = () => {
     if (step === 1 && !postType) return Alert.alert("Select Type", "Please choose a post type.");
     if (step === 2) {
       if (postType === "text" && !content) return Alert.alert("Required", "Please enter some content.");
+      if (postType === "website" && !githubUrl) return Alert.alert("Required", "Please enter a live website URL.");
       if ((postType === "project" || postType === "capstone") && !title) return Alert.alert("Required", "Please enter a title.");
     }
     setStep((s) => (s + 1) as 1 | 2 | 3);
@@ -67,6 +94,15 @@ export default function CreatePostModal() {
         finalImageUrl = await uploadToStorage(imageUri, 'assets', path, 'image/jpeg');
       }
 
+      let finalPreviewMetadata = previewData;
+      if (postType === "website" && !finalPreviewMetadata && githubUrl) {
+        try {
+          finalPreviewMetadata = await fetchLinkPreview(githubUrl.trim());
+        } catch {
+          // Non-blocking
+        }
+      }
+
       const techArray = technologies ? technologies.split(',').map(t => t.trim()) : null;
 
       if (isEditing && postId) {
@@ -74,9 +110,10 @@ export default function CreatePostModal() {
         await updatePost(postId, {
           content,
           type: postType || 'text',
-          title: title || null,
+          title: title || (finalPreviewMetadata?.title ?? null),
           technologies: techArray,
           github_url: githubUrl || null,
+          preview_metadata: finalPreviewMetadata || null,
           ...(finalImageUrl ? { image_url: finalImageUrl } : {}),
         });
       } else {
@@ -86,10 +123,11 @@ export default function CreatePostModal() {
           body: JSON.stringify({
             content,
             type: postType || 'text',
-            title: title || null,
+            title: title || (finalPreviewMetadata?.title ?? null),
             technologies: techArray,
             github_url: githubUrl || null,
             image_url: finalImageUrl,
+            preview_metadata: finalPreviewMetadata || null,
           }),
         });
 
@@ -154,10 +192,11 @@ export default function CreatePostModal() {
             {step === 1 && (
               <Animated.View entering={FadeInDown.duration(400).springify()}>
                 <Text className="text-slate-500 font-semibold uppercase tracking-widest text-xs mb-6">Step 1 of 3: Select Format</Text>
-                <OptionCard type="text" title="Start a Discussion" desc="Share thoughts, ask questions, or start a debate." Icon={Type} color="#3B82F6" bg="bg-blue-100" />
-                <OptionCard type="image" title="Share an Update" desc="Post an image with a caption of your recent work." Icon={ImageIcon} color="#8B5CF6" bg="bg-purple-100" />
+                <OptionCard type="website" title="Live Website / Web App" desc="Share a hosted web project with automatic link preview." Icon={Globe} color="#0284C7" bg="bg-sky-100" />
                 <OptionCard type="project" title="Showcase Project" desc="Display a coding project with tech stack and repo." Icon={FolderOpen} color="#10B981" bg="bg-emerald-100" />
                 <OptionCard type="capstone" title="Publish Capstone" desc="Officially share your final year capstone." Icon={GraduationCap} color="#F59E0B" bg="bg-amber-100" />
+                <OptionCard type="text" title="Start a Discussion" desc="Share thoughts, ask questions, or start a debate." Icon={Type} color="#3B82F6" bg="bg-blue-100" />
+                <OptionCard type="image" title="Share an Update" desc="Post an image with a caption of your recent work." Icon={ImageIcon} color="#8B5CF6" bg="bg-purple-100" />
               </Animated.View>
             )}
 
@@ -165,12 +204,61 @@ export default function CreatePostModal() {
               <Animated.View entering={FadeInRight.duration(400).springify()}>
                 <Text className="text-slate-500 font-semibold uppercase tracking-widest text-xs mb-6">Step 2 of 3: Content</Text>
                 
-                {(postType === "project" || postType === "capstone") && (
+                {postType === "website" && (
                   <View className="mb-6">
-                    <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Project Title</Text>
+                    <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Live Website URL</Text>
+                    <View className="flex-row items-center">
+                      <TextInput
+                        className="flex-1 bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base text-sky-600 font-medium shadow-sm shadow-slate-100"
+                        placeholder="https://my-app.vercel.app"
+                        placeholderTextColor="#94A3B8"
+                        autoCapitalize="none"
+                        keyboardType="url"
+                        value={githubUrl}
+                        onChangeText={setGithubUrl}
+                        onBlur={() => loadPreview(githubUrl)}
+                      />
+                      <TouchableOpacity
+                        onPress={() => loadPreview(githubUrl)}
+                        disabled={fetchingPreview || !githubUrl.trim()}
+                        className="ml-2 bg-sky-600 px-4 py-4 rounded-2xl items-center justify-center"
+                      >
+                        {fetchingPreview ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <RefreshCw size={18} color="#FFFFFF" />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                    <Text className="text-slate-400 text-xs mt-1 ml-1">Tap the refresh icon to scan Open Graph preview metadata.</Text>
+                  </View>
+                )}
+
+                {postType === "website" && previewData && (
+                  <View className="mb-6 bg-white border border-sky-200 rounded-2xl p-4 shadow-sm shadow-slate-100">
+                    <Text className="text-sky-700 font-bold text-xs uppercase mb-2">Live Preview Detected</Text>
+                    {previewData.image ? (
+                      <Image
+                        source={{ uri: previewData.image }}
+                        className="w-full h-36 rounded-xl mb-3 bg-slate-100"
+                        resizeMode="cover"
+                      />
+                    ) : null}
+                    <Text className="text-slate-900 font-bold text-base mb-1">{previewData.title || title}</Text>
+                    {previewData.description ? (
+                      <Text numberOfLines={2} className="text-slate-600 text-xs leading-4">{previewData.description}</Text>
+                    ) : null}
+                  </View>
+                )}
+
+                {(postType === "project" || postType === "capstone" || postType === "website") && (
+                  <View className="mb-6">
+                    <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">
+                      {postType === "website" ? "Website Title" : "Project Title"}
+                    </Text>
                     <TextInput
                       className="bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base font-semibold text-slate-900 shadow-sm shadow-slate-100"
-                      placeholder="e.g. LCCB Connect App"
+                      placeholder={postType === "website" ? "e.g. IT Student Portfolio" : "e.g. LCCB Connect App"}
                       placeholderTextColor="#94A3B8"
                       value={title}
                       onChangeText={setTitle}
@@ -221,13 +309,13 @@ export default function CreatePostModal() {
               <Animated.View entering={FadeInRight.duration(400).springify()}>
                 <Text className="text-slate-500 font-semibold uppercase tracking-widest text-xs mb-6">Step 3 of 3: Final Details</Text>
                 
-                {(postType === "project" || postType === "capstone") ? (
+                {(postType === "project" || postType === "capstone" || postType === "website") ? (
                   <>
                     <View className="mb-6">
                       <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Tech Stack (comma separated)</Text>
                       <TextInput
                         className="bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base font-medium text-slate-800 shadow-sm shadow-slate-100"
-                        placeholder="React Native, Node.js, Supabase"
+                        placeholder="React, Next.js, Node.js, Tailwind"
                         placeholderTextColor="#94A3B8"
                         value={technologies}
                         onChangeText={setTechnologies}
@@ -235,7 +323,9 @@ export default function CreatePostModal() {
                     </View>
 
                     <View className="mb-8">
-                      <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Repository Link (Optional)</Text>
+                      <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">
+                        {postType === "website" ? "Repository Link (Optional)" : "Repository Link (Optional)"}
+                      </Text>
                       <TextInput
                         className="bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base text-indigo-600 font-medium shadow-sm shadow-slate-100"
                         placeholder="https://github.com/username/repo"

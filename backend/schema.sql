@@ -10,7 +10,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   bio TEXT,
   course TEXT,
   year_level TEXT,
-  role TEXT DEFAULT 'student',
+  role TEXT DEFAULT 'student' CHECK (
+    role IN (
+      'student', 'faculty', 'departmentAdmin', 'department_admin',
+      'admin', 'superadmin', 'superAdmin'
+    )
+  ),
   skills TEXT[],
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -21,11 +26,12 @@ CREATE TABLE IF NOT EXISTS public.posts (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   author_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   content TEXT,
-  type TEXT DEFAULT 'text' CHECK (type IN ('text', 'image', 'project', 'capstone')),
+  type TEXT DEFAULT 'text' CHECK (type IN ('text', 'image', 'project', 'capstone', 'website')),
   title TEXT,
   technologies TEXT[],
   github_url TEXT,
   image_url TEXT,
+  preview_metadata JSONB,
   moderation_status TEXT DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'hidden')),
   moderation_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),

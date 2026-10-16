@@ -18,6 +18,21 @@ export async function apiFetch(
     data: { session },
   } = await supabase.auth.getSession();
 
+  let targetPath = path;
+  const method = (init.method || "GET").toUpperCase();
+
+  // If there is no active session (guest visitor) and this is a read request,
+  // route to the dedicated public read-only endpoints.
+  if (!session?.access_token && method === "GET") {
+    if (path.startsWith("/posts")) {
+      targetPath = `/public${path}`;
+    } else if (path.startsWith("/theses")) {
+      targetPath = `/public${path}`;
+    } else if (path.startsWith("/users")) {
+      targetPath = path.replace(/^\/users/, "/public/peers");
+    }
+  }
+
   const headers: Record<string, string> = {
     ...((init.headers as Record<string, string>) || {}),
   };
@@ -28,7 +43,7 @@ export async function apiFetch(
     headers["Authorization"] = `Bearer ${session.access_token}`;
   }
 
-  return fetch(`${API_URL}${path}`, { ...init, headers });
+  return fetch(`${API_URL}${targetPath}`, { ...init, headers });
 }
 
 /** apiFetch + JSON parsing + throw on non-2xx (uses the server's error message). */
@@ -53,6 +68,7 @@ export async function updatePost(
     github_url?: string | null;
     image_url?: string | null;
     type?: string;
+    preview_metadata?: any;
   }
 ) {
   return apiJson(`/posts/${id}`, {

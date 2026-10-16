@@ -1,6 +1,6 @@
 # Security Enhancement Plan — LCCB Connect
 
-**Status:** Phases 0–5 and 7–11 implemented (6 and 9 partial)
+**Status:** Phases 0–5, 7–8 and 10–11 implemented (6 partial — no buckets yet; 7 source done, deploy pending; 9 partial)
 **Scope:** `backend/` (Express API + Postgres/Supabase), `frontend/` (Expo/React Native), Supabase project config
 **Related:** `Feature_plan.md`
 
@@ -18,7 +18,7 @@
 > | 7 | `link-preview` edge function: requires a verified Supabase token; http(s)-only; blocks loopback/private/link-local/multicast/metadata (IP literals **and** resolved DNS, re-checked on every redirect hop); timeout + 512 KB cap; origin-restricted CORS; returns extracted metadata only | `frontend/supabase/functions/link-preview/index.ts` |
 > | 8 | Partial updates touch only the fields supplied (a fixed column whitelist, so editing a post no longer nulls `image_url`) while ownership is still enforced in SQL; `updated_at` is set by DB triggers (forgery-proof) — **applied to the live database**; keyset pagination (`?limit=`/`?cursor=`) capped at 100 on every list endpoint; seed script is idempotent | `backend/models/*.js`, `backend/controllers/*.js`, `backend/migrations/002_updated_at_triggers.sql`, `backend/scripts/seed-data.js` |
 > | 9 (partial) | Central `apiFetch` client attaches `Bearer <token>`; all frontend call sites go through it; fabricated guest session replaced with real anonymous sign-in | `frontend/src/lib/api.ts`, `frontend/app/**`, `frontend/src/contexts/AuthContext.tsx` |
-> | 10 | `node:test` + `supertest` suite (**42 tests**: 401 on every `/api` mount, token-derived identity, SQL ownership → 404, role-escalation blocked, storage-URL rules, no DB-error leakage, pagination caps). Backend split into a testable `app.js` + boot-only `index.js`. Unused `expo` backend dependency removed → **`npm audit` 22 → 0 vulnerabilities**. GitHub Actions CI (backend tests + blocking audit; frontend typecheck/lint/audit; gitleaks), Dependabot, `.gitleaks.toml`, and a `.githooks/pre-commit` gitleaks guard | `backend/tests/*`, `backend/app.js`, `backend/package.json`, `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.githooks/pre-commit`, `.gitleaks.toml` |
+> | 10 | `node:test` + `supertest` suite (**48 tests**: 401 on every `/api` mount, token-derived identity, SQL ownership → 404, role-escalation blocked, storage-URL rules, no DB-error leakage, pagination caps). Backend split into a testable `app.js` + boot-only `index.js`. Unused `expo` backend dependency removed → **`npm audit` 22 → 0 vulnerabilities**. GitHub Actions CI (backend tests + blocking audit; frontend typecheck/lint/audit; gitleaks), Dependabot, `.gitleaks.toml`, and a `.githooks/pre-commit` gitleaks guard | `backend/tests/*`, `backend/app.js`, `backend/package.json`, `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.githooks/pre-commit`, `.gitleaks.toml` |
 > | 11 | **RBAC audit fixes.** A privilege ranking (`ROLE_RANK`, `rankOf`, `getRank`, `canManage`) now backs account management: the caller must *outrank* the target, so an `admin` can no longer edit/delete a peer `admin` or a `superadmin`, and only a `superadmin` can grant `superadmin` (closing an `admin → superadmin` self-promotion). Non-admins are refused before any target lookup, so the endpoint can't be used to probe which account ids exist. Moderation is department-scoped **fail-closed** — new `getCommentById` gives comments the same scope check posts had, and a missing department on either side is a refusal, not a pass | `backend/middleware/auth.js`, `backend/controllers/userController.js`, `backend/controllers/moderationController.js`, `backend/models/postModel.js` |
 >
 > **Verified:** `/api/*` returns `401` with no/invalid token; `/` stays public; the owner role still reads every
@@ -26,27 +26,33 @@
 > configured origin does; writes hit `429` after 30/min; the server refuses to boot without required env vars;
 > 26/26 Phase-8 checks pass (limit clamping, keyset paging, partial-update + ownership, storage-URL validation);
 > the `updated_at` triggers overwrite a forged value; re-running the seed adds no duplicates; **backend
-> `npm test` 42/42 pass** (including 14 RBAC regression tests that reproduce the escalation and
+> `npm test` 48/48 pass** (including 14 RBAC regression tests that reproduce the escalation and
 > department-scope gaps) **and `npm audit` reports 0 vulnerabilities**; the CI/Dependabot YAML parse; the
 > pre-commit hook exits 0 when gitleaks is absent; `tsc --noEmit` and the edge-function syntax check are clean.
 >
-> **Still manual (Phase 0, steps 1–4):** rotate the leaked DB password + service-role key and purge `.env`
-> from git history — needs the Supabase dashboard and a coordinated `git filter-repo` + force-push.
-> **Also manual for Phase 7:** (re)deploy the function (`supabase functions deploy link-preview`) and set the
-> `ALLOWED_ORIGINS` secret for production web origins.
-> **Also manual for Phase 6:** make the `theses` bucket private and add Storage RLS policies (dashboard), then
-> switch reads to signed URLs, and add infinite-scroll to the feed to consume `?cursor=`.
+> **Phase 0 — DONE (2026-10-16):** DB password, anon key and service-role key rotated; the legacy keys were
+> disabled after the new-format keys went live; `.env` untracked and purged from git history with
+> `git filter-repo`, then all three branches force-pushed. Old credentials now fail (`28P01` / `401`); the new
+> publishable + secret keys and the new DB password are verified working, and `backend/.env` + `frontend/.env`
+> are `404` on GitHub.
+> **Still manual for Phase 7:** the hardened source is committed, but the live function answers `404`
+> (`NOT_FOUND`) — it has never been deployed. Run `supabase functions deploy link-preview` (from `frontend/`)
+> and set the `ALLOWED_ORIGINS` secret for production web origins.
+> **Phase 6 — re-scoped:** the project currently has **no Storage buckets** (the `theses` bucket returns
+> `NoSuchBucket` and `GET /storage/v1/bucket` is empty), so there is no world-readable manuscript bucket to
+> lock down today; create `theses` **private** + Storage RLS + signed URLs when uploads ship.
 > **Also manual for Phase 10:** install `gitleaks` locally to activate the pre-commit scan (the hook is
 > already wired via `git config core.hooksPath .githooks`); clear the ~27 pre-existing lint errors so the lint
-> step can block; after the Phase 0 history purge, drop `continue-on-error` from the gitleaks CI job.
-> **Known-open RBAC items (Phase 11 review, not yet fixed):** the role vocabulary is inconsistent — the API
-> accepts seven spellings (`superadmin`/`superAdmin`, `departmentAdmin`/`department_admin`) and stores them
-> verbatim with no DB `CHECK` on `profiles.role`, while the client routes on exact equality
-> (`frontend/app/_layout.tsx`), so a row written as `superAdmin` is a server-side admin but a client-side
-> non-admin (and a `departmentAdmin` is never routed to the moderation UI it is authorised for); the
-> declarative gates (`requireAdmin`, `requireSuperAdmin`, `requireFaculty`, …) are still unused, so user
-> management and moderation remain enforced by controller-level checks; `GET /api/users` has no role gate
-> for any authenticated caller; and there is no department-scope check on notifications.
+> step can block. The gitleaks CI job is now **blocking** (`continue-on-error` removed).
+> **Known-open RBAC items (Phase 11 review):** the role vocabulary is still inconsistent — the API accepts
+> seven spellings (`superadmin`/`superAdmin`, `departmentAdmin`/`department_admin`) while the client routes
+> on exact equality (`frontend/app/_layout.tsx`), so a row written as `superAdmin` is a server-side admin but
+> a client-side non-admin (and a `departmentAdmin` is never routed to the moderation UI it is authorised
+> for). A DB `CHECK` (`chk_profiles_role`, migration `003`) now **bounds** the vocabulary but does not
+> normalise it. The declarative gates (`requireAdmin`, `requireSuperAdmin`, `requireFaculty`, …) are still
+> unused, so user management and moderation remain enforced by controller-level checks; `GET /api/users`
+> (behind `requireAuth`) has no role gate, so any signed-in user can list profiles (public browsing is the
+> sanitised `/api/public/peers`).
 > Phase 6 (Storage side) and the monitoring half of Phase 10 (Sentry, an `audit_log` table, Supabase auth
 > policy) remain open.
 

@@ -36,6 +36,7 @@ const getAllPosts = async ({ limit = DEFAULT_LIMIT, cursor = null, includeHidden
       p.technologies,
       p.github_url,
       p.image_url,
+      p.preview_metadata,
       p.moderation_status,
       p.moderation_reason,
       p.created_at,
@@ -76,6 +77,7 @@ const getPostById = async (id, { includeHidden = false } = {}) => {
       p.technologies,
       p.github_url,
       p.image_url,
+      p.preview_metadata,
       p.moderation_status,
       p.moderation_reason,
       p.created_at,
@@ -98,10 +100,21 @@ const getPostById = async (id, { includeHidden = false } = {}) => {
 };
 
 const createPost = async (postData) => {
-  const { author_id, content, type, title, technologies, github_url, image_url, moderation_status = 'approved', moderation_reason = null } = postData;
+  const {
+    author_id,
+    content,
+    type,
+    title,
+    technologies,
+    github_url,
+    image_url,
+    preview_metadata = null,
+    moderation_status = 'approved',
+    moderation_reason = null,
+  } = postData;
   const sql = `
-    INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, moderation_status, moderation_reason)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, preview_metadata, moderation_status, moderation_reason)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING *;
   `;
   const values = [
@@ -112,6 +125,7 @@ const createPost = async (postData) => {
     technologies || null,
     github_url || null,
     image_url || null,
+    preview_metadata ? JSON.stringify(preview_metadata) : null,
     moderation_status,
     moderation_reason,
   ];
@@ -126,6 +140,7 @@ const POST_UPDATABLE_COLUMNS = [
   "technologies",
   "github_url",
   "image_url",
+  "preview_metadata",
 ];
 
 const updatePost = async (id, authorId, postData) => {

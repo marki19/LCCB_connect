@@ -60,6 +60,7 @@ export default function PostDetailScreen() {
               tags: postData.technologies || postData.tags || [],
               previewUrl: postData.github_url || postData.preview_url,
               imageUrl: postData.image_url,
+              preview_metadata: postData.preview_metadata || null,
               likes: postData.likes || 0,
               comments: postData.comments || 0,
               createdAt: new Date(postData.created_at).toLocaleDateString(),
@@ -265,7 +266,54 @@ export default function PostDetailScreen() {
             ))}
           </View>
 
-          {post.previewUrl ? (
+          {/* Website / Link Preview Card */}
+          {post.preview_metadata ? (
+            <TouchableOpacity
+              onPress={() => {
+                const target = post.preview_metadata?.url || post.previewUrl;
+                if (target) Linking.openURL(target);
+              }}
+              activeOpacity={0.85}
+              style={{
+                marginHorizontal: 16,
+                marginBottom: 16,
+                backgroundColor: "#F8FAFC",
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                overflow: "hidden",
+              }}
+            >
+              {post.preview_metadata.image ? (
+                <Image
+                  source={{ uri: post.preview_metadata.image }}
+                  style={{ width: "100%", height: 180, backgroundColor: "#E2E8F0" }}
+                  resizeMode="cover"
+                />
+              ) : null}
+              <View style={{ padding: 14 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+                  <ExternalLink size={14} color="#0284C7" />
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: "#0284C7", fontWeight: "700", marginLeft: 6, flex: 1 }}>
+                    {post.preview_metadata.siteName || post.preview_metadata.url}
+                  </Text>
+                </View>
+                {post.preview_metadata.title ? (
+                  <Text numberOfLines={2} style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>
+                    {post.preview_metadata.title}
+                  </Text>
+                ) : null}
+                {post.preview_metadata.description ? (
+                  <Text numberOfLines={3} style={{ fontSize: 13, color: "#64748B", lineHeight: 18, marginBottom: 8 }}>
+                    {post.preview_metadata.description}
+                  </Text>
+                ) : null}
+                <View style={{ alignSelf: "flex-start", backgroundColor: "#0284C7", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                  <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "700" }}>Visit Website</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ) : post.previewUrl ? (
             <TouchableOpacity onPress={() => Linking.openURL(post.previewUrl!)} activeOpacity={0.8}
               style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: "#EFF6FF", borderRadius: 14, borderWidth: 1, borderColor: "#BFDBFE", padding: 14, flexDirection: "row", alignItems: "center" }}>
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center", marginRight: 12 }}>

@@ -19,7 +19,7 @@ export default function HomeScreen() {
   const [activePeers, setActivePeers] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [filter, setFilter] = useState<"all" | "theses" | "projects" | "discussions" | "images">("all");
+  const [filter, setFilter] = useState<"all" | "theses" | "websites" | "projects" | "discussions" | "images">("all");
 
   const getInitials = (name?: string | null) => {
     if (!name) return "LC";
@@ -76,6 +76,7 @@ export default function HomeScreen() {
             tags: row.technologies || row.tags || [],
             previewUrl: row.github_url || row.preview_url,
             imageUrl: row.image_url,
+            preview_metadata: row.preview_metadata || null,
             likes: row.likes || 0,
             comments: row.comments || 0,
             createdAt: new Date(row.created_at).toLocaleDateString(),
@@ -128,6 +129,8 @@ export default function HomeScreen() {
 
     if (filter === "theses") {
       unified = unified.filter((item) => item.type === "thesis");
+    } else if (filter === "websites") {
+      unified = unified.filter((item) => item.type === "website");
     } else if (filter === "projects") {
       unified = unified.filter((item) => item.type === "project" || item.type === "capstone");
     } else if (filter === "discussions") {
@@ -293,6 +296,7 @@ export default function HomeScreen() {
                 {/* Filter Pills */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
                   <FilterTab label="All" value="all" />
+                  <FilterTab label="🌐 Websites" value="websites" />
                   <FilterTab label="📑 Theses" value="theses" />
                   <FilterTab label="Projects" value="projects" />
                   <FilterTab label="Discussions" value="discussions" />

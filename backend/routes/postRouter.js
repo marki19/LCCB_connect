@@ -21,6 +21,9 @@ router.post("/:id/like", postController.toggleLike);
 router.get("/:id/comments", postController.getComments);
 router.post("/:id/comments", loadProfile, validate(createCommentSchema), postController.addComment);
 
+// Link preview generation
+router.post("/preview", postController.generatePreview);
+
 module.exports = router;
 
 

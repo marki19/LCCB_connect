@@ -1,33 +1,34 @@
-import { supabase } from './supabase';
+import { apiFetch } from "./api";
 
 export type LinkPreviewData = {
   title: string | null;
   description: string | null;
   image: string | null;
   url: string;
+  siteName?: string | null;
 };
 
 /**
- * Fetches metadata (Open Graph tags) for a given URL by calling our Supabase Edge Function.
- * This is used for generating rich link previews in the Broadcasting Feed or Messages.
- * 
- * @param url The URL to fetch a preview for
- * @returns A LinkPreviewData object or null if it fails
+ * Fetches metadata (Open Graph tags) for a given URL by calling our Express backend.
+ * This is used for generating rich link previews for IT student websites and live apps.
  */
 export async function fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
   try {
-    const { data, error } = await supabase.functions.invoke('link-preview', {
-      body: { url },
+    const res = await apiFetch("/posts/preview", {
+      method: "POST",
+      body: JSON.stringify({ url }),
     });
 
-    if (error) {
-      console.error('Error fetching link preview from edge function:', error.message);
+    if (!res.ok) {
+      console.warn("Backend link preview returned status", res.status);
       return null;
     }
 
+    const data = await res.json();
     return data as LinkPreviewData;
   } catch (err) {
-    console.error('Failed to invoke link-preview function', err);
+    console.error("Failed to fetch link preview from backend", err);
     return null;
   }
 }
+

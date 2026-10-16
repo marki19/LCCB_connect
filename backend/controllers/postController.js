@@ -2,6 +2,7 @@ const postModel = require("../models/postModel");
 const { clampLimit } = require("../models/pagination");
 const moderationService = require("../services/moderationService");
 const notificationService = require("../services/notificationService");
+const previewService = require("../services/previewService");
 
 // Errors are forwarded to the centralized handler in index.js, which logs
 // server-side and returns a generic message (never the raw DB error).
@@ -146,6 +147,19 @@ const addComment = async (req, res, next) => {
   }
 };
 
+const generatePreview = async (req, res, next) => {
+  try {
+    const { url } = req.body;
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ error: "A valid URL string is required" });
+    }
+    const preview = await previewService.fetchLinkPreview(url);
+    res.json(preview);
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to generate link preview" });
+  }
+};
+
 module.exports = {
   getPosts,
   getPost,
@@ -155,4 +169,5 @@ module.exports = {
   toggleLike,
   getComments,
   addComment,
+  generatePreview,
 };

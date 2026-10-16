@@ -71,6 +71,35 @@ async function requireAuth(req, res, next) {
   }
 }
 
+/**
+ * Optional authentication:
+ * If a Bearer token is provided, verify it and attach req.user.
+ * If no token is provided, proceed as guest (req.user = null).
+ * If an invalid token is explicitly supplied, reject with 401.
+ */
+async function optionalAuth(req, res, next) {
+  try {
+    const header = req.headers.authorization || "";
+    const token = header.startsWith("Bearer ") ? header.slice(7).trim() : null;
+    if (!token) {
+      req.user = null;
+      req.accessToken = null;
+      return next();
+    }
+
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data || !data.user) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    req.user = data.user;
+    req.accessToken = token;
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+}
+
 /** Loads the caller's `profiles` row into `req.profile`. */
 async function loadProfile(req, res, next) {
   try {
@@ -186,6 +215,7 @@ const requireStudent = [requireAuth, loadProfile, requireRole("student")];
 
 module.exports = {
   requireAuth,
+  optionalAuth,
   loadProfile,
   requireRole,
   // Role constants and normalization

@@ -48,14 +48,26 @@ const optionalStorageUrl = () => StorageUrl.nullable().optional();
 const stringArray = (maxItems, maxLen) =>
   z.array(z.string().trim().max(maxLen)).max(maxItems).nullable().optional();
 
+const previewMetadataSchema = z
+  .object({
+    title: z.string().max(300).nullable().optional(),
+    description: z.string().max(2000).nullable().optional(),
+    image: HttpUrl.nullable().optional(),
+    url: HttpUrl,
+  })
+  .strict()
+  .nullable()
+  .optional();
+
 // ---- posts -----------------------------------------------------------------
 const postFields = {
   content: z.string().max(5000).nullable().optional(),
-  type: z.enum(["text", "image", "project", "capstone"]).optional(),
+  type: z.enum(["text", "image", "project", "capstone", "website"]).optional(),
   title: optionalText(200),
   technologies: stringArray(30, 40),
   github_url: optionalUrl(),
   image_url: optionalStorageUrl(),
+  preview_metadata: previewMetadataSchema,
 };
 
 const createPostSchema = z.object(postFields).strict();

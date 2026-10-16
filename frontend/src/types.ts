@@ -21,6 +21,13 @@ export type Post = {
   type: PostType;
   previewUrl?: string;
   imageUrl?: string;
+  preview_metadata?: {
+    title?: string | null;
+    description?: string | null;
+    image?: string | null;
+    url: string;
+    siteName?: string | null;
+  } | null;
   tags: string[];
   likes: number;
   comments: number;

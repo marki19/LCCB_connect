@@ -12,6 +12,7 @@ const userRouter = require("./routes/userRouter");
 const postRouter = require("./routes/postRouter");
 const thesisRouter = require("./routes/thesisRouter");
 const moderationRouter = require("./routes/moderationRouter");
+const publicRouter = require("./routes/publicRouter");
 
 // The Express app is built here and exported WITHOUT listening, so tests can
 // drive it via supertest. `index.js` owns dotenv + boot-time env validation and
@@ -95,6 +96,9 @@ app.use((req, res, next) => {
 // Baseline limit for all API traffic, stricter for writes.
 app.use("/api", apiLimiter);
 app.use("/api", (req, res, next) => (isWrite(req) ? writeLimiter(req, res, next) : next()));
+
+// Public read-only endpoints (no token required)
+app.use("/api/public", publicRouter);
 
 // Every API route requires a valid Supabase access token. Identity is taken
 // from the verified token, never from the request body.

@@ -190,8 +190,55 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         ))}
       </View>
 
-      {/* Preview URL chip */}
-      {post.previewUrl ? (
+      {/* Website / Link Preview Card */}
+      {post.preview_metadata ? (
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation?.();
+            const target = post.preview_metadata?.url || post.previewUrl;
+            if (target) Linking.openURL(target);
+          }}
+          activeOpacity={0.85}
+          style={{
+            marginHorizontal: 14,
+            marginBottom: 12,
+            backgroundColor: "#F8FAFC",
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: "#E2E8F0",
+            overflow: "hidden",
+          }}
+        >
+          {post.preview_metadata.image ? (
+            <Image
+              source={{ uri: post.preview_metadata.image }}
+              style={{ width: "100%", height: 160, backgroundColor: "#E2E8F0" }}
+              resizeMode="cover"
+            />
+          ) : null}
+          <View style={{ padding: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+              <ExternalLink size={13} color="#0284C7" />
+              <Text
+                numberOfLines={1}
+                style={{ fontSize: 12, color: "#0284C7", fontWeight: "700", marginLeft: 6, flex: 1 }}
+              >
+                {post.preview_metadata.siteName || post.preview_metadata.url}
+              </Text>
+            </View>
+            {post.preview_metadata.title ? (
+              <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", marginBottom: 2 }}>
+                {post.preview_metadata.title}
+              </Text>
+            ) : null}
+            {post.preview_metadata.description ? (
+              <Text numberOfLines={2} style={{ fontSize: 12, color: "#64748B", lineHeight: 17 }}>
+                {post.preview_metadata.description}
+              </Text>
+            ) : null}
+          </View>
+        </TouchableOpacity>
+      ) : post.previewUrl ? (
         <TouchableOpacity
           onPress={(e) => { e.stopPropagation?.(); Linking.openURL(post.previewUrl!); }}
           activeOpacity={0.8}
