@@ -28,6 +28,7 @@ const getAllTheses = async ({ limit = DEFAULT_LIMIT, cursor = null } = {}) => {
       t.uploader_id,
       t.title,
       t.abstract,
+      t.department_id,
       t.department,
       t.category,
       t.pdf_url,
@@ -38,10 +39,13 @@ const getAllTheses = async ({ limit = DEFAULT_LIMIT, cursor = null } = {}) => {
         'full_name', pr.full_name,
         'avatar_url', pr.avatar_url,
         'course', pr.course,
-        'year_level', pr.year_level
+        'year_level', pr.year_level,
+        'department_id', pr.department_id,
+        'department_name', d.name
       ) AS uploader
     FROM theses t
-    LEFT JOIN profiles pr ON t.uploader_id = pr.id${whereClause}
+    LEFT JOIN profiles pr ON t.uploader_id = pr.id
+    LEFT JOIN public.departments d ON d.id = pr.department_id${whereClause}
     ORDER BY t.created_at DESC, t.id DESC
     LIMIT $${params.length};
   `;
@@ -56,6 +60,7 @@ const getThesisById = async (id) => {
       t.uploader_id,
       t.title,
       t.abstract,
+      t.department_id,
       t.department,
       t.category,
       t.pdf_url,
@@ -64,10 +69,13 @@ const getThesisById = async (id) => {
         'id', pr.id,
         'username', pr.username,
         'full_name', pr.full_name,
-        'avatar_url', pr.avatar_url
+        'avatar_url', pr.avatar_url,
+        'department_id', pr.department_id,
+        'department_name', d.name
       ) AS uploader
     FROM theses t
     LEFT JOIN profiles pr ON t.uploader_id = pr.id
+    LEFT JOIN public.departments d ON d.id = pr.department_id
     WHERE t.id = $1;
   `;
   const result = await db.query(sql, [id]);
@@ -75,22 +83,24 @@ const getThesisById = async (id) => {
 };
 
 const createThesis = async (thesisData) => {
-  const { uploader_id, title, abstract, department, category, pdf_url } = thesisData;
+  // `department_id` (catalog) is derived by the controller from the uploader's
+  // profile; `department` is its denormalized display name.
+  const { uploader_id, title, abstract, department_id, department, category, pdf_url } = thesisData;
   const sql = `
-    INSERT INTO theses (uploader_id, title, abstract, department, category, pdf_url)
-    VALUES ($1, $2, $3, $4, $5, $6)
+    INSERT INTO theses (uploader_id, title, abstract, department_id, department, category, pdf_url)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING *;
   `;
-  const values = [uploader_id, title, abstract, department, category, pdf_url];
+  const values = [uploader_id, title, abstract, department_id || null, department || null, category, pdf_url];
   const result = await db.query(sql, values);
   return result.rows[0];
 };
 
 // Columns a caller may change (fixed whitelist — no client input reaches SQL).
+// Department is NOT here: it is derived from the uploader's profile, not chosen.
 const THESIS_UPDATABLE_COLUMNS = [
   "title",
   "abstract",
-  "department",
   "category",
   "pdf_url",
 ];

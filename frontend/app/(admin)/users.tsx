@@ -41,14 +41,14 @@ export default function AdminUsersScreen() {
               <Text className="flex-2 font-bold text-slate-700 w-48">Name</Text>
               <Text className="flex-2 font-bold text-slate-700 w-48">Username</Text>
               <Text className="flex-1 font-bold text-slate-700 w-32">Role</Text>
-              <Text className="flex-1 font-bold text-slate-700 w-32">Course</Text>
+              <Text className="flex-1 font-bold text-slate-700 w-32">Department</Text>
             </View>
             {users.map((u) => (
               <View key={u.id} className="flex-row items-center py-3 border-b border-slate-100">
                 <Text className="text-slate-800 font-medium w-48">{u.full_name || "—"}</Text>
                 <Text className="text-slate-500 text-sm w-48">{u.username || "—"}</Text>
                 <Text className="text-blue-600 font-semibold text-xs w-32 uppercase">{u.role || "student"}</Text>
-                <Text className="text-slate-500 text-sm w-32">{u.course || "—"}</Text>
+                <Text className="text-slate-500 text-sm w-32">{u.department_name || "—"}</Text>
               </View>
             ))}
           </View>

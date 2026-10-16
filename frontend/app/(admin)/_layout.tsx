@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, Dimensions } from "react-native";
 import { Stack, useRouter, usePathname } from "expo-router";
-import { LayoutDashboard, Users, FileText, Settings, LogOut } from "lucide-react-native";
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Building2 } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../src/contexts/AuthContext";
 
@@ -63,6 +63,7 @@ export default function AdminLayout() {
           <NavItem icon={LayoutDashboard} label="Overview" path="/(admin)" />
           <NavItem icon={Users} label="Users & Roles" path="/(admin)/users" />
           <NavItem icon={FileText} label="Content Moderation" path="/(admin)/content" />
+          <NavItem icon={Building2} label="Departments & Courses" path="/(admin)/departments" />
           <NavItem icon={Settings} label="Settings" path="/(admin)/settings" />
         </View>
 
@@ -93,6 +94,7 @@ export default function AdminLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="users" />
           <Stack.Screen name="content" />
+          <Stack.Screen name="departments" />
           <Stack.Screen name="settings" />
         </Stack>
       </View>

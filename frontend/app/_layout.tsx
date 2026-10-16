@@ -25,14 +25,34 @@ function RouteGuard() {
     if (!initialized) return;
 
     const inAuth = segments[0] === "(auth)";
+    const inComplete = segments[0] === "complete-profile";
     const isAdminUser = session && profile && (profile.role === 'admin' || profile.role === 'superadmin');
     const isAuthenticated = !!session || isGuest;
+
+    // A real (non-guest, non-campus-admin) account missing a department must
+    // finish the one-time profile-completion gate before using the app.
+    const needsProfile =
+      !!session &&
+      !isGuest &&
+      !!profile &&
+      profile.role !== "admin" &&
+      profile.role !== "superadmin" &&
+      !profile.department_id;
 
     if (!isAuthenticated && !inAuth) {
       // Not logged in - send to login
       router.replace("/(auth)/login");
+    } else if (isAuthenticated && needsProfile && !inComplete) {
+      router.replace("/complete-profile");
     } else if (isAuthenticated && inAuth) {
       // Already logged in or browsing as guest - route based on role
+      if (isAdminUser) {
+        router.replace("/(admin)/");
+      } else {
+        router.replace("/(tabs)/");
+      }
+    } else if (isAuthenticated && inComplete && !needsProfile) {
+      // Finished the gate - send home.
       if (isAdminUser) {
         router.replace("/(admin)/");
       } else {
@@ -45,6 +65,7 @@ function RouteGuard() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="(auth)" />
+      <Stack.Screen name="complete-profile" options={{ presentation: "modal" }} />
       <Stack.Screen name="create" options={{ presentation: "modal" }} />
       <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
       <Stack.Screen name="post/[id]" />

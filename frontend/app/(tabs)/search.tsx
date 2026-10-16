@@ -54,7 +54,7 @@ export default function SearchScreen() {
         <View style={{ flex: 1, paddingRight: 12 }}>
           <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B", marginBottom: 4 }}>{item.title}</Text>
           <Text style={{ fontSize: 13, color: "#64748B", fontWeight: "500" }}>
-            {(item.uploader?.full_name || item.author?.full_name || "Unknown User")} • {item.department}
+            {(item.uploader?.full_name || item.author?.full_name || "Unknown User")} • {item.uploader?.department_name || item.department || "—"}
           </Text>
         </View>
         <View style={{ backgroundColor: item.category === "Graduate Dissertation" ? "#FCE7F3" : "#E0E7FF", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>

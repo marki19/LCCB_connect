@@ -51,7 +51,8 @@ const createPost = async (req, res, next) => {
             targetId: newPost.id,
             type: "post",
             reason: scan.reason,
-            department: req.profile?.course,
+            departmentId: req.profile?.department_id,
+            departmentName: req.profile?.department_name,
             authorId: req.user.id,
             snippet: (newPost.title || newPost.content || "").slice(0, 80),
           });
@@ -133,7 +134,8 @@ const addComment = async (req, res, next) => {
             targetId: comment.id,
             type: "comment",
             reason: scan.reason,
-            department: req.profile?.course,
+            departmentId: req.profile?.department_id,
+            departmentName: req.profile?.department_name,
             authorId: req.user.id,
             snippet: content.slice(0, 80),
           });

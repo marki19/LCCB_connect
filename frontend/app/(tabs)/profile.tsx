@@ -20,7 +20,7 @@ export default function ProfileScreen() {
     username: "mark_antipo",
     avatar_url: null,
     bio: "Full stack developer & capstone project lead.",
-    course: "BSIT",
+    department_name: null,
     year_level: "3rd Year",
     skills: ["React Native", "PostgreSQL", "Node.js"],
   };
@@ -66,7 +66,7 @@ export default function ProfileScreen() {
             name: currentUser.full_name,
             initials: getInitials(currentUser.full_name),
             avatarColor: "#BFDBFE",
-            course: currentUser.course,
+            course: currentUser.department_name,
             yearLevel: currentUser.year_level,
           },
           title: row.title || "Post Update",
@@ -115,7 +115,7 @@ export default function ProfileScreen() {
           </View>
 
           <Text style={{ fontSize: 24, fontWeight: "800", color: "#1E293B", marginTop: 8 }}>{isGuest ? "Guest Visitor" : currentUser.full_name}</Text>
-          <Text style={{ fontSize: 15, color: "#64748B", marginTop: 2, fontWeight: "500" }}>{isGuest ? "External Visitor · Read-only" : `${currentUser.course} · ${currentUser.year_level}`}</Text>
+          <Text style={{ fontSize: 15, color: "#64748B", marginTop: 2, fontWeight: "500" }}>{isGuest ? "External Visitor · Read-only" : `${currentUser.department_name || "No department"} · ${currentUser.year_level || "—"}`}</Text>
 
           <Text style={{ fontSize: 14, color: "#334155", marginTop: 12, lineHeight: 22 }}>
             {isGuest ? "Viewing LCCB academic projects and theses as a guest." : (currentUser.bio || "No bio yet.")}

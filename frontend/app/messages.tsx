@@ -26,7 +26,7 @@ export default function MessagesScreen() {
               name: u.full_name || u.username || "Peer",
               initials: getInitials(u.full_name || u.username),
               avatarColor: "#DBEAFE",
-              course: u.course || "BSIT",
+              course: u.department_name || "—",
               yearLevel: u.year_level || "3rd Year",
             })));
           }

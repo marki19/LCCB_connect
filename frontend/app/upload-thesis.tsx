@@ -16,7 +16,6 @@ export default function UploadThesisScreen() {
 
   const [title, setTitle] = useState("");
   const [abstract, setAbstract] = useState("");
-  const [department, setDepartment] = useState("");
   const [category, setCategory] = useState<"Undergraduate Capstone" | "Graduate Dissertation">("Undergraduate Capstone");
   const [pdfFile, setPdfFile] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -38,7 +37,7 @@ export default function UploadThesisScreen() {
   };
 
   const handleUpload = async () => {
-    if (!title || !abstract || !department || !pdfFile) {
+    if (!title || !abstract || !pdfFile) {
       Alert.alert("Missing Fields", "Please fill out all fields and select a PDF manuscript.");
       return;
     }
@@ -58,7 +57,6 @@ export default function UploadThesisScreen() {
         body: JSON.stringify({
           title,
           abstract,
-          department,
           category,
           pdf_url: pdfUrl,
         }),
@@ -115,13 +113,14 @@ export default function UploadThesisScreen() {
 
               <View className="mb-6">
                 <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Department / Program</Text>
-                <TextInput
-                  className="bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base text-slate-900 shadow-sm shadow-slate-100"
-                  placeholder="e.g. BS Information Technology"
-                  placeholderTextColor="#94A3B8"
-                  value={department}
-                  onChangeText={setDepartment}
-                />
+                <View className="bg-slate-100 border border-slate-200 rounded-2xl px-5 py-4">
+                  <Text className="text-base text-slate-900">
+                    {profile?.department_name || "No department on file"}
+                  </Text>
+                </View>
+                <Text className="text-slate-400 text-xs mt-2">
+                  Your manuscript is filed under your department of record.
+                </Text>
               </View>
 
               <View className="mb-6">

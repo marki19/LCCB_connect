@@ -48,6 +48,10 @@ const optionalStorageUrl = () => StorageUrl.nullable().optional();
 const stringArray = (maxItems, maxLen) =>
   z.array(z.string().trim().max(maxLen)).max(maxItems).nullable().optional();
 
+/** UUID shape (catalog + profile references). */
+const optionalUuid = () => z.string().uuid().nullable().optional();
+const requiredUuid = () => z.string().uuid();
+
 const previewMetadataSchema = z
   .object({
     title: z.string().max(300).nullable().optional(),
@@ -79,16 +83,45 @@ const createCommentSchema = z
   .strict();
 
 // ---- theses ----------------------------------------------------------------
+// `department` is deliberately absent: it is derived server-side from the
+// uploader's profile, so a caller cannot attribute a thesis to another
+// department (`.strict()` rejects an attempted `department` field).
 const thesisFields = {
   title: z.string().trim().min(1).max(300),
   abstract: z.string().trim().min(1).max(10000),
-  department: z.string().trim().min(1).max(200),
   category: z.string().trim().min(1).max(100),
   pdf_url: StorageUrl,
 };
 
 const createThesisSchema = z.object(thesisFields).strict();
 const updateThesisSchema = z.object(thesisFields).partial().strict();
+
+// ---- catalog: departments & courses (admin-managed runtime data) -----------
+const departmentFields = {
+  name: z.string().trim().min(1).max(200),
+  code: optionalText(20),
+  sort_order: z.number().int().min(0).max(100000).optional(),
+};
+
+const createDepartmentSchema = z.object(departmentFields).strict();
+const updateDepartmentSchema = z.object(departmentFields).partial().strict();
+
+const courseFields = {
+  department_id: requiredUuid(),
+  name: z.string().trim().min(1).max(200),
+  code: optionalText(20),
+  sort_order: z.number().int().min(0).max(100000).optional(),
+};
+
+const createCourseSchema = z.object(courseFields).strict();
+const updateCourseSchema = z
+  .object({
+    department_id: requiredUuid().optional(),
+    name: z.string().trim().min(1).max(200).optional(),
+    code: optionalText(20),
+    sort_order: z.number().int().min(0).max(100000).optional(),
+  })
+  .strict();
 
 // ---- profiles --------------------------------------------------------------
 const profileFields = {
@@ -99,6 +132,11 @@ const profileFields = {
   course: optionalText(100),
   year_level: optionalText(50),
   skills: stringArray(30, 40),
+  // Catalog references. A non-admin may CLAIM these once while unset (the
+  // profile-completion gate); changing an existing value is admin-only, which
+  // the controller enforces.
+  department_id: optionalUuid(),
+  course_id: optionalUuid(),
 };
 
 // Self-provisioning: no `role`/`id` accepted (server assigns them).
@@ -120,6 +158,8 @@ const updateProfileSchema = z
         "superAdmin",
       ])
       .optional(),
+    // Per-user "who can message me" preference (Messaging_plan.md §4).
+    message_policy: z.enum(["everyone", "department", "selected", "nobody"]).optional(),
   })
   .strict();
 
@@ -158,4 +198,8 @@ module.exports = {
   updateThesisSchema,
   createProfileSchema,
   updateProfileSchema,
+  createDepartmentSchema,
+  updateDepartmentSchema,
+  createCourseSchema,
+  updateCourseSchema,
 };

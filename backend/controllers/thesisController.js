@@ -31,9 +31,13 @@ const getThesis = async (req, res, next) => {
 
 const createThesis = async (req, res, next) => {
   try {
+    // Department is derived server-side from the uploader's profile — never a
+    // client-supplied value — so moderation/notification scope can't be spoofed.
     const newThesis = await thesisModel.createThesis({
       ...req.body,
       uploader_id: req.user.id,
+      department_id: req.profile?.department_id || null,
+      department: req.profile?.department_name || null,
       moderation_status: "approved",
     });
     res.status(201).json(newThesis);
@@ -48,7 +52,8 @@ const createThesis = async (req, res, next) => {
             targetId: newThesis.id,
             type: "thesis",
             reason: scan.reason,
-            department: newThesis.department || req.profile?.course,
+            departmentId: newThesis.department_id || req.profile?.department_id,
+            departmentName: req.profile?.department_name || newThesis.department,
             authorId: req.user.id,
             snippet: newThesis.title.slice(0, 80),
           });

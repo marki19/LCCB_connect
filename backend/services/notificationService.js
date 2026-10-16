@@ -3,34 +3,49 @@ const db = require("../db");
 /**
  * Finds all admins eligible to receive notifications for an event.
  * - superAdmin & admin receive all campus-wide events.
- * - departmentAdmin receives events matching their own department/course.
+ * - departmentAdmin receives events targeting their own department (by UUID).
+ *
+ * Targeting is by `department_id` (catalog UUID), never a display string, so a
+ * renamed department changes nothing. A campus-wide event (no department)
+ * notifies only campus admins — it must not fan out to every department admin.
  */
-async function getTargetAdmins(department) {
+async function getTargetAdmins(departmentId = null) {
   const sql = `
-    SELECT id, role, course FROM public.profiles
-    WHERE 
+    SELECT id, role, department_id FROM public.profiles
+    WHERE
       LOWER(role) IN ('admin', 'superadmin')
       OR (
         LOWER(REPLACE(REPLACE(role, '_', ''), '-', '')) = 'departmentadmin'
-        AND ($1::text IS NULL OR LOWER(course) = LOWER($1))
+        AND $1::uuid IS NOT NULL
+        AND department_id = $1::uuid
       );
   `;
-  const result = await db.query(sql, [department || null]);
+  const result = await db.query(sql, [departmentId || null]);
   return result.rows;
 }
 
 /**
  * Creates notification records in bulk using parameterized raw SQL.
+ * Stores the department as both the authoritative `department_id` and a
+ * denormalized display `department` name.
  */
-async function createNotifications(adminIds, { actorId, type, targetId, department, message }) {
+async function createNotifications(adminIds, { actorId, type, targetId, departmentId, departmentName, message }) {
   if (!adminIds || adminIds.length === 0) return;
 
   for (const adminId of adminIds) {
     const sql = `
-      INSERT INTO public.notifications (user_id, actor_id, type, target_id, department, message)
-      VALUES ($1, $2, $3, $4, $5, $6);
+      INSERT INTO public.notifications (user_id, actor_id, type, target_id, department_id, department, message)
+      VALUES ($1, $2, $3, $4, $5, $6, $7);
     `;
-    await db.query(sql, [adminId, actorId || null, type, targetId || null, department || null, message]);
+    await db.query(sql, [
+      adminId,
+      actorId || null,
+      type,
+      targetId || null,
+      departmentId || null,
+      departmentName || null,
+      message,
+    ]);
   }
 }
 
@@ -39,8 +54,9 @@ async function createNotifications(adminIds, { actorId, type, targetId, departme
  */
 async function notifyAdminsOnPostCreated(post, author) {
   try {
-    const department = author?.course || null;
-    const admins = await getTargetAdmins(department);
+    const departmentId = author?.department_id || null;
+    const departmentName = author?.department_name || null;
+    const admins = await getTargetAdmins(departmentId);
     const authorName = author?.full_name || author?.username || "Student";
     const postTitle = post.title ? `"${post.title}"` : "a new post";
 
@@ -50,8 +66,9 @@ async function notifyAdminsOnPostCreated(post, author) {
         actorId: author?.id,
         type: "new_post",
         targetId: post.id,
-        department,
-        message: `${authorName} (${department || "Campus"}) published ${postTitle}.`,
+        departmentId,
+        departmentName,
+        message: `${authorName} (${departmentName || "Campus"}) published ${postTitle}.`,
       }
     );
   } catch (err) {
@@ -64,8 +81,9 @@ async function notifyAdminsOnPostCreated(post, author) {
  */
 async function notifyAdminsOnThesisCreated(thesis, uploader) {
   try {
-    const department = thesis.department || uploader?.course || null;
-    const admins = await getTargetAdmins(department);
+    const departmentId = thesis.department_id || uploader?.department_id || null;
+    const departmentName = uploader?.department_name || thesis.department || null;
+    const admins = await getTargetAdmins(departmentId);
     const uploaderName = uploader?.full_name || uploader?.username || "Student";
 
     await createNotifications(
@@ -74,7 +92,8 @@ async function notifyAdminsOnThesisCreated(thesis, uploader) {
         actorId: uploader?.id,
         type: "new_thesis",
         targetId: thesis.id,
-        department,
+        departmentId,
+        departmentName,
         message: `${uploaderName} deposited manuscript: "${thesis.title}".`,
       }
     );
@@ -86,9 +105,9 @@ async function notifyAdminsOnThesisCreated(thesis, uploader) {
 /**
  * High-priority alert sent to admins when AI detects foul language or policy violations.
  */
-async function notifyAdminsOnFlaggedContent({ targetId, type, reason, department, authorId, snippet }) {
+async function notifyAdminsOnFlaggedContent({ targetId, type, reason, departmentId, departmentName, authorId, snippet }) {
   try {
-    const admins = await getTargetAdmins(department);
+    const admins = await getTargetAdmins(departmentId);
     const notifType = type === "comment" ? "flagged_comment" : "flagged_post";
     const alertMessage = `⚠️ [AI Moderation Alert] Inappropriate content flagged in ${type}: "${snippet}". Reason: ${reason}`;
 
@@ -98,7 +117,8 @@ async function notifyAdminsOnFlaggedContent({ targetId, type, reason, department
         actorId: authorId,
         type: notifType,
         targetId,
-        department,
+        departmentId,
+        departmentName,
         message: alertMessage,
       }
     );

@@ -12,7 +12,6 @@ export default function EditProfileScreen() {
   
   const [fullName, setFullName] = useState(profile?.full_name || "");
   const [bio, setBio] = useState(profile?.bio || "");
-  const [course, setCourse] = useState(profile?.course || "");
   const [yearLevel, setYearLevel] = useState(profile?.year_level || "");
   const [skills, setSkills] = useState<string[]>(profile?.skills || []);
   const [newSkill, setNewSkill] = useState("");
@@ -51,7 +50,6 @@ export default function EditProfileScreen() {
         body: JSON.stringify({
           full_name: fullName.trim(),
           bio: bio.trim(),
-          course: course.trim(),
           year_level: yearLevel.trim(),
           skills: skills,
           avatar_url: finalAvatarUrl,
@@ -134,30 +132,31 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
-          <View className="flex-row space-x-4">
-            <View className="flex-1">
-              <Text className="text-sm font-bold text-slate-700 mb-2 ml-1 uppercase tracking-wider">Course</Text>
-              <View className="bg-white rounded-2xl px-5 py-4 border border-slate-200">
-                <TextInput
-                  className="text-slate-900 text-base font-medium outline-none"
-                  value={course}
-                  onChangeText={setCourse}
-                  placeholder="e.g. BSIT"
-                  placeholderTextColor="#94A3B8"
-                />
-              </View>
+          <View>
+            <Text className="text-sm font-bold text-slate-700 mb-2 ml-1 uppercase tracking-wider">Department &amp; Course</Text>
+            <View className="bg-white rounded-2xl px-5 py-4 border border-slate-200">
+              <Text className="text-slate-900 text-base font-semibold">
+                {profile?.department_name || "—"}
+              </Text>
+              <Text className="text-slate-500 text-sm mt-1">
+                {profile?.course_name || "—"}
+              </Text>
+              <Text className="text-slate-400 text-xs mt-2">
+                Assigned at registration. Contact an administrator to change it.
+              </Text>
             </View>
-            <View className="flex-1">
-              <Text className="text-sm font-bold text-slate-700 mb-2 ml-1 uppercase tracking-wider">Year Level</Text>
-              <View className="bg-white rounded-2xl px-5 py-4 border border-slate-200">
-                <TextInput
-                  className="text-slate-900 text-base font-medium outline-none"
-                  value={yearLevel}
-                  onChangeText={setYearLevel}
-                  placeholder="e.g. 3rd Year"
-                  placeholderTextColor="#94A3B8"
-                />
-              </View>
+          </View>
+
+          <View>
+            <Text className="text-sm font-bold text-slate-700 mb-2 ml-1 uppercase tracking-wider">Year Level</Text>
+            <View className="bg-white rounded-2xl px-5 py-4 border border-slate-200">
+              <TextInput
+                className="text-slate-900 text-base font-medium outline-none"
+                value={yearLevel}
+                onChangeText={setYearLevel}
+                placeholder="e.g. 3rd Year"
+                placeholderTextColor="#94A3B8"
+              />
             </View>
           </View>
 

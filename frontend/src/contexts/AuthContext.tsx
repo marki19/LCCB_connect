@@ -13,11 +13,19 @@ export type Profile = {
   year_level: string | null;
   role: string | null;
   skills: string[] | null;
+  // Catalog assignment (Messaging_plan.md §3). Null until the user completes
+  // their profile; the ids are the authorization source of truth.
+  department_id?: string | null;
+  course_id?: string | null;
+  department_name?: string | null;
+  course_name?: string | null;
+  message_policy?: string | null;
 };
 
 type AuthContextType = { 
   signInAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   session: Session | null;
   user: User | null;
   profile: Profile | null;
@@ -28,6 +36,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType>({ 
   signInAsGuest: async () => {},
   signOut: async () => {},
+  refreshProfile: async () => {},
   session: null,
   user: null,
   profile: null,
@@ -93,6 +102,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
   };
 
+  const refreshProfile = async () => {
+    if (user?.id) {
+      await fetchProfile(user.id, user);
+    }
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -122,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, initialized, isGuest, signInAsGuest, signOut }}>
+    <AuthContext.Provider value={{ session, user, profile, initialized, isGuest, signInAsGuest, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

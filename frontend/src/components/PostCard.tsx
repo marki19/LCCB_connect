@@ -124,7 +124,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B" }}>{post.author.name}</Text>
-          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>{post.author.course} · {post.author.yearLevel}</Text>
+          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>{post.author.course || "—"} · {post.author.yearLevel || "—"}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Text style={{ fontSize: 11, color: "#94A3B8" }}>{post.createdAt}</Text>

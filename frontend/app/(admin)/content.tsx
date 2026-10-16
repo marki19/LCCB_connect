@@ -21,7 +21,9 @@ import {
   RefreshCw,
 } from "lucide-react-native";
 import { apiFetch } from "../../src/lib/api";
+import { fetchDepartments } from "../../src/lib/catalog";
 import { useAuth } from "../../src/contexts/AuthContext";
+import type { Department } from "../../src/types";
 
 type ModerationTab = "queue" | "posts" | "comments";
 
@@ -34,7 +36,8 @@ export default function AdminContentScreen() {
   const [flaggedPosts, setFlaggedPosts] = useState<any[]>([]);
   const [flaggedComments, setFlaggedComments] = useState<any[]>([]);
   const [allPosts, setAllPosts] = useState<any[]>([]);
-  const [departmentFilter, setDepartmentFilter] = useState<string>("All");
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
 
   // Reason modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -44,18 +47,20 @@ export default function AdminContentScreen() {
 
   // Check role
   const role = (profile?.role || "").toLowerCase();
-  const isSuper = role.includes("super");
   const isDeptAdmin = role.includes("department");
-  const userDept = profile?.course || "";
+  const userDeptId = profile?.department_id || null;
+  const userDeptName = profile?.department_name || "";
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Load Moderation Queue
-      const queueUrl = departmentFilter !== "All" && (isSuper || !isDeptAdmin)
-        ? `/moderation/queue?department=${encodeURIComponent(departmentFilter)}`
-        : `/moderation/queue`;
-      
+      // 1. Load Moderation Queue. Scope is the catalog UUID, never a label.
+      //    Department admins are scoped server-side; campus admins may filter.
+      const queueUrl =
+        !isDeptAdmin && departmentFilter !== "all"
+          ? `/moderation/queue?department_id=${encodeURIComponent(departmentFilter)}`
+          : `/moderation/queue`;
+
       const queueRes = await apiFetch(queueUrl);
       if (queueRes.ok) {
         const queueData = await queueRes.json();
@@ -68,10 +73,12 @@ export default function AdminContentScreen() {
       if (postsRes.ok) {
         const postsData = await postsRes.json();
         const list = Array.isArray(postsData) ? postsData : [];
-        if (isDeptAdmin && userDept) {
-          setAllPosts(list.filter((p: any) => (p.author?.course || "").toLowerCase() === userDept.toLowerCase()));
-        } else if (departmentFilter !== "All") {
-          setAllPosts(list.filter((p: any) => (p.author?.course || "").toLowerCase() === departmentFilter.toLowerCase()));
+        if (isDeptAdmin) {
+          // A department admin sees only their own department (or nothing if
+          // they have no department assigned — fail closed).
+          setAllPosts(userDeptId ? list.filter((p: any) => p.author?.department_id === userDeptId) : []);
+        } else if (departmentFilter !== "all") {
+          setAllPosts(list.filter((p: any) => p.author?.department_id === departmentFilter));
         } else {
           setAllPosts(list);
         }
@@ -81,11 +88,19 @@ export default function AdminContentScreen() {
     } finally {
       setLoading(false);
     }
-  }, [departmentFilter, isDeptAdmin, isSuper, userDept]);
+  }, [departmentFilter, isDeptAdmin, userDeptId]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Campus admins pick from the live catalog; department admins are fixed.
+  useEffect(() => {
+    if (isDeptAdmin) return;
+    fetchDepartments()
+      .then(setDepartments)
+      .catch(() => setDepartments([]));
+  }, [isDeptAdmin]);
 
   // Actions
   const handleApprove = async (id: string, type: "post" | "comment") => {
@@ -200,30 +215,30 @@ export default function AdminContentScreen() {
             </Text>
             <Text className="text-indigo-700 text-xs mt-0.5">
               {isDeptAdmin
-                ? `Scoped strictly to ${userDept || "your assigned department"}.`
+                ? `Scoped strictly to ${userDeptName || "your assigned department"}.`
                 : "Campus-wide moderation access across all departments."}
             </Text>
           </View>
         </View>
 
         {!isDeptAdmin && (
-          <View className="flex-row gap-2">
-            {["All", "BSIT", "BSCS", "BSIS"].map((dept) => (
+          <View className="flex-row gap-2 flex-wrap max-w-[60%]">
+            {[{ id: "all", name: "All" }, ...departments].map((dept) => (
               <TouchableOpacity
-                key={dept}
-                onPress={() => setDepartmentFilter(dept)}
-                className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${
-                  departmentFilter === dept
+                key={dept.id}
+                onPress={() => setDepartmentFilter(dept.id)}
+                className={`px-3 py-1.5 rounded-lg border ${
+                  departmentFilter === dept.id
                     ? "bg-indigo-600 border-indigo-600"
                     : "bg-white border-slate-200"
                 }`}
               >
                 <Text
                   className={`text-xs font-bold ${
-                    departmentFilter === dept ? "text-white" : "text-slate-600"
+                    departmentFilter === dept.id ? "text-white" : "text-slate-600"
                   }`}
                 >
-                  {dept}
+                  {dept.name}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -316,7 +331,7 @@ export default function AdminContentScreen() {
                         <Text className="text-white text-xs font-black ml-1 uppercase">AI Flagged Post</Text>
                       </View>
                       <Text className="text-xs text-slate-500 font-semibold">
-                        {p.author?.course || "Dept"} • {p.author?.full_name || p.author?.username}
+                        {p.author?.department_name || "—"} • {p.author?.full_name || p.author?.username}
                       </Text>
                     </View>
 
@@ -449,7 +464,7 @@ export default function AdminContentScreen() {
                       <Text className="text-slate-900 font-semibold text-sm">
                         {p.author?.full_name || p.author?.username || "—"}
                       </Text>
-                      <Text className="text-slate-400 text-xs">{p.author?.course || "Dept"}</Text>
+                      <Text className="text-slate-400 text-xs">{p.author?.department_name || "—"}</Text>
                     </View>
                     <Text numberOfLines={1} className="flex-1 text-slate-700 text-sm pr-4">
                       {p.title || p.content}
@@ -489,7 +504,7 @@ export default function AdminContentScreen() {
                 <View key={c.id} className="p-4 mb-3 border border-slate-200 rounded-xl flex-row justify-between items-center">
                   <View className="flex-1 mr-4">
                     <Text className="text-xs text-slate-400 font-bold mb-1">
-                      {c.author?.full_name || c.author?.username} ({c.author?.course || "Dept"}) on &quot;{c.post_title}&quot;
+                      {c.author?.full_name || c.author?.username} ({c.author?.department_name || "—"}) on &quot;{c.post_title}&quot;
                     </Text>
                     <Text className="text-slate-800 text-sm font-medium">{c.content}</Text>
                     {c.moderation_reason && (

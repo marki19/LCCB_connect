@@ -8,18 +8,20 @@ const { isSuperAdmin, isAdmin, isDepartmentAdmin } = require("../middleware/auth
  *
  * Campus admins (admin/superadmin) may act on any department. Everyone else —
  * in practice a `departmentAdmin`, since that is all `requireModerator` admits —
- * is confined to their own department. Fails **closed**: if either the moderator
- * or the content has no department on file, the action is refused.
+ * is confined to their own department. Compares `department_id` (catalog UUID),
+ * never a display string, so a renamed department cannot change scope. Fails
+ * **closed**: if either the moderator or the content has no department, the
+ * action is refused.
  *
  * Sends the 403 itself and returns false, so callers can `if (!...) return;`.
  */
-const withinDepartmentScope = (req, res, contentDepartment) => {
+const withinDepartmentScope = (req, res, contentDepartmentId) => {
   if (isAdmin(req)) return true;
 
-  const moderatorDepartment = String(req.profile?.course || "").trim().toLowerCase();
-  const targetDepartment = String(contentDepartment || "").trim().toLowerCase();
+  const moderatorDepartmentId = req.profile?.department_id || null;
+  const targetDepartmentId = contentDepartmentId || null;
 
-  if (!moderatorDepartment || !targetDepartment || moderatorDepartment !== targetDepartment) {
+  if (!moderatorDepartmentId || !targetDepartmentId || moderatorDepartmentId !== targetDepartmentId) {
     res.status(403).json({
       error: "Forbidden: cannot moderate content outside your department",
     });
@@ -35,25 +37,28 @@ const withinDepartmentScope = (req, res, contentDepartment) => {
 
 const getModerationQueue = async (req, res, next) => {
   try {
-    let departmentFilter = null;
+    // Catalog UUID only; an invalid/missing query value is ignored (never a 500).
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let departmentId = null;
 
     if (isSuperAdmin(req) || isAdmin(req)) {
-      // Campus-wide admins can view all or filter by query
-      departmentFilter = req.query.department || null;
+      // Campus-wide admins can view all, or filter by ?department_id=<uuid>.
+      const q = req.query.department_id;
+      departmentId = typeof q === "string" && UUID_RE.test(q.trim()) ? q.trim() : null;
     } else if (isDepartmentAdmin(req)) {
-      // Department admins are strictly restricted to their department/course
-      departmentFilter = req.profile?.course || null;
+      // Department admins are strictly restricted to their own department.
+      departmentId = req.profile?.department_id || null;
     } else {
       return res.status(403).json({ error: "Forbidden: insufficient moderation permissions" });
     }
 
     const [flaggedPosts, flaggedComments] = await Promise.all([
-      postModel.getFlaggedPosts({ department: departmentFilter }),
-      postModel.getFlaggedComments({ department: departmentFilter }),
+      postModel.getFlaggedPosts({ departmentId }),
+      postModel.getFlaggedComments({ departmentId }),
     ]);
 
     res.json({
-      department: departmentFilter,
+      department_id: departmentId,
       totalFlagged: flaggedPosts.length + flaggedComments.length,
       flaggedPosts,
       flaggedComments,
@@ -74,7 +79,7 @@ const moderatePost = async (req, res, next) => {
     }
 
     // Department admins are scoped to their own department; campus admins are not.
-    if (!withinDepartmentScope(req, res, post.author?.course)) return;
+    if (!withinDepartmentScope(req, res, post.author?.department_id)) return;
 
     if (action === "approve") {
       const updated = await postModel.updatePostModeration(id, "approved", reason || "Approved by moderator");
@@ -119,7 +124,7 @@ const moderateComment = async (req, res, next) => {
 
     // Same department rule as posts, scoped on the commenter's department so it
     // lines up with the queue filter in `getFlaggedComments`.
-    if (!withinDepartmentScope(req, res, comment.author?.course)) return;
+    if (!withinDepartmentScope(req, res, comment.author?.department_id)) return;
 
     if (action === "approve") {
       const updated = await postModel.updateCommentModeration(id, "approved", reason || "Approved by moderator");

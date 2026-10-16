@@ -51,7 +51,7 @@ export default function PostDetailScreen() {
                 name: authorName,
                 initials: authorName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase(),
                 avatarColor: "#BFDBFE",
-                course: postData.author?.course || "—",
+                course: postData.author?.department_name || "—",
                 yearLevel: postData.author?.year_level || "—",
               },
               title: postData.title,

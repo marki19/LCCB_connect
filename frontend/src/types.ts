@@ -11,6 +11,10 @@ export type User = {
   bio?: string;
   role?: string;
   skills?: string[];
+  // Authoritative department (catalog UUID) + its display name. `course` is a
+  // legacy free-text label kept only for backward compatibility.
+  department_id?: string | null;
+  department_name?: string | null;
 };
 
 export type Post = {
@@ -41,9 +45,30 @@ export type Thesis = {
   uploader_id: string;
   title: string;
   abstract: string;
-  department: string;
+  // Derived server-side from the uploader's department; `department` is the
+  // denormalized display name and may be null.
+  department: string | null;
+  department_id?: string | null;
   category: string;
   pdf_url: string;
   created_at: string;
   uploader?: User;
+};
+
+// Admin-managed catalog (Messaging_plan.md §3). Runtime data, never hardcoded.
+export type Department = {
+  id: string;
+  code: string | null;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+};
+
+export type Course = {
+  id: string;
+  department_id: string;
+  code: string | null;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
 };

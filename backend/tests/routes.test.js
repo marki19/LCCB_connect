@@ -27,7 +27,7 @@ stub(moderationService, "scanThesis", async () => ({ flagged: false }));
 const STORAGE_URL = "https://test-project.supabase.co/storage/v1/object/public";
 
 // The "session" the stubbed requireAuth resolves to.
-const session = { id: "u1", role: "student", course: null };
+const session = { id: "u1", role: "student", department_id: null };
 
 const defaultRequireAuth = (req, res, next) => {
   if (!(req.headers.authorization || "").startsWith("Bearer ")) {
@@ -37,7 +37,7 @@ const defaultRequireAuth = (req, res, next) => {
   return next();
 };
 const defaultLoadProfile = (req, res, next) => {
-  req.profile = { id: session.id, role: session.role, course: session.course };
+  req.profile = { id: session.id, role: session.role, department_id: session.department_id };
   return next();
 };
 
@@ -78,7 +78,7 @@ beforeEach(() => {
   }
   session.id = "u1";
   session.role = "student";
-  session.course = null;
+  session.department_id = null;
 });
 
 describe("identity comes from the token, never the body", () => {
@@ -296,11 +296,15 @@ describe("role escalation is closed", () => {
 });
 
 // --- RBAC regression tests (moderation department scope) -------------------
+// Scope is decided by the `department_id` catalog UUID, never a display string.
 describe("moderation is confined to a department admin's own department", () => {
+  const DEPT_A = "11111111-1111-4111-8111-111111111111";
+  const DEPT_B = "22222222-2222-4222-8222-222222222222";
+
   it("403 when a departmentAdmin moderates a comment from another department", async () => {
     session.role = "departmentAdmin";
-    session.course = "BSIT";
-    m.getCommentById.setImpl(async () => ({ id: "c1", author: { course: "BSED" } }));
+    session.department_id = DEPT_A;
+    m.getCommentById.setImpl(async () => ({ id: "c1", author: { department_id: DEPT_B } }));
 
     const res = await request(app)
       .post("/api/moderation/comments/c1")
@@ -313,8 +317,8 @@ describe("moderation is confined to a department admin's own department", () => 
 
   it("403 for a permanent delete outside the department", async () => {
     session.role = "departmentAdmin";
-    session.course = "BSIT";
-    m.getCommentById.setImpl(async () => ({ id: "c1", author: { course: "BSED" } }));
+    session.department_id = DEPT_A;
+    m.getCommentById.setImpl(async () => ({ id: "c1", author: { department_id: DEPT_B } }));
 
     const res = await request(app)
       .post("/api/moderation/comments/c1")
@@ -325,10 +329,10 @@ describe("moderation is confined to a department admin's own department", () => 
     assert.equal(m.deleteComment.calls.length, 0);
   });
 
-  it("allows a comment inside the department (case/whitespace insensitive)", async () => {
+  it("allows a comment in the same department", async () => {
     session.role = "departmentAdmin";
-    session.course = " bsit ";
-    m.getCommentById.setImpl(async () => ({ id: "c1", author: { course: "BSIT" } }));
+    session.department_id = DEPT_A;
+    m.getCommentById.setImpl(async () => ({ id: "c1", author: { department_id: DEPT_A } }));
     m.updateCommentModeration.setImpl(async () => ({ id: "c1" }));
 
     const res = await request(app)
@@ -342,8 +346,8 @@ describe("moderation is confined to a department admin's own department", () => 
 
   it("fails closed when the moderator has no department on file", async () => {
     session.role = "departmentAdmin";
-    session.course = null;
-    m.getPostById.setImpl(async () => ({ id: "p1", author: { course: "BSIT" } }));
+    session.department_id = null;
+    m.getPostById.setImpl(async () => ({ id: "p1", author: { department_id: DEPT_A } }));
 
     const res = await request(app)
       .post("/api/moderation/posts/p1")
@@ -356,8 +360,8 @@ describe("moderation is confined to a department admin's own department", () => 
 
   it("fails closed when the content has no department on file", async () => {
     session.role = "departmentAdmin";
-    session.course = "BSIT";
-    m.getPostById.setImpl(async () => ({ id: "p1", author: { course: null } }));
+    session.department_id = DEPT_A;
+    m.getPostById.setImpl(async () => ({ id: "p1", author: { department_id: null } }));
 
     const res = await request(app)
       .post("/api/moderation/posts/p1")
@@ -370,8 +374,8 @@ describe("moderation is confined to a department admin's own department", () => 
 
   it("does not scope a campus admin to a department", async () => {
     session.role = "superadmin";
-    session.course = null;
-    m.getPostById.setImpl(async () => ({ id: "p1", author: { course: "BSED" } }));
+    session.department_id = null;
+    m.getPostById.setImpl(async () => ({ id: "p1", author: { department_id: DEPT_B } }));
     m.updatePostModeration.setImpl(async () => ({ id: "p1" }));
 
     const res = await request(app)
@@ -410,9 +414,21 @@ describe("file URLs must live in this project's storage", () => {
     const res = await request(app).post("/api/theses").set(AUTH).send({
       title: "t",
       abstract: "a",
-      department: "d",
       category: "c",
       pdf_url: "https://w3.org/dummy.pdf",
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(m.createThesis.calls.length, 0);
+  });
+
+  it("rejects a client-supplied department on a thesis (server-derived)", async () => {
+    const res = await request(app).post("/api/theses").set(AUTH).send({
+      title: "t",
+      abstract: "a",
+      department: "somewhere else",
+      category: "c",
+      pdf_url: `${STORAGE_URL}/assets/theses/a.pdf`,
     });
 
     assert.equal(res.status, 400);

@@ -45,7 +45,7 @@ export default function HomeScreen() {
   const activeUser = profile?.full_name ? profile : (activePeers[0] || {
     full_name: "Mark Antipo",
     username: "mark_antipo",
-    course: "BSIT",
+    department_name: null,
     year_level: "3rd Year",
   });
 
@@ -67,7 +67,7 @@ export default function HomeScreen() {
               name: authorName,
               initials: getInitials(authorName),
               avatarColor: "#BFDBFE",
-              course: row.author?.course || "—",
+              course: row.author?.department_name || "—",
               yearLevel: row.author?.year_level || "—",
             },
             title: row.title || "Post Update",
@@ -103,13 +103,13 @@ export default function HomeScreen() {
               name: uploaderName,
               initials: getInitials(uploaderName),
               avatarColor: "#EDE9FE",
-              course: t.department || "LCCB Research",
+              course: t.uploader?.department_name || t.department || "—",
               yearLevel: t.category || "Thesis",
             },
             title: `📑 ${t.title}`,
             description: t.abstract,
             type: "thesis",
-            tags: [t.department, t.category].filter(Boolean),
+            tags: [t.uploader?.department_name || t.department, t.category].filter(Boolean),
             previewUrl: t.pdf_url,
             imageUrl: undefined,
             likes: 0,
@@ -193,7 +193,7 @@ export default function HomeScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: "700", color: "#0F172A", fontSize: 14 }} numberOfLines={1}>{activeUser.full_name}</Text>
-                <Text style={{ color: "#64748B", fontSize: 11 }}>{activeUser.course} {activeUser.year_level ? `· ${activeUser.year_level}` : ""}</Text>
+                <Text style={{ color: "#64748B", fontSize: 11 }}>{activeUser.department_name || "No department"} {activeUser.year_level ? `· ${activeUser.year_level}` : ""}</Text>
               </View>
             </TouchableOpacity>
 
@@ -367,7 +367,7 @@ export default function HomeScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }} numberOfLines={1}>{peer.full_name}</Text>
-                  <Text style={{ fontSize: 10, color: "#94A3B8" }}>{peer.course || "LCCB Student"} {peer.year_level ? `· ${peer.year_level}` : ""}</Text>
+                  <Text style={{ fontSize: 10, color: "#94A3B8" }}>{peer.department_name || "No department"} {peer.year_level ? `· ${peer.year_level}` : ""}</Text>
                 </View>
               </TouchableOpacity>
             ))}

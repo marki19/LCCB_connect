@@ -13,6 +13,7 @@ const postRouter = require("./routes/postRouter");
 const thesisRouter = require("./routes/thesisRouter");
 const moderationRouter = require("./routes/moderationRouter");
 const publicRouter = require("./routes/publicRouter");
+const adminCatalogRouter = require("./routes/adminCatalogRouter");
 
 // The Express app is built here and exported WITHOUT listening, so tests can
 // drive it via supertest. `index.js` owns dotenv + boot-time env validation and
@@ -106,6 +107,16 @@ app.use("/api/users", auth.requireAuth, userRouter);
 app.use("/api/posts", auth.requireAuth, postRouter);
 app.use("/api/theses", auth.requireAuth, thesisRouter);
 app.use("/api/moderation", auth.requireAuth, moderationRouter);
+
+// Admin-managed catalog (departments & courses). loadProfile runs before
+// requireRole so the role check has the caller's profile.
+app.use(
+  "/api/admin",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireRole("admin", "superadmin"),
+  adminCatalogRouter
+);
 
 // Test route
 app.get("/", (req, res) => {

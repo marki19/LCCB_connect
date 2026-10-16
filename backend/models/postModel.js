@@ -48,10 +48,13 @@ const getAllPosts = async ({ limit = DEFAULT_LIMIT, cursor = null, includeHidden
         'full_name', pr.full_name,
         'avatar_url', pr.avatar_url,
         'course', pr.course,
-        'year_level', pr.year_level
+        'year_level', pr.year_level,
+        'department_id', pr.department_id,
+        'department_name', d.name
       ) AS author
     FROM posts p
     LEFT JOIN profiles pr ON p.author_id = pr.id
+    LEFT JOIN public.departments d ON d.id = pr.department_id
     ${whereClause}
     ORDER BY p.created_at DESC, p.id DESC
     LIMIT $${params.length};
@@ -89,10 +92,13 @@ const getPostById = async (id, { includeHidden = false } = {}) => {
         'full_name', pr.full_name,
         'avatar_url', pr.avatar_url,
         'course', pr.course,
-        'year_level', pr.year_level
+        'year_level', pr.year_level,
+        'department_id', pr.department_id,
+        'department_name', d.name
       ) AS author
     FROM posts p
     LEFT JOIN profiles pr ON p.author_id = pr.id
+    LEFT JOIN public.departments d ON d.id = pr.department_id
     WHERE p.id = $1 ${hiddenFilter};
   `;
   const result = await db.query(sql, params);
@@ -212,10 +218,13 @@ const getComments = async (postId, { includeHidden = false } = {}) => {
         'full_name', pr.full_name,
         'username', pr.username,
         'avatar_url', pr.avatar_url,
-        'course', pr.course
+        'course', pr.course,
+        'department_id', pr.department_id,
+        'department_name', d.name
       ) AS user
     FROM comments c
     LEFT JOIN profiles pr ON c.user_id = pr.id
+    LEFT JOIN public.departments d ON d.id = pr.department_id
     WHERE c.post_id = $1 ${hiddenFilter}
     ORDER BY c.created_at ASC;
   `;
@@ -224,7 +233,7 @@ const getComments = async (postId, { includeHidden = false } = {}) => {
 };
 
 // Single comment, with the commenter's profile — used for moderation scoping.
-// `author.course` matches how `getFlaggedComments` filters the queue.
+// `author.department_id` matches how `getFlaggedComments` filters the queue.
 const getCommentById = async (id) => {
   const sql = `
     SELECT
@@ -240,10 +249,13 @@ const getCommentById = async (id) => {
         'full_name', pr.full_name,
         'username', pr.username,
         'avatar_url', pr.avatar_url,
-        'course', pr.course
+        'course', pr.course,
+        'department_id', pr.department_id,
+        'department_name', d.name
       ) AS author
     FROM comments c
     LEFT JOIN profiles pr ON c.user_id = pr.id
+    LEFT JOIN public.departments d ON d.id = pr.department_id
     WHERE c.id = $1;
   `;
   const result = await db.query(sql, [id]);
@@ -262,13 +274,13 @@ const addComment = async (postId, userId, content, { moderation_status = 'approv
 
 // ---- MODERATION SPECIFIC QUERIES -------------------------------------------
 
-const getFlaggedPosts = async ({ department = null } = {}) => {
+const getFlaggedPosts = async ({ departmentId = null } = {}) => {
   const params = [];
   let deptCondition = "";
 
-  if (department) {
-    params.push(department);
-    deptCondition = `AND LOWER(pr.course) = LOWER($1)`;
+  if (departmentId) {
+    params.push(departmentId);
+    deptCondition = `AND pr.department_id = $1::uuid`;
   }
 
   const sql = `
@@ -290,10 +302,13 @@ const getFlaggedPosts = async ({ department = null } = {}) => {
         'full_name', pr.full_name,
         'avatar_url', pr.avatar_url,
         'course', pr.course,
-        'year_level', pr.year_level
+        'year_level', pr.year_level,
+        'department_id', pr.department_id,
+        'department_name', d.name
       ) AS author
     FROM posts p
     LEFT JOIN profiles pr ON p.author_id = pr.id
+    LEFT JOIN public.departments d ON d.id = pr.department_id
     WHERE p.moderation_status = 'flagged' ${deptCondition}
     ORDER BY p.created_at DESC;
   `;
@@ -301,13 +316,13 @@ const getFlaggedPosts = async ({ department = null } = {}) => {
   return result.rows;
 };
 
-const getFlaggedComments = async ({ department = null } = {}) => {
+const getFlaggedComments = async ({ departmentId = null } = {}) => {
   const params = [];
   let deptCondition = "";
 
-  if (department) {
-    params.push(department);
-    deptCondition = `AND LOWER(pr.course) = LOWER($1)`;
+  if (departmentId) {
+    params.push(departmentId);
+    deptCondition = `AND pr.department_id = $1::uuid`;
   }
 
   const sql = `
@@ -325,10 +340,13 @@ const getFlaggedComments = async ({ department = null } = {}) => {
         'full_name', pr.full_name,
         'username', pr.username,
         'avatar_url', pr.avatar_url,
-        'course', pr.course
+        'course', pr.course,
+        'department_id', pr.department_id,
+        'department_name', d.name
       ) AS author
     FROM comments c
     LEFT JOIN profiles pr ON c.user_id = pr.id
+    LEFT JOIN public.departments d ON d.id = pr.department_id
     LEFT JOIN posts p ON c.post_id = p.id
     WHERE c.moderation_status = 'flagged' ${deptCondition}
     ORDER BY c.created_at DESC;

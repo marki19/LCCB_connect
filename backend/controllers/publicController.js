@@ -89,6 +89,8 @@ const getPeers = async (req, res, next) => {
       avatar_url: u.avatar_url,
       course: u.course,
       year_level: u.year_level,
+      department_id: u.department_id,
+      department_name: u.department_name,
       bio: u.bio,
       role: u.role,
     }));

@@ -5,6 +5,9 @@ import { Link, useRouter } from "expo-router";
 import { Eye, EyeOff, AlertCircle, ArrowRight } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { apiFetch } from "../../src/lib/api";
+import SelectField from "../../src/components/SelectField";
+import { fetchDepartments, fetchCourses } from "../../src/lib/catalog";
+import type { Department, Course } from "../../src/types";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -20,6 +23,15 @@ export default function RegisterScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [nameError, setNameError] = useState("");
   const [generalError, setGeneralError] = useState("");
+  const [departmentError, setDepartmentError] = useState("");
+  const [courseError, setCourseError] = useState("");
+
+  // Admin-managed catalog (loaded live; never hardcoded).
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [departmentId, setDepartmentId] = useState<string | null>(null);
+  const [courseId, setCourseId] = useState<string | null>(null);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
 
   const isValidEmailDomain = email.trim().toLowerCase().endsWith("@lccb.edu.ph");
   const showEmailFormatError = email.length > 0 && !isValidEmailDomain;
@@ -30,6 +42,28 @@ export default function RegisterScreen() {
     const subscription = Dimensions.addEventListener("change", handleResize);
     return () => subscription?.remove();
   }, []);
+
+  useEffect(() => {
+    fetchDepartments()
+      .then(setDepartments)
+      .catch(() => setDepartments([]))
+      .finally(() => setLoadingCatalog(false));
+  }, []);
+
+  useEffect(() => {
+    if (!departmentId) return;
+    let active = true;
+    fetchCourses(departmentId)
+      .then((list) => {
+        if (active) setCourses(list);
+      })
+      .catch(() => {
+        if (active) setCourses([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [departmentId]);
 
   // Clear errors when user types
   useEffect(() => {
@@ -63,6 +97,15 @@ export default function RegisterScreen() {
       hasError = true;
     }
 
+    if (!departmentId) {
+      setDepartmentError("Select your department");
+      hasError = true;
+    }
+    if (!courseId) {
+      setCourseError("Select your course");
+      hasError = true;
+    }
+
     if (hasError) return;
 
     setLoading(true);
@@ -88,6 +131,9 @@ export default function RegisterScreen() {
             body: JSON.stringify({
               username,
               full_name: fullName.trim(),
+              department_id: departmentId,
+              course_id: courseId,
+              course: courses.find((c) => c.id === courseId)?.name || null,
             }),
           });
         } catch (backendErr) {
@@ -140,6 +186,52 @@ export default function RegisterScreen() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginLeft: 4 }}>
                     <AlertCircle color="#F97316" size={14} />
                     <Text style={{ color: '#F97316', fontSize: 12, marginLeft: 4, fontWeight: '600' }}>{nameError}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {/* Department & Course (admin-managed catalog) */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: '#334155', fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>Department</Text>
+                <SelectField
+                  placeholder={loadingCatalog ? "Loading…" : "Select your department"}
+                  value={departmentId}
+                  options={departments.map((d) => ({ label: d.name, value: d.id }))}
+                  onChange={(v) => {
+                    setDepartmentId(v);
+                    setCourseId(null);
+                    setCourses([]);
+                    setDepartmentError("");
+                    setCourseError("");
+                  }}
+                  loading={loadingCatalog}
+                  error={!!departmentError}
+                />
+                {departmentError ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginLeft: 4 }}>
+                    <AlertCircle color="#F97316" size={14} />
+                    <Text style={{ color: '#F97316', fontSize: 12, marginLeft: 4, fontWeight: '600' }}>{departmentError}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: '#334155', fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>Course</Text>
+                <SelectField
+                  placeholder={departmentId ? "Select your course" : "Select a department first"}
+                  value={courseId}
+                  options={courses.map((c) => ({ label: c.name, value: c.id }))}
+                  onChange={(v) => {
+                    setCourseId(v);
+                    setCourseError("");
+                  }}
+                  disabled={!departmentId || courses.length === 0}
+                  error={!!courseError}
+                />
+                {courseError ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginLeft: 4 }}>
+                    <AlertCircle color="#F97316" size={14} />
+                    <Text style={{ color: '#F97316', fontSize: 12, marginLeft: 4, fontWeight: '600' }}>{courseError}</Text>
                   </View>
                 ) : null}
               </View>

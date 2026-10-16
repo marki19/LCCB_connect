@@ -42,7 +42,7 @@ export default function SettingsSidebar({ visible, onClose }: Props) {
     full_name: "Mark Antipo",
     username: "mark_antipo",
     avatar_url: null,
-    course: "BSIT",
+    department_name: null,
     year_level: "3rd Year"
   };
 
@@ -91,7 +91,7 @@ export default function SettingsSidebar({ visible, onClose }: Props) {
             </View>
             <View>
               <Text style={{ fontSize: 17, fontWeight: "700", color: "#FFFFFF" }}>{currentUser.full_name}</Text>
-              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{currentUser.course} · {currentUser.year_level}</Text>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{currentUser.department_name || "No department"} · {currentUser.year_level || "—"}</Text>
             </View>
           </View>
         </View>
