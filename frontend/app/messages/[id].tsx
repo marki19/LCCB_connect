@@ -8,21 +8,47 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, Send, Check, CheckCheck, Clock, ShieldAlert } from "lucide-react-native";
+import {
+  ArrowLeft,
+  Send,
+  Check,
+  CheckCheck,
+  Clock,
+  ShieldAlert,
+  MoreVertical,
+  Flag,
+  Ban,
+  ShieldCheck,
+  X,
+} from "lucide-react-native";
 import Avatar, { PRESENCE_LABELS } from "../../src/components/Avatar";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { usePresence } from "../../src/contexts/PresenceContext";
 import { useConversationRealtime, type PendingMessage } from "../../src/hooks/useConversationRealtime";
-import { acceptConversation, listConversations, listRequests } from "../../src/lib/messages";
+import {
+  acceptConversation,
+  blockUser,
+  listBlocked,
+  listConversations,
+  listRequests,
+  reportMessage,
+  unblockUser,
+} from "../../src/lib/messages";
+import { ApiError } from "../../src/lib/api";
 import { messageStatus, type Conversation, type Message } from "../../src/types";
 
 /**
- * 1:1 thread (Messaging_plan.md §6, §9, §12): bubbles + sent/delivered/seen
- * ticks + typing + the "requested" banner/Accept + offline pending bubbles.
+ * 1:1 thread (Messaging_plan.md §6, §7, §9, §12): bubbles + sent/delivered/seen
+ * ticks + typing + the "requested" banner/Accept + offline pending bubbles +
+ * trust & safety (report a message, block/unblock the peer).
  */
+
+const REPORT_REASONS = ["Spam", "Harassment", "Inappropriate content", "Scam or fraud"];
 
 const formatClock = (iso: string) =>
   new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -49,6 +75,12 @@ export default function ThreadScreen() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
+  const [reportTarget, setReportTarget] = useState<Message | null>(null);
+  const [reportReason, setReportReason] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
   const listRef = useRef<FlatList<Message>>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -76,9 +108,29 @@ export default function ThreadScreen() {
   const peerName = peer?.full_name || peer?.username || "Conversation";
   const peerMode = peer ? modeOf(peer.id) : null;
 
+  // Has the caller blocked this peer? The server enforces it regardless; this
+  // only drives the banner and the disabled composer.
+  useEffect(() => {
+    const peerId = conversation?.peer?.id;
+    if (!peerId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await listBlocked();
+        if (!cancelled) setBlocked(rows.some((b) => b.blocked_id === peerId));
+      } catch {
+        // Leave the default; a send would still be refused server-side.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation?.peer?.id]);
+
   const isRequester = conversation?.requester_id === userId;
   const isRequested = conversation?.status === "requested";
-  const canReply = !isRequested || isRequester; // pre-accept, only the requester may send
+  // Pre-accept, only the requester may send; a block stops everyone.
+  const canReply = !blocked && (!isRequested || isRequester);
 
   const subtitle = peerTyping
     ? "typing…"
@@ -104,10 +156,87 @@ export default function ThreadScreen() {
     setSending(true);
     try {
       await send(text);
-    } catch {
-      // Queued in the outbox; the pending bubble stays until it flushes.
+    } catch (err) {
+      // A 4xx (blocked / validation) is permanent — surface it. A network/5xx
+      // failure was queued in the outbox and shows as a pending bubble instead.
+      const status = err instanceof ApiError ? err.status : 0;
+      if (status >= 400 && status < 500) {
+        Alert.alert("Message not sent", err instanceof Error ? err.message : "Please try again.");
+      }
     } finally {
       setSending(false);
+    }
+  };
+
+  const latestReportable = useMemo(() => {
+    // Prefer the peer's most recent message (what "report this conversation"
+    // usually means), else the last message in the thread.
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].sender_id !== userId) return messages[i];
+    }
+    return messages.length ? messages[messages.length - 1] : null;
+  }, [messages, userId]);
+
+  const handleBlock = async () => {
+    if (!peer) return;
+    setActionBusy(true);
+    try {
+      await blockUser(peer.id);
+      setBlocked(true);
+      setSafetyOpen(false);
+    } catch (err) {
+      Alert.alert("Couldn't block", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const confirmBlock = () => {
+    if (!peer) return;
+    Alert.alert(
+      "Block user",
+      `Block ${peerName}? Neither of you will be able to message the other.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Block", style: "destructive", onPress: () => void handleBlock() },
+      ]
+    );
+  };
+
+  const handleUnblock = async () => {
+    if (!peer) return;
+    setActionBusy(true);
+    try {
+      await unblockUser(peer.id);
+      setBlocked(false);
+      setSafetyOpen(false);
+    } catch (err) {
+      Alert.alert("Couldn't unblock", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const openReport = (message: Message | null) => {
+    if (!message) return;
+    setReportTarget(message);
+    setReportReason("");
+    setSafetyOpen(false);
+    setReportOpen(true);
+  };
+
+  const submitReport = async () => {
+    if (!reportTarget) return;
+    setActionBusy(true);
+    try {
+      await reportMessage(reportTarget.id, reportReason.trim() || undefined);
+      setReportOpen(false);
+      setReportTarget(null);
+      Alert.alert("Report submitted", "Thank you — a moderator will review this message.");
+    } catch (err) {
+      Alert.alert("Couldn't report", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -127,7 +256,10 @@ export default function ThreadScreen() {
   const renderBubble = (message: Message) => {
     const mine = message.sender_id === userId;
     return (
-      <View
+      <TouchableOpacity
+        activeOpacity={1}
+        onLongPress={() => openReport(message)}
+        delayLongPress={350}
         style={{
           flexDirection: "row",
           justifyContent: mine ? "flex-end" : "flex-start",
@@ -158,7 +290,7 @@ export default function ThreadScreen() {
             {mine && <Ticks message={message} />}
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -209,7 +341,37 @@ export default function ThreadScreen() {
             {subtitle}
           </Text>
         </View>
+        <TouchableOpacity onPress={() => setSafetyOpen(true)} style={{ padding: 8 }}>
+          <MoreVertical size={20} color="#475569" />
+        </TouchableOpacity>
       </View>
+
+      {/* Blocked banner */}
+      {blocked && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: "#FEF2F2",
+            borderBottomWidth: 1,
+            borderBottomColor: "#FECACA",
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+          }}
+        >
+          <Ban size={18} color="#DC2626" />
+          <Text style={{ flex: 1, fontSize: 12.5, color: "#991B1B", marginLeft: 8, lineHeight: 17 }}>
+            You blocked {peerName}. Unblock to continue messaging.
+          </Text>
+          <TouchableOpacity
+            onPress={() => void handleUnblock()}
+            disabled={actionBusy}
+            style={{ backgroundColor: "#DC2626", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, opacity: actionBusy ? 0.6 : 1 }}
+          >
+            <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>Unblock</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Requested banner */}
       {isRequested && (
@@ -294,7 +456,7 @@ export default function ThreadScreen() {
             value={draft}
             onChangeText={handleDraftChange}
             editable={canReply}
-            placeholder={canReply ? "Message…" : "Accept the request to reply"}
+            placeholder={canReply ? "Message…" : blocked ? "You blocked this user" : "Accept the request to reply"}
             placeholderTextColor="#94A3B8"
             multiline
             style={{
@@ -326,6 +488,112 @@ export default function ThreadScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Safety actions (report / block) */}
+      <Modal visible={safetyOpen} transparent animationType="fade" onRequestClose={() => setSafetyOpen(false)}>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setSafetyOpen(false)}
+          style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.35)", justifyContent: "flex-end" }}
+        >
+          <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.6, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 6, textTransform: "uppercase" }}>
+              Safety
+            </Text>
+            <TouchableOpacity
+              onPress={() => openReport(latestReportable)}
+              disabled={!latestReportable}
+              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 14, opacity: latestReportable ? 1 : 0.5 }}
+            >
+              <Flag size={18} color="#D97706" />
+              <Text style={{ marginLeft: 12, fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Report message</Text>
+            </TouchableOpacity>
+            {blocked ? (
+              <TouchableOpacity
+                onPress={() => void handleUnblock()}
+                disabled={actionBusy}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 14 }}
+              >
+                <ShieldCheck size={18} color="#16A34A" />
+                <Text style={{ marginLeft: 12, fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Unblock {peerName}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={confirmBlock}
+                disabled={actionBusy || !peer}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 14 }}
+              >
+                <Ban size={18} color="#DC2626" />
+                <Text style={{ marginLeft: 12, fontSize: 15, fontWeight: "600", color: "#DC2626" }}>Block {peerName}</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={() => setSafetyOpen(false)}
+              style={{ alignItems: "center", paddingVertical: 14, borderTopWidth: 1, borderTopColor: "#F1F5F9", marginTop: 4 }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#64748B" }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Report reason */}
+      <Modal visible={reportOpen} transparent animationType="fade" onRequestClose={() => setReportOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.35)", justifyContent: "center", padding: 20 }}>
+          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 18, padding: 20 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Report message</Text>
+              <TouchableOpacity onPress={() => setReportOpen(false)} style={{ padding: 4 }}>
+                <X size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>
+              Tell a moderator why. The other person isn&apos;t told who reported them.
+            </Text>
+
+            {reportTarget && (
+              <View style={{ backgroundColor: "#F8FAFC", borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                <Text numberOfLines={3} style={{ fontSize: 13, color: "#475569", fontStyle: "italic" }}>
+                  {reportTarget.body}
+                </Text>
+              </View>
+            )}
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+              {REPORT_REASONS.map((reason) => {
+                const active = reportReason === reason;
+                return (
+                  <TouchableOpacity
+                    key={reason}
+                    onPress={() => setReportReason(active ? "" : reason)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: active ? "#1A56DB" : "#F1F5F9" }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: active ? "#FFFFFF" : "#475569" }}>{reason}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TextInput
+              value={reportReason}
+              onChangeText={setReportReason}
+              placeholder="Add details (optional)"
+              placeholderTextColor="#94A3B8"
+              multiline
+              style={{ backgroundColor: "#F1F5F9", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: "#0F172A", minHeight: 64, textAlignVertical: "top" }}
+            />
+
+            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
+              <TouchableOpacity onPress={() => setReportOpen(false)} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#64748B" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => void submitReport()} disabled={actionBusy} style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: "#1A56DB", opacity: actionBusy ? 0.6 : 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF" }}>Submit report</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

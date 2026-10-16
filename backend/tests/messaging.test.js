@@ -306,3 +306,48 @@ describe("reads and receipts (§9)", () => {
     assert.equal(res.status, 404);
   });
 });
+
+describe("report a message (§7)", () => {
+  it("201 when a participant reports a message", async () => {
+    m.getMessageById.setImpl(async () => ({ id: MSG, conversation_id: CONV }));
+    m.getConversationForParticipant.setImpl(async () => ({ id: CONV, status: "active" }));
+    m.reportMessage.setImpl(async () => ({ id: "r1", message_id: MSG, status: "open" }));
+
+    const res = await request(app)
+      .post(`/api/messages/${MSG}/report`)
+      .set(AUTH)
+      .send({ reason: "Harassment" });
+
+    assert.equal(res.status, 201);
+    assert.equal(res.body.status, "open");
+    assert.deepEqual(m.reportMessage.calls[0], [MSG, "u1", "Harassment"]);
+  });
+
+  it("404 when the message does not exist", async () => {
+    m.getMessageById.setImpl(async () => undefined);
+
+    const res = await request(app).post(`/api/messages/${MSG}/report`).set(AUTH).send({});
+
+    assert.equal(res.status, 404);
+    assert.equal(m.reportMessage.calls.length, 0);
+  });
+
+  it("404 when the reporter is not a participant (ids can't be probed)", async () => {
+    m.getMessageById.setImpl(async () => ({ id: MSG, conversation_id: CONV }));
+    m.getConversationForParticipant.setImpl(async () => undefined);
+
+    const res = await request(app).post(`/api/messages/${MSG}/report`).set(AUTH).send({});
+
+    assert.equal(res.status, 404);
+    assert.equal(m.reportMessage.calls.length, 0);
+  });
+
+  it("400 on a too-long reason or an unknown key", async () => {
+    const cases = [{ reason: "x".repeat(501) }, { reason: "ok", message_id: MSG }];
+    for (const payload of cases) {
+      const res = await request(app).post(`/api/messages/${MSG}/report`).set(AUTH).send(payload);
+      assert.equal(res.status, 400, JSON.stringify(payload));
+    }
+    assert.equal(m.reportMessage.calls.length, 0);
+  });
+});

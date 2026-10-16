@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ApiError } from "./api";
 import { onStatus } from "./realtime";
 import { sendMessage } from "./messages";
 import type { Message } from "../types";
@@ -23,6 +24,7 @@ export type OutboxItem = {
 
 let cache: OutboxItem[] | null = null;
 const sentListeners = new Set<(item: OutboxItem, message: Message) => void>();
+const failedListeners = new Set<(item: OutboxItem, error: unknown) => void>();
 
 async function load(): Promise<OutboxItem[]> {
   if (cache) return cache;
@@ -66,11 +68,20 @@ export function onOutboxSent(cb: (item: OutboxItem, message: Message) => void): 
   };
 }
 
+/** Fired when a queued send is permanently rejected and dropped (e.g. blocked). */
+export function onOutboxFailed(cb: (item: OutboxItem, error: unknown) => void): () => void {
+  failedListeners.add(cb);
+  return () => {
+    failedListeners.delete(cb);
+  };
+}
+
 let flushing = false;
 
 /**
- * Replay queued sends. Stops at the first failure (still offline / rejected) so
- * order is preserved and we don't hammer a failing endpoint.
+ * Replay queued sends. A transient failure (network / 5xx) stops the run so
+ * order is preserved and a failing endpoint isn't hammered; a permanent
+ * rejection (4xx) is dropped, since retrying can never succeed.
  */
 export async function flushOutbox(conversationId?: string): Promise<void> {
   if (flushing) return;
@@ -83,7 +94,13 @@ export async function flushOutbox(conversationId?: string): Promise<void> {
         const message = await sendMessage(item.conversationId, item.body, item.id);
         await removeFromOutbox(item.id);
         for (const listener of sentListeners) listener(item, message);
-      } catch {
+      } catch (err) {
+        const status = err instanceof ApiError ? err.status : 0;
+        if (status >= 400 && status < 500) {
+          await removeFromOutbox(item.id);
+          for (const listener of failedListeners) listener(item, err);
+          continue;
+        }
         break;
       }
     }

@@ -19,13 +19,14 @@ import {
   MessageSquare,
   FileText,
   RefreshCw,
+  Flag,
 } from "lucide-react-native";
 import { apiFetch } from "../../src/lib/api";
 import { fetchDepartments } from "../../src/lib/catalog";
 import { useAuth } from "../../src/contexts/AuthContext";
-import type { Department } from "../../src/types";
+import type { Department, MessageReport } from "../../src/types";
 
-type ModerationTab = "queue" | "posts" | "comments";
+type ModerationTab = "queue" | "posts" | "comments" | "reports";
 
 export default function AdminContentScreen() {
   const { profile } = useAuth();
@@ -35,6 +36,7 @@ export default function AdminContentScreen() {
   // Data state
   const [flaggedPosts, setFlaggedPosts] = useState<any[]>([]);
   const [flaggedComments, setFlaggedComments] = useState<any[]>([]);
+  const [messageReports, setMessageReports] = useState<MessageReport[]>([]);
   const [allPosts, setAllPosts] = useState<any[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
@@ -66,6 +68,7 @@ export default function AdminContentScreen() {
         const queueData = await queueRes.json();
         setFlaggedPosts(queueData.flaggedPosts || []);
         setFlaggedComments(queueData.flaggedComments || []);
+        setMessageReports(queueData.messageReports || []);
       }
 
       // 2. Load all posts for general moderation
@@ -152,6 +155,22 @@ export default function AdminContentScreen() {
     }
   };
 
+  const handleResolveReport = async (id: string, action: "reviewed" | "dismissed") => {
+    try {
+      const res = await apiFetch(`/moderation/message-reports/${id}`, {
+        method: "POST",
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) {
+        loadData();
+      } else {
+        Alert.alert("Action Failed", "Could not update the report.");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    }
+  };
+
   const handleDelete = (id: string, type: "post" | "comment") => {
     Alert.alert(
       "Confirm Permanent Delete",
@@ -183,7 +202,7 @@ export default function AdminContentScreen() {
     );
   };
 
-  const totalFlaggedCount = flaggedPosts.length + flaggedComments.length;
+  const totalFlaggedCount = flaggedPosts.length + flaggedComments.length + messageReports.length;
 
   return (
     <ScrollView className="flex-1 p-8 bg-[#F8FAFC]" showsVerticalScrollIndicator={false}>
@@ -298,6 +317,22 @@ export default function AdminContentScreen() {
             }`}
           >
             Foul Comments ({flaggedComments.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setActiveTab("reports")}
+          className={`pb-3 flex-row items-center border-b-2 ${
+            activeTab === "reports" ? "border-rose-600" : "border-transparent"
+          }`}
+        >
+          <Flag size={18} color={activeTab === "reports" ? "#E11D48" : "#64748B"} />
+          <Text
+            className={`ml-2 font-bold text-sm ${
+              activeTab === "reports" ? "text-rose-600" : "text-slate-600"
+            }`}
+          >
+            Reported Messages ({messageReports.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -488,6 +523,63 @@ export default function AdminContentScreen() {
                   </View>
                 );
               })}
+            </View>
+          )
+        ) : activeTab === "reports" ? (
+          // TAB 4: REPORTED MESSAGES (Messaging_plan.md §7)
+          messageReports.length === 0 ? (
+            <View className="py-20 items-center justify-center">
+              <CheckCircle size={48} color="#10B981" />
+              <Text className="text-lg font-bold text-slate-800 mt-4">No reported messages</Text>
+              <Text className="text-slate-500 text-sm mt-1">
+                Direct messages reported by students will appear here.
+              </Text>
+            </View>
+          ) : (
+            <View>
+              {messageReports.map((r) => (
+                <View
+                  key={r.id}
+                  className="mb-4 p-4 rounded-xl border border-rose-200 bg-rose-50/40 flex-row justify-between items-start flex-wrap gap-4"
+                >
+                  <View className="flex-1 min-w-[280px]">
+                    <View className="flex-row items-center gap-2 mb-1">
+                      <View className="bg-rose-600 px-2.5 py-0.5 rounded-full flex-row items-center">
+                        <Flag size={12} color="#FFFFFF" />
+                        <Text className="text-white text-xs font-black ml-1 uppercase">Reported Message</Text>
+                      </View>
+                      <Text className="text-xs text-slate-500 font-semibold">
+                        {r.sender?.department_name || "—"} • {r.sender?.full_name || r.sender?.username || "Unknown"}
+                      </Text>
+                    </View>
+
+                    <Text className="text-slate-800 text-sm mt-1 italic">&quot;{r.message_body}&quot;</Text>
+
+                    <Text className="text-slate-500 text-xs mt-2">
+                      Reason: <Text className="font-semibold text-slate-700">{r.reason || "Not specified"}</Text>
+                      {"  ·  "}Reported by {r.reporter?.full_name || r.reporter?.username || "a user"}
+                    </Text>
+                  </View>
+
+                  <View className="flex-row gap-2 self-center">
+                    <TouchableOpacity
+                      onPress={() => handleResolveReport(r.id, "reviewed")}
+                      className="px-3 py-2 bg-emerald-600 rounded-xl flex-row items-center"
+                    >
+                      <CheckCircle size={15} color="#FFFFFF" />
+                      <Text className="text-white text-xs font-bold ml-1.5">Reviewed</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => handleResolveReport(r.id, "dismissed")}
+                      className="px-3 py-2 bg-slate-500 rounded-xl flex-row items-center"
+                    >
+                      <EyeOff size={15} color="#FFFFFF" />
+                      <Text className="text-white text-xs font-bold ml-1.5">Dismiss</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
             </View>
           )
         ) : (

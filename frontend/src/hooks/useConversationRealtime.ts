@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { ApiError } from "../lib/api";
 import {
   getConnectionStatus,
   onMessage,
@@ -15,7 +16,7 @@ import {
   newClientMessageId,
   sendMessage,
 } from "../lib/messages";
-import { enqueue, onOutboxSent } from "../lib/outbox";
+import { enqueue, onOutboxFailed, onOutboxSent } from "../lib/outbox";
 import type { Message } from "../types";
 
 /**
@@ -145,6 +146,16 @@ export function useConversationRealtime(
     return off;
   }, [conversationId]);
 
+  // A queued send that was permanently rejected (e.g. blocked while offline)
+  // is dropped server-side; remove its optimistic bubble too.
+  useEffect(() => {
+    const off = onOutboxFailed((item) => {
+      if (item.conversationId !== conversationId) return;
+      setPending((prev) => prev.filter((p) => p.clientMsgId !== item.id));
+    });
+    return off;
+  }, [conversationId]);
+
   // Reconnect recovery: refill anything missed while disconnected.
   useEffect(() => {
     const off = onStatus((next) => {
@@ -198,9 +209,16 @@ export function useConversationRealtime(
         lastSeqRef.current = Math.max(lastSeqRef.current, message.seq);
         return message;
       } catch (err) {
-        // Likely offline — queue it; the outbox replays on reconnect and the
-        // server's client_msg_id dedupe makes the retry safe.
-        await enqueue({ id: clientMsgId, conversationId, body: trimmed, createdAt });
+        // A 4xx (e.g. a blocked send or a validation error) will never succeed
+        // on retry, so drop the bubble. Network/5xx failures are queued in the
+        // outbox; the server's client_msg_id dedupe makes the retry safe.
+        const status = err instanceof ApiError ? err.status : 0;
+        const retryable = status === 0 || status >= 500;
+        if (retryable) {
+          await enqueue({ id: clientMsgId, conversationId, body: trimmed, createdAt });
+        } else {
+          setPending((prev) => prev.filter((p) => p.clientMsgId !== clientMsgId));
+        }
         throw err;
       }
     },

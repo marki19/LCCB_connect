@@ -17,5 +17,6 @@ const requireModerator = [
 router.get("/queue", ...requireModerator, moderationController.getModerationQueue);
 router.post("/posts/:id", ...requireModerator, moderationController.moderatePost);
 router.post("/comments/:id", ...requireModerator, moderationController.moderateComment);
+router.post("/message-reports/:id", ...requireModerator, moderationController.moderateMessageReport);
 
 module.exports = router;

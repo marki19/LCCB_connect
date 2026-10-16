@@ -422,6 +422,79 @@ const reportMessage = async (messageId, reporterId, reason = null) => {
   return result.rows[0] || null;
 };
 
+/**
+ * Moderation queue: open reports with the reported message, its sender, and the
+ * reporter. Scoped by the **sender's** department (the member being reported),
+ * mirroring how the post/comment queues scope on the author's department.
+ * Campus admins pass `departmentId = null` to see every department.
+ */
+const listOpenMessageReports = async ({ departmentId = null, limit = DEFAULT_LIMIT } = {}) => {
+  const params = [];
+  let deptCondition = "";
+  if (departmentId) {
+    params.push(departmentId);
+    deptCondition = `AND sender.department_id = $${params.length}::uuid`;
+  }
+  params.push(limit);
+
+  const sql = `
+    SELECT
+      r.id, r.message_id, r.reason, r.status, r.created_at,
+      m.body AS message_body, m.sender_id, m.conversation_id,
+      m.created_at AS message_created_at,
+      json_build_object(
+        'id', sender.id,
+        'username', sender.username,
+        'full_name', sender.full_name,
+        'avatar_url', sender.avatar_url,
+        'department_id', sender.department_id,
+        'department_name', sd.name
+      ) AS sender,
+      json_build_object(
+        'id', reporter.id,
+        'username', reporter.username,
+        'full_name', reporter.full_name
+      ) AS reporter
+    FROM public.message_reports r
+    JOIN public.messages m ON m.id = r.message_id
+    LEFT JOIN public.profiles sender ON sender.id = m.sender_id
+    LEFT JOIN public.departments sd ON sd.id = sender.department_id
+    LEFT JOIN public.profiles reporter ON reporter.id = r.reporter_id
+    WHERE r.status = 'open' ${deptCondition}
+    ORDER BY r.created_at DESC
+    LIMIT $${params.length};
+  `;
+  const result = await db.query(sql, params);
+  return result.rows;
+};
+
+/** A single report plus the sender's department, for the scope check. */
+const getMessageReportById = async (id) => {
+  const result = await db.query(
+    `SELECT r.id, r.message_id, r.reporter_id, r.status,
+            m.sender_id,
+            sender.department_id AS sender_department_id
+       FROM public.message_reports r
+       JOIN public.messages m ON m.id = r.message_id
+       LEFT JOIN public.profiles sender ON sender.id = m.sender_id
+      WHERE r.id = $1;`,
+    [id]
+  );
+  return result.rows[0];
+};
+
+/** Resolves a report as `reviewed` or `dismissed`. */
+const resolveMessageReport = async (id, status) => {
+  const result = await db.query(
+    `UPDATE public.message_reports
+        SET status = $2
+      WHERE id = $1
+      RETURNING id, message_id, reporter_id, reason, status, created_at;`,
+    [id, status]
+  );
+  return result.rows[0];
+};
+
 module.exports = {
   // permission engine
   canMessage,
@@ -441,4 +514,7 @@ module.exports = {
   markRead,
   // reports
   reportMessage,
+  listOpenMessageReports,
+  getMessageReportById,
+  resolveMessageReport,
 };

@@ -134,6 +134,21 @@ export type MessagePolicySetting = {
   department_ids: string[];
 };
 
+/** A reported message as it appears in the moderator queue (Messaging_plan.md §7). */
+export type MessageReport = {
+  id: string;
+  message_id: string;
+  reason: string | null;
+  status: 'open' | 'reviewed' | 'dismissed';
+  created_at: string;
+  message_body: string;
+  sender_id: string;
+  conversation_id: string;
+  message_created_at: string;
+  sender: ConversationPeer | null;
+  reporter: { id: string; username: string | null; full_name: string | null } | null;
+};
+
 export type Friend = {
   peer: ConversationPeer;
   friends_since: string;

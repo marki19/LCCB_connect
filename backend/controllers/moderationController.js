@@ -1,4 +1,5 @@
 const postModel = require("../models/postModel");
+const messageModel = require("../models/messageModel");
 const notificationModel = require("../models/notificationModel");
 const notificationService = require("../services/notificationService");
 const { isSuperAdmin, isAdmin, isDepartmentAdmin } = require("../middleware/auth");
@@ -52,16 +53,18 @@ const getModerationQueue = async (req, res, next) => {
       return res.status(403).json({ error: "Forbidden: insufficient moderation permissions" });
     }
 
-    const [flaggedPosts, flaggedComments] = await Promise.all([
+    const [flaggedPosts, flaggedComments, messageReports] = await Promise.all([
       postModel.getFlaggedPosts({ departmentId }),
       postModel.getFlaggedComments({ departmentId }),
+      messageModel.listOpenMessageReports({ departmentId }),
     ]);
 
     res.json({
       department_id: departmentId,
-      totalFlagged: flaggedPosts.length + flaggedComments.length,
+      totalFlagged: flaggedPosts.length + flaggedComments.length + messageReports.length,
       flaggedPosts,
       flaggedComments,
+      messageReports,
     });
   } catch (err) {
     next(err);
@@ -147,6 +150,35 @@ const moderateComment = async (req, res, next) => {
   }
 };
 
+/**
+ * Resolves a reported message. `reviewed` = actioned/acknowledged, `dismissed` =
+ * no action. Department admins may only resolve reports against a sender in
+ * their own department; campus admins may resolve any.
+ */
+const moderateMessageReport = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // 'reviewed' | 'dismissed'
+
+    if (action !== "reviewed" && action !== "dismissed") {
+      return res.status(400).json({ error: "Invalid action. Must be 'reviewed' or 'dismissed'" });
+    }
+
+    const report = await messageModel.getMessageReportById(id);
+    if (!report) {
+      return res.status(404).json({ error: "Report not found" });
+    }
+
+    // Same department rule as posts/comments, scoped on the reported sender.
+    if (!withinDepartmentScope(req, res, report.sender_department_id)) return;
+
+    const updated = await messageModel.resolveMessageReport(id, action);
+    res.json({ message: `Report ${action}`, report: updated });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const getNotifications = async (req, res, next) => {
   try {
     const notifications = await notificationModel.getUserNotifications(req.user.id);
@@ -183,6 +215,7 @@ module.exports = {
   getModerationQueue,
   moderatePost,
   moderateComment,
+  moderateMessageReport,
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,

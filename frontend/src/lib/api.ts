@@ -54,9 +54,26 @@ export async function apiJson<T = any>(
   const res = await apiFetch(path, init);
   if (!res.ok) {
     const err = await res.json().catch(() => ({} as any));
-    throw new Error(err?.error || err?.message || `Request failed (${res.status})`);
+    throw new ApiError(
+      err?.error || err?.message || `Request failed (${res.status})`,
+      res.status
+    );
   }
   return res.json() as Promise<T>;
+}
+
+/**
+ * An API failure that carries the HTTP status, so callers can tell a permanent
+ * rejection (4xx — e.g. a blocked send) from a transient one (network / 5xx)
+ * and avoid retrying something that will never succeed.
+ */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
 }
 
 export async function updatePost(
