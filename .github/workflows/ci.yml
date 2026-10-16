@@ -74,14 +74,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      # TODO (Phase 0): the two committed `.env` files are still present in the
-      # git history until the credential rotation + `git filter-repo` purge is
-      # done. Once that lands, remove `continue-on-error` so a hit fails the
-      # build, and consider scanning the full history rather than just the
-      # commits in this push.
       - name: gitleaks
         uses: gitleaks/gitleaks-action@v2
-        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml

@@ -118,9 +118,18 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error("[api] Unhandled error:", err);
   const status = err.status || err.statusCode || 500;
-  res
-    .status(status)
-    .json({ error: status >= 500 ? "Internal server error" : err.message });
+  if (status >= 500) {
+    return res.status(500).json({ error: "Internal server error" });
+  }
+  // body-parser errors carry parser internals in `err.message`; return a
+  // generic message instead of echoing them.
+  if (err.type === "entity.parse.failed") {
+    return res.status(400).json({ error: "Invalid JSON body" });
+  }
+  if (err.type === "entity.too.large") {
+    return res.status(413).json({ error: "Request body too large" });
+  }
+  return res.status(status).json({ error: err.message });
 });
 
 module.exports = app;

@@ -89,15 +89,71 @@ function isBlockedIpv4(ip: string): boolean {
   )
 }
 
+// Parse an IPv6 literal (optionally with a zone id or an embedded dotted IPv4
+// tail) into its eight 16-bit groups. Returns null when the literal is not a
+// valid IPv6 address, so callers can fail closed.
+function parseIpv6(input: string): number[] | null {
+  let value = input.trim().toLowerCase()
+  const zone = value.indexOf("%") // strip a zone id (e.g. "fe80::1%eth0")
+  if (zone !== -1) value = value.slice(0, zone)
+
+  // Fold an embedded dotted IPv4 tail into two hex groups.
+  const v4 = value.match(/^(.*):(\d{1,3}(?:\.\d{1,3}){3})$/)
+  if (v4) {
+    const octets = v4[2].split(".").map(Number)
+    if (octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return null
+    const g1 = ((octets[0] << 8) | octets[1]).toString(16)
+    const g2 = ((octets[2] << 8) | octets[3]).toString(16)
+    value = `${v4[1]}:${g1}:${g2}`
+  }
+
+  if (!value.includes(":")) return null
+  const halves = value.split("::")
+  if (halves.length > 2) return null // more than one "::" is invalid
+
+  const parseGroups = (s: string): number[] =>
+    s === ""
+      ? []
+      : s.split(":").map((g) => (/^[0-9a-f]{1,4}$/.test(g) ? parseInt(g, 16) : NaN))
+
+  const head = parseGroups(halves[0])
+  const tail = halves.length === 2 ? parseGroups(halves[1]) : []
+  if ([...head, ...tail].some((n) => Number.isNaN(n))) return null
+
+  if (halves.length === 2) {
+    const fill = 8 - head.length - tail.length
+    if (fill < 1) return null // "::" must stand for at least one group
+    return [...head, ...Array(fill).fill(0), ...tail]
+  }
+  return head.length === 8 ? head : null
+}
+
 function isBlockedIp(ip: string): boolean {
   const value = ip.trim().toLowerCase()
   if (value.includes(":")) {
-    if (value === "::" || value === "::1") return true
-    if (value.startsWith("fc") || value.startsWith("fd")) return true // fc00::/7 unique-local
-    if (/^fe[89ab]/.test(value)) return true // fe80::/10 link-local
-    if (value.startsWith("ff")) return true // multicast
-    const mapped = value.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/) // IPv4-mapped
-    if (mapped) return isBlockedIpv4(mapped[1])
+    const groups = parseIpv6(value)
+    if (!groups) return true // unparseable IPv6 -> fail closed
+    const g = (i: number) => groups[i]
+    const embeddedV4 = () => [g(6) >> 8, g(6) & 0xff, g(7) >> 8, g(7) & 0xff].join(".")
+
+    if (groups.every((x) => x === 0)) return true // :: (unspecified)
+    if (g(0) === 0 && g(1) === 0 && g(2) === 0 && g(3) === 0 && g(4) === 0 && g(5) === 0 && g(6) === 0 && g(7) === 1) {
+      return true // ::1 loopback
+    }
+    // IPv4-mapped (::ffff:a.b.c.d) and IPv4-compatible (::a.b.c.d): classify the
+    // embedded address as IPv4. WHATWG URL normalises the mapped form to hex
+    // ("::ffff:7f00:1"), which the previous dotted-only regex missed.
+    if (g(0) === 0 && g(1) === 0 && g(2) === 0 && g(3) === 0 && g(4) === 0 && (g(5) === 0xffff || g(5) === 0)) {
+      return isBlockedIpv4(embeddedV4())
+    }
+    // NAT64 well-known prefix 64:ff9b::/96 (embeds an IPv4 address).
+    if (g(0) === 0x64 && g(1) === 0xff9b && g(2) === 0 && g(3) === 0 && g(4) === 0 && g(5) === 0) {
+      return isBlockedIpv4(embeddedV4())
+    }
+    if ((g(0) & 0xfe00) === 0xfc00) return true // fc00::/7 unique-local
+    if ((g(0) & 0xffc0) === 0xfe80) return true // fe80::/10 link-local
+    if ((g(0) & 0xffc0) === 0xfec0) return true // fec0::/10 site-local (deprecated)
+    if ((g(0) & 0xff00) === 0xff00) return true // ff00::/8 multicast
     return false
   }
   return isBlockedIpv4(value)

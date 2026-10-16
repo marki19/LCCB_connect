@@ -93,12 +93,18 @@ CREATE INDEX IF NOT EXISTS idx_comments_moderation ON public.comments(moderation
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON public.notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_dept ON public.notifications(department);
 
--- Enable Row Level Security (deny-by-default).
+-- Enable Row Level Security (deny-by-default) on EVERY table — including
+-- notifications, which earlier versions of this file missed.
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.theses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+-- Drop any decorative blanket policy (e.g. the `USING (true)` policy older
+-- migrations created on notifications). Those expose the table to the anon key.
+DROP POLICY IF EXISTS "Allow public read-write for notifications" ON public.notifications;
 
 -- The Expo app never talks to PostgREST for these tables — all data access goes
 -- through the Express API, which connects as the table owner and bypasses RLS.
@@ -111,9 +117,10 @@ BEGIN
   FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
       EXECUTE format(
-        'REVOKE ALL ON public.profiles, public.posts, public.theses, public.likes, public.comments FROM %I',
+        'REVOKE ALL ON public.profiles, public.posts, public.theses, public.likes, public.comments, public.notifications FROM %I',
         r
       );
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
     END IF;
   END LOOP;
 END $$;

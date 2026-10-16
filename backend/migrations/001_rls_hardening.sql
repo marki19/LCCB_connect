@@ -28,13 +28,17 @@ DROP POLICY IF EXISTS "Allow public read-write for posts"    ON public.posts;
 DROP POLICY IF EXISTS "Allow public read-write for theses"   ON public.theses;
 DROP POLICY IF EXISTS "Allow public read-write for likes"    ON public.likes;
 DROP POLICY IF EXISTS "Allow public read-write for comments" ON public.comments;
+-- notifications was missed by the first hardening pass; `scripts/migrate-moderation.js`
+-- created it with a blanket `USING (true) WITH CHECK (true)` policy.
+DROP POLICY IF EXISTS "Allow public read-write for notifications" ON public.notifications;
 
 -- 2. Ensure RLS is enabled on every table.
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.posts    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.theses   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.likes    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.posts         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.theses        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.likes         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.comments      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- 3. Revoke the public Supabase API roles' access to these tables.
 --    (These roles exist on Supabase; the guard keeps the script portable and
@@ -46,7 +50,7 @@ BEGIN
   FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
       EXECUTE format(
-        'REVOKE ALL ON public.profiles, public.posts, public.theses, public.likes, public.comments FROM %I',
+        'REVOKE ALL ON public.profiles, public.posts, public.theses, public.likes, public.comments, public.notifications FROM %I',
         r
       );
     END IF;

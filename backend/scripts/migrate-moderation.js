@@ -57,15 +57,13 @@ async function applyModerationMigration() {
     CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON public.notifications(user_id, is_read);
     CREATE INDEX IF NOT EXISTS idx_notifications_dept ON public.notifications(department);
 
-    -- 7. Row Level Security for notifications
+    -- 7. Row Level Security for notifications (deny-by-default).
+    --    Do NOT add a `USING (true)` policy here: it would expose every user's
+    --    notifications to the public anon key. Access goes through the Express
+    --    API, which connects as the table owner and bypasses RLS. The DROP below
+    --    also removes the blanket policy earlier versions of this script created.
     ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow public read-write for notifications') THEN
-        CREATE POLICY "Allow public read-write for notifications" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
-      END IF;
-    END
-    $$;
+    DROP POLICY IF EXISTS "Allow public read-write for notifications" ON public.notifications;
   `;
 
   await db.query(sql);
