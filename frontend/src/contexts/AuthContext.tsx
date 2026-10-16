@@ -20,6 +20,11 @@ export type Profile = {
   department_name?: string | null;
   course_name?: string | null;
   message_policy?: string | null;
+  // Presence (Messaging_plan.md §8). `presence_mode` is the persisted default;
+  // the live value is owned by PresenceContext.
+  presence_mode?: string | null;
+  last_seen_at?: string | null;
+  last_seen_visible?: boolean | null;
 };
 
 type AuthContextType = { 

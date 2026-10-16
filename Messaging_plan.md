@@ -1,6 +1,6 @@
 # Messaging, Presence & Social Graph — Implementation Plan
 
-**Status:** Design locked (v3.1) — **Phases 0–2 implemented.** Phase 0: admin-managed catalog (API + admin screen), registration pickers, existing-user completion gate, and the `course`→`department_id` refactor (migrations 004/005 applied live). Phase 1: messaging/friends/requests schema, read-only realtime posture + `supabase_realtime` publication, `realtime.messages` private-channel policies (migrations 006/007 applied live), and the permission engine `canMessage`. Phase 2: the full messaging/social API (conversations, requests, receipts, policy, friends, block, report, device-tokens, presence; migration 008 adds the presence columns) — 116/116 backend tests.
+**Status:** Design locked (v3.1) — **Phases 0–3 implemented.** Phase 0: admin-managed catalog (API + admin screen), registration pickers, existing-user completion gate, and the `course`→`department_id` refactor (migrations 004/005 applied live). Phase 1: messaging/friends/requests schema, read-only realtime posture + `supabase_realtime` publication, `realtime.messages` private-channel policies (migrations 006/007 applied live), and the permission engine `canMessage`. Phase 2: the full messaging/social API (conversations, requests, receipts, policy, friends, block, report, device-tokens, presence; migration 008 adds the presence columns) — 116/116 backend tests. Phase 3: realtime plumbing — Postgres Changes on `messages`/`conversations`/`notifications`, the private `presence:campus` channel, per-thread typing Broadcast, and reconnect + `seq` catch-up (`src/lib/realtime.ts`, `src/lib/messages.ts`, `src/contexts/PresenceContext.tsx`, `src/hooks/useConversationRealtime.ts`) — frontend `tsc` + lint clean.
 **Scope:** `backend/` (Express API + Postgres), `frontend/` (Expo/React Native), Supabase (Realtime + Push)
 **Related:** `Feature_suggestions.md` (A6 connections, A7 messaging, A14 trust & safety), `Security_plan.md` (Phase 3 RLS, Phase 4 validation, Phase 9 API client)
 
@@ -406,9 +406,9 @@ COMMIT
 | `app/friends.tsx` (new) | friends list, requests, add button |
 | `src/components/PeerPicker.tsx` | peer list with Message / **Request** button + dept |
 | `src/lib/catalog.ts` (new) | fetch + cache departments/courses; invalidate on admin edit |
-| `src/lib/realtime.ts` | channels: `presence:campus`, messages, notifications; reconnect + catch-up |
-| `src/lib/messages.ts`, `outbox.ts`, `push.ts`, `friends.ts` | API + offline queue + push |
-| `src/contexts/PresenceContext.tsx`, `hooks/*` | presence + data wiring |
+| `src/lib/realtime.ts` **(DONE — Phase 3)** | channels: `presence:campus`, messages, notifications; reconnect + catch-up |
+| `src/lib/messages.ts` **(DONE — Phase 3: API client)**, `outbox.ts`, `push.ts`, `friends.ts` | API + offline queue + push |
+| `src/contexts/PresenceContext.tsx` **(DONE — Phase 3)**, `hooks/useConversationRealtime.ts` **(DONE — Phase 3)** | presence + data wiring |
 | `src/types.ts` | `Department`, `Course`, `Conversation`, `Message`, `MessageStatus`, `PresenceMode`, `MessagePolicy`, `Friend` |
 
 Verify Realtime JS + `expo-notifications` against the installed Expo SDK's versioned docs (AGENTS.md). Guest/anonymous accounts cannot DM.
@@ -446,7 +446,7 @@ Verify Realtime JS + `expo-notifications` against the installed Expo SDK's versi
 | **0** | Departments + Courses: tables, **admin CRUD (API + admin UI)**, pre-auth picker endpoints, registration pickers, **existing-user completion gate**, admin-only change, **`course`→`department` refactor (DONE)** | admin can add/rename/deactivate dept & courses; both required at signup; existing users gated; non-admin can't change; moderation/notifications scoped by `department_id`, fail-closed | 3–4 d |
 | **1** | Messaging + friends + requests schema, RLS, publication, `realtime.messages` policies, permission engine **(DONE — migrations 006/007 live; `canMessage` + truth-table tests)** | migration live; anon/authed can't write; a non-participant sees nothing; `canMessage` returns direct/request/blocked correctly | 2–3 d |
 | **2** | API: conversations, requests, receipts, policy, friends, block, report, device-tokens, presence + tests **(DONE — migration 008 presence columns live; 39 new tests)** | 401 unauth; non-participant 404; request-vs-direct enforced; validation 400; idempotent send; suite green | 3–4 d |
-| **3** | Realtime plumbing + presence + typing | two devices see messages/typing/status live; reconnect recovers by `seq` | 2–3 d |
+| **3** | Realtime plumbing + presence + typing **(DONE — `src/lib/realtime.ts` (db/presence/typing channels), `src/lib/messages.ts` API client, `src/contexts/PresenceContext.tsx` + heartbeat, `src/hooks/useConversationRealtime.ts`; `PresenceProvider` wired in `app/_layout.tsx`; frontend `tsc` + lint clean)** | two devices see messages/typing/status live; reconnect recovers by `seq` | 2–3 d |
 | **4** | Frontend: registration, admin catalog screen, settings policy, inbox+requests, threads, friends | two users DM; request→accept→inbox works; ticks correct; offline queue flushes; typecheck+lint clean | 4–5 d |
 | **5** | Push (EAS dev build + credentials) | background push arrives; request = quiet; DND suppresses | 1–2 d (+ your setup) |
 | **6** | Trust & safety (block gate + report → moderation queue) | blocked send refused; report reaches queue | 1 d |

@@ -2,6 +2,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
+import { PresenceProvider } from "../src/contexts/PresenceContext";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 import "../global.css";
 
@@ -77,7 +78,9 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <RouteGuard />
+        <PresenceProvider>
+          <RouteGuard />
+        </PresenceProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

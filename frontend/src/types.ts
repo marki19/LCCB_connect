@@ -72,3 +72,81 @@ export type Course = {
   sort_order: number;
   is_active: boolean;
 };
+
+// ---- messaging & presence (Messaging_plan.md §4–§11) -----------------------
+
+export type PresenceMode = 'online' | 'away' | 'busy' | 'dnd' | 'invisible';
+
+export type MessagePolicy = 'everyone' | 'department' | 'selected' | 'nobody';
+
+/** Derived from `delivered_at` / `read_at` (the server stores the timestamps). */
+export type MessageStatus = 'sent' | 'delivered' | 'seen';
+
+export type ConversationPeer = {
+  id: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  department_id: string | null;
+  department_name: string | null;
+};
+
+export type Message = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  recipient_id: string;
+  seq: number;
+  body: string;
+  delivered_at: string | null;
+  read_at: string | null;
+  created_at: string;
+};
+
+export type ConversationLastMessage = {
+  id: string;
+  body: string;
+  sender_id: string;
+  seq: number;
+  created_at: string;
+};
+
+export type Conversation = {
+  id: string;
+  status: 'requested' | 'active';
+  requester_id: string | null;
+  user_a: string;
+  user_b: string;
+  last_message_at: string | null;
+  created_at: string;
+  peer: ConversationPeer | null;
+  last_message: ConversationLastMessage | null;
+  unread: number;
+};
+
+export type MessageRequests = {
+  received: Conversation[];
+  sent: Conversation[];
+};
+
+export type MessagePolicySetting = {
+  message_policy: MessagePolicy;
+  department_ids: string[];
+};
+
+export type Friend = {
+  peer: ConversationPeer;
+  friends_since: string;
+};
+
+export type FriendRequests = {
+  incoming: { id: string; requester: ConversationPeer; created_at: string }[];
+  outgoing: { id: string; addressee: ConversationPeer; created_at: string }[];
+};
+
+export function messageStatus(message: Message): MessageStatus {
+  if (message.read_at) return 'seen';
+  if (message.delivered_at) return 'delivered';
+  return 'sent';
+}
+
