@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import {
   ArrowLeft,
   Send,
@@ -40,6 +40,7 @@ import {
   unblockUser,
 } from "../../src/lib/messages";
 import { ApiError } from "../../src/lib/api";
+import { setActiveConversation } from "../../src/lib/push";
 import { messageStatus, type Conversation, type Message } from "../../src/types";
 
 /**
@@ -70,6 +71,15 @@ export default function ThreadScreen() {
 
   const { messages, pending, loading, peerTyping, send, notifyTyping, loadOlder } =
     useConversationRealtime(conversationId);
+
+  // Foreground push suppression (§10): while this thread is focused, don't show
+  // a banner for messages arriving in it.
+  useFocusEffect(
+    useCallback(() => {
+      setActiveConversation(conversationId);
+      return () => setActiveConversation(null);
+    }, [conversationId])
+  );
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [draft, setDraft] = useState("");

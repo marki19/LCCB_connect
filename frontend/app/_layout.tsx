@@ -3,6 +3,11 @@ import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 import { PresenceProvider } from "../src/contexts/PresenceContext";
+import {
+  observeNotificationTaps,
+  observeTokenRefresh,
+  registerForPush,
+} from "../src/lib/push";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 import "../global.css";
 
@@ -21,6 +26,26 @@ function RouteGuard() {
   const { session, profile, initialized, isGuest } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  const userId = session?.user?.id ?? null;
+
+  // Push registration (§10). Runs once the session exists; guests never register.
+  useEffect(() => {
+    if (!userId || isGuest) return;
+    void registerForPush();
+    const offTokenRefresh = observeTokenRefresh();
+    return () => offTokenRefresh();
+  }, [userId, isGuest]);
+
+  // Deep-link a tapped push to its thread. Waits for auth so a cold-start tap
+  // isn't dropped (the last response is consumed once, in `push.ts`).
+  useEffect(() => {
+    if (!initialized || !userId || isGuest) return;
+    const offTap = observeNotificationTaps((conversationId) => {
+      router.push(`/messages/${conversationId}`);
+    });
+    return () => offTap();
+  }, [initialized, userId, isGuest, router]);
 
   useEffect(() => {
     if (!initialized) return;

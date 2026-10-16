@@ -15,3 +15,7 @@ process.env.RATE_LIMIT_SEND_MAX = "1000000";
 process.env.RATE_LIMIT_SEND_DAILY_MAX = "1000000";
 process.env.RATE_LIMIT_FRIEND_MAX = "1000000";
 process.env.RATE_LIMIT_REPORT_MAX = "1000000";
+
+// Push is best-effort and would otherwise try to reach Postgres/Expo; the
+// service short-circuits when disabled. push.test.js re-enables it locally.
+process.env.PUSH_ENABLED = "false";

@@ -197,6 +197,22 @@ export function unblockUser(userId: string): Promise<unknown> {
   return apiJson(`/users/${userId}/block`, { method: "DELETE" });
 }
 
+// ---- device tokens (push, §10) ---------------------------------------------
+
+export function registerDeviceToken(token: string, platform: "ios" | "android" | "web"): Promise<unknown> {
+  return apiJson(`/users/me/device-tokens`, {
+    method: "POST",
+    body: JSON.stringify({ token, platform }),
+  });
+}
+
+export function unregisterDeviceToken(token: string): Promise<unknown> {
+  return apiJson(`/users/me/device-tokens`, {
+    method: "DELETE",
+    body: JSON.stringify({ token }),
+  });
+}
+
 // ---- helpers ---------------------------------------------------------------
 
 /**

@@ -1,6 +1,7 @@
 const friendModel = require("../models/friendModel");
 const socialModel = require("../models/socialModel");
 const notificationService = require("../services/notificationService");
+const pushService = require("../services/pushService");
 const { clampLimit } = require("../models/pagination");
 
 /**
@@ -72,6 +73,18 @@ const createRequest = async (req, res, next) => {
         })
       )
       .catch((err) => console.error("[friends] request notification failed:", err));
+
+    // OS push (§10) — quiet, best-effort.
+    Promise.resolve()
+      .then(() =>
+        pushService.notifyFriendEvent({
+          recipientId: addressee_id,
+          actorId: req.user.id,
+          actorName: displayName(req.profile),
+          type: "friend_request",
+        })
+      )
+      .catch((err) => console.error("[friends] request push failed:", err));
   } catch (error) {
     next(error);
   }
@@ -97,6 +110,17 @@ const respond = (status) => async (req, res, next) => {
           })
         )
         .catch((err) => console.error("[friends] accept notification failed:", err));
+
+      Promise.resolve()
+        .then(() =>
+          pushService.notifyFriendEvent({
+            recipientId: friendship.requester_id,
+            actorId: req.user.id,
+            actorName: displayName(req.profile),
+            type: "friend_accepted",
+          })
+        )
+        .catch((err) => console.error("[friends] accept push failed:", err));
     }
   } catch (error) {
     next(error);

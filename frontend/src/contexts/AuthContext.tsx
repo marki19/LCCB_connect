@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { apiFetch } from '../lib/api';
+import { unregisterForPush } from '../lib/push';
 
 export type Profile = {
   id: string;
@@ -73,6 +74,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // Drop this device's push token first (while the session still authorizes the
+    // request) so a shared device stops getting the previous account's pushes.
+    await unregisterForPush();
     setIsGuest(false);
     setSession(null);
     setUser(null);

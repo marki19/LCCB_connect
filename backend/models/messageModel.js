@@ -25,6 +25,24 @@ const notFoundError = () => {
   return err;
 };
 
+/**
+ * Pre-accept cap (§6 "one-line switch"). The default is **unlimited** (`0`), a
+ * conscious, reversible choice; set `MESSAGE_REQUEST_MAX=1` (or `3`) to brake
+ * abuse without touching code. Read at call time so it can be flipped at runtime.
+ */
+const messageRequestCap = () => {
+  const parsed = Number.parseInt(process.env.MESSAGE_REQUEST_MAX, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const requestCapError = () => {
+  const err = new Error(
+    "You've reached the message request limit for this person. They need to reply before you can send more."
+  );
+  err.status = 429;
+  return err;
+};
+
 // ---------------------------------------------------------------------------
 // Permission engine (§4)
 // ---------------------------------------------------------------------------
@@ -310,6 +328,21 @@ const sendMessage = async ({ conversationId, senderId, body, clientMsgId, sender
       status = "active";
     }
 
+    // Pre-accept cap (§6): only the requester is still in a `requested` thread
+    // here, so a count of their own messages is the pre-accept total. Unlimited
+    // by default; `MESSAGE_REQUEST_MAX` is the reversible switch.
+    if (status === "requested") {
+      const cap = messageRequestCap();
+      if (cap > 0) {
+        const sent = await client.query(
+          `SELECT COUNT(*)::int AS count FROM public.messages
+            WHERE conversation_id = $1 AND sender_id = $2;`,
+          [conversationId, senderId]
+        );
+        if ((sent.rows[0]?.count ?? 0) >= cap) throw requestCapError();
+      }
+    }
+
     const inserted = await client.query(
       `INSERT INTO public.messages (conversation_id, sender_id, recipient_id, client_msg_id, body)
        VALUES ($1, $2, $3, $4, $5)
@@ -499,6 +532,7 @@ module.exports = {
   // permission engine
   canMessage,
   resolveDecision,
+  messageRequestCap,
   // conversations
   getOrCreateConversation,
   getConversationForParticipant,

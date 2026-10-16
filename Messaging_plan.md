@@ -1,6 +1,6 @@
 # Messaging, Presence & Social Graph — Implementation Plan
 
-**Status:** Design locked (v3.1) — **Phases 0–4 and 6 implemented.** Phase 0: admin-managed catalog (API + admin screen), registration pickers, existing-user completion gate, and the `course`→`department_id` refactor (migrations 004/005 applied live). Phase 1: messaging/friends/requests schema, read-only realtime posture + `supabase_realtime` publication, `realtime.messages` private-channel policies (migrations 006/007 applied live), and the permission engine `canMessage`. Phase 2: the full messaging/social API (conversations, requests, receipts, policy, friends, block, report, device-tokens, presence; migration 008 adds the presence columns) — 116/116 backend tests. Phase 3: realtime plumbing — Postgres Changes on `messages`/`conversations`/`notifications`, the private `presence:campus` channel, per-thread typing Broadcast, and reconnect + `seq` catch-up (`src/lib/realtime.ts`, `src/lib/messages.ts`, `src/contexts/PresenceContext.tsx`, `src/hooks/useConversationRealtime.ts`) — frontend `tsc` + lint clean. Phase 4: the messaging/friends UI — inbox + Requests tab (`app/messages/index.tsx`), thread with sent/delivered/seen ticks + typing + request banner (`app/messages/[id].tsx`), friends & requests (`app/friends.tsx`), peer directory (`src/components/PeerPicker.tsx`), messaging/presence/policy/blocked settings (`app/settings.tsx`), shared `Avatar`, and the offline outbox (`src/lib/outbox.ts`); new files `tsc` + lint clean. Phase 6: trust & safety — report a message (thread safety menu + long-press bubble + reason modal) and block/unblock the peer from the thread, status-aware send errors so a 4xx is never queued (`ApiError` in `src/lib/api.ts`), and moderator visibility of reports (`messageModel.listOpenMessageReports`/`resolveMessageReport`, `messageReports` in the moderation queue, `POST /api/moderation/message-reports/:id` department-scoped, and the admin "Reported Messages" tab in `app/(admin)/content.tsx`) — 130/130 backend tests.
+**Status:** Design locked (v3.1) — **Phases 0–7 implemented** (Phase 5 push code complete; delivery awaits your EAS build). Phase 0: admin-managed catalog (API + admin screen), registration pickers, existing-user completion gate, and the `course`→`department_id` refactor (migrations 004/005 applied live). Phase 1: messaging/friends/requests schema, read-only realtime posture + `supabase_realtime` publication, `realtime.messages` private-channel policies (migrations 006/007 applied live), and the permission engine `canMessage`. Phase 2: the full messaging/social API (conversations, requests, receipts, policy, friends, block, report, device-tokens, presence; migration 008 adds the presence columns). Phase 3: realtime plumbing — Postgres Changes on `messages`/`conversations`/`notifications`, the private `presence:campus` channel, per-thread typing Broadcast, and reconnect + `seq` catch-up (`src/lib/realtime.ts`, `src/lib/messages.ts`, `src/contexts/PresenceContext.tsx`, `src/hooks/useConversationRealtime.ts`) — frontend `tsc` + lint clean. Phase 4: the messaging/friends UI — inbox + Requests tab (`app/messages/index.tsx`), thread with sent/delivered/seen ticks + typing + request banner (`app/messages/[id].tsx`), friends & requests (`app/friends.tsx`), peer directory (`src/components/PeerPicker.tsx`), messaging/presence/policy/blocked settings (`app/settings.tsx`), shared `Avatar`, and the offline outbox (`src/lib/outbox.ts`). Phase 5: OS push — `backend/services/pushService.js` (Expo Push API; DND suppresses, mute hides, requests quiet, `DeviceNotRegistered` pruned) wired into the send + friend paths, and `src/lib/push.ts` (permission + Expo token registration, token-refresh, tap deep-link to the thread, foreground suppression while the thread is focused). Phase 6: trust & safety — report a message (thread safety menu + long-press bubble + reason modal) and block/unblock the peer from the thread, status-aware send errors so a 4xx is never queued (`ApiError` in `src/lib/api.ts`), and moderator visibility of reports (`messageModel.listOpenMessageReports`/`resolveMessageReport`, `messageReports` in the moderation queue, `POST /api/moderation/message-reports/:id` department-scoped, and the admin "Reported Messages" tab in `app/(admin)/content.tsx`). Phase 7: hardening — the `MESSAGE_REQUEST_MAX` pre-accept cap switch enforced inside the send transaction, `backend/scripts/prune.js` retention sweep, and documented limits/TTLs — **150/150 backend tests**.
 **Scope:** `backend/` (Express API + Postgres), `frontend/` (Expo/React Native), Supabase (Realtime + Push)
 **Related:** `Feature_suggestions.md` (A6 connections, A7 messaging, A14 trust & safety), `Security_plan.md` (Phase 3 RLS, Phase 4 validation, Phase 9 API client)
 
@@ -346,6 +346,8 @@ CREATE POLICY "participants read messages" ON public.messages FOR SELECT TO auth
 
 Types added: `new_message`, `message_request`, `friend_request`, `friend_accepted`.
 
+**Implemented (Phase 5):** `backend/services/pushService.js` resolves the recipient's `presence_mode` + `conversation_state.muted_until` in one query, then pushes to every `device_tokens` row. The "isn't in the thread" rule is enforced **client-side** — `src/lib/push.ts` suppresses the foreground banner while the matching thread is focused (`setActiveConversation`), since the server has no cheap way to know which screen a user is on. Delivery needs an EAS dev build with FCM/APNs; without credentials Expo returns an error ticket and the in-app layers still work.
+
 ---
 
 ## 11. API surface
@@ -407,7 +409,7 @@ COMMIT
 | `src/components/PeerPicker.tsx` **(DONE — Phase 4)** | peer list with Message / **Request** button + dept |
 | `src/lib/catalog.ts` (new) | fetch + cache departments/courses; invalidate on admin edit |
 | `src/lib/realtime.ts` **(DONE — Phase 3)** | channels: `presence:campus`, messages, notifications; reconnect + catch-up |
-| `src/lib/messages.ts` **(DONE — Phase 3: API client + friends)**, `outbox.ts` **(DONE — Phase 4)**, `push.ts` | API + offline queue + push |
+| `src/lib/messages.ts` **(DONE — Phase 3: API client + friends)**, `outbox.ts` **(DONE — Phase 4)**, `push.ts` **(DONE — Phase 5)** | API + offline queue + push |
 | `src/contexts/PresenceContext.tsx` **(DONE — Phase 3)**, `hooks/useConversationRealtime.ts` **(DONE — Phase 3)** | presence + data wiring |
 | `src/types.ts` | `Department`, `Course`, `Conversation`, `Message`, `MessageStatus`, `PresenceMode`, `MessagePolicy`, `Friend` |
 
@@ -423,7 +425,8 @@ Verify Realtime JS + `expo-notifications` against the installed Expo SDK's versi
 - **Two enforcement layers:** Express (authoritative, SQL predicates) + Realtime RLS (participant-scoped, read-only). Tests must prove a non-participant cannot subscribe to a foreign conversation, and a non-permitted sender can only create a *request*, never an `active` thread.
 - **Block is checked first, everywhere**, wins over friendship and policy; responses are generic (no block/policy disclosure ⇒ no probing).
 - **Enumeration:** peer list exposes department/course (already campus-public); **policy and block state never leak**.
-- **Spam:** rate-limit sends (esp. pre-accept), friend requests, and reports. Unlimited pre-accept is the weakest link (§6).
+- **Spam:** rate-limit sends (esp. pre-accept), friend requests, and reports. Unlimited pre-accept is the weakest link (§6) — the reversible `MESSAGE_REQUEST_MAX` switch is enforced **inside the send transaction** (a count of the requester's own messages), so it cannot be raced.
+- **Retention:** `scripts/prune.js` deletes only dead push tokens, *resolved* reports, and *read* notifications; open reports and unread notifications are never touched.
 - **Notifications** carry a short preview only; DND suppressed; mutes honored.
 - **No E2EE ⇒ reported messages are reviewable;** default is no proactive scanning.
 
@@ -448,9 +451,9 @@ Verify Realtime JS + `expo-notifications` against the installed Expo SDK's versi
 | **2** | API: conversations, requests, receipts, policy, friends, block, report, device-tokens, presence + tests **(DONE — migration 008 presence columns live; 39 new tests)** | 401 unauth; non-participant 404; request-vs-direct enforced; validation 400; idempotent send; suite green | 3–4 d |
 | **3** | Realtime plumbing + presence + typing **(DONE — `src/lib/realtime.ts` (db/presence/typing channels), `src/lib/messages.ts` API client, `src/contexts/PresenceContext.tsx` + heartbeat, `src/hooks/useConversationRealtime.ts`; `PresenceProvider` wired in `app/_layout.tsx`; frontend `tsc` + lint clean)** | two devices see messages/typing/status live; reconnect recovers by `seq` | 2–3 d |
 | **4** | Frontend: registration, admin catalog screen, settings policy, inbox+requests, threads, friends **(DONE — `app/messages/index.tsx`, `app/messages/[id].tsx`, `app/friends.tsx`, `app/settings.tsx`, `src/components/PeerPicker.tsx` + `Avatar.tsx`, `src/lib/outbox.ts`; SettingsSidebar + notification routing wired; new files `tsc` + lint clean)** | two users DM; request→accept→inbox works; ticks correct; offline queue flushes; typecheck+lint clean | 4–5 d |
-| **5** | Push (EAS dev build + credentials) | background push arrives; request = quiet; DND suppresses | 1–2 d (+ your setup) |
+| **5** | Push (EAS dev build + credentials) **(CODE DONE — `services/pushService.js` (Expo Push API, mute/DND/quiet-request, `DeviceNotRegistered` pruning) wired into the send + friend paths; `src/lib/push.ts` registration/token-refresh/tap deep-link/foreground suppression + device-token client; `expo-notifications` plugin; `tests/push.test.js`. Delivery still needs your EAS dev build + FCM/APNs credentials)** | background push arrives; request = quiet; DND suppresses | 1–2 d (+ your setup) |
 | **6** | Trust & safety (block gate + report → moderation queue) **(DONE — thread report/block UI + long-press report + reason modal; `ApiError` status-aware send; `messageModel` report queries; moderation queue returns `messageReports`; `POST /api/moderation/message-reports/:id` dept-scoped; admin "Reported Messages" tab; `tests/messageReports.test.js` + report route tests)** | blocked send refused; report reaches queue | 1 d |
-| **7** | Hardening (JWT, rate limits, pre-accept cap switch, retention, load sanity) | limits documented; no policy drift | 1 d |
+| **7** | Hardening (JWT, rate limits, pre-accept cap switch, retention, load sanity) **(CODE DONE — `MESSAGE_REQUEST_MAX` pre-accept cap switch enforced in the send transaction; `scripts/prune.js` retention sweep (device tokens / resolved reports / read notifications) with env TTLs; limits + TTLs + `PUSH_ENABLED` documented in `backend/.env.example`; cap tests in `tests/messagePolicy.test.js`. JWT expiry is a dashboard setting — §17)** | limits documented; no policy drift | 1 d |
 
 **Total ≈ 3.5–5 weeks**, plus your dashboard/EAS setup. (No dependency on you supplying a static department list.)
 
@@ -467,6 +470,13 @@ Verify Realtime JS + `expo-notifications` against the installed Expo SDK's versi
 
 ## 17. Your setup (dashboard / EAS)
 Add tables to the `supabase_realtime` publication (**done — migration 006**); apply `realtime.messages` policies (**done — migration 007**); in the dashboard enable Realtime and **disable "Allow public access"**; set JWT expiry 1 h; create the EAS dev build with FCM/APNs. **Departments/courses are entered in-app by an admin** — no static list to supply.
+
+**Hardening knobs (Phase 7):**
+- **JWT expiry 1 h** — dashboard → Auth → JWT expiry. Bounds Realtime policy-cache staleness (§14).
+- **Pre-accept cap** — `MESSAGE_REQUEST_MAX` (default `0` = unlimited; set `1`/`3` to brake spam, §6).
+- **Push** — `PUSH_ENABLED` (default `true`); set `false` to disable outbound push.
+- **Retention** — schedule `node scripts/prune.js` (add `--dry-run` to preview). TTLs: `DEVICE_TOKEN_TTL_DAYS=90`, `MESSAGE_REPORT_TTL_DAYS=180`, `NOTIFICATION_TTL_DAYS=90`.
+- **Load sanity** — verify your Supabase plan's concurrent-connection + messages/month caps before heavy use (§14).
 
 ---
 

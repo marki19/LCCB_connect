@@ -1,5 +1,6 @@
 const messageModel = require("../models/messageModel");
 const notificationService = require("../services/notificationService");
+const pushService = require("../services/pushService");
 const { clampLimit } = require("../models/pagination");
 
 /**
@@ -151,6 +152,23 @@ const sendMessage = async (req, res, next) => {
     });
 
     res.status(result.deduped ? 200 : 201).json(result.message);
+
+    // OS push (§10) — third layer, best-effort, never blocks the response. A
+    // deduped retry already pushed on its first attempt, so don't push twice.
+    if (!result.deduped) {
+      Promise.resolve()
+        .then(() =>
+          pushService.notifyNewMessage({
+            recipientId: result.message.recipient_id,
+            senderId: req.user.id,
+            senderName,
+            body: req.body.body,
+            conversationId: result.message.conversation_id,
+            isRequest: result.status === "requested",
+          })
+        )
+        .catch((err) => console.error("[messaging] push failed:", err));
+    }
   } catch (error) {
     next(error);
   }

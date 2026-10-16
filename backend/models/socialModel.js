@@ -159,6 +159,28 @@ const removeDeviceToken = async (userId, token) => {
   return result.rows[0];
 };
 
+/** All push targets for a user (multi-device: one row per installed app). */
+const listDeviceTokens = async (userId) => {
+  const result = await db.query(
+    `SELECT id, user_id, token, platform FROM public.device_tokens WHERE user_id = $1;`,
+    [userId]
+  );
+  return result.rows;
+};
+
+/**
+ * Prunes tokens Expo reports as `DeviceNotRegistered` (§10). Matching on the
+ * token (not the id) is what the push response gives us back.
+ */
+const deleteDeviceTokens = async (tokens) => {
+  if (!tokens || tokens.length === 0) return 0;
+  const result = await db.query(
+    `DELETE FROM public.device_tokens WHERE token = ANY($1::text[]);`,
+    [tokens]
+  );
+  return result.rowCount;
+};
+
 module.exports = {
   block,
   unblock,
@@ -170,4 +192,6 @@ module.exports = {
   heartbeat,
   addDeviceToken,
   removeDeviceToken,
+  listDeviceTokens,
+  deleteDeviceTokens,
 };

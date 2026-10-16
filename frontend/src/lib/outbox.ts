@@ -79,9 +79,9 @@ export function onOutboxFailed(cb: (item: OutboxItem, error: unknown) => void): 
 let flushing = false;
 
 /**
- * Replay queued sends. A transient failure (network / 5xx) stops the run so
- * order is preserved and a failing endpoint isn't hammered; a permanent
- * rejection (4xx) is dropped, since retrying can never succeed.
+ * Replay queued sends. A transient failure (network / 5xx / 429) stops the run
+ * so order is preserved and a failing endpoint isn't hammered; a permanent
+ * rejection (other 4xx) is dropped, since retrying can never succeed.
  */
 export async function flushOutbox(conversationId?: string): Promise<void> {
   if (flushing) return;
@@ -96,6 +96,9 @@ export async function flushOutbox(conversationId?: string): Promise<void> {
         for (const listener of sentListeners) listener(item, message);
       } catch (err) {
         const status = err instanceof ApiError ? err.status : 0;
+        // 429 is transient (send rate limit / pre-accept cap): keep the item and
+        // stop the run so it retries on the next reconnect instead of vanishing.
+        if (status === 429) break;
         if (status >= 400 && status < 500) {
           await removeFromOutbox(item.id);
           for (const listener of failedListeners) listener(item, err);

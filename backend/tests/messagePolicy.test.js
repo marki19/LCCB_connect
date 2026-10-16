@@ -279,4 +279,114 @@ describe("sendMessage (atomic send path)", () => {
       true
     );
   });
+
+  // --- pre-accept cap (§6 "one-line switch") --------------------------------
+
+  it("messageRequestCap: absent/invalid/non-positive => unlimited (0)", () => {
+    const prev = process.env.MESSAGE_REQUEST_MAX;
+    try {
+      delete process.env.MESSAGE_REQUEST_MAX;
+      assert.equal(messageModel.messageRequestCap(), 0);
+      process.env.MESSAGE_REQUEST_MAX = "abc";
+      assert.equal(messageModel.messageRequestCap(), 0);
+      process.env.MESSAGE_REQUEST_MAX = "-1";
+      assert.equal(messageModel.messageRequestCap(), 0);
+      process.env.MESSAGE_REQUEST_MAX = "3";
+      assert.equal(messageModel.messageRequestCap(), 3);
+    } finally {
+      if (prev === undefined) delete process.env.MESSAGE_REQUEST_MAX;
+      else process.env.MESSAGE_REQUEST_MAX = prev;
+    }
+  });
+
+  it("refuses a pre-accept send once the cap is reached, before any INSERT", async () => {
+    const prev = process.env.MESSAGE_REQUEST_MAX;
+    process.env.MESSAGE_REQUEST_MAX = "1";
+    try {
+      const client = fakeClient([
+        ["FOR UPDATE", () => ({ rows: [conversationRow({ status: "requested", requester_id: "u1" })] })],
+        ["is_blocked", () => ({ rows: [row()] })],
+        ["COUNT(*)", () => ({ rows: [{ count: 1 }] })],
+      ]);
+      tx.setImpl(async (fn) => fn(client));
+
+      await assert.rejects(
+        () =>
+          messageModel.sendMessage({
+            conversationId: CONV,
+            senderId: "u1",
+            body: "hi",
+            clientMsgId: "c1",
+            senderName: "Ana",
+          }),
+        (err) => err.status === 429
+      );
+      assert.equal(
+        client.seen.some((sql) => sql.includes("INSERT INTO public.messages")),
+        false
+      );
+    } finally {
+      if (prev === undefined) delete process.env.MESSAGE_REQUEST_MAX;
+      else process.env.MESSAGE_REQUEST_MAX = prev;
+    }
+  });
+
+  it("allows a pre-accept send while under the cap", async () => {
+    const prev = process.env.MESSAGE_REQUEST_MAX;
+    process.env.MESSAGE_REQUEST_MAX = "3";
+    const message = { id: "m1", conversation_id: CONV, sender_id: "u1", body: "hi" };
+    try {
+      const client = fakeClient([
+        ["FOR UPDATE", () => ({ rows: [conversationRow({ status: "requested", requester_id: "u1" })] })],
+        ["is_blocked", () => ({ rows: [row()] })],
+        ["COUNT(*)", () => ({ rows: [{ count: 1 }] })],
+        ["INSERT INTO public.messages", () => ({ rows: [message] })],
+        ["SET last_message_at", () => ({ rows: [] })],
+        ["INSERT INTO public.conversation_state", () => ({ rows: [] })],
+      ]);
+      tx.setImpl(async (fn) => fn(client));
+
+      const result = await messageModel.sendMessage({
+        conversationId: CONV,
+        senderId: "u1",
+        body: "hi",
+        clientMsgId: "c1",
+        senderName: "Ana",
+      });
+      assert.equal(result.deduped, false);
+      assert.equal(result.status, "requested");
+    } finally {
+      if (prev === undefined) delete process.env.MESSAGE_REQUEST_MAX;
+      else process.env.MESSAGE_REQUEST_MAX = prev;
+    }
+  });
+
+  it("never counts when the cap is unset (unlimited)", async () => {
+    const prev = process.env.MESSAGE_REQUEST_MAX;
+    delete process.env.MESSAGE_REQUEST_MAX;
+    const message = { id: "m1", conversation_id: CONV, sender_id: "u1", body: "hi" };
+    try {
+      // No "COUNT(*)" route: the fake client throws if the cap path is taken.
+      const client = fakeClient([
+        ["FOR UPDATE", () => ({ rows: [conversationRow({ status: "requested", requester_id: "u1" })] })],
+        ["is_blocked", () => ({ rows: [row()] })],
+        ["INSERT INTO public.messages", () => ({ rows: [message] })],
+        ["SET last_message_at", () => ({ rows: [] })],
+        ["INSERT INTO public.conversation_state", () => ({ rows: [] })],
+      ]);
+      tx.setImpl(async (fn) => fn(client));
+
+      const result = await messageModel.sendMessage({
+        conversationId: CONV,
+        senderId: "u1",
+        body: "hi",
+        clientMsgId: "c1",
+        senderName: "Ana",
+      });
+      assert.equal(result.deduped, false);
+    } finally {
+      if (prev === undefined) delete process.env.MESSAGE_REQUEST_MAX;
+      else process.env.MESSAGE_REQUEST_MAX = prev;
+    }
+  });
 });
