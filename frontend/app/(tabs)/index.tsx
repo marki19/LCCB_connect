@@ -6,10 +6,12 @@ import PostCard from "../../src/components/PostCard";
 import SettingsSidebar from "../../src/components/SettingsSidebar";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useFocusEffect, useRouter } from "expo-router";
+import { apiFetch } from "../../src/lib/api";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
+  const isGuest = profile?.role === "guest";
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
 
@@ -27,8 +29,7 @@ export default function HomeScreen() {
   // Fetch real users from backend / database
   const fetchActivePeers = async () => {
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      const res = await fetch(`${apiUrl}/users`);
+      const res = await apiFetch(`/users`);
       if (res.ok) {
         const users = await res.json();
         if (users && users.length > 0) {
@@ -54,8 +55,7 @@ export default function HomeScreen() {
 
     // 1. Fetch Posts from raw SQL backend API
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      const res = await fetch(`${apiUrl}/posts`);
+      const res = await apiFetch(`/posts`);
       if (res.ok) {
         const data = await res.json();
         postItems = data.map((row: any) => {
@@ -90,8 +90,7 @@ export default function HomeScreen() {
 
     // 2. Fetch Theses from raw SQL backend API
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      const res = await fetch(`${apiUrl}/theses`);
+      const res = await apiFetch(`/theses`);
       if (res.ok) {
         const data = await res.json();
         thesisItems = data.map((t: any) => {
@@ -213,10 +212,12 @@ export default function HomeScreen() {
               <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }}>Capstones & Projects</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.push("/messages")} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10 }}>
-              <MessageSquare size={18} color="#8B5CF6" />
-              <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }}>Messages</Text>
-            </TouchableOpacity>
+            {!isGuest && (
+              <TouchableOpacity onPress={() => router.push("/messages")} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10 }}>
+                <MessageSquare size={18} color="#8B5CF6" />
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }}>Messages</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity onPress={() => setSidebarOpen(true)} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10 }}>
               <Settings size={18} color="#64748B" />
@@ -236,56 +237,58 @@ export default function HomeScreen() {
             ListHeaderComponent={
               <View style={{ marginBottom: 14 }}>
                 {/* Create post trigger card */}
-                <TouchableOpacity
-                  onPress={() => router.push("/create")}
-                  activeOpacity={0.8}
-                  style={{
-                    marginHorizontal: 16,
-                    marginBottom: 12,
-                    padding: 14,
-                    backgroundColor: "#FFFFFF",
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: "#DBEAFE",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    shadowColor: "#1A56DB",
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 4,
-                    elevation: 2,
-                  }}
-                >
-                  <View
+                {!isGuest && (
+                  <TouchableOpacity
+                    onPress={() => router.push("/create")}
+                    activeOpacity={0.8}
                     style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 19,
-                      backgroundColor: "#BFDBFE",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginRight: 10,
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "800", color: "#1E293B" }}>{getInitials(activeUser.full_name)}</Text>
-                  </View>
-                  <View
-                    style={{
-                      flex: 1,
-                      height: 38,
-                      backgroundColor: "#F0F7FF",
-                      borderRadius: 19,
+                      marginHorizontal: 16,
+                      marginBottom: 12,
+                      padding: 14,
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: 16,
                       borderWidth: 1,
                       borderColor: "#DBEAFE",
-                      justifyContent: "center",
-                      paddingHorizontal: 14,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      shadowColor: "#1A56DB",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 4,
+                      elevation: 2,
                     }}
                   >
-                    <Text style={{ color: "#94A3B8", fontSize: 13 }}>
-                      Share your project or deposit thesis...
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+                    <View
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 19,
+                        backgroundColor: "#BFDBFE",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginRight: 10,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "800", color: "#1E293B" }}>{getInitials(activeUser.full_name)}</Text>
+                    </View>
+                    <View
+                      style={{
+                        flex: 1,
+                        height: 38,
+                        backgroundColor: "#F0F7FF",
+                        borderRadius: 19,
+                        borderWidth: 1,
+                        borderColor: "#DBEAFE",
+                        justifyContent: "center",
+                        paddingHorizontal: 14,
+                      }}
+                    >
+                      <Text style={{ color: "#94A3B8", fontSize: 13 }}>
+                        Share your project or deposit thesis...
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
 
                 {/* Filter Pills */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
@@ -313,21 +316,23 @@ export default function HomeScreen() {
           <View style={{ width: 300, paddingHorizontal: 18, paddingTop: 18, borderLeftWidth: 1, borderLeftColor: "#DBEAFE" }}>
             
             {/* Quick Deposit Banner */}
-            <View style={{ backgroundColor: "#1A56DB", borderRadius: 16, padding: 16, marginBottom: 18 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <UploadCloud size={20} color="#FFFFFF" />
-                <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 14 }}>Deposit Manuscript</Text>
+            {!isGuest && (
+              <View style={{ backgroundColor: "#1A56DB", borderRadius: 16, padding: 16, marginBottom: 18 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <UploadCloud size={20} color="#FFFFFF" />
+                  <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 14 }}>Deposit Manuscript</Text>
+                </View>
+                <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, lineHeight: 17, marginBottom: 12 }}>
+                  Archive your capstone or dissertation into the LCCB Digital Repository.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => router.push("/upload-thesis")}
+                  style={{ backgroundColor: "#FFFFFF", paddingVertical: 8, borderRadius: 8, alignItems: "center" }}
+                >
+                  <Text style={{ color: "#1A56DB", fontWeight: "700", fontSize: 12 }}>Upload PDF</Text>
+                </TouchableOpacity>
               </View>
-              <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, lineHeight: 17, marginBottom: 12 }}>
-                Archive your capstone or dissertation into the LCCB Digital Repository.
-              </Text>
-              <TouchableOpacity
-                onPress={() => router.push("/upload-thesis")}
-                style={{ backgroundColor: "#FFFFFF", paddingVertical: 8, borderRadius: 8, alignItems: "center" }}
-              >
-                <Text style={{ color: "#1A56DB", fontWeight: "700", fontSize: 12 }}>Upload PDF</Text>
-              </TouchableOpacity>
-            </View>
+            )}
 
             {/* Academic Deadlines */}
             <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", marginBottom: 10 }}>Academic Deadlines</Text>

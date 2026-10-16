@@ -4,6 +4,7 @@ import { supabase } from "../../src/lib/supabase";
 import { Link, useRouter } from "expo-router";
 import { Eye, EyeOff, AlertCircle, ArrowRight } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { apiFetch } from "../../src/lib/api";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -81,16 +82,12 @@ export default function RegisterScreen() {
     } else {
       if (data?.user) {
         try {
-          const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
           const username = email.trim().toLowerCase().split("@")[0] + "_" + Math.floor(Math.random() * 1000);
-          await fetch(`${apiUrl}/users`, {
+          await apiFetch(`/users`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              id: data.user.id,
               username,
               full_name: fullName.trim(),
-              role: "student",
             }),
           });
         } catch (backendErr) {

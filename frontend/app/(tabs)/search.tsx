@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, FlatList, Linking,
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Search as SearchIcon, Filter, BookOpen, Download, UploadCloud } from "lucide-react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { apiFetch } from "../../src/lib/api";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -17,8 +18,7 @@ export default function SearchScreen() {
 
     try {
       // 1. Fetch from raw SQL backend API
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      const res = await fetch(`${apiUrl}/theses`);
+      const res = await apiFetch(`/theses`);
       if (res.ok) {
         const data = await res.json();
         let filtered = data;

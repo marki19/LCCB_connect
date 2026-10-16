@@ -1,15 +1,24 @@
 const postModel = require("../models/postModel");
+const { clampLimit } = require("../models/pagination");
+const moderationService = require("../services/moderationService");
+const notificationService = require("../services/notificationService");
 
-const getPosts = async (req, res) => {
+// Errors are forwarded to the centralized handler in index.js, which logs
+// server-side and returns a generic message (never the raw DB error).
+const getPosts = async (req, res, next) => {
   try {
-    const posts = await postModel.getAllPosts();
+    // Optional keyset pagination: ?limit=<1..100>&cursor=<created_at>|<id>
+    const posts = await postModel.getAllPosts({
+      limit: clampLimit(req.query.limit),
+      cursor: req.query.cursor || null,
+    });
     res.json(posts);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-const getPost = async (req, res) => {
+const getPost = async (req, res, next) => {
   try {
     const { id } = req.params;
     const post = await postModel.getPostById(id);
@@ -18,80 +27,122 @@ const getPost = async (req, res) => {
     }
     res.json(post);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-const createPost = async (req, res) => {
+const createPost = async (req, res, next) => {
   try {
-    const newPost = await postModel.createPost(req.body);
+    const newPost = await postModel.createPost({
+      ...req.body,
+      author_id: req.user.id,
+    });
     res.status(201).json(newPost);
+
+    // Asynchronously notify admins and run AI content analysis
+    Promise.resolve().then(async () => {
+      try {
+        await notificationService.notifyAdminsOnPostCreated(newPost, req.profile);
+        const scan = await moderationService.scanPost(newPost);
+        if (scan && scan.flagged) {
+          await postModel.updatePostModeration(newPost.id, "flagged", scan.reason);
+          await notificationService.notifyAdminsOnFlaggedContent({
+            targetId: newPost.id,
+            type: "post",
+            reason: scan.reason,
+            department: req.profile?.course,
+            authorId: req.user.id,
+            snippet: (newPost.title || newPost.content || "").slice(0, 80),
+          });
+        }
+      } catch (scanErr) {
+        console.error("[moderation] Background post scan failed:", scanErr);
+      }
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-const updatePost = async (req, res) => {
+const updatePost = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updated = await postModel.updatePost(id, req.body);
+    // Ownership is enforced in SQL (author_id = caller). An unauthorized caller
+    // receives the same 404 as a missing post.
+    const updated = await postModel.updatePost(id, req.user.id, req.body);
     if (!updated) {
       return res.status(404).json({ message: "Post not found" });
     }
     res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-const deletePost = async (req, res) => {
+const deletePost = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const deleted = await postModel.deletePost(id);
+    const deleted = await postModel.deletePost(id, req.user.id);
     if (!deleted) {
       return res.status(404).json({ message: "Post not found" });
     }
     res.json({ message: "Post deleted successfully", post: deleted });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-const toggleLike = async (req, res) => {
+const toggleLike = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { user_id } = req.body;
-    if (!user_id) {
-      return res.status(400).json({ error: "user_id is required" });
-    }
-    const result = await postModel.toggleLike(id, user_id);
+    // The liking user is the authenticated caller, not a body field.
+    const result = await postModel.toggleLike(id, req.user.id);
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-const getComments = async (req, res) => {
+const getComments = async (req, res, next) => {
   try {
     const { id } = req.params;
     const comments = await postModel.getComments(id);
     res.json(comments);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-const addComment = async (req, res) => {
+const addComment = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { user_id, content } = req.body;
-    if (!user_id || !content) {
-      return res.status(400).json({ error: "user_id and content are required" });
-    }
-    const comment = await postModel.addComment(id, user_id, content);
+    const { content } = req.body;
+    const comment = await postModel.addComment(id, req.user.id, content, {
+      moderation_status: "approved",
+    });
     res.status(201).json(comment);
+
+    // Asynchronously scan comment for foul/inappropriate language
+    Promise.resolve().then(async () => {
+      try {
+        const scan = await moderationService.scanComment(content);
+        if (scan && scan.flagged) {
+          await postModel.updateCommentModeration(comment.id, "flagged", scan.reason);
+          await notificationService.notifyAdminsOnFlaggedContent({
+            targetId: comment.id,
+            type: "comment",
+            reason: scan.reason,
+            department: req.profile?.course,
+            authorId: req.user.id,
+            snippet: content.slice(0, 80),
+          });
+        }
+      } catch (scanErr) {
+        console.error("[moderation] Background comment scan failed:", scanErr);
+      }
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 

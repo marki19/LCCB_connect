@@ -8,6 +8,7 @@ import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
 import { uploadToStorage } from "../src/lib/upload";
+import { apiFetch } from "../src/lib/api";
 
 export default function UploadThesisScreen() {
   const router = useRouter();
@@ -52,12 +53,9 @@ export default function UploadThesisScreen() {
 
       if (!pdfUrl) throw new Error("Failed to upload the file to Supabase Storage.");
 
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      const res = await fetch(`${apiUrl}/theses`, {
+      const res = await apiFetch(`/theses`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          uploader_id: profile.id,
           title,
           abstract,
           department,

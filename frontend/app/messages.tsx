@@ -3,6 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from "react
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MessageSquarePlus } from "lucide-react-native";
 import type { User } from "../src/types";
+import { apiFetch } from "../src/lib/api";
 
 export default function MessagesScreen() {
   const [peers, setPeers] = useState<User[]>([]);
@@ -15,9 +16,8 @@ export default function MessagesScreen() {
 
   useEffect(() => {
     const fetchPeers = async () => {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
       try {
-        const res = await fetch(`${apiUrl}/users`);
+        const res = await apiFetch(`/users`);
         if (res.ok) {
           const data = await res.json();
           if (data && data.length > 0) {

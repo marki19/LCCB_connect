@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
+import { apiFetch } from "../../src/lib/api";
 
 export default function AdminUsersScreen() {
   const [users, setUsers] = useState<any[]>([]);
@@ -7,9 +8,8 @@ export default function AdminUsersScreen() {
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
       try {
-        const res = await fetch(`${apiUrl}/users`);
+        const res = await apiFetch(`/users`);
         if (res.ok) {
           const data = await res.json();
           setUsers(Array.isArray(data) ? data : []);

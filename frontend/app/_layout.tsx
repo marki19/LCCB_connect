@@ -17,28 +17,29 @@ LogBox.ignoreLogs([
 ]);
 
 function RouteGuard() {
-  const { session, profile, initialized } = useAuth();
+  const { session, profile, initialized, isGuest } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
     if (!initialized) return;
 
-    const inAuth  = segments[0] === "(auth)";
+    const inAuth = segments[0] === "(auth)";
     const isAdminUser = session && profile && (profile.role === 'admin' || profile.role === 'superadmin');
+    const isAuthenticated = !!session || isGuest;
 
-    if (!session && !inAuth) {
+    if (!isAuthenticated && !inAuth) {
       // Not logged in - send to login
       router.replace("/(auth)/login");
-    } else if (session && inAuth) {
-      // Already logged in - route based on role
+    } else if (isAuthenticated && inAuth) {
+      // Already logged in or browsing as guest - route based on role
       if (isAdminUser) {
         router.replace("/(admin)/");
       } else {
         router.replace("/(tabs)/");
       }
     }
-  }, [session, profile, initialized, segments]);
+  }, [session, profile, initialized, segments, isGuest]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

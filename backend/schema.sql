@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS public.posts (
   technologies TEXT[],
   github_url TEXT,
   image_url TEXT,
+  moderation_status TEXT DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'hidden')),
+  moderation_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -39,6 +41,8 @@ CREATE TABLE IF NOT EXISTS public.theses (
   department TEXT NOT NULL,
   category TEXT NOT NULL,
   pdf_url TEXT NOT NULL,
+  moderation_status TEXT DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'hidden')),
+  moderation_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -58,26 +62,60 @@ CREATE TABLE IF NOT EXISTS public.comments (
   post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
   user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
+  moderation_status TEXT DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'hidden')),
+  moderation_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. Indexes for High-Performance Queries
+-- 6. Notifications table
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  actor_id TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
+  type TEXT NOT NULL,
+  target_id UUID,
+  department TEXT,
+  message TEXT NOT NULL,
+  is_read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. Indexes for High-Performance Queries & Moderation
 CREATE INDEX IF NOT EXISTS idx_posts_author ON public.posts(author_id);
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON public.posts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_moderation ON public.posts(moderation_status);
 CREATE INDEX IF NOT EXISTS idx_theses_uploader ON public.theses(uploader_id);
 CREATE INDEX IF NOT EXISTS idx_theses_created_at ON public.theses(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_theses_moderation ON public.theses(moderation_status);
 CREATE INDEX IF NOT EXISTS idx_likes_post ON public.likes(post_id);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON public.comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_comments_moderation ON public.comments(moderation_status);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON public.notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_dept ON public.notifications(department);
 
--- Enable Row Level Security
+-- Enable Row Level Security (deny-by-default).
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.theses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow public read-write for profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public read-write for posts" ON public.posts FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public read-write for theses" ON public.theses FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public read-write for likes" ON public.likes FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public read-write for comments" ON public.comments FOR ALL USING (true) WITH CHECK (true);
+-- The Expo app never talks to PostgREST for these tables — all data access goes
+-- through the Express API, which connects as the table owner and bypasses RLS.
+-- Never create `USING (true) WITH CHECK (true)` policies: they expose every table
+-- to the public anon key. Revoke the public API roles' access instead.
+DO $$
+DECLARE
+  r text;
+BEGIN
+  FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      EXECUTE format(
+        'REVOKE ALL ON public.profiles, public.posts, public.theses, public.likes, public.comments FROM %I',
+        r
+      );
+    END IF;
+  END LOOP;
+END $$;
+
+-- Upgrading an existing database? Apply migrations/001_rls_hardening.sql instead.

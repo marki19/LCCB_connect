@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Linking, TextInput, Image } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Linking, TextInput, Image, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming } from "react-native-reanimated";
-import { ArrowLeft, Heart, MessageCircle, Share2, ExternalLink, Send, Tag, Calendar } from "lucide-react-native";
+import { ArrowLeft, Heart, MessageCircle, Share2, ExternalLink, Send, Tag, Calendar, Pencil, Trash2 } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import type { Post } from "../../src/types";
+import { apiFetch, deletePost } from "../../src/lib/api";
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   website:  { label: "Website",  bg: "#DBEAFE", text: "#1D4ED8" },
@@ -22,6 +23,7 @@ export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { profile } = useAuth();
+  const isGuest = profile?.role === "guest";
 
   const [post, setPost] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -36,9 +38,8 @@ export default function PostDetailScreen() {
 
   useEffect(() => {
     const fetchDetails = async () => {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
       try {
-        const res = await fetch(`${apiUrl}/posts/${id}`);
+        const res = await apiFetch(`/posts/${id}`);
         if (res.ok) {
           const postData = await res.json();
           if (postData) {
@@ -69,7 +70,7 @@ export default function PostDetailScreen() {
         }
 
         // Fetch comments from raw SQL backend
-        const resComments = await fetch(`${apiUrl}/posts/${id}/comments`);
+        const resComments = await apiFetch(`/posts/${id}/comments`);
         if (resComments.ok) {
           const commentsData = await resComments.json();
           if (commentsData) {
@@ -118,19 +119,17 @@ export default function PostDetailScreen() {
   const typeConfig = TYPE_CONFIG[post.type] || TYPE_CONFIG['text'];
 
   const handleLike = async () => {
-    if (!profile?.id) return;
+    if (!profile?.id || isGuest) {
+      Alert.alert("Sign In Required", "Please sign in with your institutional account to like posts.");
+      return;
+    }
     scale.value = withSequence(withTiming(1.4, { duration: 110 }), withTiming(0.85, { duration: 80 }), withTiming(1, { duration: 110 }));
     const newLiked = !liked;
     setLiked(newLiked);
     setLikeCount(newLiked ? likeCount + 1 : likeCount - 1);
 
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      await fetch(`${apiUrl}/posts/${post.id}/like`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: profile.id }),
-      });
+      await apiFetch(`/posts/${post.id}/like`, { method: "POST" });
     } catch (err) {
       console.error("Failed to toggle like via backend:", err);
     }
@@ -154,18 +153,51 @@ export default function PostDetailScreen() {
     setComments([newComment, ...comments]);
 
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      await fetch(`${apiUrl}/posts/${post.id}/comments`, {
+      await apiFetch(`/posts/${post.id}/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: profile.id,
-          content: text,
-        }),
+        body: JSON.stringify({ content: text }),
       });
     } catch (err) {
       console.error("Failed to post comment via backend:", err);
     }
+  };
+
+  const isOwner = !!profile?.id && !!post && profile.id === post.author.id;
+
+  const handleEdit = () => {
+    router.push({
+      pathname: "/create",
+      params: {
+        postId: String(post.id),
+        editTitle: post.title ?? "",
+        editContent: post.description ?? "",
+        editType: post.type ?? "text",
+        editTech: (post.tags ?? []).join(", "),
+        editUrl: post.previewUrl ?? "",
+      },
+    });
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Post",
+      "Are you sure you want to delete this post? This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deletePost(post.id);
+              router.back();
+            } catch (e: any) {
+              Alert.alert("Error", e.message || "Failed to delete post");
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -175,6 +207,18 @@ export default function PostDetailScreen() {
           <ArrowLeft size={20} color="#1A56DB" />
         </TouchableOpacity>
         <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B", flex: 1 }} numberOfLines={1}>{post.title}</Text>
+        {isOwner && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <TouchableOpacity onPress={handleEdit} activeOpacity={0.7}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center" }}>
+              <Pencil size={17} color="#1A56DB" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleDelete} activeOpacity={0.7}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FEF2F2", alignItems: "center", justifyContent: "center" }}>
+              <Trash2 size={17} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -258,17 +302,25 @@ export default function PostDetailScreen() {
         <View style={{ marginHorizontal: 16 }}>
           <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B", marginBottom: 14 }}>Comments ({comments.length + post.comments})</Text>
 
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 20 }}>
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#BFDBFE", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-              <Text style={{ fontSize: 12, fontWeight: "800", color: "#1E293B" }}>MA</Text>
+          {isGuest ? (
+            <View style={{ backgroundColor: "#EFF6FF", borderRadius: 16, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: "#DBEAFE" }}>
+              <Text style={{ fontSize: 13, color: "#1E40AF", textAlign: "center", fontWeight: "600" }}>
+                Browsing as guest. Sign in with your school account to comment.
+              </Text>
             </View>
-            <TextInput value={commentText} onChangeText={setCommentText} placeholder="Write a comment..." placeholderTextColor="#94A3B8"
-              style={{ flex: 1, backgroundColor: "#FFFFFF", borderRadius: 20, borderWidth: 1, borderColor: "#DBEAFE", paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: "#1E293B" }} />
-            <TouchableOpacity onPress={handleComment} disabled={!commentText.trim()} activeOpacity={0.7}
-              style={{ marginLeft: 8, width: 38, height: 38, borderRadius: 19, backgroundColor: commentText.trim() ? "#1A56DB" : "#E2E8F0", alignItems: "center", justifyContent: "center" }}>
-              <Send size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
+          ) : (
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 20 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#BFDBFE", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: "800", color: "#1E293B" }}>MA</Text>
+              </View>
+              <TextInput value={commentText} onChangeText={setCommentText} placeholder="Write a comment..." placeholderTextColor="#94A3B8"
+                style={{ flex: 1, backgroundColor: "#FFFFFF", borderRadius: 20, borderWidth: 1, borderColor: "#DBEAFE", paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: "#1E293B" }} />
+              <TouchableOpacity onPress={handleComment} disabled={!commentText.trim()} activeOpacity={0.7}
+                style={{ marginLeft: 8, width: 38, height: 38, borderRadius: 19, backgroundColor: commentText.trim() ? "#1A56DB" : "#E2E8F0", alignItems: "center", justifyContent: "center" }}>
+                <Send size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          )}
 
           {comments.length === 0 && (
             <Text style={{ color: "#94A3B8", fontSize: 14, textAlign: "center", marginTop: 16 }}>No comments yet. Be the first!</Text>

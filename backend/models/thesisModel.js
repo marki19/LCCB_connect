@@ -1,8 +1,27 @@
 const db = require("../db");
+const { DEFAULT_LIMIT } = require("./pagination");
 
 // RAW SQL QUERIES FOR THESES / MANUSCRIPTS
 
-const getAllTheses = async () => {
+// Keyset pagination. Pass `cursor` = "<created_at>|<id>" of the last row you
+// saw; results are capped by models/pagination.js.
+const getAllTheses = async ({ limit = DEFAULT_LIMIT, cursor = null } = {}) => {
+  const params = [];
+  let whereClause = "";
+
+  if (cursor) {
+    const [createdAt, id] = String(cursor).split("|");
+    if (createdAt && id) {
+      params.push(createdAt, id);
+      whereClause = `
+    WHERE (
+      t.created_at < $1::timestamptz
+      OR (t.created_at = $1::timestamptz AND t.id < $2::uuid)
+    )`;
+    }
+  }
+
+  params.push(limit);
   const sql = `
     SELECT 
       t.id,
@@ -22,10 +41,11 @@ const getAllTheses = async () => {
         'year_level', pr.year_level
       ) AS uploader
     FROM theses t
-    LEFT JOIN profiles pr ON t.uploader_id = pr.id
-    ORDER BY t.created_at DESC;
+    LEFT JOIN profiles pr ON t.uploader_id = pr.id${whereClause}
+    ORDER BY t.created_at DESC, t.id DESC
+    LIMIT $${params.length};
   `;
-  const result = await db.query(sql);
+  const result = await db.query(sql, params);
   return result.rows;
 };
 
@@ -66,26 +86,49 @@ const createThesis = async (thesisData) => {
   return result.rows[0];
 };
 
-const updateThesis = async (id, thesisData) => {
-  const { title, abstract, department, category, pdf_url } = thesisData;
+// Columns a caller may change (fixed whitelist — no client input reaches SQL).
+const THESIS_UPDATABLE_COLUMNS = [
+  "title",
+  "abstract",
+  "department",
+  "category",
+  "pdf_url",
+];
+
+// Partial update: only the columns present in `thesisData` are written, so an
+// omitted field keeps its current value. An explicit `null` clears a field.
+// Ownership is enforced in SQL: the row is only updated when it belongs to
+// `uploaderId`. A caller who does not own the thesis gets no row back (=> 404).
+const updateThesis = async (id, uploaderId, thesisData) => {
+  const fields = THESIS_UPDATABLE_COLUMNS.filter(
+    (column) => thesisData[column] !== undefined
+  );
+
+  if (fields.length === 0) {
+    const current = await db.query(
+      `SELECT * FROM theses WHERE id = $1 AND uploader_id = $2;`,
+      [id, uploaderId]
+    );
+    return current.rows[0];
+  }
+
+  const setClause = fields.map((column, i) => `${column} = $${i + 1}`).join(", ");
+  const values = fields.map((column) => thesisData[column]);
+  values.push(id, uploaderId);
+
   const sql = `
     UPDATE theses
-    SET title = $1,
-        abstract = $2,
-        department = $3,
-        category = $4,
-        pdf_url = $5
-    WHERE id = $6
+    SET ${setClause}
+    WHERE id = $${fields.length + 1} AND uploader_id = $${fields.length + 2}
     RETURNING *;
   `;
-  const values = [title, abstract, department, category, pdf_url, id];
   const result = await db.query(sql, values);
   return result.rows[0];
 };
 
-const deleteThesis = async (id) => {
-  const sql = `DELETE FROM theses WHERE id = $1 RETURNING *;`;
-  const result = await db.query(sql, [id]);
+const deleteThesis = async (id, uploaderId) => {
+  const sql = `DELETE FROM theses WHERE id = $1 AND uploader_id = $2 RETURNING *;`;
+  const result = await db.query(sql, [id, uploaderId]);
   return result.rows[0];
 };
 

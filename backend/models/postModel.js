@@ -1,8 +1,31 @@
 const db = require("../db");
+const { DEFAULT_LIMIT } = require("./pagination");
 
 // RAW SQL QUERIES FOR POSTS (WITH JOIN FOR AUTHOR INFO)
 
-const getAllPosts = async () => {
+// Keyset pagination. Pass `cursor` = "<created_at>|<id>" of the last row you saw.
+const getAllPosts = async ({ limit = DEFAULT_LIMIT, cursor = null, includeHidden = false } = {}) => {
+  const params = [];
+  const conditions = [];
+
+  if (!includeHidden) {
+    conditions.push("p.moderation_status != 'hidden'");
+  }
+
+  if (cursor) {
+    const [createdAt, id] = String(cursor).split("|");
+    if (createdAt && id) {
+      params.push(createdAt, id);
+      conditions.push(`(
+        p.created_at < $${params.length - 1}::timestamptz
+        OR (p.created_at = $${params.length - 1}::timestamptz AND p.id < $${params.length}::uuid)
+      )`);
+    }
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  params.push(limit);
+
   const sql = `
     SELECT 
       p.id,
@@ -13,9 +36,11 @@ const getAllPosts = async () => {
       p.technologies,
       p.github_url,
       p.image_url,
+      p.moderation_status,
+      p.moderation_reason,
       p.created_at,
       COALESCE((SELECT COUNT(*)::int FROM likes l WHERE l.post_id = p.id), 0) AS likes,
-      COALESCE((SELECT COUNT(*)::int FROM comments c WHERE c.post_id = p.id), 0) AS comments,
+      COALESCE((SELECT COUNT(*)::int FROM comments c WHERE c.post_id = p.id AND c.moderation_status != 'hidden'), 0) AS comments,
       json_build_object(
         'id', pr.id,
         'username', pr.username,
@@ -26,13 +51,21 @@ const getAllPosts = async () => {
       ) AS author
     FROM posts p
     LEFT JOIN profiles pr ON p.author_id = pr.id
-    ORDER BY p.created_at DESC;
+    ${whereClause}
+    ORDER BY p.created_at DESC, p.id DESC
+    LIMIT $${params.length};
   `;
-  const result = await db.query(sql);
+  const result = await db.query(sql, params);
   return result.rows;
 };
 
-const getPostById = async (id) => {
+const getPostById = async (id, { includeHidden = false } = {}) => {
+  const params = [id];
+  let hiddenFilter = "";
+  if (!includeHidden) {
+    hiddenFilter = "AND p.moderation_status != 'hidden'";
+  }
+
   const sql = `
     SELECT 
       p.id,
@@ -43,9 +76,11 @@ const getPostById = async (id) => {
       p.technologies,
       p.github_url,
       p.image_url,
+      p.moderation_status,
+      p.moderation_reason,
       p.created_at,
       COALESCE((SELECT COUNT(*)::int FROM likes l WHERE l.post_id = p.id), 0) AS likes,
-      COALESCE((SELECT COUNT(*)::int FROM comments c WHERE c.post_id = p.id), 0) AS comments,
+      COALESCE((SELECT COUNT(*)::int FROM comments c WHERE c.post_id = p.id AND c.moderation_status != 'hidden'), 0) AS comments,
       json_build_object(
         'id', pr.id,
         'username', pr.username,
@@ -56,17 +91,17 @@ const getPostById = async (id) => {
       ) AS author
     FROM posts p
     LEFT JOIN profiles pr ON p.author_id = pr.id
-    WHERE p.id = $1;
+    WHERE p.id = $1 ${hiddenFilter};
   `;
-  const result = await db.query(sql, [id]);
+  const result = await db.query(sql, params);
   return result.rows[0];
 };
 
 const createPost = async (postData) => {
-  const { author_id, content, type, title, technologies, github_url, image_url } = postData;
+  const { author_id, content, type, title, technologies, github_url, image_url, moderation_status = 'approved', moderation_reason = null } = postData;
   const sql = `
-    INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, moderation_status, moderation_reason)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     RETURNING *;
   `;
   const values = [
@@ -77,77 +112,241 @@ const createPost = async (postData) => {
     technologies || null,
     github_url || null,
     image_url || null,
+    moderation_status,
+    moderation_reason,
   ];
   const result = await db.query(sql, values);
   return result.rows[0];
 };
 
-const updatePost = async (id, postData) => {
-  const { content, type, title, technologies, github_url, image_url } = postData;
+const POST_UPDATABLE_COLUMNS = [
+  "content",
+  "type",
+  "title",
+  "technologies",
+  "github_url",
+  "image_url",
+];
+
+const updatePost = async (id, authorId, postData) => {
+  const fields = POST_UPDATABLE_COLUMNS.filter(
+    (column) => postData[column] !== undefined
+  );
+
+  if (fields.length === 0) {
+    const current = await db.query(
+      `SELECT * FROM posts WHERE id = $1 AND author_id = $2;`,
+      [id, authorId]
+    );
+    return current.rows[0];
+  }
+
+  const setClause = fields.map((column, i) => `${column} = $${i + 1}`).join(", ");
+  const values = fields.map((column) => postData[column]);
+  values.push(id, authorId);
+
   const sql = `
     UPDATE posts
-    SET content = $1,
-        type = $2,
-        title = $3,
-        technologies = $4,
-        github_url = $5,
-        image_url = $6
-    WHERE id = $7
+    SET ${setClause}
+    WHERE id = $${fields.length + 1} AND author_id = $${fields.length + 2}
     RETURNING *;
   `;
-  const values = [content, type, title, technologies, github_url, image_url, id];
   const result = await db.query(sql, values);
   return result.rows[0];
 };
 
-const deletePost = async (id) => {
+const deletePost = async (id, authorId) => {
+  const sql = `DELETE FROM posts WHERE id = $1 AND author_id = $2 RETURNING *;`;
+  const result = await db.query(sql, [id, authorId]);
+  return result.rows[0];
+};
+
+const adminDeletePost = async (id) => {
   const sql = `DELETE FROM posts WHERE id = $1 RETURNING *;`;
   const result = await db.query(sql, [id]);
   return result.rows[0];
 };
 
 const toggleLike = async (postId, userId) => {
-  const checkSql = `SELECT id FROM likes WHERE post_id = $1 AND user_id = $2;`;
-  const existing = await db.query(checkSql, [postId, userId]);
-  if (existing.rows.length > 0) {
-    await db.query(`DELETE FROM likes WHERE post_id = $1 AND user_id = $2;`, [postId, userId]);
-    return { liked: false };
-  } else {
-    await db.query(`INSERT INTO likes (post_id, user_id) VALUES ($1, $2);`, [postId, userId]);
+  const inserted = await db.query(
+    `INSERT INTO likes (post_id, user_id) VALUES ($1, $2)
+     ON CONFLICT (post_id, user_id) DO NOTHING
+     RETURNING id;`,
+    [postId, userId]
+  );
+  if (inserted.rowCount > 0) {
     return { liked: true };
   }
+  await db.query(`DELETE FROM likes WHERE post_id = $1 AND user_id = $2;`, [postId, userId]);
+  return { liked: false };
 };
 
-const getComments = async (postId) => {
+const getComments = async (postId, { includeHidden = false } = {}) => {
+  const hiddenFilter = includeHidden ? "" : "AND c.moderation_status != 'hidden'";
   const sql = `
     SELECT 
       c.id,
       c.post_id,
       c.user_id,
       c.content,
+      c.moderation_status,
+      c.moderation_reason,
       c.created_at,
       json_build_object(
         'id', pr.id,
         'full_name', pr.full_name,
         'username', pr.username,
-        'avatar_url', pr.avatar_url
+        'avatar_url', pr.avatar_url,
+        'course', pr.course
       ) AS user
     FROM comments c
     LEFT JOIN profiles pr ON c.user_id = pr.id
-    WHERE c.post_id = $1
+    WHERE c.post_id = $1 ${hiddenFilter}
     ORDER BY c.created_at ASC;
   `;
   const result = await db.query(sql, [postId]);
   return result.rows;
 };
 
-const addComment = async (postId, userId, content) => {
+// Single comment, with the commenter's profile — used for moderation scoping.
+// `author.course` matches how `getFlaggedComments` filters the queue.
+const getCommentById = async (id) => {
   const sql = `
-    INSERT INTO comments (post_id, user_id, content)
-    VALUES ($1, $2, $3)
+    SELECT
+      c.id,
+      c.post_id,
+      c.user_id,
+      c.content,
+      c.moderation_status,
+      c.moderation_reason,
+      c.created_at,
+      json_build_object(
+        'id', pr.id,
+        'full_name', pr.full_name,
+        'username', pr.username,
+        'avatar_url', pr.avatar_url,
+        'course', pr.course
+      ) AS author
+    FROM comments c
+    LEFT JOIN profiles pr ON c.user_id = pr.id
+    WHERE c.id = $1;
+  `;
+  const result = await db.query(sql, [id]);
+  return result.rows[0];
+};
+
+const addComment = async (postId, userId, content, { moderation_status = 'approved', moderation_reason = null } = {}) => {
+  const sql = `
+    INSERT INTO comments (post_id, user_id, content, moderation_status, moderation_reason)
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING *;
   `;
-  const result = await db.query(sql, [postId, userId, content]);
+  const result = await db.query(sql, [postId, userId, content, moderation_status, moderation_reason]);
+  return result.rows[0];
+};
+
+// ---- MODERATION SPECIFIC QUERIES -------------------------------------------
+
+const getFlaggedPosts = async ({ department = null } = {}) => {
+  const params = [];
+  let deptCondition = "";
+
+  if (department) {
+    params.push(department);
+    deptCondition = `AND LOWER(pr.course) = LOWER($1)`;
+  }
+
+  const sql = `
+    SELECT 
+      p.id,
+      p.author_id,
+      p.content,
+      p.type,
+      p.title,
+      p.technologies,
+      p.github_url,
+      p.image_url,
+      p.moderation_status,
+      p.moderation_reason,
+      p.created_at,
+      json_build_object(
+        'id', pr.id,
+        'username', pr.username,
+        'full_name', pr.full_name,
+        'avatar_url', pr.avatar_url,
+        'course', pr.course,
+        'year_level', pr.year_level
+      ) AS author
+    FROM posts p
+    LEFT JOIN profiles pr ON p.author_id = pr.id
+    WHERE p.moderation_status = 'flagged' ${deptCondition}
+    ORDER BY p.created_at DESC;
+  `;
+  const result = await db.query(sql, params);
+  return result.rows;
+};
+
+const getFlaggedComments = async ({ department = null } = {}) => {
+  const params = [];
+  let deptCondition = "";
+
+  if (department) {
+    params.push(department);
+    deptCondition = `AND LOWER(pr.course) = LOWER($1)`;
+  }
+
+  const sql = `
+    SELECT 
+      c.id,
+      c.post_id,
+      c.user_id,
+      c.content,
+      c.moderation_status,
+      c.moderation_reason,
+      c.created_at,
+      p.title AS post_title,
+      json_build_object(
+        'id', pr.id,
+        'full_name', pr.full_name,
+        'username', pr.username,
+        'avatar_url', pr.avatar_url,
+        'course', pr.course
+      ) AS author
+    FROM comments c
+    LEFT JOIN profiles pr ON c.user_id = pr.id
+    LEFT JOIN posts p ON c.post_id = p.id
+    WHERE c.moderation_status = 'flagged' ${deptCondition}
+    ORDER BY c.created_at DESC;
+  `;
+  const result = await db.query(sql, params);
+  return result.rows;
+};
+
+const updatePostModeration = async (id, status, reason = null) => {
+  const sql = `
+    UPDATE posts
+    SET moderation_status = $1, moderation_reason = $2
+    WHERE id = $3
+    RETURNING *;
+  `;
+  const result = await db.query(sql, [status, reason, id]);
+  return result.rows[0];
+};
+
+const updateCommentModeration = async (id, status, reason = null) => {
+  const sql = `
+    UPDATE comments
+    SET moderation_status = $1, moderation_reason = $2
+    WHERE id = $3
+    RETURNING *;
+  `;
+  const result = await db.query(sql, [status, reason, id]);
+  return result.rows[0];
+};
+
+const deleteComment = async (id) => {
+  const sql = `DELETE FROM comments WHERE id = $1 RETURNING *;`;
+  const result = await db.query(sql, [id]);
   return result.rows[0];
 };
 
@@ -157,7 +356,14 @@ module.exports = {
   createPost,
   updatePost,
   deletePost,
+  adminDeletePost,
   toggleLike,
   getComments,
+  getCommentById,
   addComment,
+  getFlaggedPosts,
+  getFlaggedComments,
+  updatePostModeration,
+  updateCommentModeration,
+  deleteComment,
 };

@@ -5,11 +5,13 @@ import { Settings, MapPin, Calendar, LogOut } from "lucide-react-native";
 import PostCard from "../../src/components/PostCard";
 import { useAuth } from "../../src/contexts/AuthContext";
 import type { Post } from "../../src/types";
+import { apiFetch } from "../../src/lib/api";
 
 import { useRouter } from "expo-router";
 
 export default function ProfileScreen() {
   const { profile, signOut } = useAuth();
+  const isGuest = profile?.role === "guest";
   const router = useRouter();
   
   const currentUser = profile || {
@@ -36,15 +38,18 @@ export default function ProfileScreen() {
   const [loadingPosts, setLoadingPosts] = useState(true);
 
   useEffect(() => {
-    if (!currentUser.id || currentUser.id === 'guest') return;
+    if (!currentUser.id || currentUser.id === 'guest' || isGuest) {
+      setLoadingPosts(false);
+      setMyPosts([]);
+      return;
+    }
     
     const fetchPosts = async () => {
       setLoadingPosts(true);
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
       let posts: any[] = [];
 
       try {
-        const res = await fetch(`${apiUrl}/posts`);
+        const res = await apiFetch(`/posts`);
         if (res.ok) {
           const allPosts = await res.json();
           posts = allPosts.filter((p: any) => p.author_id === currentUser.id);
@@ -83,7 +88,7 @@ export default function ProfileScreen() {
     };
     
     fetchPosts();
-  }, [currentUser.id]);
+  }, [currentUser.id, isGuest]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F7FF" }}>
@@ -98,20 +103,22 @@ export default function ProfileScreen() {
               <Text style={{ fontSize: 28, fontWeight: "800", color: "#1E293B" }}>{getInitials(currentUser.full_name)}</Text>
             </View>
             <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-              <TouchableOpacity onPress={() => router.push("/edit-profile")} style={{ padding: 8, backgroundColor: "#F1F5F9", borderRadius: 20 }}>
-                <Settings size={20} color="#64748B" />
-              </TouchableOpacity>
+              {!isGuest && (
+                <TouchableOpacity onPress={() => router.push("/edit-profile")} style={{ padding: 8, backgroundColor: "#F1F5F9", borderRadius: 20 }}>
+                  <Settings size={20} color="#64748B" />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity onPress={handleSignOut} style={{ padding: 8, backgroundColor: "#FEE2E2", borderRadius: 20 }}>
                 <LogOut size={20} color="#EF4444" />
               </TouchableOpacity>
             </View>
           </View>
 
-          <Text style={{ fontSize: 24, fontWeight: "800", color: "#1E293B", marginTop: 8 }}>{currentUser.full_name}</Text>
-          <Text style={{ fontSize: 15, color: "#64748B", marginTop: 2, fontWeight: "500" }}>{currentUser.course} · {currentUser.year_level}</Text>
+          <Text style={{ fontSize: 24, fontWeight: "800", color: "#1E293B", marginTop: 8 }}>{isGuest ? "Guest Visitor" : currentUser.full_name}</Text>
+          <Text style={{ fontSize: 15, color: "#64748B", marginTop: 2, fontWeight: "500" }}>{isGuest ? "External Visitor · Read-only" : `${currentUser.course} · ${currentUser.year_level}`}</Text>
 
           <Text style={{ fontSize: 14, color: "#334155", marginTop: 12, lineHeight: 22 }}>
-            {currentUser.bio || "No bio yet."}
+            {isGuest ? "Viewing LCCB academic projects and theses as a guest." : (currentUser.bio || "No bio yet.")}
           </Text>
 
           <View style={{ flexDirection: "row", marginTop: 12, gap: 16 }}>

@@ -1,10 +1,22 @@
 const db = require("../db");
+const { DEFAULT_LIMIT } = require("./pagination");
 
 // RAW SQL QUERIES ONLY (NO ORM METHODS)
 
-const getAllUsers = async () => {
-  const sql = `SELECT * FROM profiles ORDER BY id ASC;`;
-  const result = await db.query(sql);
+// Keyset pagination on the (text) primary key. `cursor` is the last `id` seen.
+const getAllUsers = async ({ limit = DEFAULT_LIMIT, cursor = null } = {}) => {
+  const params = [];
+  const whereClause = cursor ? "WHERE id > $1" : "";
+  if (cursor) params.push(cursor);
+  params.push(limit);
+
+  const sql = `
+    SELECT * FROM profiles
+    ${whereClause}
+    ORDER BY id ASC
+    LIMIT $${params.length};
+  `;
+  const result = await db.query(sql, params);
   return result.rows;
 };
 

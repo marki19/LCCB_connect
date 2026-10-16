@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, Linking, Image } from "react-native";
+import { View, Text, TouchableOpacity, Linking, Image, Alert } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Heart, MessageCircle, Share2, ExternalLink } from "lucide-react-native";
+import { Heart, MessageCircle, Share2, ExternalLink, MoreVertical, Pencil, Trash2 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
+import { apiFetch, deletePost } from "../lib/api";
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   website:  { label: "Website",  bg: "#DBEAFE", text: "#1D4ED8" },
@@ -20,10 +21,11 @@ const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> =
   image:    { label: "Image",    bg: "#FCE7F3", text: "#BE185D" },
 };
 
-export default function PostCard({ post }: { post: Post }) {
+export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: (id: string | number) => void }) {
   const router = useRouter();
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
@@ -31,9 +33,51 @@ export default function PostCard({ post }: { post: Post }) {
   }));
 
   const { profile } = useAuth();
+  const isOwner = !!profile?.id && profile.id === post.author.id;
+
+  const handleEdit = () => {
+    setMenuOpen(false);
+    router.push({
+      pathname: "/create",
+      params: {
+        postId: String(post.id),
+        editTitle: post.title ?? "",
+        editContent: post.description ?? "",
+        editType: post.type ?? "text",
+        editTech: (post.tags ?? []).join(", "),
+        editUrl: post.previewUrl ?? "",
+      },
+    });
+  };
+
+  const handleDelete = () => {
+    setMenuOpen(false);
+    Alert.alert(
+      "Delete Post",
+      "Are you sure you want to delete this post? This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deletePost(post.id);
+              onDeleted?.(post.id);
+            } catch (e: any) {
+              Alert.alert("Error", e.message || "Failed to delete post");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleLike = async () => {
-    if (!profile?.id) return;
+    if (!profile?.id || profile?.role === "guest") {
+      Alert.alert("Sign In Required", "Please sign in with your institutional account to like posts.");
+      return;
+    }
 
     scale.value = withSequence(
       withTiming(1.35, { duration: 110 }),
@@ -46,12 +90,7 @@ export default function PostCard({ post }: { post: Post }) {
     setLikeCount(newLiked ? likeCount + 1 : likeCount - 1);
 
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      await fetch(`${apiUrl}/posts/${post.id}/like`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: profile.id }),
-      });
+      await apiFetch(`/posts/${post.id}/like`, { method: "POST" });
     } catch (e) {
       console.error("Failed to toggle like via SQL backend:", e);
     }
@@ -87,8 +126,41 @@ export default function PostCard({ post }: { post: Post }) {
           <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B" }}>{post.author.name}</Text>
           <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>{post.author.course} · {post.author.yearLevel}</Text>
         </View>
-        <Text style={{ fontSize: 11, color: "#94A3B8" }}>{post.createdAt}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={{ fontSize: 11, color: "#94A3B8" }}>{post.createdAt}</Text>
+          {isOwner && (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }}
+              activeOpacity={0.7}
+              style={{ marginLeft: 6, padding: 4 }}
+            >
+              <MoreVertical size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
+
+      {/* Owner edit/delete dropdown */}
+      {isOwner && menuOpen && (
+        <View style={{ marginHorizontal: 14, marginBottom: 8, backgroundColor: "#F8FAFC", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden" }}>
+          <TouchableOpacity
+            onPress={(e) => { e.stopPropagation?.(); handleEdit(); }}
+            activeOpacity={0.7}
+            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
+          >
+            <Pencil size={15} color="#1A56DB" />
+            <Text style={{ fontSize: 14, color: "#1A56DB", fontWeight: "600", marginLeft: 10 }}>Edit Post</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={(e) => { e.stopPropagation?.(); handleDelete(); }}
+            activeOpacity={0.7}
+            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 11 }}
+          >
+            <Trash2 size={15} color="#EF4444" />
+            <Text style={{ fontSize: 14, color: "#EF4444", fontWeight: "600", marginLeft: 10 }}>Delete Post</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Title + description */}
       <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>

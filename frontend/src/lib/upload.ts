@@ -1,7 +1,24 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { supabase } from './supabase';
-import { Platform } from 'react-native';
+
+/**
+ * Per-bucket upload policy. Anything not listed here (or not matching the
+ * listed types) is refused before the file ever reaches Storage.
+ */
+const BUCKET_MIME_TYPES: Record<string, string[]> = {
+  assets: ['image/png', 'image/jpeg', 'image/webp'],
+  theses: ['application/pdf'],
+};
+
+/** Hard ceiling for a single upload (10 MB). */
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function isAllowedMime(bucketName: string, contentType: string): boolean {
+  const allowed = BUCKET_MIME_TYPES[bucketName];
+  if (!allowed) return false; // unknown bucket -> refuse
+  return allowed.includes(contentType.toLowerCase());
+}
 
 /**
  * Uploads a file (by its local URI) to Supabase Storage.
@@ -18,16 +35,29 @@ export async function uploadToStorage(
   contentType: string = 'application/octet-stream'
 ): Promise<string | null> {
   try {
+    // 0. Reject disallowed file types for this bucket.
+    if (!isAllowedMime(bucketName, contentType)) {
+      console.error(`Upload rejected: "${contentType}" is not allowed in "${bucketName}"`);
+      return null;
+    }
+
     // 1. Convert local URI to a Blob
     const response = await fetch(uri);
     const blob = await response.blob();
 
-    // 2. Upload to Supabase Storage
-    const { data, error } = await supabase.storage
+    // 2. Reject oversized files before uploading.
+    if (blob.size > MAX_UPLOAD_BYTES) {
+      console.error(`Upload rejected: file is ${blob.size} bytes (max ${MAX_UPLOAD_BYTES})`);
+      return null;
+    }
+
+    // 3. Upload to Supabase Storage.
+    //    `upsert: false` — never silently overwrite an existing object.
+    const { error } = await supabase.storage
       .from(bucketName)
       .upload(path, blob, {
         contentType,
-        upsert: true, // Overwrite if a file with the same name exists
+        upsert: false,
       });
 
     if (error) {
@@ -35,7 +65,7 @@ export async function uploadToStorage(
       throw error;
     }
 
-    // 3. Get the public URL
+    // 4. Get the public URL
     const { data: publicData } = supabase.storage
       .from(bucketName)
       .getPublicUrl(path);
@@ -62,7 +92,7 @@ export async function pickImage() {
     const asset = result.assets[0];
     return {
       uri: asset.uri,
-      type: asset.mimeType || 'image/jpeg',
+      type: 'image/jpeg',
       name: asset.fileName || `image-${Date.now()}.jpg`
     };
   }
@@ -70,12 +100,13 @@ export async function pickImage() {
 }
 
 /**
- * Prompts the user to pick a document (PDF, DOCX) from their device files.
+ * Prompts the user to pick a PDF document from their device files.
+ * The repository accepts PDF manuscripts only.
  * @returns An object with the local uri, name, and mimetype, or null if cancelled.
  */
 export async function pickDocument() {
   const result = await DocumentPicker.getDocumentAsync({
-    type: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    type: ['application/pdf'],
     copyToCacheDirectory: true,
   });
 
@@ -83,7 +114,7 @@ export async function pickDocument() {
     const asset = result.assets[0];
     return {
       uri: asset.uri,
-      type: asset.mimeType || 'application/pdf',
+      type: 'application/pdf',
       name: asset.name
     };
   }

@@ -1,0 +1,18 @@
+# gitleaks configuration — https://github.com/gitleaks/gitleaks#configuration
+#
+# Starts from the default ruleset, then allowlists files that intentionally
+# contain non-secret placeholders.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Templates and fixtures that contain no real credentials"
+paths = [
+  # Template files are meant to hold dummy values.
+  '''backend/\.env\.example''',
+  '''frontend/\.env\.example''',
+  # Test fixtures use throwaway values (fake anon key, localhost DSN).
+  '''backend/tests/''',
+  # Lockfiles carry integrity hashes, not credentials.
+  '''package-lock\.json''',
+]

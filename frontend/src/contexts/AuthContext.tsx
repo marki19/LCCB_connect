@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { apiFetch } from '../lib/api';
 
 export type Profile = {
   id: string;
@@ -15,21 +16,23 @@ export type Profile = {
 };
 
 type AuthContextType = { 
-  signInAsGuest: () => void; 
+  signInAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   initialized: boolean;
+  isGuest: boolean;
 };
 
 const AuthContext = createContext<AuthContextType>({ 
-  signInAsGuest: () => {}, 
+  signInAsGuest: async () => {},
   signOut: async () => {},
   session: null,
   user: null,
   profile: null,
   initialized: false,
+  isGuest: false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -37,14 +40,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
 
-  const signInAsGuest = () => {
-    setSession({ access_token: "guest", refresh_token: "guest", expires_in: 9999, token_type: "bearer", user: { id: "u1", app_metadata: {}, user_metadata: {}, aud: "authenticated", created_at: "" } });
-    setProfile({ id: "u1", username: "mark_antipo", full_name: "Mark Antipo", avatar_url: null, bio: "Full stack developer & capstone project lead.", course: "BSIT", year_level: "3rd Year", role: "student", skills: ["React Native", "PostgreSQL", "Node.js"] });
-    setInitialized(true);
+  const signInAsGuest = async () => {
+    // Pure local guest mode: No Supabase user or account needed.
+    setIsGuest(true);
+    setProfile({
+      id: "guest",
+      username: "guest",
+      full_name: "Guest Visitor",
+      avatar_url: null,
+      bio: "Browsing projects as a guest visitor.",
+      course: null,
+      year_level: null,
+      role: "guest",
+      skills: null,
+    });
   };
 
   const signOut = async () => {
+    setIsGuest(false);
     setSession(null);
     setUser(null);
     setProfile(null);
@@ -53,8 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (userId: string, currentUser?: User | null) => {
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      const res = await fetch(`${apiUrl}/users/${userId}`);
+      const res = await apiFetch(`/users/${userId}`);
       if (res.ok) {
         const data = await res.json();
         setProfile(data as Profile);
@@ -63,15 +77,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.status === 404 && currentUser) {
         const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Student";
         const username = (currentUser.email?.split("@")[0] || "user") + "_" + Math.floor(Math.random() * 1000);
-        const createRes = await fetch(`${apiUrl}/users`, {
+        const createRes = await apiFetch(`/users`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: userId,
-            username,
-            full_name: fullName,
-            role: "student",
-          }),
+          body: JSON.stringify({ username, full_name: fullName }),
         });
         if (createRes.ok) {
           const newProfile = await createRes.json();
@@ -114,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, initialized, signInAsGuest, signOut }}>
+    <AuthContext.Provider value={{ session, user, profile, initialized, isGuest, signInAsGuest, signOut }}>
       {children}
     </AuthContext.Provider>
   );

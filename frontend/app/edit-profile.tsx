@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../src/contexts/AuthContext";
 import { pickImage, uploadToStorage } from "../src/lib/upload";
 import { Camera, X, Check } from "lucide-react-native";
+import { apiFetch } from "../src/lib/api";
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -45,10 +46,8 @@ export default function EditProfileScreen() {
         setUploadingImage(false);
       }
 
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      const res = await fetch(`${apiUrl}/users/${session.user.id}`, {
+      const res = await apiFetch(`/users/${session.user.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           full_name: fullName.trim(),
           bio: bio.trim(),

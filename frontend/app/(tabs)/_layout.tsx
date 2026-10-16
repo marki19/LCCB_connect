@@ -2,6 +2,7 @@ import { Tabs, useRouter } from "expo-router";
 import { View, Text, Pressable, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { Home, Plus, Bell, User, BookOpen, GraduationCap } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "../../src/contexts/AuthContext";
 
 const TAB_ITEMS = [
   { name: "index", label: "Home", Icon: Home, isAction: false },
@@ -14,6 +15,9 @@ const TAB_ITEMS = [
 function TabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { profile } = useAuth();
+  const isGuest = profile?.role === "guest";
+  const visibleTabs = TAB_ITEMS.filter((item) => !isGuest || !item.isAction);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
 
@@ -31,7 +35,7 @@ function TabBar({ state, navigation }: any) {
 
         {/* Center: Navigation Links */}
         <View style={styles.webNavLinks}>
-          {TAB_ITEMS.map(({ name, label, Icon, isAction }) => {
+          {visibleTabs.map(({ name, label, Icon, isAction }) => {
             const routeIndex = state.routes.findIndex((route: any) => route.name === name);
             const focused = !isAction && state.index === routeIndex;
 
@@ -74,7 +78,7 @@ function TabBar({ state, navigation }: any) {
   // Mobile App: Standard Ergonomic Bottom Bar
   return (
     <View style={[styles.mobileBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      {TAB_ITEMS.map(({ name, label, Icon, isAction }) => {
+      {visibleTabs.map(({ name, label, Icon, isAction }) => {
         const routeIndex = state.routes.findIndex((route: any) => route.name === name);
         const focused = !isAction && state.index === routeIndex;
 

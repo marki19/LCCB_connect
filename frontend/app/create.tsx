@@ -1,28 +1,51 @@
 import { useState } from "react";
 import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, ChevronRight, CheckCircle2, ChevronLeft, SendHorizontal } from "lucide-react-native";
 import Animated, { FadeIn, FadeInRight, FadeOutLeft, FadeInDown } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
 import { uploadToStorage, pickImage } from "../src/lib/upload";
+import { apiFetch, updatePost } from "../src/lib/api";
 
 type PostType = "text" | "image" | "project" | "capstone" | null;
 
 export default function CreatePostModal() {
   const router = useRouter();
   const { profile } = useAuth();
+
+  // Edit mode: these params are set when navigating from PostCard / PostDetail
+  const {
+    postId,
+    editTitle,
+    editContent,
+    editType,
+    editTech,
+    editUrl,
+  } = useLocalSearchParams<{
+    postId?: string;
+    editTitle?: string;
+    editContent?: string;
+    editType?: string;
+    editTech?: string;
+    editUrl?: string;
+  }>();
+
+  const isEditing = !!postId;
   
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [postType, setPostType] = useState<PostType>(null);
-  
-  const [content, setContent] = useState("");
-  const [title, setTitle] = useState("");
-  const [technologies, setTechnologies] = useState("");
-  const [githubUrl, setGithubUrl] = useState("");
+  const [step, setStep] = useState<1 | 2 | 3>(isEditing ? 2 : 1);
+  const [postType, setPostType] = useState<PostType>(
+    isEditing ? (editType as PostType) ?? "text" : null
+  );
+
+  const [content, setContent] = useState(isEditing ? editContent ?? "" : "");
+  const [title, setTitle] = useState(isEditing ? editTitle ?? "" : "");
+  const [technologies, setTechnologies] = useState(isEditing ? editTech ?? "" : "");
+  const [githubUrl, setGithubUrl] = useState(isEditing ? editUrl ?? "" : "");
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+
 
   const handleNext = () => {
     if (step === 1 && !postType) return Alert.alert("Select Type", "Please choose a post type.");
@@ -38,32 +61,44 @@ export default function CreatePostModal() {
     setIsPublishing(true);
 
     try {
-      let finalImageUrl = null;
+      let finalImageUrl: string | null = null;
       if (imageUri) {
         const path = `posts/${profile.id}-${Date.now()}.jpg`;
         finalImageUrl = await uploadToStorage(imageUri, 'assets', path, 'image/jpeg');
       }
 
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      const res = await fetch(`${apiUrl}/posts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          author_id: profile.id,
-          content: content,
+      const techArray = technologies ? technologies.split(',').map(t => t.trim()) : null;
+
+      if (isEditing && postId) {
+        // Edit mode — PUT /posts/:id
+        await updatePost(postId, {
+          content,
           type: postType || 'text',
           title: title || null,
-          technologies: technologies ? technologies.split(',').map(t => t.trim()) : null,
+          technologies: techArray,
           github_url: githubUrl || null,
-          image_url: finalImageUrl,
-        }),
-      });
+          ...(finalImageUrl ? { image_url: finalImageUrl } : {}),
+        });
+      } else {
+        // Create mode — POST /posts
+        const res = await apiFetch(`/posts`, {
+          method: "POST",
+          body: JSON.stringify({
+            content,
+            type: postType || 'text',
+            title: title || null,
+            technologies: techArray,
+            github_url: githubUrl || null,
+            image_url: finalImageUrl,
+          }),
+        });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to create post");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to create post");
+        }
       }
-      
+
       router.back();
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to publish post");
@@ -71,6 +106,7 @@ export default function CreatePostModal() {
       setIsPublishing(false);
     }
   };
+
 
   const handlePickImage = async () => {
     const result = await pickImage();
@@ -110,7 +146,7 @@ export default function CreatePostModal() {
                 <X color="#1E293B" size={28} />
               </TouchableOpacity>
             )}
-            <Text className="text-slate-900 font-extrabold text-xl tracking-tight">Create Post</Text>
+            <Text className="text-slate-900 font-extrabold text-xl tracking-tight">{isEditing ? "Edit Post" : "Create Post"}</Text>
             <View className="w-10" />
           </View>
 
@@ -239,7 +275,7 @@ export default function CreatePostModal() {
                 disabled={isPublishing}
                 className={`py-4 rounded-2xl flex-row items-center justify-center shadow-lg ${isPublishing ? 'bg-indigo-400 shadow-indigo-400/20' : 'bg-indigo-600 shadow-indigo-600/40'}`}
               >
-                <Text className="text-white font-bold text-lg mr-2">{isPublishing ? "Publishing..." : "Publish Post"}</Text>
+                <Text className="text-white font-bold text-lg mr-2">{isPublishing ? (isEditing ? "Saving..." : "Publishing...") : (isEditing ? "Save Changes" : "Publish Post")}</Text>
                 {!isPublishing && <SendHorizontal color="#FFF" size={20} />}
               </TouchableOpacity>
             )}

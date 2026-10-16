@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { Users, FileText, Activity } from "lucide-react-native";
+import { apiFetch } from "../../src/lib/api";
 
 export default function AdminOverviewScreen() {
   const [stats, setStats] = useState({ users: 0, theses: 0, posts: 0 });
@@ -8,12 +9,11 @@ export default function AdminOverviewScreen() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
       try {
         const [usersRes, thesesRes, postsRes] = await Promise.all([
-          fetch(`${apiUrl}/users`).then(r => r.ok ? r.json() : []),
-          fetch(`${apiUrl}/theses`).then(r => r.ok ? r.json() : []),
-          fetch(`${apiUrl}/posts`).then(r => r.ok ? r.json() : []),
+          apiFetch(`/users`).then(r => r.ok ? r.json() : []),
+          apiFetch(`/theses`).then(r => r.ok ? r.json() : []),
+          apiFetch(`/posts`).then(r => r.ok ? r.json() : []),
         ]);
         setStats({
           users: Array.isArray(usersRes) ? usersRes.length : 0,
