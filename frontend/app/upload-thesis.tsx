@@ -1,24 +1,55 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { ArrowLeft, UploadCloud, FileText, CheckCircle2, ChevronRight, BookOpen } from "lucide-react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { ArrowLeft, UploadCloud, FileText, CheckCircle2, ChevronRight, BookOpen, AlertCircle } from "lucide-react-native";
 import * as DocumentPicker from "expo-document-picker";
 import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
 import { uploadToStorage } from "../src/lib/upload";
-import { apiFetch } from "../src/lib/api";
+import { apiFetch, updateThesis } from "../src/lib/api";
 
 export default function UploadThesisScreen() {
   const router = useRouter();
   const { profile } = useAuth();
 
+  // Edit mode: set when the uploader opens "Edit" on their own thesis card.
+  const { thesisId } = useLocalSearchParams<{ thesisId?: string }>();
+  const isEditing = !!thesisId;
+
   const [title, setTitle] = useState("");
   const [abstract, setAbstract] = useState("");
-  const [category, setCategory] = useState<"Undergraduate Capstone" | "Graduate Dissertation">("Undergraduate Capstone");
+  const [category, setCategory] = useState<string>("Undergraduate Capstone");
   const [pdfFile, setPdfFile] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(isEditing);
+  const [loadError, setLoadError] = useState("");
+
+  // In edit mode, prefill from the stored manuscript (fetch-on-mount avoids
+  // passing a 10k-character abstract through router params).
+  useEffect(() => {
+    if (!thesisId) return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await apiFetch(`/theses/${thesisId}`);
+        if (!res.ok) throw new Error(`Could not load the manuscript (${res.status})`);
+        const t = await res.json();
+        if (!active) return;
+        setTitle(t.title || "");
+        setAbstract(t.abstract || "");
+        if (t.category) setCategory(t.category);
+      } catch (e: any) {
+        if (active) setLoadError(e.message || "Could not load the manuscript.");
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [thesisId]);
 
   const pickDocument = async () => {
     try {
@@ -37,37 +68,60 @@ export default function UploadThesisScreen() {
   };
 
   const handleUpload = async () => {
-    if (!title || !abstract || !pdfFile) {
-      Alert.alert("Missing Fields", "Please fill out all fields and select a PDF manuscript.");
+    if (!title || !abstract || (!isEditing && !pdfFile)) {
+      Alert.alert(
+        "Missing Fields",
+        isEditing
+          ? "Please fill out the manuscript title and abstract."
+          : "Please fill out all fields and select a PDF manuscript."
+      );
       return;
     }
     if (!profile?.id) return;
 
     setIsUploading(true);
     try {
-      const ext = pdfFile.name.split('.').pop() || "pdf";
-      const filePath = `${profile.id}/${Date.now()}.${ext}`;
+      // Only upload when a file was picked; in edit mode an untouched picker
+      // means "keep the stored manuscript".
+      let pdfUrl: string | null = null;
+      if (pdfFile) {
+        const ext = pdfFile.name.split('.').pop() || "pdf";
+        const filePath = `${profile.id}/${Date.now()}.${ext}`;
+        pdfUrl = await uploadToStorage(pdfFile.uri, 'theses', filePath, pdfFile.mimeType || 'application/pdf');
+        if (!pdfUrl) throw new Error("Failed to upload the file to Supabase Storage.");
+      }
 
-      const pdfUrl = await uploadToStorage(pdfFile.uri, 'theses', filePath, pdfFile.mimeType || 'application/pdf');
-
-      if (!pdfUrl) throw new Error("Failed to upload the file to Supabase Storage.");
-
-      const res = await apiFetch(`/theses`, {
-        method: "POST",
-        body: JSON.stringify({
+      if (isEditing) {
+        // Partial update — ownership is enforced server-side (404 otherwise).
+        await updateThesis(thesisId!, {
           title,
           abstract,
           category,
-          pdf_url: pdfUrl,
-        }),
-      });
+          ...(pdfUrl ? { pdf_url: pdfUrl } : {}),
+        });
+      } else {
+        const res = await apiFetch(`/theses`, {
+          method: "POST",
+          body: JSON.stringify({
+            title,
+            abstract,
+            category,
+            pdf_url: pdfUrl,
+          }),
+        });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to save manuscript to backend database");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to save manuscript to backend database");
+        }
       }
 
-      Alert.alert("Success", "Manuscript successfully uploaded to the repository!");
+      Alert.alert(
+        "Success",
+        isEditing
+          ? "Changes saved to the repository!"
+          : "Manuscript successfully uploaded to the repository!"
+      );
       router.back();
     } catch (error: any) {
       console.error("Upload error:", error);
@@ -77,6 +131,26 @@ export default function UploadThesisScreen() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color="#4F46E5" />
+      </SafeAreaView>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <AlertCircle size={44} color="#EF4444" />
+        <Text className="text-slate-700 font-bold text-lg mt-4 text-center">{loadError}</Text>
+        <TouchableOpacity onPress={() => router.back()} className="mt-6">
+          <Text className="text-indigo-600 font-semibold">Go back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       <LinearGradient colors={["#F8FAFC", "#EEF2FF"]} style={{ flex: 1 }}>
@@ -85,7 +159,7 @@ export default function UploadThesisScreen() {
             <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
               <ArrowLeft color="#1E293B" size={28} />
             </TouchableOpacity>
-            <Text className="text-slate-900 font-extrabold text-xl tracking-tight">Deposit Manuscript</Text>
+            <Text className="text-slate-900 font-extrabold text-xl tracking-tight">{isEditing ? "Edit Manuscript" : "Deposit Manuscript"}</Text>
             <View className="w-10" />
           </View>
 
@@ -95,8 +169,8 @@ export default function UploadThesisScreen() {
               <View className="w-16 h-16 bg-indigo-100 rounded-full items-center justify-center mb-4">
                 <BookOpen color="#4F46E5" size={32} />
               </View>
-              <Text className="text-slate-900 font-extrabold text-2xl text-center">Contribute to the Repository</Text>
-              <Text className="text-slate-500 text-center mt-2 px-4 leading-5">Upload your capstone or dissertation to the LCCB Digital Thesis Repository.</Text>
+              <Text className="text-slate-900 font-extrabold text-2xl text-center">{isEditing ? "Update Your Manuscript" : "Contribute to the Repository"}</Text>
+              <Text className="text-slate-500 text-center mt-2 px-4 leading-5">{isEditing ? "Apply changes to your deposited capstone or dissertation." : "Upload your capstone or dissertation to the LCCB Digital Thesis Repository."}</Text>
             </Animated.View>
 
             <Animated.View entering={FadeInRight.delay(100).duration(400).springify()}>
@@ -169,7 +243,7 @@ export default function UploadThesisScreen() {
                   ) : (
                     <>
                       <FileText color="#94A3B8" size={40} className="mb-2" />
-                      <Text className="text-slate-700 font-semibold mt-2">Upload PDF Manuscript</Text>
+                      <Text className="text-slate-700 font-semibold mt-2">{isEditing ? "Keep current PDF — tap to replace" : "Upload PDF Manuscript"}</Text>
                       <Text className="text-slate-500 text-xs mt-1">Maximum size: 25MB</Text>
                     </>
                   )}
@@ -191,7 +265,7 @@ export default function UploadThesisScreen() {
               ) : (
                 <>
                   <UploadCloud color="#FFFFFF" size={20} className="mr-2" />
-                  <Text className="text-white font-bold text-lg">Deposit to Repository</Text>
+                  <Text className="text-white font-bold text-lg">{isEditing ? "Save Changes" : "Deposit to Repository"}</Text>
                 </>
               )}
             </TouchableOpacity>

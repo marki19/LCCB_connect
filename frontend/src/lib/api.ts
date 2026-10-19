@@ -97,3 +97,40 @@ export async function updatePost(
 export async function deletePost(id: string | number) {
   return apiJson(`/posts/${id}`, { method: "DELETE" });
 }
+
+export async function updateComment(
+  postId: string | number,
+  commentId: string | number,
+  content: string
+) {
+  return apiJson(`/posts/${postId}/comments/${commentId}`, {
+    method: "PUT",
+    body: JSON.stringify({ content }),
+  });
+}
+
+export async function deleteComment(
+  postId: string | number,
+  commentId: string | number
+) {
+  return apiJson(`/posts/${postId}/comments/${commentId}`, { method: "DELETE" });
+}
+
+export async function updateThesis(
+  id: string | number,
+  data: {
+    title?: string;
+    abstract?: string;
+    category?: string;
+    pdf_url?: string | null;
+  }
+) {
+  return apiJson(`/theses/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteThesis(id: string | number) {
+  return apiJson(`/theses/${id}`, { method: "DELETE" });
+}

@@ -21,6 +21,11 @@ export default function HomeScreen() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "theses" | "websites" | "projects" | "discussions" | "images">("all");
 
+  // Drop a deleted card immediately; the next feed refresh reconciles with the server.
+  const handlePostDeleted = useCallback((id: string | number) => {
+    setPosts((prev) => prev.filter((p) => String(p.id) !== String(id)));
+  }, []);
+
   const getInitials = (name?: string | null) => {
     if (!name) return "LC";
     return name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
@@ -234,7 +239,7 @@ export default function HomeScreen() {
           <FlatList
             data={posts}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <PostCard post={item} />}
+            renderItem={({ item }) => <PostCard post={item} onDeleted={handlePostDeleted} />}
             contentContainerStyle={{ paddingTop: 14, paddingBottom: 32 }}
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={

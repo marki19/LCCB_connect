@@ -10,7 +10,7 @@ import { Heart, MessageCircle, Share2, ExternalLink, MoreVertical, Pencil, Trash
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
-import { apiFetch, deletePost } from "../lib/api";
+import { apiFetch, deletePost, deleteThesis } from "../lib/api";
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   website:  { label: "Website",  bg: "#DBEAFE", text: "#1D4ED8" },
@@ -37,6 +37,14 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
 
   const handleEdit = () => {
     setMenuOpen(false);
+    if (post.type === "thesis") {
+      // Theses are edited in the deposit screen (backend: PUT /theses/:id).
+      router.push({
+        pathname: "/upload-thesis",
+        params: { thesisId: String(post.id) },
+      });
+      return;
+    }
     router.push({
       pathname: "/create",
       params: {
@@ -52,9 +60,10 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
 
   const handleDelete = () => {
     setMenuOpen(false);
+    const isThesis = post.type === "thesis";
     Alert.alert(
-      "Delete Post",
-      "Are you sure you want to delete this post? This cannot be undone.",
+      isThesis ? "Delete Thesis" : "Delete Post",
+      `Are you sure you want to delete this ${isThesis ? "thesis" : "post"}? This cannot be undone.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -62,10 +71,14 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           style: "destructive",
           onPress: async () => {
             try {
-              await deletePost(post.id);
+              if (isThesis) {
+                await deleteThesis(post.id);
+              } else {
+                await deletePost(post.id);
+              }
               onDeleted?.(post.id);
             } catch (e: any) {
-              Alert.alert("Error", e.message || "Failed to delete post");
+              Alert.alert("Error", e.message || "Failed to delete");
             }
           },
         },
@@ -101,7 +114,15 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   return (
     <TouchableOpacity
       activeOpacity={0.97}
-      onPress={() => router.push(`/post/${post.id}`)}
+      onPress={() => {
+        // A thesis has no post-detail screen; open the deposited PDF instead
+        // (mirrors the search screen's thesis card).
+        if (post.type === "thesis") {
+          if (post.previewUrl) Linking.openURL(post.previewUrl);
+          return;
+        }
+        router.push(`/post/${post.id}`);
+      }}
       style={{
         backgroundColor: "#FFFFFF",
         borderRadius: 20,
@@ -252,31 +273,43 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
       {/* Divider */}
       <View style={{ height: 1, backgroundColor: "#F1F5F9" }} />
 
-      {/* Actions */}
+      {/* Actions — likes/comments do not apply to thesis deposits */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 6, paddingVertical: 6 }}>
-        <Animated.View style={animatedStyle}>
-          <TouchableOpacity
-            onPress={(e) => { e.stopPropagation?.(); handleLike(); }}
-            activeOpacity={0.7}
-            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
-          >
-            <Heart size={18} color={liked ? "#EF4444" : "#94A3B8"} fill={liked ? "#EF4444" : "transparent"} strokeWidth={2} />
-            <Text style={{ fontSize: 12, color: liked ? "#EF4444" : "#94A3B8", marginLeft: 5, fontWeight: "600" }}>{likeCount}</Text>
-          </TouchableOpacity>
-        </Animated.View>
+        {post.type !== "thesis" && (
+          <>
+            <Animated.View style={animatedStyle}>
+              <TouchableOpacity
+                onPress={(e) => { e.stopPropagation?.(); handleLike(); }}
+                activeOpacity={0.7}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
+              >
+                <Heart size={18} color={liked ? "#EF4444" : "#94A3B8"} fill={liked ? "#EF4444" : "transparent"} strokeWidth={2} />
+                <Text style={{ fontSize: 12, color: liked ? "#EF4444" : "#94A3B8", marginLeft: 5, fontWeight: "600" }}>{likeCount}</Text>
+              </TouchableOpacity>
+            </Animated.View>
 
-        <TouchableOpacity
-          onPress={() => router.push(`/post/${post.id}`)}
-          activeOpacity={0.7}
-          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
-        >
-          <MessageCircle size={18} color="#94A3B8" strokeWidth={2} />
-          <Text style={{ fontSize: 12, color: "#94A3B8", marginLeft: 5, fontWeight: "600" }}>{post.comments}</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push(`/post/${post.id}`)}
+              activeOpacity={0.7}
+              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
+            >
+              <MessageCircle size={18} color="#94A3B8" strokeWidth={2} />
+              <Text style={{ fontSize: 12, color: "#94A3B8", marginLeft: 5, fontWeight: "600" }}>{post.comments}</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
         <View style={{ flex: 1 }} />
 
-        <TouchableOpacity activeOpacity={0.7} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}>
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation?.();
+            const target = post.previewUrl || post.preview_metadata?.url;
+            if (target) Linking.openURL(target);
+          }}
+          activeOpacity={0.7}
+          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
+        >
           <Share2 size={18} color="#94A3B8" strokeWidth={2} />
           <Text style={{ fontSize: 12, color: "#94A3B8", marginLeft: 5, fontWeight: "600" }}>Share</Text>
         </TouchableOpacity>

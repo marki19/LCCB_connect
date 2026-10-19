@@ -3,10 +3,10 @@ import { View, Text, ScrollView, TouchableOpacity, Linking, TextInput, Image, Al
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming } from "react-native-reanimated";
-import { ArrowLeft, Heart, MessageCircle, Share2, ExternalLink, Send, Tag, Calendar, Pencil, Trash2 } from "lucide-react-native";
+import { ArrowLeft, Heart, MessageCircle, Share2, ExternalLink, Send, Tag, Calendar, Pencil, Trash2, MoreVertical } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import type { Post } from "../../src/types";
-import { apiFetch, deletePost } from "../../src/lib/api";
+import { apiFetch, deletePost, updateComment, deleteComment } from "../../src/lib/api";
 
 const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   website:  { label: "Website",  bg: "#DBEAFE", text: "#1D4ED8" },
@@ -32,6 +32,9 @@ export default function PostDetailScreen() {
   const [likeCount, setLikeCount] = useState(0);
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<any[]>([]);
+  const [commentMenuId, setCommentMenuId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
 
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -79,6 +82,7 @@ export default function PostDetailScreen() {
               const cName = c.user?.full_name || "Unknown User";
               return {
                 id: c.id,
+                userId: c.user_id,
                 author: cName,
                 initials: cName.substring(0, 2).toUpperCase(),
                 avatarColor: "#E2E8F0",
@@ -145,6 +149,7 @@ export default function PostDetailScreen() {
     // Optimistic UI update
     const newComment = { 
       id: String(Date.now()), 
+      userId: profile.id,
       author: profile.full_name || "You", 
       initials: (profile.full_name || "You").substring(0, 2).toUpperCase(), 
       avatarColor: "#BFDBFE", 
@@ -161,6 +166,59 @@ export default function PostDetailScreen() {
     } catch (err) {
       console.error("Failed to post comment via backend:", err);
     }
+  };
+
+  const startEditComment = (c: any) => {
+    setCommentMenuId(null);
+    setEditingCommentId(c.id);
+    setEditingText(c.text);
+  };
+
+  const cancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingText("");
+  };
+
+  const handleSaveComment = async (c: any) => {
+    const text = editingText.trim();
+    if (!text || text === c.text) {
+      cancelEditComment();
+      return;
+    }
+    try {
+      const updated: any = await updateComment(post.id, c.id, text);
+      setComments((prev) =>
+        prev.map((item) =>
+          item.id === c.id ? { ...item, text: updated?.content ?? text } : item
+        )
+      );
+      cancelEditComment();
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to update comment");
+    }
+  };
+
+  const handleDeleteComment = (c: any) => {
+    setCommentMenuId(null);
+    Alert.alert(
+      "Delete Comment",
+      "Are you sure you want to delete this comment? This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteComment(post.id, c.id);
+              setComments((prev) => prev.filter((item) => item.id !== c.id));
+            } catch (e: any) {
+              Alert.alert("Error", e.message || "Failed to delete comment");
+            }
+          },
+        },
+      ]
+    );
   };
 
   const isOwner = !!profile?.id && !!post && profile.id === post.author.id;
@@ -374,20 +432,85 @@ export default function PostDetailScreen() {
             <Text style={{ color: "#94A3B8", fontSize: 14, textAlign: "center", marginTop: 16 }}>No comments yet. Be the first!</Text>
           )}
 
-          {comments.map((c) => (
-            <View key={c.id} style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 16 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c.avatarColor, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-                <Text style={{ fontSize: 12, fontWeight: "800", color: "#1E293B" }}>{c.initials}</Text>
-              </View>
-              <View style={{ flex: 1, backgroundColor: "#FFFFFF", borderRadius: 16, padding: 12, borderWidth: 1, borderColor: "#DBEAFE" }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B" }}>{c.author}</Text>
-                  <Text style={{ fontSize: 11, color: "#94A3B8" }}>{c.time}</Text>
+          {comments.map((c) => {
+            const isCommentOwner = !!profile?.id && profile.id === c.userId;
+            const isEditingComment = editingCommentId === c.id;
+            const isMenuOpen = commentMenuId === c.id;
+            return (
+              <View key={c.id} style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 16 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c.avatarColor, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "800", color: "#1E293B" }}>{c.initials}</Text>
                 </View>
-                <Text style={{ fontSize: 13, color: "#475569", lineHeight: 20 }}>{c.text}</Text>
+                <View style={{ flex: 1 }}>
+                  <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 12, borderWidth: 1, borderColor: "#DBEAFE" }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B" }}>{c.author}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        <Text style={{ fontSize: 11, color: "#94A3B8" }}>{c.time}</Text>
+                        {isCommentOwner && (
+                          <TouchableOpacity
+                            onPress={() => setCommentMenuId(isMenuOpen ? null : c.id)}
+                            activeOpacity={0.7}
+                            style={{ marginLeft: 6, padding: 2 }}
+                          >
+                            <MoreVertical size={14} color="#94A3B8" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                    {isEditingComment ? (
+                      <View>
+                        <TextInput
+                          value={editingText}
+                          onChangeText={setEditingText}
+                          multiline
+                          autoFocus
+                          placeholder="Edit your comment..."
+                          placeholderTextColor="#94A3B8"
+                          style={{ backgroundColor: "#F8FAFC", borderRadius: 12, borderWidth: 1, borderColor: "#DBEAFE", paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
+                        />
+                        <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 8, alignItems: "center" }}>
+                          <TouchableOpacity onPress={cancelEditComment} activeOpacity={0.7} style={{ paddingHorizontal: 12, paddingVertical: 6, marginRight: 6 }}>
+                            <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => handleSaveComment(c)}
+                            disabled={!editingText.trim()}
+                            activeOpacity={0.7}
+                            style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: editingText.trim() ? "#1A56DB" : "#E2E8F0" }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFFFFF" }}>Save</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: 13, color: "#475569", lineHeight: 20 }}>{c.text}</Text>
+                    )}
+                  </View>
+                  {isCommentOwner && isMenuOpen && !isEditingComment && (
+                    <View style={{ marginTop: 6, backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden" }}>
+                      <TouchableOpacity
+                        onPress={() => startEditComment(c)}
+                        activeOpacity={0.7}
+                        style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
+                      >
+                        <Pencil size={14} color="#1A56DB" />
+                        <Text style={{ fontSize: 13, color: "#1A56DB", fontWeight: "600", marginLeft: 8 }}>Edit Comment</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteComment(c)}
+                        activeOpacity={0.7}
+                        style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10 }}
+                      >
+                        <Trash2 size={14} color="#EF4444" />
+                        <Text style={{ fontSize: 13, color: "#EF4444", fontWeight: "600", marginLeft: 8 }}>Delete Comment</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>

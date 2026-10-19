@@ -57,6 +57,8 @@ const m = {
   updateCommentModeration: stub(postModel, "updateCommentModeration"),
   adminDeletePost: stub(postModel, "adminDeletePost"),
   deleteComment: stub(postModel, "deleteComment"),
+  updateCommentByAuthor: stub(postModel, "updateCommentByAuthor"),
+  deleteCommentByAuthor: stub(postModel, "deleteCommentByAuthor"),
   getAllTheses: stub(thesisModel, "getAllTheses"),
   updateThesis: stub(thesisModel, "updateThesis"),
   createThesis: stub(thesisModel, "createThesis"),
@@ -143,6 +145,104 @@ describe("ownership is enforced in SQL (404, not 403)", () => {
     const res = await request(app).put("/api/theses/t1").set(AUTH).send({ title: "new" });
 
     assert.equal(res.status, 404);
+  });
+});
+
+describe("comments: the author can edit and delete their own", () => {
+  it("401s on both routes without a token", async () => {
+    const put = await request(app).put("/api/posts/p1/comments/c1").send({ content: "x" });
+    const del = await request(app).delete("/api/posts/p1/comments/c1");
+
+    assert.equal(put.status, 401);
+    assert.equal(del.status, 401);
+    assert.equal(m.updateCommentByAuthor.calls.length, 0);
+    assert.equal(m.deleteCommentByAuthor.calls.length, 0);
+  });
+
+  it("404 when the edit matched no owned (or hidden) comment", async () => {
+    m.updateCommentByAuthor.setImpl(async () => undefined);
+
+    const res = await request(app)
+      .put("/api/posts/p1/comments/c1")
+      .set(AUTH)
+      .send({ content: "edited" });
+
+    assert.equal(res.status, 404);
+    // Caller identity comes from the token; post + comment come from the path.
+    assert.deepEqual(m.updateCommentByAuthor.calls, [["c1", "p1", "u1", "edited"]]);
+  });
+
+  it("404 when deleting a comment that is not owned", async () => {
+    m.deleteCommentByAuthor.setImpl(async () => undefined);
+
+    const res = await request(app).delete("/api/posts/p1/comments/c1").set(AUTH);
+
+    assert.equal(res.status, 404);
+    assert.deepEqual(m.deleteCommentByAuthor.calls, [["c1", "p1", "u1"]]);
+  });
+
+  it("400 when the new content is blank", async () => {
+    const res = await request(app)
+      .put("/api/posts/p1/comments/c1")
+      .set(AUTH)
+      .send({ content: "   " });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error, "Validation failed");
+    assert.equal(m.updateCommentByAuthor.calls.length, 0);
+  });
+
+  it("rejects a client-supplied user_id with 400", async () => {
+    const res = await request(app)
+      .put("/api/posts/p1/comments/c1")
+      .set(AUTH)
+      .send({ content: "hi", user_id: "u9" });
+
+    assert.equal(res.status, 400);
+    assert.ok(res.body.fields.some((f) => f.path === "user_id"));
+    assert.equal(m.updateCommentByAuthor.calls.length, 0);
+  });
+
+  it("returns the updated comment on a successful edit", async () => {
+    m.updateCommentByAuthor.setImpl(async () => ({ id: "c1", content: "edited" }));
+
+    const res = await request(app)
+      .put("/api/posts/p1/comments/c1")
+      .set(AUTH)
+      .send({ content: "  edited  " });
+
+    assert.equal(res.status, 200);
+    // The schema trims, so SQL receives the clean value.
+    assert.deepEqual(m.updateCommentByAuthor.calls, [["c1", "p1", "u1", "edited"]]);
+    assert.equal(res.body.content, "edited");
+  });
+
+  it("re-scans an edited comment and flags it when the scanner matches", async () => {
+    m.updateCommentByAuthor.setImpl(async () => ({ id: "c1", content: "bad words" }));
+    moderationService.scanComment.setImpl(async () => ({ flagged: true, reason: "language" }));
+    try {
+      const res = await request(app)
+        .put("/api/posts/p1/comments/c1")
+        .set(AUTH)
+        .send({ content: "bad words" });
+
+      assert.equal(res.status, 200);
+      // Let the background Promise.resolve() chain run before asserting.
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.deepEqual(m.updateCommentModeration.calls, [["c1", "flagged", "language"]]);
+    } finally {
+      moderationService.scanComment.setImpl(async () => ({ flagged: false }));
+    }
+  });
+
+  it("deletes an owned comment and confirms the removal", async () => {
+    m.deleteCommentByAuthor.setImpl(async () => ({ id: "c1" }));
+
+    const res = await request(app).delete("/api/posts/p1/comments/c1").set(AUTH);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.message, "Comment deleted successfully");
+    assert.deepEqual(m.deleteCommentByAuthor.calls, [["c1", "p1", "u1"]]);
   });
 });
 

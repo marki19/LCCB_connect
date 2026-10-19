@@ -7,6 +7,7 @@ const {
   createPostSchema,
   updatePostSchema,
   createCommentSchema,
+  updateCommentSchema,
 } = require("../validation");
 
 // Routes (global requireAuth is applied when this router is mounted in app.js)
@@ -20,6 +21,9 @@ router.delete("/:id", postController.deletePost);
 router.post("/:id/like", postController.toggleLike);
 router.get("/:id/comments", postController.getComments);
 router.post("/:id/comments", loadProfile, validate(createCommentSchema), postController.addComment);
+// Author-scoped comment edit/delete (ownership enforced in SQL -> 404).
+router.put("/:id/comments/:commentId", loadProfile, validate(updateCommentSchema), postController.updateComment);
+router.delete("/:id/comments/:commentId", postController.deleteComment);
 
 // Link preview generation
 router.post("/preview", postController.generatePreview);

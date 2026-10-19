@@ -383,6 +383,38 @@ const deleteComment = async (id) => {
   return result.rows[0];
 };
 
+// ---- AUTHOR-SCOPED COMMENT WRITES ------------------------------------------
+// Ownership is enforced in SQL: an edit/delete only matches when the caller is
+// the comment's author (and, for the edit, the comment is still attached to the
+// post in the path). A caller who does not own the comment gets no row back,
+// which the controller turns into a 404 — same convention as post/thesis writes.
+//
+// An edit resets the moderation status and re-runs the scanner (see the
+// controller), mirroring comment creation. A moderator-hidden comment cannot
+// be edited by its author (`moderation_status != 'hidden'`), so a hide cannot
+// be edited away.
+
+const updateCommentByAuthor = async (id, postId, userId, content) => {
+  const sql = `
+    UPDATE comments
+    SET content = $1, moderation_status = 'approved', moderation_reason = NULL
+    WHERE id = $2 AND post_id = $3 AND user_id = $4 AND moderation_status != 'hidden'
+    RETURNING *;
+  `;
+  const result = await db.query(sql, [content, id, postId, userId]);
+  return result.rows[0];
+};
+
+const deleteCommentByAuthor = async (id, postId, userId) => {
+  const sql = `
+    DELETE FROM comments
+    WHERE id = $1 AND post_id = $2 AND user_id = $3
+    RETURNING *;
+  `;
+  const result = await db.query(sql, [id, postId, userId]);
+  return result.rows[0];
+};
+
 module.exports = {
   getAllPosts,
   getPostById,
@@ -399,4 +431,6 @@ module.exports = {
   updatePostModeration,
   updateCommentModeration,
   deleteComment,
+  updateCommentByAuthor,
+  deleteCommentByAuthor,
 };

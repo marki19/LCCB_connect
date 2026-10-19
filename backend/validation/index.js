@@ -82,6 +82,12 @@ const createCommentSchema = z
   .object({ content: z.string().trim().min(1).max(2000) })
   .strict();
 
+// Author edit: same shape as creation — identity is never accepted from the
+// body, so `.strict()` rejects an attempted `user_id`/`post_id` override.
+const updateCommentSchema = z
+  .object({ content: z.string().trim().min(1).max(2000) })
+  .strict();
+
 // ---- theses ----------------------------------------------------------------
 // `department` is deliberately absent: it is derived server-side from the
 // uploader's profile, so a caller cannot attribute a thesis to another
@@ -249,6 +255,7 @@ module.exports = {
   createPostSchema,
   updatePostSchema,
   createCommentSchema,
+  updateCommentSchema,
   createThesisSchema,
   updateThesisSchema,
   createProfileSchema,

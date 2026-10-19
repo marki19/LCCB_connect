@@ -149,6 +149,67 @@ const addComment = async (req, res, next) => {
   }
 };
 
+const updateComment = async (req, res, next) => {
+  try {
+    const { id: postId, commentId } = req.params;
+    const { content } = req.body;
+    // Ownership is enforced in SQL (user_id = caller, and the comment must be
+    // attached to the post in the path). An unauthorized or hidden comment
+    // receives the same 404 as a missing one.
+    const updated = await postModel.updateCommentByAuthor(
+      commentId,
+      postId,
+      req.user.id,
+      content
+    );
+    if (!updated) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+    res.json(updated);
+
+    // Asynchronously re-scan the edited text (same posture as comment creation,
+    // since the edit reset the moderation status to approved).
+    Promise.resolve().then(async () => {
+      try {
+        const scan = await moderationService.scanComment(updated.content);
+        if (scan && scan.flagged) {
+          await postModel.updateCommentModeration(updated.id, "flagged", scan.reason);
+          await notificationService.notifyAdminsOnFlaggedContent({
+            targetId: updated.id,
+            type: "comment",
+            reason: scan.reason,
+            departmentId: req.profile?.department_id,
+            departmentName: req.profile?.department_name,
+            authorId: req.user.id,
+            snippet: updated.content.slice(0, 80),
+          });
+        }
+      } catch (scanErr) {
+        console.error("[moderation] Background comment re-scan failed:", scanErr);
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteComment = async (req, res, next) => {
+  try {
+    const { id: postId, commentId } = req.params;
+    const deleted = await postModel.deleteCommentByAuthor(
+      commentId,
+      postId,
+      req.user.id
+    );
+    if (!deleted) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+    res.json({ message: "Comment deleted successfully", comment: deleted });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const generatePreview = async (req, res, next) => {
   try {
     const { url } = req.body;
@@ -171,5 +232,7 @@ module.exports = {
   toggleLike,
   getComments,
   addComment,
+  updateComment,
+  deleteComment,
   generatePreview,
 };
