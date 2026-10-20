@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, Animated, Dimensions, ScrollView, TouchableWithoutFeedback, Switch } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X, UserCircle, Shield, Lock, Palette, BellRing, School, Flag, LogOut, ChevronRight, Users, MessageSquare, Sun, Moon } from "lucide-react-native";
@@ -39,8 +39,8 @@ export default function SettingsSidebar({ visible, onClose }: Props) {
   const insets     = useSafeAreaInsets();
   const router     = useRouter();
   const { colors, isDark, toggleTheme } = useTheme();
-  const translateX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
-  const backdrop   = useRef(new Animated.Value(0)).current;
+  const [translateX] = useState(() => new Animated.Value(-SIDEBAR_WIDTH));
+  const [backdrop] = useState(() => new Animated.Value(0));
 
   const { profile } = useAuth();
   

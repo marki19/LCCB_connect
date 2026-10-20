@@ -37,17 +37,15 @@ export default function ProfileScreen() {
   };
 
   const [myPosts, setMyPosts] = useState<any[]>([]);
-  const [loadingPosts, setLoadingPosts] = useState(true);
+  const isGuestUser = !currentUser.id || currentUser.id === "guest" || isGuest;
+  const visiblePosts = isGuestUser ? [] : myPosts;
 
   useEffect(() => {
-    if (!currentUser.id || currentUser.id === 'guest' || isGuest) {
-      setLoadingPosts(false);
-      setMyPosts([]);
+    if (!currentUser.id || currentUser.id === "guest" || isGuest) {
       return;
     }
     
     const fetchPosts = async () => {
-      setLoadingPosts(true);
       let posts: any[] = [];
 
       try {
@@ -86,7 +84,6 @@ export default function ProfileScreen() {
       } else {
         setMyPosts([]);
       }
-      setLoadingPosts(false);
     };
     
     fetchPosts();
@@ -147,15 +144,15 @@ export default function ProfileScreen() {
           {/* Stats */}
           <View style={{ flexDirection: "row", marginTop: 20, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
             <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{myPosts.length}</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{visiblePosts.length}</Text>
               <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Projects</Text>
             </View>
             <View style={{ flex: 1, alignItems: "center", borderLeftWidth: 1, borderRightWidth: 1, borderColor: colors.border }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{myPosts.reduce((s, p) => s + p.likes, 0)}</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{visiblePosts.reduce((s, p) => s + p.likes, 0)}</Text>
               <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Likes</Text>
             </View>
             <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{myPosts.reduce((s, p) => s + p.comments, 0)}</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{visiblePosts.reduce((s, p) => s + p.comments, 0)}</Text>
               <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Comments</Text>
             </View>
           </View>
@@ -164,12 +161,12 @@ export default function ProfileScreen() {
         {/* Portfolio */}
         <View style={{ padding: 16 }}>
           <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary, marginBottom: 16 }}>Portfolio</Text>
-          {myPosts.length === 0 ? (
+          {visiblePosts.length === 0 ? (
             <View style={{ alignItems: "center", paddingVertical: 40 }}>
               <Text style={{ fontSize: 15, color: colors.textTertiary, fontWeight: "500" }}>No posts yet</Text>
             </View>
           ) : (
-            myPosts.map((post) => <PostCard key={post.id} post={post} />)
+            visiblePosts.map((post) => <PostCard key={post.id} post={post} />)
           )}
         </View>
       </ScrollView>

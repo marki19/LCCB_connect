@@ -9,6 +9,20 @@ import { useTheme } from "../../src/contexts/ThemeContext";
 import { useFocusEffect, useRouter } from "expo-router";
 import { apiFetch } from "../../src/lib/api";
 
+type FeedFilter = "all" | "theses" | "websites" | "projects" | "discussions" | "images";
+
+function FilterTab({ label, value, active, onSelect }: { label: string, value: FeedFilter, active: boolean, onSelect: (value: FeedFilter) => void }) {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={() => onSelect(value)}
+      style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: active ? colors.action : colors.surfaceSunken, marginRight: 8 }}
+    >
+      <Text style={{ fontSize: 13, fontWeight: "600", color: active ? "#FFFFFF" : colors.textPrimary }}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
@@ -21,7 +35,7 @@ export default function HomeScreen() {
   const [activePeers, setActivePeers] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [filter, setFilter] = useState<"all" | "theses" | "websites" | "projects" | "discussions" | "images">("all");
+  const [filter, setFilter] = useState<FeedFilter>("all");
 
   // Drop a deleted card immediately; the next feed refresh reconciles with the server.
   const handlePostDeleted = useCallback((id: string | number) => {
@@ -162,24 +176,6 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [filter]);
 
-  const FilterTab = ({ label, value }: { label: string, value: any }) => {
-    const active = filter === value;
-    return (
-      <TouchableOpacity 
-        onPress={() => setFilter(value)}
-        style={{ 
-          paddingHorizontal: 16, 
-          paddingVertical: 8, 
-          borderRadius: 20, 
-          backgroundColor: active ? colors.action : colors.surfaceSunken,
-          marginRight: 8 
-        }}
-      >
-        <Text style={{ fontSize: 13, fontWeight: "600", color: active ? "#FFFFFF" : colors.textPrimary }}>{label}</Text>
-      </TouchableOpacity>
-    );
-  };
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
       <HomeHeader onMenuPress={() => setSidebarOpen(true)} />
@@ -302,12 +298,12 @@ export default function HomeScreen() {
 
                 {/* Filter Pills */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
-                  <FilterTab label="All" value="all" />
-                  <FilterTab label="🌐 Websites" value="websites" />
-                  <FilterTab label="📑 Theses" value="theses" />
-                  <FilterTab label="Projects" value="projects" />
-                  <FilterTab label="Discussions" value="discussions" />
-                  <FilterTab label="Images" value="images" />
+                  <FilterTab label="All" value="all" active={filter === "all"} onSelect={setFilter} />
+                  <FilterTab label="🌐 Websites" value="websites" active={filter === "websites"} onSelect={setFilter} />
+                  <FilterTab label="📑 Theses" value="theses" active={filter === "theses"} onSelect={setFilter} />
+                  <FilterTab label="Projects" value="projects" active={filter === "projects"} onSelect={setFilter} />
+                  <FilterTab label="Discussions" value="discussions" active={filter === "discussions"} onSelect={setFilter} />
+                  <FilterTab label="Images" value="images" active={filter === "images"} onSelect={setFilter} />
                 </ScrollView>
               </View>
             }

@@ -67,14 +67,6 @@ export default function RegisterScreen() {
     };
   }, [departmentId]);
 
-  // Clear errors when user types
-  useEffect(() => {
-    if (email) setEmailError("");
-    if (password) setPasswordError("");
-    if (fullName) setNameError("");
-    setGeneralError("");
-  }, [email, password, fullName]);
-
   async function signUpWithEmail() {
     let hasError = false;
 
@@ -180,7 +172,7 @@ export default function RegisterScreen() {
                     placeholder="Juan Dela Cruz"
                     placeholderTextColor={colors.textTertiary}
                     value={fullName}
-                    onChangeText={setFullName}
+                    onChangeText={(text) => { setFullName(text); if (text) setNameError(""); setGeneralError(""); }}
                     autoCapitalize="words"
                   />
                 </View>
@@ -247,7 +239,7 @@ export default function RegisterScreen() {
                     placeholder="student@lccb.edu.ph"
                     placeholderTextColor={colors.textTertiary}
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={(text) => { setEmail(text); if (text) setEmailError(""); setGeneralError(""); }}
                     autoCapitalize="none"
                     keyboardType="email-address"
                   />
@@ -269,7 +261,7 @@ export default function RegisterScreen() {
                     placeholder="••••••••••••"
                     placeholderTextColor={colors.textTertiary}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(text) => { setPassword(text); if (text) setPasswordError(""); setGeneralError(""); }}
                     secureTextEntry={!showPassword}
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>

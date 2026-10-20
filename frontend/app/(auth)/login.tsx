@@ -32,13 +32,6 @@ export default function LoginScreen() {
     return () => subscription?.remove();
   }, []);
 
-  // Clear errors when user types
-  useEffect(() => {
-    if (email) setEmailError("");
-    if (password) setPasswordError("");
-    setGeneralError("");
-  }, [email, password]);
-
   async function signInWithEmail() {
     let hasError = false;
     if (!email.trim()) {
@@ -98,7 +91,7 @@ export default function LoginScreen() {
                     placeholder="student@lccb.edu.ph"
                     placeholderTextColor={colors.textTertiary}
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={(text) => { setEmail(text); if (text) setEmailError(""); setGeneralError(""); }}
                     autoCapitalize="none"
                     keyboardType="email-address"
                   />
@@ -120,7 +113,7 @@ export default function LoginScreen() {
                     placeholder="••••••••••••"
                     placeholderTextColor={colors.textTertiary}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(text) => { setPassword(text); if (text) setPasswordError(""); setGeneralError(""); }}
                     secureTextEntry={!showPassword}
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
@@ -169,7 +162,7 @@ export default function LoginScreen() {
               
               {/* Footer Link */}
               <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 24 }}>
-                <Text style={{ color: colors.textTertiary, fontWeight: '500', fontSize: 14 }}>Don't have an account? </Text>
+                <Text style={{ color: colors.textTertiary, fontWeight: '500', fontSize: 14 }}>Don&apos;t have an account? </Text>
                 <Link href="/(auth)/register" asChild>
                   <TouchableOpacity>
                     <Text style={{ color: colors.action, fontWeight: '700', fontSize: 14 }}>Create one</Text>
