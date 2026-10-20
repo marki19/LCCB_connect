@@ -1,33 +1,86 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, ChevronRight, CheckCircle2, ChevronLeft, SendHorizontal } from "lucide-react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, Globe, RefreshCw, ChevronRight, CheckCircle2, ChevronLeft, SendHorizontal, ExternalLink } from "lucide-react-native";
 import Animated, { FadeIn, FadeInRight, FadeOutLeft, FadeInDown } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
+import { useTheme } from "../src/contexts/ThemeContext";
 import { uploadToStorage, pickImage } from "../src/lib/upload";
+import { apiFetch, updatePost } from "../src/lib/api";
+import { fetchLinkPreview, LinkPreviewData } from "../src/lib/linkPreview";
+import { safeBack } from "../src/lib/navigation";
 
-type PostType = "text" | "image" | "project" | "capstone" | null;
+type PostType = "text" | "image" | "project" | "capstone" | "website" | null;
 
 export default function CreatePostModal() {
   const router = useRouter();
   const { profile } = useAuth();
+  const { colors, isDark } = useTheme();
+
+  // Edit mode: these params are set when navigating from PostCard / PostDetail
+  const {
+    postId,
+    editTitle,
+    editContent,
+    editType,
+    editTech,
+    editUrl,
+  } = useLocalSearchParams<{
+    postId?: string;
+    editTitle?: string;
+    editContent?: string;
+    editType?: string;
+    editTech?: string;
+    editUrl?: string;
+  }>();
+
+  const isEditing = !!postId;
   
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [postType, setPostType] = useState<PostType>(null);
-  
-  const [content, setContent] = useState("");
-  const [title, setTitle] = useState("");
-  const [technologies, setTechnologies] = useState("");
-  const [githubUrl, setGithubUrl] = useState("");
+  const [step, setStep] = useState<1 | 2 | 3>(isEditing ? 2 : 1);
+  const [postType, setPostType] = useState<PostType>(
+    isEditing ? (editType as PostType) ?? "text" : null
+  );
+
+  const [content, setContent] = useState(isEditing ? editContent ?? "" : "");
+  const [title, setTitle] = useState(isEditing ? editTitle ?? "" : "");
+  const [technologies, setTechnologies] = useState(isEditing ? editTech ?? "" : "");
+  const [githubUrl, setGithubUrl] = useState(isEditing ? editUrl ?? "" : "");
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+
+  const [previewData, setPreviewData] = useState<LinkPreviewData | null>(null);
+  const [fetchingPreview, setFetchingPreview] = useState(false);
+
+  const loadPreview = async (urlToFetch: string) => {
+    const trimmed = (urlToFetch || "").trim();
+    if (!trimmed || (!trimmed.startsWith("http://") && !trimmed.startsWith("https://"))) {
+      Alert.alert("Invalid URL", "Please enter a full URL starting with http:// or https://");
+      return;
+    }
+    setFetchingPreview(true);
+    try {
+      const data = await fetchLinkPreview(trimmed);
+      if (data) {
+        setPreviewData(data);
+        if (!title && data.title) setTitle(data.title);
+        if (!content && data.description) setContent(data.description);
+      } else {
+        Alert.alert("Preview Notice", "Could not automatically fetch metadata for this link. You can still publish it with your own title and description.");
+      }
+    } catch {
+      // Non-blocking
+    } finally {
+      setFetchingPreview(false);
+    }
+  };
 
   const handleNext = () => {
     if (step === 1 && !postType) return Alert.alert("Select Type", "Please choose a post type.");
     if (step === 2) {
       if (postType === "text" && !content) return Alert.alert("Required", "Please enter some content.");
+      if (postType === "website" && !githubUrl) return Alert.alert("Required", "Please enter a live website URL.");
       if ((postType === "project" || postType === "capstone") && !title) return Alert.alert("Required", "Please enter a title.");
     }
     setStep((s) => (s + 1) as 1 | 2 | 3);
@@ -38,33 +91,56 @@ export default function CreatePostModal() {
     setIsPublishing(true);
 
     try {
-      let finalImageUrl = null;
+      let finalImageUrl: string | null = null;
       if (imageUri) {
         const path = `posts/${profile.id}-${Date.now()}.jpg`;
         finalImageUrl = await uploadToStorage(imageUri, 'assets', path, 'image/jpeg');
       }
 
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-      const res = await fetch(`${apiUrl}/posts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          author_id: profile.id,
-          content: content,
-          type: postType || 'text',
-          title: title || null,
-          technologies: technologies ? technologies.split(',').map(t => t.trim()) : null,
-          github_url: githubUrl || null,
-          image_url: finalImageUrl,
-        }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to create post");
+      let finalPreviewMetadata = previewData;
+      if (postType === "website" && !finalPreviewMetadata && githubUrl) {
+        try {
+          finalPreviewMetadata = await fetchLinkPreview(githubUrl.trim());
+        } catch {
+          // Non-blocking
+        }
       }
-      
-      router.back();
+
+      const techArray = technologies ? technologies.split(',').map(t => t.trim()) : null;
+
+      if (isEditing && postId) {
+        // Edit mode — PUT /posts/:id
+        await updatePost(postId, {
+          content,
+          type: postType || 'text',
+          title: title || (finalPreviewMetadata?.title ?? null),
+          technologies: techArray,
+          github_url: githubUrl || null,
+          preview_metadata: finalPreviewMetadata || null,
+          ...(finalImageUrl ? { image_url: finalImageUrl } : {}),
+        });
+      } else {
+        // Create mode — POST /posts
+        const res = await apiFetch(`/posts`, {
+          method: "POST",
+          body: JSON.stringify({
+            content,
+            type: postType || 'text',
+            title: title || (finalPreviewMetadata?.title ?? null),
+            technologies: techArray,
+            github_url: githubUrl || null,
+            image_url: finalImageUrl,
+            preview_metadata: finalPreviewMetadata || null,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to create post");
+        }
+      }
+
+      safeBack("/(tabs)");
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to publish post");
     } finally {
@@ -72,180 +148,243 @@ export default function CreatePostModal() {
     }
   };
 
+
   const handlePickImage = async () => {
     const result = await pickImage();
     if (result) setImageUri(result.uri);
   };
 
-  const OptionCard = ({ type, title, desc, Icon, color, bg }: any) => (
-    <TouchableOpacity
-      onPress={() => setPostType(type)}
-      className={`p-5 rounded-2xl mb-4 flex-row items-center border ${postType === type ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'} shadow-sm`}
-      activeOpacity={0.7}
-    >
-      <View className={`w-14 h-14 rounded-full items-center justify-center mr-4 ${bg}`}>
-        <Icon color={color} size={28} />
-      </View>
-      <View className="flex-1">
-        <Text className={`text-lg font-bold ${postType === type ? 'text-indigo-900' : 'text-slate-800'}`}>{title}</Text>
-        <Text className="text-slate-500 text-sm mt-1 leading-5">{desc}</Text>
-      </View>
-      <View className={`w-6 h-6 rounded-full border-2 items-center justify-center ${postType === type ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300'}`}>
-        {postType === type && <CheckCircle2 color="#FFFFFF" size={16} />}
-      </View>
-    </TouchableOpacity>
-  );
+  const OptionCard = ({ type, title, desc, Icon, color, bg }: any) => {
+    const isSelected = postType === type;
+    return (
+      <TouchableOpacity
+        onPress={() => setPostType(type)}
+        style={{
+          padding: 16,
+          borderRadius: 16,
+          marginBottom: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          borderWidth: 1.5,
+          borderColor: isSelected ? colors.action : colors.border,
+          backgroundColor: isSelected ? colors.actionSurface : colors.surface,
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={{ width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginRight: 14, backgroundColor: isDark ? colors.surfaceSunken : (bg || colors.actionSurface) }}>
+          <Icon color={color} size={24} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }}>{title}</Text>
+          <Text style={{ fontSize: 13, color: colors.textTertiary, marginTop: 2, lineHeight: 18 }}>{desc}</Text>
+        </View>
+        <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: isSelected ? colors.action : colors.borderStrong, alignItems: "center", justifyContent: "center", backgroundColor: isSelected ? colors.action : "transparent" }}>
+          {isSelected && <CheckCircle2 color="#FFFFFF" size={14} />}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-      <LinearGradient colors={["#F8FAFC", "#EEF2FF"]} style={{ flex: 1 }}>
-        <SafeAreaView style={{ flex: 1 }}>
-          <View className="flex-row items-center justify-between px-6 py-4 bg-white/80 border-b border-slate-200/50">
-            {step > 1 ? (
-              <TouchableOpacity onPress={() => setStep((s) => (s - 1) as 1 | 2 | 3)} className="p-2 -ml-2">
-                <ChevronLeft color="#1E293B" size={28} />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
-                <X color="#1E293B" size={28} />
-              </TouchableOpacity>
-            )}
-            <Text className="text-slate-900 font-extrabold text-xl tracking-tight">Create Post</Text>
-            <View className="w-10" />
-          </View>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+          {step > 1 ? (
+            <TouchableOpacity onPress={() => setStep((s) => (s - 1) as 1 | 2 | 3)} style={{ padding: 4 }}>
+              <ChevronLeft color={colors.textPrimary} size={26} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => safeBack("/(tabs)")} style={{ padding: 4 }}>
+              <X color={colors.textPrimary} size={26} />
+            </TouchableOpacity>
+          )}
+          <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 18 }}>{isEditing ? "Edit Post" : "Create Post"}</Text>
+          <View style={{ width: 26 }} />
+        </View>
 
-          <ScrollView contentContainerStyle={{ padding: 24 }} showsVerticalScrollIndicator={false}>
-            {step === 1 && (
-              <Animated.View entering={FadeInDown.duration(400).springify()}>
-                <Text className="text-slate-500 font-semibold uppercase tracking-widest text-xs mb-6">Step 1 of 3: Select Format</Text>
-                <OptionCard type="text" title="Start a Discussion" desc="Share thoughts, ask questions, or start a debate." Icon={Type} color="#3B82F6" bg="bg-blue-100" />
-                <OptionCard type="image" title="Share an Update" desc="Post an image with a caption of your recent work." Icon={ImageIcon} color="#8B5CF6" bg="bg-purple-100" />
-                <OptionCard type="project" title="Showcase Project" desc="Display a coding project with tech stack and repo." Icon={FolderOpen} color="#10B981" bg="bg-emerald-100" />
-                <OptionCard type="capstone" title="Publish Capstone" desc="Officially share your final year capstone." Icon={GraduationCap} color="#F59E0B" bg="bg-amber-100" />
-              </Animated.View>
-            )}
+        <ScrollView contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
+          {step === 1 && (
+            <Animated.View entering={FadeInDown.duration(400).springify()}>
+              <Text style={{ color: colors.textTertiary, fontWeight: "700", textTransform: "uppercase", fontSize: 11, letterSpacing: 0.8, marginBottom: 14 }}>Step 1 of 3: Select Format</Text>
+              <OptionCard type="website" title="Live Website / Web App" desc="Share a hosted web project with automatic link preview." Icon={Globe} color="#0284C7" bg="#E0F2FE" />
+              <OptionCard type="project" title="Showcase Project" desc="Display a coding project with tech stack and repo." Icon={FolderOpen} color="#10B981" bg="#D1FAE5" />
+              <OptionCard type="capstone" title="Publish Capstone" desc="Officially share your final year capstone." Icon={GraduationCap} color="#F59E0B" bg="#FEF3C7" />
+              <OptionCard type="text" title="Start a Discussion" desc="Share thoughts, ask questions, or start a debate." Icon={Type} color="#3B82F6" bg="#DBEAFE" />
+              <OptionCard type="image" title="Share an Update" desc="Post an image with a caption of your recent work." Icon={ImageIcon} color="#8B5CF6" bg="#EDE9FE" />
+            </Animated.View>
+          )}
 
-            {step === 2 && (
-              <Animated.View entering={FadeInRight.duration(400).springify()}>
-                <Text className="text-slate-500 font-semibold uppercase tracking-widest text-xs mb-6">Step 2 of 3: Content</Text>
-                
-                {(postType === "project" || postType === "capstone") && (
-                  <View className="mb-6">
-                    <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Project Title</Text>
+          {step === 2 && (
+            <Animated.View entering={FadeInRight.duration(400).springify()}>
+              <Text style={{ color: colors.textTertiary, fontWeight: "700", textTransform: "uppercase", fontSize: 11, letterSpacing: 0.8, marginBottom: 14 }}>Step 2 of 3: Content</Text>
+              
+              {postType === "website" && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 6, fontSize: 12, textTransform: "uppercase" }}>Live Website URL</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <TextInput
-                      className="bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base font-semibold text-slate-900 shadow-sm shadow-slate-100"
-                      placeholder="e.g. LCCB Connect App"
-                      placeholderTextColor="#94A3B8"
-                      value={title}
-                      onChangeText={setTitle}
+                      style={{ flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: colors.action }}
+                      placeholder="https://my-app.vercel.app"
+                      placeholderTextColor={colors.textTertiary}
+                      autoCapitalize="none"
+                      keyboardType="url"
+                      value={githubUrl}
+                      onChangeText={setGithubUrl}
+                      onBlur={() => loadPreview(githubUrl)}
                     />
-                  </View>
-                )}
-
-                <View className="mb-6">
-                  <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">
-                    {postType === "text" ? "Discussion Topic" : "Description & Details"}
-                  </Text>
-                  <TextInput
-                    className="bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base text-slate-800 min-h-[160px] shadow-sm shadow-slate-100"
-                    placeholder="What's on your mind? Be descriptive..."
-                    placeholderTextColor="#94A3B8"
-                    multiline
-                    textAlignVertical="top"
-                    value={content}
-                    onChangeText={setContent}
-                  />
-                </View>
-
-                {(postType === "image" || postType === "project" || postType === "capstone") && (
-                  <View className="mb-6">
-                    <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Cover Image</Text>
-                    <TouchableOpacity 
-                      onPress={handlePickImage}
-                      className="bg-indigo-50/50 border-2 border-dashed border-indigo-200 rounded-2xl p-8 items-center justify-center"
+                    <TouchableOpacity
+                      onPress={() => loadPreview(githubUrl)}
+                      disabled={fetchingPreview || !githubUrl.trim()}
+                      style={{ marginLeft: 8, backgroundColor: colors.action, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, alignItems: "center", justifyContent: "center" }}
                     >
-                      {imageUri ? (
-                        <>
-                          <CheckCircle2 color="#4F46E5" size={40} className="mb-2" />
-                          <Text className="text-indigo-700 font-bold mt-2">Image Selected</Text>
-                        </>
+                      {fetchingPreview ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
-                        <>
-                          <ImageIcon color="#818CF8" size={40} className="mb-2" />
-                          <Text className="text-indigo-600 font-semibold mt-2">Tap to upload from Gallery</Text>
-                        </>
+                        <RefreshCw size={18} color="#FFFFFF" />
                       )}
                     </TouchableOpacity>
                   </View>
-                )}
-              </Animated.View>
-            )}
+                  <Text style={{ color: colors.textTertiary, fontSize: 11, marginTop: 4, marginLeft: 2 }}>Tap the refresh icon to scan Open Graph preview metadata.</Text>
+                </View>
+              )}
 
-            {step === 3 && (
-              <Animated.View entering={FadeInRight.duration(400).springify()}>
-                <Text className="text-slate-500 font-semibold uppercase tracking-widest text-xs mb-6">Step 3 of 3: Final Details</Text>
-                
-                {(postType === "project" || postType === "capstone") ? (
-                  <>
-                    <View className="mb-6">
-                      <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Tech Stack (comma separated)</Text>
-                      <TextInput
-                        className="bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base font-medium text-slate-800 shadow-sm shadow-slate-100"
-                        placeholder="React Native, Node.js, Supabase"
-                        placeholderTextColor="#94A3B8"
-                        value={technologies}
-                        onChangeText={setTechnologies}
-                      />
-                    </View>
+              {postType === "website" && previewData && (
+                <View style={{ marginBottom: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 14 }}>
+                  <Text style={{ color: colors.action, fontWeight: "700", fontSize: 11, textTransform: "uppercase", marginBottom: 8 }}>Live Preview Detected</Text>
+                  {previewData.image ? (
+                    <Image
+                      source={{ uri: previewData.image }}
+                      style={{ width: "100%", height: 140, borderRadius: 10, marginBottom: 10, backgroundColor: colors.surfaceSunken }}
+                      resizeMode="cover"
+                    />
+                  ) : null}
+                  <Text style={{ color: colors.textPrimary, fontWeight: "700", fontSize: 15, marginBottom: 4 }}>{previewData.title || title}</Text>
+                  {previewData.description ? (
+                    <Text numberOfLines={2} style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 16 }}>{previewData.description}</Text>
+                  ) : null}
+                </View>
+              )}
 
-                    <View className="mb-8">
-                      <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Repository Link (Optional)</Text>
-                      <TextInput
-                        className="bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base text-indigo-600 font-medium shadow-sm shadow-slate-100"
-                        placeholder="https://github.com/username/repo"
-                        placeholderTextColor="#94A3B8"
-                        autoCapitalize="none"
-                        keyboardType="url"
-                        value={githubUrl}
-                        onChangeText={setGithubUrl}
-                      />
-                    </View>
-                  </>
-                ) : (
-                  <View className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm shadow-slate-100 items-center justify-center mb-8">
-                    <CheckCircle2 color="#10B981" size={60} className="mb-4" />
-                    <Text className="text-slate-900 font-bold text-xl text-center">Ready to Publish!</Text>
-                    <Text className="text-slate-500 text-center mt-2 px-4 leading-6">Your post is formatted perfectly and ready to be shared with the LCCB community.</Text>
+              {(postType === "project" || postType === "capstone" || postType === "website") && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 6, fontSize: 12, textTransform: "uppercase" }}>
+                    {postType === "website" ? "Website Title" : "Project Title"}
+                  </Text>
+                  <TextInput
+                    style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontWeight: "600", color: colors.textPrimary }}
+                    placeholder={postType === "website" ? "e.g. IT Student Portfolio" : "e.g. LCCB Connect App"}
+                    placeholderTextColor={colors.textTertiary}
+                    value={title}
+                    onChangeText={setTitle}
+                  />
+                </View>
+              )}
+
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 6, fontSize: 12, textTransform: "uppercase" }}>
+                  {postType === "text" ? "Discussion Topic" : "Description & Details"}
+                </Text>
+                <TextInput
+                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.textPrimary, minHeight: 140 }}
+                  placeholder="What's on your mind? Be descriptive..."
+                  placeholderTextColor={colors.textTertiary}
+                  multiline
+                  textAlignVertical="top"
+                  value={content}
+                  onChangeText={setContent}
+                />
+              </View>
+
+              {(postType === "image" || postType === "project" || postType === "capstone") && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 6, fontSize: 12, textTransform: "uppercase" }}>Cover Image</Text>
+                  <TouchableOpacity 
+                    onPress={handlePickImage}
+                    style={{ backgroundColor: colors.surfaceSunken, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.borderStrong, borderRadius: 14, padding: 24, alignItems: "center", justifyContent: "center" }}
+                  >
+                    {imageUri ? (
+                      <>
+                        <CheckCircle2 color={colors.action} size={36} />
+                        <Text style={{ color: colors.action, fontWeight: "700", marginTop: 8 }}>Image Selected</Text>
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon color={colors.textTertiary} size={36} />
+                        <Text style={{ color: colors.textSecondary, fontWeight: "600", marginTop: 8 }}>Tap to upload from Gallery</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </Animated.View>
+          )}
+
+          {step === 3 && (
+            <Animated.View entering={FadeInRight.duration(400).springify()}>
+              <Text style={{ color: colors.textTertiary, fontWeight: "700", textTransform: "uppercase", fontSize: 11, letterSpacing: 0.8, marginBottom: 14 }}>Step 3 of 3: Final Details</Text>
+              
+              {(postType === "project" || postType === "capstone" || postType === "website") ? (
+                <>
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 6, fontSize: 12, textTransform: "uppercase" }}>Tech Stack (comma separated)</Text>
+                    <TextInput
+                      style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.textPrimary }}
+                      placeholder="React, Next.js, Node.js, Tailwind"
+                      placeholderTextColor={colors.textTertiary}
+                      value={technologies}
+                      onChangeText={setTechnologies}
+                    />
                   </View>
-                )}
-              </Animated.View>
-            )}
-            
-            <View className="h-20" />
-          </ScrollView>
 
-          <View className="p-6 bg-white/90 border-t border-slate-100">
-            {step < 3 ? (
-              <TouchableOpacity 
-                onPress={handleNext}
-                className="bg-indigo-600 py-4 rounded-2xl flex-row items-center justify-center shadow-lg shadow-indigo-600/40"
-              >
-                <Text className="text-white font-bold text-lg mr-2">Continue</Text>
-                <ChevronRight color="#FFF" size={24} />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity 
-                onPress={handlePublish}
-                disabled={isPublishing}
-                className={`py-4 rounded-2xl flex-row items-center justify-center shadow-lg ${isPublishing ? 'bg-indigo-400 shadow-indigo-400/20' : 'bg-indigo-600 shadow-indigo-600/40'}`}
-              >
-                <Text className="text-white font-bold text-lg mr-2">{isPublishing ? "Publishing..." : "Publish Post"}</Text>
-                {!isPublishing && <SendHorizontal color="#FFF" size={20} />}
-              </TouchableOpacity>
-            )}
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 6, fontSize: 12, textTransform: "uppercase" }}>
+                      Repository Link (Optional)
+                    </Text>
+                    <TextInput
+                      style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.action }}
+                      placeholder="https://github.com/username/repo"
+                      placeholderTextColor={colors.textTertiary}
+                      autoCapitalize="none"
+                      keyboardType="url"
+                      value={githubUrl}
+                      onChangeText={setGithubUrl}
+                    />
+                  </View>
+                </>
+              ) : (
+                <View style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 24, alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                  <CheckCircle2 color="#10B981" size={50} />
+                  <Text style={{ color: colors.textPrimary, fontWeight: "700", fontSize: 18, textAlign: "center", marginTop: 12 }}>Ready to Publish!</Text>
+                  <Text style={{ color: colors.textTertiary, textAlign: "center", marginTop: 8, paddingHorizontal: 12, lineHeight: 20 }}>Your post is formatted and ready to be shared with the LCCB community.</Text>
+                </View>
+              )}
+            </Animated.View>
+          )}
+          
+          <View style={{ height: 20 }} />
+        </ScrollView>
+
+        <View style={{ padding: 18, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }}>
+          {step < 3 ? (
+            <TouchableOpacity 
+              onPress={handleNext}
+              style={{ backgroundColor: colors.action, paddingVertical: 14, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center" }}
+            >
+              <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 16, marginRight: 6 }}>Continue</Text>
+              <ChevronRight color="#FFFFFF" size={20} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              onPress={handlePublish}
+              disabled={isPublishing}
+              style={{ backgroundColor: isPublishing ? colors.surfaceSunken : colors.action, paddingVertical: 14, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center" }}
+            >
+              <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 16, marginRight: 6 }}>{isPublishing ? (isEditing ? "Saving..." : "Publishing...") : (isEditing ? "Save Changes" : "Publish Post")}</Text>
+              {!isPublishing && <SendHorizontal color="#FFFFFF" size={18} />}
+            </TouchableOpacity>
+          )}
+        </View>
+      </SafeAreaView>
     </KeyboardAvoidingView>
   );
 }

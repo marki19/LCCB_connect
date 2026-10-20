@@ -4,9 +4,15 @@ import { supabase } from "../../src/lib/supabase";
 import { Link, useRouter } from "expo-router";
 import { Eye, EyeOff, AlertCircle, ArrowRight } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { apiFetch } from "../../src/lib/api";
+import SelectField from "../../src/components/SelectField";
+import { useTheme } from "../../src/contexts/ThemeContext";
+import { fetchDepartments, fetchCourses } from "../../src/lib/catalog";
+import type { Department, Course } from "../../src/types";
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { colors, isDark } = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -19,6 +25,15 @@ export default function RegisterScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [nameError, setNameError] = useState("");
   const [generalError, setGeneralError] = useState("");
+  const [departmentError, setDepartmentError] = useState("");
+  const [courseError, setCourseError] = useState("");
+
+  // Admin-managed catalog (loaded live; never hardcoded).
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [departmentId, setDepartmentId] = useState<string | null>(null);
+  const [courseId, setCourseId] = useState<string | null>(null);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
 
   const isValidEmailDomain = email.trim().toLowerCase().endsWith("@lccb.edu.ph");
   const showEmailFormatError = email.length > 0 && !isValidEmailDomain;
@@ -29,6 +44,28 @@ export default function RegisterScreen() {
     const subscription = Dimensions.addEventListener("change", handleResize);
     return () => subscription?.remove();
   }, []);
+
+  useEffect(() => {
+    fetchDepartments()
+      .then(setDepartments)
+      .catch(() => setDepartments([]))
+      .finally(() => setLoadingCatalog(false));
+  }, []);
+
+  useEffect(() => {
+    if (!departmentId) return;
+    let active = true;
+    fetchCourses(departmentId)
+      .then((list) => {
+        if (active) setCourses(list);
+      })
+      .catch(() => {
+        if (active) setCourses([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [departmentId]);
 
   // Clear errors when user types
   useEffect(() => {
@@ -62,6 +99,15 @@ export default function RegisterScreen() {
       hasError = true;
     }
 
+    if (!departmentId) {
+      setDepartmentError("Select your department");
+      hasError = true;
+    }
+    if (!courseId) {
+      setCourseError("Select your course");
+      hasError = true;
+    }
+
     if (hasError) return;
 
     setLoading(true);
@@ -81,16 +127,15 @@ export default function RegisterScreen() {
     } else {
       if (data?.user) {
         try {
-          const apiUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
           const username = email.trim().toLowerCase().split("@")[0] + "_" + Math.floor(Math.random() * 1000);
-          await fetch(`${apiUrl}/users`, {
+          await apiFetch(`/users`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              id: data.user.id,
               username,
               full_name: fullName.trim(),
-              role: "student",
+              department_id: departmentId,
+              course_id: courseId,
+              course: courses.find((c) => c.id === courseId)?.name || null,
             }),
           });
         } catch (backendErr) {
@@ -104,36 +149,36 @@ export default function RegisterScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-      <LinearGradient colors={["#EEF2FF", "#E0E7FF", "#FFFFFF"]} style={{ flex: 1 }}>
+      <LinearGradient colors={isDark ? ["hsl(215, 30%, 10%)", "hsl(215, 28%, 13%)", "hsl(215, 25%, 9%)"] : ["#EEF2FF", "#E0E7FF", "#FFFFFF"]} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center' }} showsVerticalScrollIndicator={false}>
           
           <View style={{ width: '100%', maxWidth: 450, padding: 24 }}>
-            <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', borderRadius: 32, padding: 32, shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 5 }}>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 32, padding: 32, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: isDark ? 0.3 : 0.08, shadowRadius: 20, elevation: 5 }}>
               
               {/* Header */}
               <View style={{ alignItems: 'center', marginBottom: 32 }}>
-                <View style={{ width: 64, height: 64, backgroundColor: 'white', borderRadius: 32, alignItems: 'center', justifyContent: 'center', shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10, elevation: 3, marginBottom: 16 }}>
+                <View style={{ width: 64, height: 64, backgroundColor: colors.actionSurfaceAlt, borderRadius: 32, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10, elevation: 3, marginBottom: 16 }}>
                   <Image source={require("../../assets/images/logo.jpg")} style={{ width: 44, height: 44, borderRadius: 22 }} resizeMode="cover" />
                 </View>
-                <Text style={{ color: '#1E1B4B', fontSize: 26, fontWeight: '800', textAlign: 'center' }}>Create account</Text>
-                <Text style={{ color: '#64748B', fontSize: 13, marginTop: 8, textAlign: 'center' }}>Join LCCB Connect and showcase your academic portfolio.</Text>
+                <Text style={{ color: colors.textPrimary, fontSize: 26, fontWeight: '800', textAlign: 'center' }}>Create account</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 13, marginTop: 8, textAlign: 'center' }}>Join LCCB Connect and showcase your academic portfolio.</Text>
               </View>
 
               {generalError ? (
-                <View style={{ backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ backgroundColor: isDark ? 'hsl(0, 30%, 15%)' : '#FEF2F2', borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
                   <AlertCircle color="#EF4444" size={20} />
-                  <Text style={{ color: '#DC2626', fontWeight: '600', marginLeft: 12, flex: 1 }}>{generalError}</Text>
+                  <Text style={{ color: isDark ? 'hsl(0, 80%, 80%)' : '#DC2626', fontWeight: '600', marginLeft: 12, flex: 1 }}>{generalError}</Text>
                 </View>
               ) : null}
 
               {/* Name Input */}
               <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: '#334155', fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>Full Name</Text>
-                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 16, paddingHorizontal: 16, height: 56, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: nameError ? '#F87171' : '#E2E8F0' }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>Full Name</Text>
+                <View style={{ backgroundColor: colors.surfaceSunken, borderRadius: 16, paddingHorizontal: 16, height: 56, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: nameError ? '#F87171' : colors.border }}>
                   <TextInput
-                    style={{ flex: 1, color: '#0F172A', fontSize: 16, fontWeight: '500', outlineStyle: 'none' } as any}
+                    style={{ flex: 1, color: colors.textPrimary, fontSize: 16, fontWeight: '500', outlineStyle: 'none' } as any}
                     placeholder="Juan Dela Cruz"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={colors.textTertiary}
                     value={fullName}
                     onChangeText={setFullName}
                     autoCapitalize="words"
@@ -147,14 +192,60 @@ export default function RegisterScreen() {
                 ) : null}
               </View>
 
+              {/* Department & Course (admin-managed catalog) */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>Department</Text>
+                <SelectField
+                  placeholder={loadingCatalog ? "Loading…" : "Select your department"}
+                  value={departmentId}
+                  options={departments.map((d) => ({ label: d.name, value: d.id }))}
+                  onChange={(v) => {
+                    setDepartmentId(v);
+                    setCourseId(null);
+                    setCourses([]);
+                    setDepartmentError("");
+                    setCourseError("");
+                  }}
+                  loading={loadingCatalog}
+                  error={!!departmentError}
+                />
+                {departmentError ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginLeft: 4 }}>
+                    <AlertCircle color="#F97316" size={14} />
+                    <Text style={{ color: '#F97316', fontSize: 12, marginLeft: 4, fontWeight: '600' }}>{departmentError}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>Course</Text>
+                <SelectField
+                  placeholder={departmentId ? "Select your course" : "Select a department first"}
+                  value={courseId}
+                  options={courses.map((c) => ({ label: c.name, value: c.id }))}
+                  onChange={(v) => {
+                    setCourseId(v);
+                    setCourseError("");
+                  }}
+                  disabled={!departmentId || courses.length === 0}
+                  error={!!courseError}
+                />
+                {courseError ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginLeft: 4 }}>
+                    <AlertCircle color="#F97316" size={14} />
+                    <Text style={{ color: '#F97316', fontSize: 12, marginLeft: 4, fontWeight: '600' }}>{courseError}</Text>
+                  </View>
+                ) : null}
+              </View>
+
               {/* Email Input */}
               <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: '#334155', fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>Institutional Email</Text>
-                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 16, paddingHorizontal: 16, height: 56, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: (showEmailFormatError || emailError) ? '#F87171' : '#E2E8F0' }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>Institutional Email</Text>
+                <View style={{ backgroundColor: colors.surfaceSunken, borderRadius: 16, paddingHorizontal: 16, height: 56, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: (showEmailFormatError || emailError) ? '#F87171' : colors.border }}>
                   <TextInput
-                    style={{ flex: 1, color: '#0F172A', fontSize: 16, fontWeight: '500', outlineStyle: 'none' } as any}
+                    style={{ flex: 1, color: colors.textPrimary, fontSize: 16, fontWeight: '500', outlineStyle: 'none' } as any}
                     placeholder="student@lccb.edu.ph"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={colors.textTertiary}
                     value={email}
                     onChangeText={setEmail}
                     autoCapitalize="none"
@@ -171,18 +262,18 @@ export default function RegisterScreen() {
 
               {/* Password Input */}
               <View style={{ marginBottom: 32 }}>
-                <Text style={{ color: '#334155', fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>Password</Text>
-                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 16, paddingHorizontal: 16, height: 56, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: passwordError ? '#F87171' : '#E2E8F0' }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 }}>Password</Text>
+                <View style={{ backgroundColor: colors.surfaceSunken, borderRadius: 16, paddingHorizontal: 16, height: 56, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: passwordError ? '#F87171' : colors.border }}>
                   <TextInput
-                    style={{ flex: 1, color: '#0F172A', fontSize: 16, fontWeight: '500', outlineStyle: 'none' } as any}
+                    style={{ flex: 1, color: colors.textPrimary, fontSize: 16, fontWeight: '500', outlineStyle: 'none' } as any}
                     placeholder="••••••••••••"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={colors.textTertiary}
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry={!showPassword}
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                    {showPassword ? <EyeOff color="#94A3B8" size={20} /> : <Eye color="#94A3B8" size={20} />}
+                    {showPassword ? <EyeOff color={colors.textTertiary} size={20} /> : <Eye color={colors.textTertiary} size={20} />}
                   </TouchableOpacity>
                 </View>
                 {passwordError ? (
@@ -195,7 +286,7 @@ export default function RegisterScreen() {
 
               {/* Sign Up Button */}
               <TouchableOpacity 
-                style={{ backgroundColor: (loading || showEmailFormatError) ? '#818CF8' : '#4F46E5', height: 56, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}
+                style={{ backgroundColor: (loading || showEmailFormatError) ? colors.surfaceSunken : colors.action, height: 56, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: colors.action, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}
                 onPress={signUpWithEmail}
                 disabled={loading || showEmailFormatError}
                 activeOpacity={0.8}
@@ -208,10 +299,10 @@ export default function RegisterScreen() {
 
               {/* Footer Link */}
               <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 24 }}>
-                <Text style={{ color: '#64748B', fontWeight: '500', fontSize: 14 }}>Already have an account? </Text>
+                <Text style={{ color: colors.textTertiary, fontWeight: '500', fontSize: 14 }}>Already have an account? </Text>
                 <Link href="/(auth)/login" asChild>
                   <TouchableOpacity>
-                    <Text style={{ color: '#4F46E5', fontWeight: '700', fontSize: 14 }}>Sign in</Text>
+                    <Text style={{ color: colors.action, fontWeight: '700', fontSize: 14 }}>Sign in</Text>
                   </TouchableOpacity>
                 </Link>
               </View>

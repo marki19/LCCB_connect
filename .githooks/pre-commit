@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+# Stops a commit that introduces a secret.
+#
+# Enable once per clone (this is repo-local config, not global):
+#   git config core.hooksPath .githooks
+#   chmod +x .githooks/pre-commit     # POSIX; Git for Windows doesn't need it
+#
+# Emergency bypass:  git commit --no-verify
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "[pre-commit] gitleaks not found on PATH — skipping secret scan."
+  echo "[pre-commit] Install it to get local secret detection:"
+  echo "[pre-commit]   https://github.com/gitleaks/gitleaks#installing"
+  exit 0
+fi
+
+if gitleaks protect --staged --redact --verbose; then
+  exit 0
+fi
+
+cat <<'EOF'
+
+[pre-commit] gitleaks found a potential secret in your staged changes.
+[pre-commit] Nothing was committed. Remove the secret — and rotate it if it was
+[pre-commit] ever real — then try again. To bypass: git commit --no-verify
+EOF
+
+exit 1

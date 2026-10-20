@@ -82,17 +82,27 @@ async function seed() {
     console.log("Seeded 6 real student profiles.");
 
     for (const p of posts) {
+      // Idempotent: skip posts that already exist for this author (matched on
+      // title), so re-running the seed never creates duplicates.
       await db.query(`
         INSERT INTO posts (author_id, title, content, type, technologies, github_url)
-        VALUES ($1, $2, $3, $4, $5, $6);
+        SELECT $1::text, $2::text, $3::text, $4::text, $5::text[], $6::text
+        WHERE NOT EXISTS (
+          SELECT 1 FROM posts WHERE author_id = $1 AND title = $2
+        );
       `, [p.author_id, p.title, p.content, p.type, p.technologies, p.github_url]);
     }
     console.log("Seeded real student projects & posts.");
 
     for (const t of theses) {
+      // Idempotent: skip theses that already exist for this uploader (matched on
+      // title), so re-running the seed never creates duplicates.
       await db.query(`
         INSERT INTO theses (uploader_id, title, abstract, department, category, pdf_url)
-        VALUES ($1, $2, $3, $4, $5, $6);
+        SELECT $1::text, $2::text, $3::text, $4::text, $5::text, $6::text
+        WHERE NOT EXISTS (
+          SELECT 1 FROM theses WHERE uploader_id = $1 AND title = $2
+        );
       `, [t.uploader_id, t.title, t.abstract, t.department, t.category, t.pdf_url]);
     }
     console.log("Seeded real academic theses & capstones.");

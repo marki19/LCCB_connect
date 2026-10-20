@@ -24,7 +24,14 @@
     },
     "plugins": [
       "expo-router",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-notifications",
+        {
+          "color": "#1D4ED8",
+          "defaultChannel": "default"
+        }
+      ]
     ]
   }
 }

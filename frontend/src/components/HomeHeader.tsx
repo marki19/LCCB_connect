@@ -1,7 +1,8 @@
 import { View, Text, TouchableOpacity, Platform, useWindowDimensions } from "react-native";
-import { AlignJustify, Search, MessageSquare } from "lucide-react-native";
+import { AlignJustify, Search, MessageSquare, Sun, Moon } from "lucide-react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../contexts/ThemeContext";
 
 type Props = {
   onMenuPress: () => void;
@@ -10,6 +11,7 @@ type Props = {
 export default function HomeHeader({ onMenuPress }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors, isDark, toggleTheme } = useTheme();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
 
   // On desktop web, the top navigation bar is already rendered by _layout.tsx
@@ -20,7 +22,7 @@ export default function HomeHeader({ onMenuPress }: Props) {
   return (
     <View
       style={{
-        backgroundColor: "#FFFFFF",
+        backgroundColor: colors.surface,
         paddingTop: insets.top + 8,
         paddingBottom: 12,
         paddingHorizontal: 16,
@@ -28,10 +30,10 @@ export default function HomeHeader({ onMenuPress }: Props) {
         alignItems: "center",
         justifyContent: "space-between",
         borderBottomWidth: 1,
-        borderBottomColor: "#DBEAFE",
-        shadowColor: "#1A56DB",
+        borderBottomColor: colors.border,
+        shadowColor: colors.shadow,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
+        shadowOpacity: isDark ? 0.3 : 0.05,
         shadowRadius: 6,
         elevation: 4,
       }}
@@ -46,29 +48,49 @@ export default function HomeHeader({ onMenuPress }: Props) {
             width: 38,
             height: 38,
             borderRadius: 12,
-            backgroundColor: "#EFF6FF",
+            backgroundColor: colors.actionSurface,
             alignItems: "center",
             justifyContent: "center",
             borderWidth: 1,
-            borderColor: "#DBEAFE",
+            borderColor: colors.border,
           }}
         >
-          <AlignJustify size={20} color="#1A56DB" strokeWidth={2.2} />
+          <AlignJustify size={20} color={colors.action} strokeWidth={2.2} />
         </TouchableOpacity>
 
         {/* Wordmark Logo */}
         <View>
-          <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A", letterSpacing: -0.4 }}>
-            LCCB <Text style={{ color: "#1A56DB" }}>Connect</Text>
+          <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.4 }}>
+            LCCB <Text style={{ color: colors.action }}>Connect</Text>
           </Text>
-          <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "600" }}>
+          <Text style={{ fontSize: 10, color: colors.textTertiary, fontWeight: "600" }}>
             Academic Network
           </Text>
         </View>
       </View>
 
-      {/* Right: Search & Messages actions */}
+      {/* Right: Search, Theme Toggle & Messages actions */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <TouchableOpacity
+          onPress={() => void toggleTheme()}
+          activeOpacity={0.7}
+          accessibilityLabel={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 19,
+            backgroundColor: colors.surfaceSunken,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {isDark ? (
+            <Sun size={18} color={colors.action} strokeWidth={2} />
+          ) : (
+            <Moon size={18} color={colors.textSecondary} strokeWidth={2} />
+          )}
+        </TouchableOpacity>
+
         <TouchableOpacity
           onPress={() => router.push("/(tabs)/search")}
           activeOpacity={0.7}
@@ -77,12 +99,12 @@ export default function HomeHeader({ onMenuPress }: Props) {
             width: 38,
             height: 38,
             borderRadius: 19,
-            backgroundColor: "#F1F5F9",
+            backgroundColor: colors.surfaceSunken,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Search size={18} color="#64748B" strokeWidth={2} />
+          <Search size={18} color={colors.textTertiary} strokeWidth={2} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -93,12 +115,12 @@ export default function HomeHeader({ onMenuPress }: Props) {
             width: 38,
             height: 38,
             borderRadius: 19,
-            backgroundColor: "#EFF6FF",
+            backgroundColor: colors.actionSurface,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <MessageSquare size={18} color="#1A56DB" strokeWidth={2} />
+          <MessageSquare size={18} color={colors.action} strokeWidth={2} />
         </TouchableOpacity>
       </View>
     </View>

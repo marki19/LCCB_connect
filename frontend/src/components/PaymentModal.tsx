@@ -5,9 +5,9 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSpring,
-  runOnJS,
 } from "react-native-reanimated";
 import { CheckCircle, X, CreditCard } from "lucide-react-native";
+import { useTheme } from "../contexts/ThemeContext";
 
 type Props = {
   visible: boolean;
@@ -18,6 +18,7 @@ type Props = {
 };
 
 export default function PaymentModal({ visible, amount, title, onClose, onConfirm }: Props) {
+  const { colors, isDark } = useTheme();
   const scale = useSharedValue(0.6);
   const opacity = useSharedValue(0);
 
@@ -41,44 +42,44 @@ export default function PaymentModal({ visible, amount, title, onClose, onConfir
   return (
     <Modal transparent animationType="none" visible={visible} onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <Animated.View style={[styles.modal, animatedStyle]}>
+        <Animated.View style={[styles.modal, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: isDark ? 1 : 0 }, animatedStyle]}>
           <TouchableOpacity onPress={onClose} activeOpacity={0.7} style={styles.closeBtn}>
-            <X size={20} color="#94A3B8" />
+            <X size={20} color={colors.textTertiary} />
           </TouchableOpacity>
 
-          <View style={styles.iconWrap}>
-            <CreditCard size={32} color="#1A56DB" />
+          <View style={[styles.iconWrap, { backgroundColor: colors.actionSurface }]}>
+            <CreditCard size={32} color={colors.action} />
           </View>
 
-          <Text style={styles.title}>Checkout</Text>
-          <Text style={styles.subtitle} numberOfLines={2}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Checkout</Text>
+          <Text style={[styles.subtitle, { color: colors.textTertiary }]} numberOfLines={2}>
             {title}
           </Text>
 
           <View style={styles.amountRow}>
-            <Text style={styles.currency}>₱</Text>
-            <Text style={styles.amount}>{amount.toLocaleString()}</Text>
+            <Text style={[styles.currency, { color: colors.action }]}>₱</Text>
+            <Text style={[styles.amount, { color: colors.action }]}>{amount.toLocaleString()}</Text>
           </View>
 
-          <Text style={styles.paymentNote}>LCCB Secure Student Payment</Text>
+          <Text style={[styles.paymentNote, { color: colors.textTertiary }]}>LCCB Secure Student Payment</Text>
 
           <View style={styles.paymentMethods}>
-            <View style={styles.methodChip}><Text style={styles.methodText}>💳 Card</Text></View>
-            <View style={styles.methodChip}><Text style={styles.methodText}>📱 GCash</Text></View>
-            <View style={styles.methodChip}><Text style={styles.methodText}>🏦 Maya</Text></View>
+            <View style={[styles.methodChip, { backgroundColor: colors.actionSurface, borderColor: colors.border }]}><Text style={[styles.methodText, { color: colors.action }]}>💳 Card</Text></View>
+            <View style={[styles.methodChip, { backgroundColor: colors.actionSurface, borderColor: colors.border }]}><Text style={[styles.methodText, { color: colors.action }]}>📱 GCash</Text></View>
+            <View style={[styles.methodChip, { backgroundColor: colors.actionSurface, borderColor: colors.border }]}><Text style={[styles.methodText, { color: colors.action }]}>🏦 Maya</Text></View>
           </View>
 
           <TouchableOpacity
             onPress={onConfirm}
             activeOpacity={0.85}
-            style={styles.confirmBtn}
+            style={[styles.confirmBtn, { backgroundColor: colors.action }]}
           >
             <CheckCircle size={18} color="#FFFFFF" />
             <Text style={styles.confirmText}>Pay ₱{amount.toLocaleString()}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={onClose} activeOpacity={0.7} style={styles.cancelBtn}>
-            <Text style={styles.cancelText}>Cancel</Text>
+            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -95,7 +96,6 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modal: {
-    backgroundColor: "#FFFFFF",
     borderRadius: 24,
     padding: 24,
     alignItems: "center",
@@ -118,7 +118,6 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: "#EBF5FF",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
@@ -126,12 +125,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#1E293B",
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 13,
-    color: "#64748B",
     textAlign: "center",
     marginBottom: 16,
   },
@@ -143,17 +140,14 @@ const styles = StyleSheet.create({
   currency: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1A56DB",
     marginRight: 4,
   },
   amount: {
     fontSize: 38,
     fontWeight: "800",
-    color: "#1A56DB",
   },
   paymentNote: {
     fontSize: 11,
-    color: "#94A3B8",
     marginBottom: 16,
   },
   paymentMethods: {
@@ -162,20 +156,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   methodChip: {
-    backgroundColor: "#F0F7FF",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#DBEAFE",
   },
   methodText: {
     fontSize: 12,
-    color: "#1A56DB",
     fontWeight: "600",
   },
   confirmBtn: {
-    backgroundColor: "#1A56DB",
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -195,7 +185,6 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontSize: 14,
-    color: "#94A3B8",
     fontWeight: "600",
   },
 });

@@ -12,6 +12,10 @@ yarn-error.log*
 */.env
 */.env.*
 
+# ...but the template holds no secrets and must be tracked (documents required vars).
+!.env.example
+!*/.env.example
+
 # Expo & Metro
 .expo/
 */.expo/
@@ -25,3 +29,7 @@ web-build/
 Thumbs.db
 .vscode/
 .idea/
+
+# Supabase CLI local state (never commit)
+supabase/.temp/
+frontend/supabase/.temp/
