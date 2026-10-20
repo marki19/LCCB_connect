@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
+import { useTheme } from "../../src/contexts/ThemeContext";
 import { apiFetch } from "../../src/lib/api";
 
 type NotificationItem = {
@@ -38,6 +39,7 @@ type NotificationItem = {
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { colors, isDark } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -178,7 +180,7 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
       {/* Header */}
       <View
         style={{
@@ -188,18 +190,19 @@ export default function NotificationsScreen() {
           paddingHorizontal: 16,
           paddingVertical: 14,
           borderBottomWidth: 1,
-          borderBottomColor: "#F1F5F9",
+          borderBottomColor: colors.border,
+          backgroundColor: colors.surface,
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={{ fontSize: 22, fontWeight: "800", color: "#0F172A" }}>
+          <Text style={{ fontSize: 22, fontWeight: "800", color: colors.textPrimary }}>
             Notifications
           </Text>
           {unreadCount > 0 && (
             <View
               style={{
                 marginLeft: 8,
-                backgroundColor: "#EF4444",
+                backgroundColor: colors.destructive,
                 paddingHorizontal: 7,
                 paddingVertical: 2,
                 borderRadius: 10,
@@ -222,13 +225,13 @@ export default function NotificationsScreen() {
               paddingVertical: 6,
               paddingHorizontal: 10,
               borderRadius: 8,
-              backgroundColor: "#EFF6FF",
+              backgroundColor: colors.actionSurface,
             }}
           >
-            <CheckCheck size={15} color="#1A56DB" />
+            <CheckCheck size={15} color={colors.action} />
             <Text
               style={{
-                color: "#1A56DB",
+                color: colors.action,
                 fontWeight: "700",
                 fontSize: 13,
                 marginLeft: 5,
@@ -243,14 +246,19 @@ export default function NotificationsScreen() {
       {/* Main Content */}
       {loading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="small" color="#1A56DB" />
+          <ActivityIndicator size="small" color={colors.action} />
         </View>
       ) : (
         <FlatList
           data={notifications}
           keyExtractor={(item) => item.id}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.action]}
+              tintColor={colors.action}
+            />
           }
           ListEmptyComponent={
             <View style={{ alignItems: "center", paddingTop: 80, paddingHorizontal: 32 }}>
@@ -259,19 +267,19 @@ export default function NotificationsScreen() {
                   width: 56,
                   height: 56,
                   borderRadius: 28,
-                  backgroundColor: "#F1F5F9",
+                  backgroundColor: colors.surfaceSunken,
                   alignItems: "center",
                   justifyContent: "center",
                   marginBottom: 16,
                 }}
               >
-                <Bell size={26} color="#94A3B8" />
+                <Bell size={26} color={colors.textTertiary} />
               </View>
               <Text
                 style={{
                   fontSize: 16,
                   fontWeight: "700",
-                  color: "#1E293B",
+                  color: colors.textPrimary,
                   marginBottom: 6,
                 }}
               >
@@ -280,7 +288,7 @@ export default function NotificationsScreen() {
               <Text
                 style={{
                   fontSize: 13,
-                  color: "#64748B",
+                  color: colors.textTertiary,
                   textAlign: "center",
                   lineHeight: 18,
                 }}
@@ -301,8 +309,8 @@ export default function NotificationsScreen() {
                   flexDirection: "row",
                   padding: 14,
                   borderBottomWidth: 1,
-                  borderBottomColor: "#F8FAFC",
-                  backgroundColor: item.is_read ? "#FFFFFF" : "#F8FAFC",
+                  borderBottomColor: colors.border,
+                  backgroundColor: item.is_read ? colors.surface : (isDark ? "hsl(215, 30%, 20%)" : "#EFF6FF"),
                 }}
               >
                 {/* Avatar with Type Icon Badge */}
@@ -333,7 +341,7 @@ export default function NotificationsScreen() {
                       alignItems: "center",
                       justifyContent: "center",
                       borderWidth: 2,
-                      borderColor: "#FFFFFF",
+                      borderColor: colors.surface,
                     }}
                   >
                     <Icon size={10} color="#FFFFFF" />
@@ -355,7 +363,7 @@ export default function NotificationsScreen() {
                       style={{
                         fontSize: 14,
                         fontWeight: item.is_read ? "600" : "700",
-                        color: "#0F172A",
+                        color: colors.textPrimary,
                         flex: 1,
                         marginRight: 6,
                       }}
@@ -365,7 +373,7 @@ export default function NotificationsScreen() {
                     <Text
                       style={{
                         fontSize: 11,
-                        color: item.is_read ? "#94A3B8" : "#1A56DB",
+                        color: item.is_read ? colors.textTertiary : colors.action,
                         fontWeight: item.is_read ? "400" : "600",
                       }}
                     >
@@ -377,7 +385,7 @@ export default function NotificationsScreen() {
                     numberOfLines={2}
                     style={{
                       fontSize: 13,
-                      color: "#475569",
+                      color: colors.textSecondary,
                       lineHeight: 18,
                     }}
                   >
@@ -388,7 +396,7 @@ export default function NotificationsScreen() {
                     <Text
                       style={{
                         fontSize: 11,
-                        color: "#94A3B8",
+                        color: colors.textTertiary,
                         marginTop: 4,
                         fontWeight: "500",
                       }}
@@ -405,7 +413,7 @@ export default function NotificationsScreen() {
                       width: 8,
                       height: 8,
                       borderRadius: 4,
-                      backgroundColor: "#1A56DB",
+                      backgroundColor: colors.action,
                       marginLeft: 8,
                       alignSelf: "center",
                     }}

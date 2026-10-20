@@ -14,6 +14,7 @@ import { ArrowLeft, UserPlus, MessageSquare, Check, X, UserMinus } from "lucide-
 import Avatar from "../src/components/Avatar";
 import PeerPicker from "../src/components/PeerPicker";
 import { usePresence } from "../src/contexts/PresenceContext";
+import { useTheme } from "../src/contexts/ThemeContext";
 import {
   acceptFriendRequest,
   declineFriendRequest,
@@ -23,6 +24,7 @@ import {
   removeFriend,
 } from "../src/lib/messages";
 import type { ConversationPeer, Friend, FriendRequests } from "../src/types";
+import { safeBack } from "../src/lib/navigation";
 
 /**
  * Friends (Messaging_plan.md §5): mutual request → accept. Accepted friends
@@ -32,6 +34,7 @@ import type { ConversationPeer, Friend, FriendRequests } from "../src/types";
 export default function FriendsScreen() {
   const router = useRouter();
   const { modeOf } = usePresence();
+  const { colors, isDark } = useTheme();
 
   const [tab, setTab] = useState<"friends" | "requests">("friends");
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -122,7 +125,7 @@ export default function FriendsScreen() {
   const data: Friend[] = friends;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
       <View
         style={{
           flexDirection: "row",
@@ -130,21 +133,22 @@ export default function FriendsScreen() {
           justifyContent: "space-between",
           paddingHorizontal: 12,
           paddingVertical: 12,
+          backgroundColor: colors.surface,
           borderBottomWidth: 1,
-          borderBottomColor: "#F1F5F9",
+          borderBottomColor: colors.border,
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <TouchableOpacity onPress={() => router.back()} style={{ padding: 6, marginRight: 4 }}>
-            <ArrowLeft size={22} color="#0F172A" />
+          <TouchableOpacity onPress={() => safeBack("/(tabs)")} style={{ padding: 6, marginRight: 4 }}>
+            <ArrowLeft size={22} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={{ fontSize: 22, fontWeight: "800", color: "#0F172A" }}>Friends</Text>
+          <Text style={{ fontSize: 22, fontWeight: "800", color: colors.textPrimary }}>Friends</Text>
         </View>
         <TouchableOpacity
           onPress={() => setPickerOpen(true)}
-          style={{ width: 40, height: 40, backgroundColor: "#EFF6FF", borderRadius: 20, alignItems: "center", justifyContent: "center" }}
+          style={{ width: 40, height: 40, backgroundColor: colors.actionSurface, borderRadius: 20, alignItems: "center", justifyContent: "center" }}
         >
-          <UserPlus size={20} color="#1A56DB" />
+          <UserPlus size={20} color={colors.action} />
         </TouchableOpacity>
       </View>
 
@@ -155,14 +159,14 @@ export default function FriendsScreen() {
             <TouchableOpacity
               key={key}
               onPress={() => setTab(key)}
-              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, backgroundColor: active ? "#1A56DB" : "#F1F5F9" }}
+              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, backgroundColor: active ? colors.action : colors.surfaceSunken }}
             >
-              <Text style={{ fontSize: 13, fontWeight: "700", color: active ? "#FFFFFF" : "#475569" }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: active ? "#FFFFFF" : colors.textSecondary }}>
                 {key === "friends" ? `Friends (${friends.length})` : "Requests"}
               </Text>
               {key === "requests" && requestCount > 0 && (
-                <View style={{ marginLeft: 6, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: active ? "#FFFFFF" : "#EF4444", alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}>
-                  <Text style={{ fontSize: 10, fontWeight: "800", color: active ? "#1A56DB" : "#FFFFFF" }}>{requestCount}</Text>
+                <View style={{ marginLeft: 6, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: active ? "#FFFFFF" : colors.destructive, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: "800", color: active ? colors.action : "#FFFFFF" }}>{requestCount}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -172,40 +176,40 @@ export default function FriendsScreen() {
 
       {loading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="small" color="#1A56DB" />
+          <ActivityIndicator size="small" color={colors.action} />
         </View>
       ) : tab === "friends" ? (
         <FlatList
           style={{ flex: 1, marginTop: 12 }}
           data={data}
           keyExtractor={(item) => item.peer.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.action} />}
           renderItem={({ item }) => (
-            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
               <Avatar name={item.peer.full_name || item.peer.username} size={48} showPresence mode={modeOf(item.peer.id)} />
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>
+                <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}>
                   {item.peer.full_name || item.peer.username || "Friend"}
                 </Text>
-                <Text numberOfLines={1} style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>
                   {item.peer.department_name || "No department"}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => void startChat(item.peer)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center", marginRight: 8 }}>
-                <MessageSquare size={17} color="#1A56DB" />
+              <TouchableOpacity onPress={() => void startChat(item.peer)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.actionSurface, alignItems: "center", justifyContent: "center", marginRight: 8 }}>
+                <MessageSquare size={17} color={colors.action} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleRemove(item)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FEF2F2", alignItems: "center", justifyContent: "center" }}>
-                <UserMinus size={17} color="#EF4444" />
+              <TouchableOpacity onPress={() => handleRemove(item)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: isDark ? "hsl(0, 30%, 15%)" : "#FEF2F2", alignItems: "center", justifyContent: "center" }}>
+                <UserMinus size={17} color={colors.destructive} />
               </TouchableOpacity>
             </View>
           )}
           ListEmptyComponent={
             <View style={{ alignItems: "center", paddingTop: 72, paddingHorizontal: 32 }}>
-              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-                <UserPlus size={24} color="#1A56DB" />
+              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.actionSurface, alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                <UserPlus size={24} color={colors.action} />
               </View>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B", marginBottom: 6 }}>No friends yet</Text>
-              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary, marginBottom: 6 }}>No friends yet</Text>
+              <Text style={{ fontSize: 13, color: colors.textTertiary, textAlign: "center", lineHeight: 18 }}>
                 Add people to message them regardless of their messaging policy.
               </Text>
             </View>
@@ -216,48 +220,48 @@ export default function FriendsScreen() {
           style={{ flex: 1, marginTop: 12 }}
           data={requests.incoming}
           keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.action} />}
           ListHeaderComponent={
             requests.incoming.length > 0 ? (
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.6, paddingHorizontal: 16, paddingBottom: 4, textTransform: "uppercase" }}>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textTertiary, letterSpacing: 0.6, paddingHorizontal: 16, paddingBottom: 4, textTransform: "uppercase" }}>
                 Incoming
               </Text>
             ) : null
           }
           renderItem={({ item }) => (
-            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
               <Avatar name={item.requester.full_name || item.requester.username} size={48} showPresence mode={modeOf(item.requester.id)} />
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>
+                <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}>
                   {item.requester.full_name || item.requester.username || "Someone"}
                 </Text>
-                <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>wants to be friends</Text>
+                <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>wants to be friends</Text>
               </View>
-              <TouchableOpacity onPress={() => void respond(item.id, "decline")} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center", marginRight: 8 }}>
-                <X size={17} color="#64748B" />
+              <TouchableOpacity onPress={() => void respond(item.id, "decline")} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSunken, alignItems: "center", justifyContent: "center", marginRight: 8 }}>
+                <X size={17} color={colors.textSecondary} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => void respond(item.id, "accept")} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#1A56DB", alignItems: "center", justifyContent: "center" }}>
+              <TouchableOpacity onPress={() => void respond(item.id, "accept")} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.action, alignItems: "center", justifyContent: "center" }}>
                 <Check size={17} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           )}
           ListFooterComponent={
             requests.outgoing.length > 0 ? (
-              <View style={{ borderTopWidth: 1, borderTopColor: "#F1F5F9", marginTop: 8 }}>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.6, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, textTransform: "uppercase" }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 8 }}>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textTertiary, letterSpacing: 0.6, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, textTransform: "uppercase" }}>
                   Sent
                 </Text>
                 {requests.outgoing.map((item) => (
-                  <View key={item.id} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+                  <View key={item.id} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                     <Avatar name={item.addressee.full_name || item.addressee.username} size={44} />
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}>
                         {item.addressee.full_name || item.addressee.username || "Someone"}
                       </Text>
-                      <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Pending</Text>
+                      <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Pending</Text>
                     </View>
-                    <TouchableOpacity onPress={() => void respond(item.id, "decline")} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: "#F1F5F9" }}>
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
+                    <TouchableOpacity onPress={() => void respond(item.id, "decline")} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: colors.surfaceSunken }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>Cancel</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -267,7 +271,7 @@ export default function FriendsScreen() {
           ListEmptyComponent={
             requests.outgoing.length === 0 ? (
               <View style={{ alignItems: "center", paddingTop: 72, paddingHorizontal: 32 }}>
-                <Text style={{ fontSize: 15, color: "#94A3B8", fontWeight: "500" }}>No friend requests</Text>
+                <Text style={{ fontSize: 15, color: colors.textTertiary, fontWeight: "500" }}>No friend requests</Text>
               </View>
             ) : null
           }

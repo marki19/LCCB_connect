@@ -2,13 +2,16 @@ import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "../src/contexts/AuthContext";
+import { useTheme } from "../src/contexts/ThemeContext";
 import { pickImage, uploadToStorage } from "../src/lib/upload";
 import { Camera, X, Check } from "lucide-react-native";
 import { apiFetch } from "../src/lib/api";
+import { safeBack } from "../src/lib/navigation";
 
 export default function EditProfileScreen() {
   const router = useRouter();
   const { profile, session } = useAuth();
+  const { colors, isDark } = useTheme();
   
   const [fullName, setFullName] = useState(profile?.full_name || "");
   const [bio, setBio] = useState(profile?.bio || "");
@@ -62,7 +65,7 @@ export default function EditProfileScreen() {
       }
       
       // Force context to re-fetch would be ideal, but for now we just dismiss modal
-      router.back();
+      safeBack("/(tabs)/profile");
     } catch (error: any) {
       Alert.alert("Error saving profile", error.message);
       setSaving(false);
@@ -71,61 +74,61 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 bg-[#F8FAFC]">
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.surfacePage }}>
       {/* Header */}
-      <View className="flex-row justify-between items-center px-4 py-4 bg-white border-b border-slate-200">
-        <TouchableOpacity onPress={() => router.back()} className="p-2">
-          <X color="#64748B" size={24} />
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <TouchableOpacity onPress={() => safeBack("/(tabs)/profile")} style={{ padding: 6 }}>
+          <X color={colors.textSecondary} size={22} />
         </TouchableOpacity>
-        <Text className="text-lg font-bold text-slate-800">Edit Profile</Text>
-        <TouchableOpacity onPress={handleSave} disabled={saving || uploadingImage} className="p-2">
-          {saving ? <ActivityIndicator size="small" color="#1D4ED8" /> : <Check color="#1D4ED8" size={24} />}
+        <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>Edit Profile</Text>
+        <TouchableOpacity onPress={handleSave} disabled={saving || uploadingImage} style={{ padding: 6 }}>
+          {saving ? <ActivityIndicator size="small" color={colors.action} /> : <Check color={colors.action} size={22} />}
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1 p-6" showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
         
         {/* Avatar Picker */}
-        <View className="items-center mb-8">
+        <View style={{ alignItems: "center", marginBottom: 28 }}>
           <TouchableOpacity 
             onPress={handlePickImage} 
-            className="w-28 h-28 rounded-full bg-slate-200 items-center justify-center overflow-hidden border-4 border-white shadow-sm"
+            style={{ width: 104, height: 104, borderRadius: 52, backgroundColor: colors.surfaceSunken, alignItems: "center", justifyContent: "center", overflow: "hidden", borderWidth: 4, borderColor: colors.surface }}
           >
             {avatarUri ? (
-              <Image source={{ uri: avatarUri }} className="w-full h-full" resizeMode="cover" />
+              <Image source={{ uri: avatarUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
             ) : (
-              <Camera color="#94A3B8" size={32} />
+              <Camera color={colors.textTertiary} size={32} />
             )}
-            <View className="absolute bottom-0 w-full bg-black/40 py-1 items-center">
-              <Text className="text-white text-[10px] font-bold uppercase tracking-wider">Edit</Text>
+            <View style={{ position: "absolute", bottom: 0, width: "100%", backgroundColor: "rgba(0,0,0,0.45)", paddingVertical: 4, alignItems: "center" }}>
+              <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 }}>Edit</Text>
             </View>
           </TouchableOpacity>
         </View>
 
         {/* Form Fields */}
-        <View className="space-y-6 mb-12">
+        <View style={{ gap: 20, marginBottom: 40 }}>
           <View>
-            <Text className="text-sm font-bold text-slate-700 mb-2 ml-1 uppercase tracking-wider">Full Name</Text>
-            <View className="bg-white rounded-2xl px-5 py-4 border border-slate-200">
+            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Full Name</Text>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: colors.border }}>
               <TextInput
-                className="text-slate-900 text-base font-medium outline-none"
+                style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "500" }}
                 value={fullName}
                 onChangeText={setFullName}
                 placeholder="Juan Dela Cruz"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.textTertiary}
               />
             </View>
           </View>
 
           <View>
-            <Text className="text-sm font-bold text-slate-700 mb-2 ml-1 uppercase tracking-wider">Bio</Text>
-            <View className="bg-white rounded-2xl px-5 py-4 border border-slate-200 min-h-[100px]">
+            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Bio</Text>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: colors.border, minHeight: 100 }}>
               <TextInput
-                className="text-slate-900 text-base font-medium outline-none"
+                style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "500" }}
                 value={bio}
                 onChangeText={setBio}
                 placeholder="Tell us about yourself..."
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.textTertiary}
                 multiline
                 textAlignVertical="top"
               />
@@ -133,55 +136,55 @@ export default function EditProfileScreen() {
           </View>
 
           <View>
-            <Text className="text-sm font-bold text-slate-700 mb-2 ml-1 uppercase tracking-wider">Department &amp; Course</Text>
-            <View className="bg-white rounded-2xl px-5 py-4 border border-slate-200">
-              <Text className="text-slate-900 text-base font-semibold">
+            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Department & Course</Text>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "600" }}>
                 {profile?.department_name || "—"}
               </Text>
-              <Text className="text-slate-500 text-sm mt-1">
+              <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 4 }}>
                 {profile?.course_name || "—"}
               </Text>
-              <Text className="text-slate-400 text-xs mt-2">
+              <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 8 }}>
                 Assigned at registration. Contact an administrator to change it.
               </Text>
             </View>
           </View>
 
           <View>
-            <Text className="text-sm font-bold text-slate-700 mb-2 ml-1 uppercase tracking-wider">Year Level</Text>
-            <View className="bg-white rounded-2xl px-5 py-4 border border-slate-200">
+            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Year Level</Text>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: colors.border }}>
               <TextInput
-                className="text-slate-900 text-base font-medium outline-none"
+                style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "500" }}
                 value={yearLevel}
                 onChangeText={setYearLevel}
                 placeholder="e.g. 3rd Year"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.textTertiary}
               />
             </View>
           </View>
 
           <View>
-            <Text className="text-sm font-bold text-slate-700 mb-2 ml-1 uppercase tracking-wider">Skills</Text>
-            <View className="bg-white rounded-2xl p-4 border border-slate-200">
-              <View className="flex-row flex-wrap gap-2 mb-3">
+            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Skills</Text>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
                 {skills.map((skill, index) => (
-                  <View key={index} className="bg-[#DBEAFE] px-3 py-1.5 rounded-full flex-row items-center">
-                    <Text className="text-[#1D4ED8] font-semibold text-sm">{skill}</Text>
+                  <View key={index} style={{ backgroundColor: colors.actionSurface, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, flexDirection: "row", alignItems: "center" }}>
+                    <Text style={{ color: colors.action, fontWeight: "600", fontSize: 13 }}>{skill}</Text>
                     <TouchableOpacity 
                       onPress={() => setSkills(skills.filter((_, i) => i !== index))}
-                      className="ml-2 bg-[#BFDBFE] rounded-full p-0.5"
+                      style={{ marginLeft: 8, backgroundColor: colors.actionSurfaceAlt, borderRadius: 10, padding: 2 }}
                     >
-                      <X color="#1D4ED8" size={12} />
+                      <X color={colors.action} size={12} />
                     </TouchableOpacity>
                   </View>
                 ))}
               </View>
               <TextInput
-                className="text-slate-900 text-base font-medium outline-none"
+                style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "500" }}
                 value={newSkill}
                 onChangeText={setNewSkill}
                 placeholder="e.g. React Native (press enter to add)"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.textTertiary}
                 onSubmitEditing={() => {
                   if (newSkill.trim() && !skills.includes(newSkill.trim())) {
                     setSkills([...skills, newSkill.trim()]);

@@ -18,11 +18,18 @@ const getUser = stub(auth.supabase.auth, "getUser", async () => ({
   data: { user: null },
   error: { message: "not stubbed" },
 }));
+const getClaims = stub(auth.supabase.auth, "getClaims", async () => ({
+  data: null,
+  error: { message: "not stubbed" },
+}));
 
 // Route handlers must not touch a database.
 stub(postModel, "getAllPosts", async () => []);
 stub(thesisModel, "getAllTheses", async () => []);
 stub(userModel, "getAllUsers", async () => []);
+// Every authenticated mount now loads the profile so suspended accounts are
+// blocked. Auth tests only exercise the middleware, so return a minimal row.
+const getProfile = stub(userModel, "getUserById", async (id) => ({ id, role: "student" }));
 
 // Imported only after the stubs are installed.
 const app = require("../app");
@@ -30,6 +37,8 @@ const app = require("../app");
 beforeEach(() => {
   getUser.calls.length = 0;
   getUser.setImpl(async () => ({ data: { user: null }, error: { message: "not stubbed" } }));
+  getClaims.calls.length = 0;
+  getClaims.setImpl(async () => ({ data: null, error: { message: "not stubbed" } }));
 });
 
 describe("requireAuth", () => {
@@ -64,6 +73,49 @@ describe("requireAuth", () => {
     const res = await request(app).post("/api/posts").set("Authorization", "Bearer anon-key");
 
     assert.equal(res.status, 401);
+  });
+
+  it("accepts a verified JWT after its session was revoked", async () => {
+    getUser.setImpl(async () => ({
+      data: { user: null },
+      error: { message: "Auth session missing!" },
+    }));
+    getClaims.setImpl(async () => ({
+      data: {
+        claims: {
+          sub: "u1",
+          email: "a@b.c",
+          aud: "authenticated",
+          role: "authenticated",
+        },
+      },
+      error: null,
+    }));
+
+    const res = await request(app).get("/api/posts").set("Authorization", "Bearer suspended");
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(getUser.calls, [["suspended"]]);
+    assert.deepEqual(getClaims.calls, [["suspended"]]);
+  });
+
+  it("rejects a revoked JWT when its profile was deleted", async () => {
+    getUser.setImpl(async () => ({
+      data: { user: null },
+      error: { message: "Auth session missing!" },
+    }));
+    getClaims.setImpl(async () => ({
+      data: { claims: { sub: "gone", aud: "authenticated" } },
+      error: null,
+    }));
+    getProfile.setImpl(async () => null);
+    try {
+      const res = await request(app).get("/api/posts").set("Authorization", "Bearer deleted");
+      assert.equal(res.status, 401);
+      assert.deepEqual(res.body, { error: "Invalid or expired token" });
+    } finally {
+      getProfile.setImpl(async (id) => ({ id, role: "student" }));
+    }
   });
 
   it("allows the request through with a valid token", async () => {

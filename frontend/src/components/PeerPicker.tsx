@@ -13,6 +13,7 @@ import { Search, MessageSquare, UserPlus, Check, X } from "lucide-react-native";
 import { apiFetch } from "../lib/api";
 import { openConversation, sendFriendRequest } from "../lib/messages";
 import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
 import Avatar from "./Avatar";
 
 /**
@@ -39,6 +40,7 @@ type Props = {
 
 export default function PeerPicker({ visible, onClose, onOpened }: Props) {
   const { profile } = useAuth();
+  const { colors, isDark } = useTheme();
   const [peers, setPeers] = useState<Peer[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -51,7 +53,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
     (async () => {
       setLoading(true);
       try {
-        const res = await apiFetch("/users");
+        const res = await apiFetch("/public/peers?limit=100");
         const data: Peer[] = res.ok ? await res.json() : [];
         if (cancelled) return;
         setPeers(Array.isArray(data) ? data.filter((p) => p.id !== profile?.id) : []);
@@ -101,10 +103,10 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.35)", justifyContent: "flex-end" }}>
+      <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end" }}>
         <View
           style={{
-            backgroundColor: "#FFFFFF",
+            backgroundColor: colors.surface,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
             maxHeight: "85%",
@@ -121,9 +123,9 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
               paddingBottom: 8,
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>New message</Text>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary }}>New message</Text>
             <TouchableOpacity onPress={onClose} style={{ padding: 6 }}>
-              <X size={20} color="#64748B" />
+              <X size={20} color={colors.textTertiary} />
             </TouchableOpacity>
           </View>
 
@@ -131,26 +133,26 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
             style={{
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: "#F1F5F9",
+              backgroundColor: colors.surfaceSunken,
               borderRadius: 12,
               marginHorizontal: 16,
               marginBottom: 8,
               paddingHorizontal: 12,
             }}
           >
-            <Search size={16} color="#94A3B8" />
+            <Search size={16} color={colors.textTertiary} />
             <TextInput
               value={query}
               onChangeText={setQuery}
               placeholder="Search people"
-              placeholderTextColor="#94A3B8"
-              style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: "#0F172A" }}
+              placeholderTextColor={colors.textTertiary}
+              style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: colors.textPrimary }}
             />
           </View>
 
           {loading ? (
             <View style={{ paddingVertical: 48, alignItems: "center" }}>
-              <ActivityIndicator size="small" color="#1A56DB" />
+              <ActivityIndicator size="small" color={colors.action} />
             </View>
           ) : (
             <FlatList
@@ -159,7 +161,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
               keyboardShouldPersistTaps="handled"
               ListEmptyComponent={
                 <View style={{ paddingVertical: 48, alignItems: "center" }}>
-                  <Text style={{ color: "#94A3B8", fontSize: 14 }}>No people found</Text>
+                  <Text style={{ color: colors.textTertiary, fontSize: 14 }}>No people found</Text>
                 </View>
               }
               renderItem={({ item }) => {
@@ -173,15 +175,15 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
                       paddingHorizontal: 16,
                       paddingVertical: 10,
                       borderBottomWidth: 1,
-                      borderBottomColor: "#F1F5F9",
+                      borderBottomColor: colors.border,
                     }}
                   >
                     <Avatar name={item.full_name || item.username} size={44} />
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>
+                      <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}>
                         {item.full_name || item.username || "Peer"}
                       </Text>
-                      <Text numberOfLines={1} style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>
                         {item.department_name || "No department"}
                         {item.year_level ? ` · ${item.year_level}` : ""}
                       </Text>
@@ -194,7 +196,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
                         width: 34,
                         height: 34,
                         borderRadius: 17,
-                        backgroundColor: alreadyRequested ? "#DCFCE7" : "#F1F5F9",
+                        backgroundColor: alreadyRequested ? (isDark ? "hsl(150, 30%, 15%)" : "#DCFCE7") : colors.surfaceSunken,
                         alignItems: "center",
                         justifyContent: "center",
                         marginRight: 8,
@@ -203,7 +205,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
                       {alreadyRequested ? (
                         <Check size={16} color="#16A34A" />
                       ) : (
-                        <UserPlus size={16} color="#1A56DB" />
+                        <UserPlus size={16} color={colors.action} />
                       )}
                     </TouchableOpacity>
 
@@ -213,7 +215,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
-                        backgroundColor: "#1A56DB",
+                        backgroundColor: colors.action,
                         paddingHorizontal: 12,
                         paddingVertical: 8,
                         borderRadius: 18,

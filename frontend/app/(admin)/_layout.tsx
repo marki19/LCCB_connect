@@ -1,102 +1,205 @@
-import { View, Text, TouchableOpacity, Dimensions } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Platform,
+  useWindowDimensions,
+} from "react-native";
 import { Stack, useRouter, usePathname } from "expo-router";
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Building2 } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  Megaphone,
+  Building2,
+  Settings,
+  ScrollText,
+  LogOut,
+  ExternalLink,
+  ShieldCheck,
+} from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { isAdminRole, isSuperAdminRole } from "../../src/lib/roles";
+import { setAdminAppPreview } from "../../src/lib/panelMode";
+
+type NavItemProps = {
+  icon: any;
+  label: string;
+  path: string;
+  active: boolean;
+  onPress: () => void;
+};
+
+function NavItem({ icon: Icon, label, path, active, onPress }: NavItemProps) {
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      className={`mb-1 flex-row items-center rounded-xl px-4 py-3 ${
+        active ? "bg-[#1D4ED8]" : "hover:bg-slate-100"
+      }`}
+    >
+      <Icon color={active ? "#FFFFFF" : "#64748B"} size={19} />
+      <Text
+        className={`ml-3 text-sm font-semibold ${
+          active ? "text-white" : "text-slate-600"
+        }`}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function AdminLayout() {
   const router = useRouter();
   const pathname = usePathname();
+  const { width } = useWindowDimensions();
   const { signOut, profile } = useAuth();
-  const [isDesktop, setIsDesktop] = useState(true);
+  const isDesktop = Platform.OS === "web" && width >= 768;
+  const adminUser = isAdminRole(profile?.role);
 
-  useEffect(() => {
-    const handleResize = () => setIsDesktop(Dimensions.get("window").width > 768);
-    handleResize(); 
-    const subscription = Dimensions.addEventListener("change", handleResize);
-    return () => subscription?.remove();
-  }, []);
-
-  const NavItem = ({ icon: Icon, label, path }: { icon: any, label: string, path: string }) => {
-    const isActive = pathname === path;
+  if (!isDesktop || !adminUser) {
     return (
-      <TouchableOpacity 
-        onPress={() => router.push(path as any)}
-        className={`flex-row items-center px-4 py-3 mb-2 rounded-xl transition-colors ${isActive ? 'bg-[#1D4ED8]' : 'hover:bg-slate-100'}`}
-      >
-        <Icon color={isActive ? "#FFFFFF" : "#64748B"} size={20} />
-        <Text className={`ml-3 font-semibold ${isActive ? 'text-white' : 'text-slate-600'}`}>
-          {label}
+      <View className="flex-1 items-center justify-center bg-slate-50 p-6">
+        <ShieldCheck size={32} color="#1D4ED8" />
+        <Text className="mt-4 text-xl font-bold text-slate-800">
+          {isDesktop ? "Admin access required" : "Desktop console"}
         </Text>
-      </TouchableOpacity>
-    );
-  };
-
-  if (!isDesktop) {
-    // On mobile, just render a regular stack (or tell them to use desktop)
-    return (
-      <View className="flex-1 bg-white items-center justify-center p-6">
-        <Text className="text-xl font-bold text-slate-800 text-center mb-2">Desktop Only</Text>
-        <Text className="text-slate-500 text-center mb-6">The Admin Dashboard is only available on desktop web browsers.</Text>
-        <TouchableOpacity 
-          className="bg-[#1D4ED8] px-6 py-3 rounded-full"
-          onPress={() => router.replace("/(tabs)/")}
+        <Text className="mt-2 max-w-[420px] text-center text-slate-500">
+          {isDesktop
+            ? "This account does not have access to the administration console."
+            : "The admin console is available on desktop web. Use the normal app on this device."}
+        </Text>
+        <TouchableOpacity
+          className="mt-6 rounded-full bg-[#1D4ED8] px-6 py-3"
+          onPress={() => {
+            setAdminAppPreview(true);
+            router.replace("/(tabs)/");
+          }}
         >
-          <Text className="text-white font-bold">Go to Mobile App</Text>
+          <Text className="font-bold text-white">Go to App</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
+  if (!profile) {
+    return (
+      <View className="flex-1 items-center justify-center bg-slate-50">
+        <ActivityIndicator size="large" color="#1D4ED8" />
+      </View>
+    );
+  }
+
+  const isActive = (path: string) => {
+    const relative = pathname.replace(/^\/\(admin\)/, "") || "/";
+    if (path === "/(admin)") return relative === "/";
+    const target = path.replace("/(admin)", "");
+    return relative === target || relative.startsWith(`${target}/`);
+  };
+
+  const nav = [
+    { label: "Overview", path: "/(admin)", icon: LayoutDashboard },
+    { label: "Users", path: "/(admin)/users", icon: Users },
+    { label: "Reports & Content", path: "/(admin)/content", icon: FileText },
+    { label: "Announcements", path: "/(admin)/announcements", icon: Megaphone },
+    {
+      label: "Departments & Courses",
+      path: "/(admin)/departments",
+      icon: Building2,
+    },
+    { label: "Settings", path: "/(admin)/settings", icon: Settings },
+  ];
+
+  if (isSuperAdminRole(profile.role)) {
+    nav.push({ label: "Audit", path: "/(admin)/audit", icon: ScrollText });
+  }
+
   return (
     <View className="flex-1 flex-row bg-[#F8FAFC]">
-      {/* Sidebar */}
-      <View className="w-64 bg-white border-r border-slate-200 h-full p-4 justify-between">
-        <View>
-          <View className="mb-8 px-2 flex-row items-center">
-            <View className="w-8 h-8 bg-[#1D4ED8] rounded-lg items-center justify-center mr-3">
-              <Text className="text-white font-black">L</Text>
+      <View className="h-full w-64 border-r border-slate-200 bg-white">
+        <ScrollView
+          className="flex-1 p-4"
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View>
+            <View className="mb-8 flex-row items-center px-2">
+              <View className="mr-3 h-9 w-9 items-center justify-center rounded-xl bg-[#1D4ED8]">
+                <Text className="font-black text-white">L</Text>
+              </View>
+              <View>
+                <Text className="text-lg font-black tracking-tight text-slate-800">
+                  Admin Console
+                </Text>
+                <Text className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  {isSuperAdminRole(profile.role) ? "Superadmin" : "Administrator"}
+                </Text>
+              </View>
             </View>
-            <Text className="text-xl font-black text-slate-800 tracking-tight">Admin Portal</Text>
-          </View>
-          
-          <NavItem icon={LayoutDashboard} label="Overview" path="/(admin)" />
-          <NavItem icon={Users} label="Users & Roles" path="/(admin)/users" />
-          <NavItem icon={FileText} label="Content Moderation" path="/(admin)/content" />
-          <NavItem icon={Building2} label="Departments & Courses" path="/(admin)/departments" />
-          <NavItem icon={Settings} label="Settings" path="/(admin)/settings" />
-        </View>
 
-        <View className="border-t border-slate-100 pt-4">
-          <View className="flex-row items-center px-2 mb-4">
-            <View className="w-10 h-10 bg-blue-100 rounded-full items-center justify-center mr-3">
-              <Text className="text-blue-700 font-bold">{profile?.full_name?.[0] || "A"}</Text>
-            </View>
-            <View>
-              <Text className="font-bold text-slate-800 text-sm">{profile?.full_name || "Admin User"}</Text>
-              <Text className="text-slate-500 text-xs">{profile?.role || "superadmin"}</Text>
-            </View>
+            {nav.map((item) => (
+              <NavItem
+                key={item.path}
+                icon={item.icon}
+                label={item.label}
+                path={item.path}
+                active={isActive(item.path)}
+                onPress={() => router.push(item.path as any)}
+              />
+            ))}
           </View>
 
-          <TouchableOpacity 
-            onPress={() => signOut()}
-            className="flex-row items-center px-4 py-3 rounded-xl hover:bg-red-50 transition-colors"
-          >
-            <LogOut color="#EF4444" size={20} />
-            <Text className="ml-3 font-semibold text-red-500">Sign Out</Text>
-          </TouchableOpacity>
-        </View>
+          <View className="border-t border-slate-100 pt-4">
+            <View className="mb-4 flex-row items-center px-2">
+              <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+                <Text className="font-bold text-blue-700">
+                  {profile.full_name?.[0] || profile.username?.[0] || "A"}
+                </Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-bold text-slate-800" numberOfLines={1}>
+                  {profile.full_name || profile.username || "Admin"}
+                </Text>
+                <Text className="text-xs text-slate-500">{profile.role}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => {
+                setAdminAppPreview(true);
+                router.push("/(tabs)/");
+              }}
+              className="mb-1 flex-row items-center rounded-xl px-4 py-3 hover:bg-slate-100"
+            >
+              <ExternalLink size={18} color="#475569" />
+              <Text className="ml-3 text-sm font-semibold text-slate-600">
+                Back to App
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => void signOut()}
+              className="flex-row items-center rounded-xl px-4 py-3 hover:bg-red-50"
+            >
+              <LogOut size={18} color="#EF4444" />
+              <Text className="ml-3 text-sm font-semibold text-red-500">Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
 
-      {/* Main Content Area */}
       <View className="flex-1 overflow-hidden">
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="users" />
-          <Stack.Screen name="content" />
-          <Stack.Screen name="departments" />
-          <Stack.Screen name="settings" />
-        </Stack>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: "transparent" },
+          }}
+        />
       </View>
     </View>
   );

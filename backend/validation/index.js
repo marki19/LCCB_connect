@@ -224,6 +224,48 @@ const deleteDeviceTokenSchema = z
 
 const friendRequestSchema = z.object({ addressee_id: requiredUuid() }).strict();
 
+// ---- admin console (SPEC-superadmin-console.md) ----------------------------
+const CanonicalRole = z.enum([
+  "student",
+  "faculty",
+  "departmentAdmin",
+  "admin",
+  "superadmin",
+]);
+
+const reasonField = z.string().trim().min(3, "Give a reason of at least 3 characters").max(500);
+
+const roleChangeSchema = z
+  .object({ role: CanonicalRole, reason: reasonField })
+  .strict();
+
+const suspendUserSchema = z
+  .object({
+    reason: reasonField,
+    until: z.string().trim().datetime({ offset: true }).nullable().optional(),
+  })
+  .strict();
+
+const reasonBodySchema = z.object({ reason: reasonField }).strict();
+
+const deleteUserSchema = reasonBodySchema;
+
+const announcementAudienceSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("all") }).strict(),
+  z.object({ type: z.literal("role"), role: CanonicalRole }).strict(),
+  z
+    .object({ type: z.literal("department"), department_id: requiredUuid() })
+    .strict(),
+]);
+
+const announcementSchema = z
+  .object({
+    title: z.string().trim().min(3).max(120),
+    body: z.string().trim().min(3).max(2000),
+    audience: announcementAudienceSchema,
+  })
+  .strict();
+
 /**
  * Validates `req.body` against `schema`. On success the parsed (typed, trimmed)
  * value replaces `req.body`. On failure returns 400 with per-field messages and
@@ -275,4 +317,9 @@ module.exports = {
   deviceTokenSchema,
   deleteDeviceTokenSchema,
   friendRequestSchema,
+  roleChangeSchema,
+  suspendUserSchema,
+  reasonBodySchema,
+  deleteUserSchema,
+  announcementSchema,
 };

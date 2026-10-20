@@ -46,6 +46,57 @@ const supabase = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
+const SUPABASE_ISSUER = process.env.SUPABASE_URL
+  ? `${process.env.SUPABASE_URL.replace(/\/+$/, "")}/auth/v1`
+  : null;
+
+/**
+ * Verifies a Supabase access token.
+ *
+ * `getUser` is authoritative, but it rejects tokens whose session was revoked
+ * (including the session revocation performed when an account is suspended).
+ * In that case, verify the JWT locally against Supabase's JWKS. The signature
+ * and expiry still have to be valid, so a suspended caller can reach
+ * `requireActiveAccount` and receive the 403 that drives the suspended screen,
+ * instead of falling through as an unauthenticated 401.
+ */
+async function verifyAccessToken(token) {
+  const { data, error } = await supabase.auth.getUser(token);
+  if (!error && data?.user) return data.user;
+
+  // Only fall back when Supabase rejected an otherwise-valid session. A forged
+  // or malformed JWT must stay a hard 401.
+  const message = error?.message || "";
+  if (!/session.*(missing|not found|invalid)|banned|revoked/i.test(message)) {
+    return null;
+  }
+
+  try {
+    const { data: claimsData, error: claimsError } =
+      await supabase.auth.getClaims(token);
+    const claims = claimsData?.claims;
+    if (claimsError || !claims?.sub) return null;
+    if (claims.aud && claims.aud !== "authenticated") return null;
+    if (SUPABASE_ISSUER && claims.iss && claims.iss !== SUPABASE_ISSUER) {
+      return null;
+    }
+    if (claims.exp && claims.exp * 1000 <= Date.now()) return null;
+
+    // A deleted account can leave a valid JWT until it expires. Accept the
+    // fallback only while a profile still exists; account deletion removes it.
+    const profile = await userModel.getUserById(claims.sub);
+    if (!profile) return null;
+
+    return {
+      id: claims.sub,
+      email: claims.email || null,
+      user_metadata: claims.user_metadata || {},
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Verifies the caller's Supabase access token and attaches `req.user`.
  * Identity is derived ONLY from the verified token — never from the request body.
@@ -64,12 +115,12 @@ async function requireAuth(req, res, next) {
       return res.status(401).json({ error: "Authentication required" });
     }
 
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data || !data.user) {
+    const user = await verifyAccessToken(token);
+    if (!user) {
       return res.status(401).json({ error: "Invalid or expired token" });
     }
 
-    req.user = data.user; // { id, email, ... } — authoritative identity
+    req.user = user; // { id, email, ... } — authoritative identity
     req.accessToken = token;
     return next();
   } catch (err) {
@@ -93,12 +144,12 @@ async function optionalAuth(req, res, next) {
       return next();
     }
 
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data || !data.user) {
+    const user = await verifyAccessToken(token);
+    if (!user) {
       return res.status(401).json({ error: "Invalid or expired token" });
     }
 
-    req.user = data.user;
+    req.user = user;
     req.accessToken = token;
     return next();
   } catch (err) {
@@ -109,6 +160,10 @@ async function optionalAuth(req, res, next) {
 /** Loads the caller's `profiles` row into `req.profile`. */
 async function loadProfile(req, res, next) {
   try {
+    // Idempotent: several routers mount on the same path. Once any mount has
+    // loaded the profile, later mounts reuse it instead of querying again.
+    if (req.profile !== undefined) return next();
+
     if (!req.user || !req.user.id) {
       req.profile = null;
       return next();
@@ -118,6 +173,36 @@ async function loadProfile(req, res, next) {
   } catch (err) {
     return next(err);
   }
+}
+
+/** True when the profile has a live suspension (an expired one is inactive). */
+function isSuspendedProfile(profile) {
+  if (!profile || !profile.suspended_at) return false;
+  if (!profile.suspended_until) return true;
+  const until = new Date(profile.suspended_until).getTime();
+  return Number.isFinite(until) && until > Date.now();
+}
+
+/**
+ * Rejects a suspended account on every authenticated API route.
+ *
+ * Mount after `loadProfile`. A missing profile is allowed through so the
+ * one-time self-provisioning POST /users path can still create it. The check is
+ * deliberately profile-only: it adds no query of its own.
+ */
+function requireActiveAccount(req, res, next) {
+  // A suspended account must still be able to read its own profile so the app
+  // can render the suspension reason and end date instead of a blank screen.
+  if (req.method === "GET" && req.path === `/${req.user?.id}`) return next();
+
+  if (!isSuspendedProfile(req.profile)) return next();
+
+  return res.status(403).json({
+    error: "Account suspended",
+    code: "account_suspended",
+    suspended_until: req.profile.suspended_until || null,
+    reason: req.profile.suspension_reason || null,
+  });
 }
 
 /** Inspection Predicates */
@@ -223,6 +308,7 @@ module.exports = {
   requireAuth,
   optionalAuth,
   loadProfile,
+  requireActiveAccount,
   requireRole,
   // Role constants and normalization
   ROLES,
@@ -239,6 +325,7 @@ module.exports = {
   isDepartmentAdmin,
   isFaculty,
   isStudent,
+  isSuspendedProfile,
   // Privilege ranking (account management)
   ROLE_RANK,
   rankOf,

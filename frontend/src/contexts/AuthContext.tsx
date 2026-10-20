@@ -26,6 +26,12 @@ export type Profile = {
   presence_mode?: string | null;
   last_seen_at?: string | null;
   last_seen_visible?: boolean | null;
+  // Account sanctions (superadmin console). The API treats an expired
+  // `suspended_until` as active, so the screen must check the date.
+  suspended_at?: string | null;
+  suspended_until?: string | null;
+  suspension_reason?: string | null;
+  suspended_by?: string | null;
 };
 
 type AuthContextType = { 

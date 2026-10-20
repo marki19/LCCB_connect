@@ -17,8 +17,15 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     )
   ),
   skills TEXT[],
+  -- Account suspension (migration 010). The API treats an expired
+  -- `suspended_until` as active; the fields remain until an admin unsuspends.
+  suspended_at TIMESTAMPTZ,
+  suspended_until TIMESTAMPTZ,
+  suspension_reason TEXT,
+  suspended_by TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT profiles_suspension_dates_check CHECK (suspended_until IS NULL OR suspended_at IS NOT NULL)
 );
 
 -- 2. Posts table
@@ -89,6 +96,24 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   message TEXT NOT NULL,
   is_read BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6a. Append-only governance audit log (migration 010).
+-- `actor_id` and `target_id` intentionally have no foreign keys: rows must
+-- outlive deleted accounts and content. Only the Express API (table owner)
+-- writes here; anon/authenticated are revoked below.
+CREATE TABLE IF NOT EXISTS public.admin_audit_log (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  actor_id TEXT NOT NULL,
+  actor_username TEXT,
+  actor_role TEXT,
+  action TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT,
+  target_label TEXT,
+  reason TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 6b. Admin-managed catalog: departments & courses (Messaging_plan.md §3).
@@ -275,6 +300,11 @@ CREATE INDEX IF NOT EXISTS idx_departments_active ON public.departments(is_activ
 CREATE INDEX IF NOT EXISTS idx_courses_department ON public.courses(department_id);
 CREATE INDEX IF NOT EXISTS idx_courses_active ON public.courses(is_active, sort_order);
 CREATE INDEX IF NOT EXISTS idx_profiles_department ON public.profiles(department_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_suspended ON public.profiles(suspended_at) WHERE suspended_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON public.admin_audit_log(created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_actor ON public.admin_audit_log(actor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON public.admin_audit_log(action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_target ON public.admin_audit_log(target_type, target_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_seq ON public.messages(conversation_id, seq);
 CREATE INDEX IF NOT EXISTS idx_messages_unread ON public.messages(recipient_id, conversation_id) WHERE read_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_messages_undelivered ON public.messages(recipient_id) WHERE delivered_at IS NULL;
@@ -300,6 +330,21 @@ ALTER TABLE public.conversation_state ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.device_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.message_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_audit_log ENABLE ROW LEVEL SECURITY;
+
+-- Audit rows are append-only even for the API. TRUNCATE stays an owner-only
+-- maintenance operation and is not exposed by any route.
+CREATE OR REPLACE FUNCTION public.reject_audit_mutation()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'admin_audit_log is append-only';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS admin_audit_log_append_only ON public.admin_audit_log;
+CREATE TRIGGER admin_audit_log_append_only
+BEFORE UPDATE OR DELETE ON public.admin_audit_log
+FOR EACH ROW EXECUTE FUNCTION public.reject_audit_mutation();
 
 -- Drop any decorative blanket policy (e.g. the `USING (true)` policy older
 -- migrations created on notifications). Those expose the table to the anon key.
@@ -316,7 +361,7 @@ BEGIN
   FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
       EXECUTE format(
-        'REVOKE ALL ON public.profiles, public.posts, public.theses, public.likes, public.comments, public.notifications, public.departments, public.courses, public.friendships, public.message_policy_departments, public.conversations, public.messages, public.conversation_state, public.device_tokens, public.blocks, public.message_reports FROM %I',
+        'REVOKE ALL ON public.profiles, public.posts, public.theses, public.likes, public.comments, public.notifications, public.admin_audit_log, public.departments, public.courses, public.friendships, public.message_policy_departments, public.conversations, public.messages, public.conversation_state, public.device_tokens, public.blocks, public.message_reports FROM %I',
         r
       );
       EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);

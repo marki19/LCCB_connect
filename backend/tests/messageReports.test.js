@@ -11,7 +11,9 @@ const request = require("supertest");
 const { stub } = require("./stub.helper");
 const auth = require("../middleware/auth");
 const postModel = require("../models/postModel");
+const thesisModel = require("../models/thesisModel");
 const messageModel = require("../models/messageModel");
+const auditService = require("../services/auditService");
 
 const REPORT = "66666666-6666-4666-8666-666666666666";
 const DEPT_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -43,6 +45,10 @@ const reports = {
   getMessageReportById: stub(messageModel, "getMessageReportById"),
   resolveMessageReport: stub(messageModel, "resolveMessageReport"),
 };
+const theses = {
+  getFlaggedTheses: stub(thesisModel, "getFlaggedTheses", async () => []),
+};
+stub(auditService, "recordRequest", async () => undefined);
 
 const app = require("../app");
 const AUTH = { Authorization: "Bearer test-token" };
@@ -116,7 +122,7 @@ describe("resolve a reported message (§7)", () => {
     const res = await request(app)
       .post(`/api/moderation/message-reports/${REPORT}`)
       .set(AUTH)
-      .send({ action: "reviewed" });
+      .send({ action: "reviewed", reason: "Reviewed in test" });
 
     assert.equal(res.status, 404);
   });
@@ -128,7 +134,7 @@ describe("resolve a reported message (§7)", () => {
     const res = await request(app)
       .post(`/api/moderation/message-reports/${REPORT}`)
       .set(AUTH)
-      .send({ action: "reviewed" });
+      .send({ action: "reviewed", reason: "Reviewed in test" });
 
     assert.equal(res.status, 200);
     assert.equal(res.body.report.status, "reviewed");
@@ -142,7 +148,7 @@ describe("resolve a reported message (§7)", () => {
     const res = await request(app)
       .post(`/api/moderation/message-reports/${REPORT}`)
       .set(AUTH)
-      .send({ action: "dismissed" });
+      .send({ action: "dismissed", reason: "Dismissed in test" });
 
     assert.equal(res.status, 403);
     assert.equal(reports.resolveMessageReport.calls.length, 0);
@@ -156,7 +162,7 @@ describe("resolve a reported message (§7)", () => {
     const res = await request(app)
       .post(`/api/moderation/message-reports/${REPORT}`)
       .set(AUTH)
-      .send({ action: "dismissed" });
+      .send({ action: "dismissed", reason: "Dismissed in test" });
 
     assert.equal(res.status, 200);
     assert.deepEqual(reports.resolveMessageReport.calls[0], [REPORT, "dismissed"]);

@@ -13,6 +13,7 @@ const postRouter = require("./routes/postRouter");
 const thesisRouter = require("./routes/thesisRouter");
 const moderationRouter = require("./routes/moderationRouter");
 const publicRouter = require("./routes/publicRouter");
+const adminRouter = require("./routes/adminRouter");
 const adminCatalogRouter = require("./routes/adminCatalogRouter");
 const conversationRouter = require("./routes/conversationRouter");
 const messageRouter = require("./routes/messageRouter");
@@ -107,27 +108,84 @@ app.use("/api/public", publicRouter);
 
 // Every API route requires a valid Supabase access token. Identity is taken
 // from the verified token, never from the request body.
-app.use("/api/users", auth.requireAuth, userRouter);
-app.use("/api/posts", auth.requireAuth, postRouter);
-app.use("/api/theses", auth.requireAuth, thesisRouter);
-app.use("/api/moderation", auth.requireAuth, moderationRouter);
+app.use(
+  "/api/users",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  userRouter
+);
+app.use(
+  "/api/posts",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  postRouter
+);
+app.use(
+  "/api/theses",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  thesisRouter
+);
+app.use(
+  "/api/moderation",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  moderationRouter
+);
 
 // Messaging & social graph (Messaging_plan.md §11). `loadProfile` runs where the
 // controller needs the caller's display name / department (notification text).
-app.use("/api/conversations", auth.requireAuth, auth.loadProfile, conversationRouter);
-app.use("/api/messages", auth.requireAuth, auth.loadProfile, messageRouter);
-app.use("/api/friends", auth.requireAuth, auth.loadProfile, friendRouter);
+app.use(
+  "/api/conversations",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  conversationRouter
+);
+app.use(
+  "/api/messages",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  messageRouter
+);
+app.use(
+  "/api/friends",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  friendRouter
+);
 // Same mount path as `userRouter`; `/me/...` and `/:id/block` are two-segment
 // paths that the profile router never matches, so Express falls through here.
 // requireAuth is idempotent and is not re-run for an already-verified request.
-app.use("/api/users", auth.requireAuth, socialRouter);
+app.use(
+  "/api/users",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  socialRouter
+);
 
-// Admin-managed catalog (departments & courses). loadProfile runs before
-// requireRole so the role check has the caller's profile.
+// Superadmin console API. Keep this mount before the catalog router so its
+// specific paths win; unmatched paths fall through.
 app.use(
   "/api/admin",
   auth.requireAuth,
   auth.loadProfile,
+  auth.requireActiveAccount,
+  auth.requireRole("admin", "superadmin"),
+  adminRouter
+);
+app.use(
+  "/api/admin",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
   auth.requireRole("admin", "superadmin"),
   adminCatalogRouter
 );

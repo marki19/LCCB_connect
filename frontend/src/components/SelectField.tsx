@@ -9,6 +9,7 @@ import {
   Pressable,
 } from "react-native";
 import { ChevronDown, Check, X } from "lucide-react-native";
+import { useTheme } from "../contexts/ThemeContext";
 
 /**
  * A dependency-free modal select. Used for the Department → Course pickers in
@@ -39,6 +40,7 @@ export default function SelectField({
   error = false,
   emptyText = "No options available",
 }: Props) {
+  const { colors, isDark } = useTheme();
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
 
@@ -48,22 +50,33 @@ export default function SelectField({
         activeOpacity={0.8}
         disabled={disabled || loading}
         onPress={() => setOpen(true)}
-        className={`bg-white rounded-2xl px-5 py-4 border flex-row items-center justify-between ${
-          error ? "border-red-400" : "border-slate-200"
-        } ${disabled ? "opacity-60" : ""}`}
+        style={{
+          backgroundColor: colors.surface,
+          borderRadius: 16,
+          paddingHorizontal: 16,
+          paddingVertical: 14,
+          borderWidth: 1,
+          borderColor: error ? colors.destructive : colors.border,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          opacity: disabled ? 0.6 : 1,
+        }}
       >
         <Text
-          className={`text-base font-medium ${
-            selected ? "text-slate-900" : "text-slate-400"
-          }`}
+          style={{
+            fontSize: 16,
+            fontWeight: "500",
+            color: selected ? colors.textPrimary : colors.textTertiary,
+          }}
           numberOfLines={1}
         >
           {loading ? "Loading…" : selected ? selected.label : placeholder}
         </Text>
         {loading ? (
-          <ActivityIndicator size="small" color="#94A3B8" />
+          <ActivityIndicator size="small" color={colors.textTertiary} />
         ) : (
-          <ChevronDown color="#94A3B8" size={18} />
+          <ChevronDown color={colors.textTertiary} size={18} />
         )}
       </TouchableOpacity>
 
@@ -74,19 +87,25 @@ export default function SelectField({
         onRequestClose={() => setOpen(false)}
       >
         <Pressable
-          className="flex-1 bg-black/40 items-center justify-center p-6"
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(15,23,42,0.45)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
           onPress={() => setOpen(false)}
         >
-          <View className="bg-white rounded-3xl w-full max-w-md max-h-[70%] overflow-hidden">
-            <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100">
-              <Text className="text-base font-bold text-slate-800">{placeholder}</Text>
-              <TouchableOpacity onPress={() => setOpen(false)} className="p-1">
-                <X color="#64748B" size={20} />
+          <View style={{ backgroundColor: colors.surface, borderRadius: 24, width: "100%", maxWidth: 440, maxHeight: "70%", overflow: "hidden", borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }}>{placeholder}</Text>
+              <TouchableOpacity onPress={() => setOpen(false)} style={{ padding: 4 }}>
+                <X color={colors.textTertiary} size={20} />
               </TouchableOpacity>
             </View>
             <ScrollView>
               {options.length === 0 ? (
-                <Text className="text-slate-400 text-sm px-5 py-6">{emptyText}</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 14, paddingHorizontal: 20, paddingVertical: 24 }}>{emptyText}</Text>
               ) : (
                 options.map((o) => (
                   <TouchableOpacity
@@ -95,16 +114,27 @@ export default function SelectField({
                       onChange(o.value);
                       setOpen(false);
                     }}
-                    className="flex-row items-center justify-between px-5 py-4 border-b border-slate-50"
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingHorizontal: 20,
+                      paddingVertical: 16,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                      backgroundColor: o.value === value ? colors.actionSurface : "transparent",
+                    }}
                   >
                     <Text
-                      className={`text-base ${
-                        o.value === value ? "text-[#1D4ED8] font-bold" : "text-slate-700"
-                      }`}
+                      style={{
+                        fontSize: 16,
+                        color: o.value === value ? colors.action : colors.textPrimary,
+                        fontWeight: o.value === value ? "700" : "500",
+                      }}
                     >
                       {o.label}
                     </Text>
-                    {o.value === value ? <Check color="#1D4ED8" size={18} /> : null}
+                    {o.value === value ? <Check color={colors.action} size={18} /> : null}
                   </TouchableOpacity>
                 ))
               )}

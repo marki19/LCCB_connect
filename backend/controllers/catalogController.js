@@ -1,4 +1,6 @@
 const departmentModel = require("../models/departmentModel");
+const auditService = require("../services/auditService");
+const { ACTIONS } = auditService;
 
 /**
  * Catalog controller — departments & courses (Messaging_plan.md §3).
@@ -74,6 +76,13 @@ const createDepartment = async (req, res, next) => {
       sort_order: req.body.sort_order ?? 0,
       actorId: req.user.id,
     });
+    await auditService.recordRequest(req, {
+      action: ACTIONS.CATALOG_CREATE,
+      targetType: "department",
+      targetId: created.id,
+      targetLabel: created.name,
+      metadata: { code: created.code },
+    });
     res.status(201).json(created);
   } catch (error) {
     handleCatalogError(error, res, next);
@@ -91,6 +100,13 @@ const updateDepartment = async (req, res, next) => {
       actorId: req.user.id,
     });
     if (!updated) return res.status(404).json({ error: "Department not found" });
+    await auditService.recordRequest(req, {
+      action: ACTIONS.CATALOG_UPDATE,
+      targetType: "department",
+      targetId: id,
+      targetLabel: updated.name,
+      metadata: { code: updated.code },
+    });
     res.json(updated);
   } catch (error) {
     handleCatalogError(error, res, next);
@@ -103,6 +119,12 @@ const setDepartmentActive = async (req, res, next, isActive) => {
     if (!isUuid(id)) return sendBadId(res);
     const updated = await departmentModel.setDepartmentActive(id, isActive, req.user.id);
     if (!updated) return res.status(404).json({ error: "Department not found" });
+    await auditService.recordRequest(req, {
+      action: isActive ? ACTIONS.CATALOG_ACTIVATE : ACTIONS.CATALOG_DEACTIVATE,
+      targetType: "department",
+      targetId: id,
+      targetLabel: updated.name,
+    });
     res.json(updated);
   } catch (error) {
     next(error);
@@ -133,6 +155,13 @@ const createCourse = async (req, res, next) => {
       sort_order: req.body.sort_order ?? 0,
       actorId: req.user.id,
     });
+    await auditService.recordRequest(req, {
+      action: ACTIONS.CATALOG_CREATE,
+      targetType: "course",
+      targetId: created.id,
+      targetLabel: created.name,
+      metadata: { code: created.code, department_id: created.department_id },
+    });
     res.status(201).json(created);
   } catch (error) {
     handleCatalogError(error, res, next);
@@ -151,6 +180,13 @@ const updateCourse = async (req, res, next) => {
       actorId: req.user.id,
     });
     if (!updated) return res.status(404).json({ error: "Course not found" });
+    await auditService.recordRequest(req, {
+      action: ACTIONS.CATALOG_UPDATE,
+      targetType: "course",
+      targetId: id,
+      targetLabel: updated.name,
+      metadata: { code: updated.code, department_id: updated.department_id },
+    });
     res.json(updated);
   } catch (error) {
     handleCatalogError(error, res, next);
@@ -163,6 +199,12 @@ const setCourseActive = async (req, res, next, isActive) => {
     if (!isUuid(id)) return sendBadId(res);
     const updated = await departmentModel.setCourseActive(id, isActive, req.user.id);
     if (!updated) return res.status(404).json({ error: "Course not found" });
+    await auditService.recordRequest(req, {
+      action: isActive ? ACTIONS.CATALOG_ACTIVATE : ACTIONS.CATALOG_DEACTIVATE,
+      targetType: "course",
+      targetId: id,
+      targetLabel: updated.name,
+    });
     res.json(updated);
   } catch (error) {
     next(error);

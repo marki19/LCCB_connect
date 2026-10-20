@@ -6,6 +6,7 @@
 process.env.NODE_ENV = "test";
 process.env.SUPABASE_URL = "https://test-project.supabase.co";
 process.env.SUPABASE_ANON_KEY = "test-anon-key";
+process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key";
 process.env.DATABASE_URL = "postgresql://test:test@127.0.0.1:5432/test";
 
 // Effectively disable rate limiting so the suite can exercise the routes.

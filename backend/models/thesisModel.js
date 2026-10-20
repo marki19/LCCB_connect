@@ -33,6 +33,8 @@ const getAllTheses = async ({ limit = DEFAULT_LIMIT, cursor = null } = {}) => {
       t.category,
       t.pdf_url,
       t.created_at,
+      t.moderation_status,
+      t.moderation_reason,
       json_build_object(
         'id', pr.id,
         'username', pr.username,
@@ -65,6 +67,8 @@ const getThesisById = async (id) => {
       t.category,
       t.pdf_url,
       t.created_at,
+      t.moderation_status,
+      t.moderation_reason,
       json_build_object(
         'id', pr.id,
         'username', pr.username,
@@ -142,10 +146,64 @@ const deleteThesis = async (id, uploaderId) => {
   return result.rows[0];
 };
 
+// ---- MODERATION ------------------------------------------------------------
+
+const getFlaggedTheses = async ({ departmentId = null } = {}) => {
+  const params = [];
+  let deptCondition = "";
+  if (departmentId) {
+    params.push(departmentId);
+    deptCondition = `AND pr.department_id = $${params.length}::uuid`;
+  }
+
+  const sql = `
+    SELECT
+      t.id, t.uploader_id, t.title, t.abstract, t.department_id, t.department,
+      t.category, t.pdf_url, t.created_at, t.moderation_status, t.moderation_reason,
+      json_build_object(
+        'id', pr.id,
+        'username', pr.username,
+        'full_name', pr.full_name,
+        'avatar_url', pr.avatar_url,
+        'department_id', pr.department_id,
+        'department_name', d.name
+      ) AS uploader
+    FROM public.theses t
+    LEFT JOIN public.profiles pr ON pr.id = t.uploader_id
+    LEFT JOIN public.departments d ON d.id = pr.department_id
+    WHERE t.moderation_status = 'flagged' ${deptCondition}
+    ORDER BY t.created_at ASC;
+  `;
+  const result = await db.query(sql, params);
+  return result.rows;
+};
+
+const updateThesisModeration = async (id, status, reason) => {
+  const result = await db.query(
+    `UPDATE public.theses
+        SET moderation_status = $2, moderation_reason = $3
+      WHERE id = $1
+      RETURNING *;`,
+    [id, status, reason]
+  );
+  return result.rows[0];
+};
+
+const adminDeleteThesis = async (id) => {
+  const result = await db.query(
+    "DELETE FROM public.theses WHERE id = $1 RETURNING *;",
+    [id]
+  );
+  return result.rows[0];
+};
+
 module.exports = {
   getAllTheses,
   getThesisById,
   createThesis,
   updateThesis,
   deleteThesis,
+  getFlaggedTheses,
+  updateThesisModeration,
+  adminDeleteThesis,
 };

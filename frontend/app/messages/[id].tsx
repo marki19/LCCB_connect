@@ -29,6 +29,7 @@ import {
 import Avatar, { PRESENCE_LABELS } from "../../src/components/Avatar";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { usePresence } from "../../src/contexts/PresenceContext";
+import { useTheme } from "../../src/contexts/ThemeContext";
 import { useConversationRealtime, type PendingMessage } from "../../src/hooks/useConversationRealtime";
 import {
   acceptConversation,
@@ -42,6 +43,7 @@ import {
 import { ApiError } from "../../src/lib/api";
 import { setActiveConversation } from "../../src/lib/push";
 import { messageStatus, type Conversation, type Message } from "../../src/types";
+import { safeBack } from "../../src/lib/navigation";
 
 /**
  * 1:1 thread (Messaging_plan.md §6, §7, §9, §12): bubbles + sent/delivered/seen
@@ -68,6 +70,7 @@ export default function ThreadScreen() {
   const { session } = useAuth();
   const userId = session?.user?.id ?? null;
   const { modeOf } = usePresence();
+  const { colors, isDark } = useTheme();
 
   const { messages, pending, loading, peerTyping, send, notifyTyping, loadOlder } =
     useConversationRealtime(conversationId);
@@ -280,21 +283,21 @@ export default function ThreadScreen() {
         <View
           style={{
             maxWidth: "78%",
-            backgroundColor: mine ? "#1A56DB" : "#FFFFFF",
+            backgroundColor: mine ? colors.bubbleMine : colors.bubblePeer,
             borderRadius: 16,
             borderBottomRightRadius: mine ? 4 : 16,
             borderBottomLeftRadius: mine ? 16 : 4,
             paddingHorizontal: 12,
             paddingVertical: 8,
             borderWidth: mine ? 0 : 1,
-            borderColor: "#E2E8F0",
+            borderColor: mine ? "transparent" : colors.border,
           }}
         >
-          <Text style={{ fontSize: 15, lineHeight: 20, color: mine ? "#FFFFFF" : "#0F172A" }}>
+          <Text style={{ fontSize: 15, lineHeight: 20, color: mine ? colors.bubbleMineText : colors.bubblePeerText }}>
             {message.body}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 3, gap: 4 }}>
-            <Text style={{ fontSize: 10, color: mine ? "#DBEAFE" : "#94A3B8" }}>
+            <Text style={{ fontSize: 10, color: mine ? colors.textOnActionMuted : colors.textTertiary }}>
               {formatClock(message.created_at)}
             </Text>
             {mine && <Ticks message={message} />}
@@ -309,7 +312,7 @@ export default function ThreadScreen() {
       <View
         style={{
           maxWidth: "78%",
-          backgroundColor: "#93B4F5",
+          backgroundColor: isDark ? "hsl(215, 60%, 40%)" : "#93B4F5",
           borderRadius: 16,
           borderBottomRightRadius: 4,
           paddingHorizontal: 12,
@@ -326,7 +329,7 @@ export default function ThreadScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F7FF" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
       {/* Header */}
       <View
         style={{
@@ -334,25 +337,25 @@ export default function ThreadScreen() {
           alignItems: "center",
           paddingHorizontal: 12,
           paddingVertical: 10,
-          backgroundColor: "#FFFFFF",
+          backgroundColor: colors.surface,
           borderBottomWidth: 1,
-          borderBottomColor: "#F1F5F9",
+          borderBottomColor: colors.border,
         }}
       >
-        <TouchableOpacity onPress={() => router.back()} style={{ padding: 6, marginRight: 4 }}>
-          <ArrowLeft size={22} color="#0F172A" />
+        <TouchableOpacity onPress={() => safeBack("/messages")} style={{ padding: 6, marginRight: 4 }}>
+          <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Avatar name={peerName} size={40} showPresence mode={peerMode} />
         <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>
+          <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }}>
             {peerName}
           </Text>
-          <Text numberOfLines={1} style={{ fontSize: 12, color: peerTyping ? "#1A56DB" : "#64748B", fontWeight: peerTyping ? "600" : "400" }}>
+          <Text numberOfLines={1} style={{ fontSize: 12, color: peerTyping ? colors.action : colors.textTertiary, fontWeight: peerTyping ? "600" : "400" }}>
             {subtitle}
           </Text>
         </View>
         <TouchableOpacity onPress={() => setSafetyOpen(true)} style={{ padding: 8 }}>
-          <MoreVertical size={20} color="#475569" />
+          <MoreVertical size={20} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -362,15 +365,15 @@ export default function ThreadScreen() {
           style={{
             flexDirection: "row",
             alignItems: "center",
-            backgroundColor: "#FEF2F2",
+            backgroundColor: isDark ? "hsl(0, 30%, 15%)" : "#FEF2F2",
             borderBottomWidth: 1,
-            borderBottomColor: "#FECACA",
+            borderBottomColor: isDark ? "hsl(0, 40%, 25%)" : "#FECACA",
             paddingHorizontal: 14,
             paddingVertical: 10,
           }}
         >
           <Ban size={18} color="#DC2626" />
-          <Text style={{ flex: 1, fontSize: 12.5, color: "#991B1B", marginLeft: 8, lineHeight: 17 }}>
+          <Text style={{ flex: 1, fontSize: 12.5, color: isDark ? "hsl(0, 75%, 85%)" : "#991B1B", marginLeft: 8, lineHeight: 17 }}>
             You blocked {peerName}. Unblock to continue messaging.
           </Text>
           <TouchableOpacity
@@ -389,15 +392,15 @@ export default function ThreadScreen() {
           style={{
             flexDirection: "row",
             alignItems: "center",
-            backgroundColor: "#FFFBEB",
+            backgroundColor: isDark ? "hsl(38, 30%, 15%)" : "#FFFBEB",
             borderBottomWidth: 1,
-            borderBottomColor: "#FDE68A",
+            borderBottomColor: isDark ? "hsl(38, 40%, 25%)" : "#FDE68A",
             paddingHorizontal: 14,
             paddingVertical: 10,
           }}
         >
           <ShieldAlert size={18} color="#D97706" />
-          <Text style={{ flex: 1, fontSize: 12.5, color: "#92400E", marginLeft: 8, lineHeight: 17 }}>
+          <Text style={{ flex: 1, fontSize: 12.5, color: isDark ? "hsl(38, 75%, 85%)" : "#92400E", marginLeft: 8, lineHeight: 17 }}>
             {isRequester
               ? "Request sent. You can keep messaging — they'll see it under Requests."
               : "This is a message request. Accept to reply."}
@@ -421,7 +424,7 @@ export default function ThreadScreen() {
       >
         {loading ? (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <ActivityIndicator size="small" color="#1A56DB" />
+            <ActivityIndicator size="small" color={colors.action} />
           </View>
         ) : (
           <FlatList
@@ -435,14 +438,14 @@ export default function ThreadScreen() {
             ListHeaderComponent={
               messages.length >= 50 ? (
                 <TouchableOpacity onPress={() => void loadOlder()} style={{ alignItems: "center", paddingVertical: 8 }}>
-                  <Text style={{ fontSize: 12, color: "#1A56DB", fontWeight: "600" }}>Load earlier messages</Text>
+                  <Text style={{ fontSize: 12, color: colors.action, fontWeight: "600" }}>Load earlier messages</Text>
                 </TouchableOpacity>
               ) : null
             }
             ListFooterComponent={<>{pending.map((p) => <View key={p.clientMsgId}>{renderPending(p)}</View>)}</>}
             ListEmptyComponent={
               <View style={{ alignItems: "center", paddingTop: 64, paddingHorizontal: 32 }}>
-                <Text style={{ fontSize: 14, color: "#94A3B8", textAlign: "center" }}>
+                <Text style={{ fontSize: 14, color: colors.textTertiary, textAlign: "center" }}>
                   No messages yet. Say hello to {peerName}.
                 </Text>
               </View>
@@ -457,9 +460,9 @@ export default function ThreadScreen() {
             alignItems: "center",
             paddingHorizontal: 12,
             paddingVertical: 10,
-            backgroundColor: "#FFFFFF",
+            backgroundColor: colors.surface,
             borderTopWidth: 1,
-            borderTopColor: "#F1F5F9",
+            borderTopColor: colors.border,
           }}
         >
           <TextInput
@@ -467,17 +470,17 @@ export default function ThreadScreen() {
             onChangeText={handleDraftChange}
             editable={canReply}
             placeholder={canReply ? "Message…" : blocked ? "You blocked this user" : "Accept the request to reply"}
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.textTertiary}
             multiline
             style={{
               flex: 1,
               maxHeight: 120,
-              backgroundColor: "#F1F5F9",
+              backgroundColor: colors.surfaceSunken,
               borderRadius: 20,
               paddingHorizontal: 14,
               paddingVertical: 10,
               fontSize: 15,
-              color: "#0F172A",
+              color: colors.textPrimary,
               opacity: canReply ? 1 : 0.6,
             }}
           />
@@ -488,13 +491,13 @@ export default function ThreadScreen() {
               width: 42,
               height: 42,
               borderRadius: 21,
-              backgroundColor: draft.trim() && canReply ? "#1A56DB" : "#CBD5E1",
+              backgroundColor: draft.trim() && canReply ? colors.action : colors.surfaceSunken,
               alignItems: "center",
               justifyContent: "center",
               marginLeft: 8,
             }}
           >
-            <Send size={18} color="#FFFFFF" />
+            <Send size={18} color={draft.trim() && canReply ? "#FFFFFF" : colors.textTertiary} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -504,10 +507,10 @@ export default function ThreadScreen() {
         <TouchableOpacity
           activeOpacity={1}
           onPress={() => setSafetyOpen(false)}
-          style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.35)", justifyContent: "flex-end" }}
+          style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end" }}
         >
-          <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 8 }}>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.6, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 6, textTransform: "uppercase" }}>
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textTertiary, letterSpacing: 0.6, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 6, textTransform: "uppercase" }}>
               Safety
             </Text>
             <TouchableOpacity
@@ -516,7 +519,7 @@ export default function ThreadScreen() {
               style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 14, opacity: latestReportable ? 1 : 0.5 }}
             >
               <Flag size={18} color="#D97706" />
-              <Text style={{ marginLeft: 12, fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Report message</Text>
+              <Text style={{ marginLeft: 12, fontSize: 15, fontWeight: "600", color: colors.textPrimary }}>Report message</Text>
             </TouchableOpacity>
             {blocked ? (
               <TouchableOpacity
@@ -525,7 +528,7 @@ export default function ThreadScreen() {
                 style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 14 }}
               >
                 <ShieldCheck size={18} color="#16A34A" />
-                <Text style={{ marginLeft: 12, fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Unblock {peerName}</Text>
+                <Text style={{ marginLeft: 12, fontSize: 15, fontWeight: "600", color: colors.textPrimary }}>Unblock {peerName}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -539,9 +542,9 @@ export default function ThreadScreen() {
             )}
             <TouchableOpacity
               onPress={() => setSafetyOpen(false)}
-              style={{ alignItems: "center", paddingVertical: 14, borderTopWidth: 1, borderTopColor: "#F1F5F9", marginTop: 4 }}
+              style={{ alignItems: "center", paddingVertical: 14, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 4 }}
             >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#64748B" }}>Cancel</Text>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textSecondary }}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -549,21 +552,21 @@ export default function ThreadScreen() {
 
       {/* Report reason */}
       <Modal visible={reportOpen} transparent animationType="fade" onRequestClose={() => setReportOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.35)", justifyContent: "center", padding: 20 }}>
-          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 18, padding: 20 }}>
+        <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "center", padding: 20 }}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 20 }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Report message</Text>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary }}>Report message</Text>
               <TouchableOpacity onPress={() => setReportOpen(false)} style={{ padding: 4 }}>
-                <X size={20} color="#64748B" />
+                <X size={20} color={colors.textTertiary} />
               </TouchableOpacity>
             </View>
-            <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>
+            <Text style={{ fontSize: 13, color: colors.textTertiary, marginBottom: 12 }}>
               Tell a moderator why. The other person isn&apos;t told who reported them.
             </Text>
 
             {reportTarget && (
-              <View style={{ backgroundColor: "#F8FAFC", borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
-                <Text numberOfLines={3} style={{ fontSize: 13, color: "#475569", fontStyle: "italic" }}>
+              <View style={{ backgroundColor: colors.surfaceSunken, borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: colors.border }}>
+                <Text numberOfLines={3} style={{ fontSize: 13, color: colors.textSecondary, fontStyle: "italic" }}>
                   {reportTarget.body}
                 </Text>
               </View>
@@ -576,9 +579,9 @@ export default function ThreadScreen() {
                   <TouchableOpacity
                     key={reason}
                     onPress={() => setReportReason(active ? "" : reason)}
-                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: active ? "#1A56DB" : "#F1F5F9" }}
+                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: active ? colors.action : colors.surfaceSunken }}
                   >
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: active ? "#FFFFFF" : "#475569" }}>{reason}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: active ? "#FFFFFF" : colors.textSecondary }}>{reason}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -588,16 +591,16 @@ export default function ThreadScreen() {
               value={reportReason}
               onChangeText={setReportReason}
               placeholder="Add details (optional)"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={colors.textTertiary}
               multiline
-              style={{ backgroundColor: "#F1F5F9", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: "#0F172A", minHeight: 64, textAlignVertical: "top" }}
+              style={{ backgroundColor: colors.surfaceSunken, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.textPrimary, minHeight: 64, textAlignVertical: "top" }}
             />
 
             <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
-              <TouchableOpacity onPress={() => setReportOpen(false)} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#64748B" }}>Cancel</Text>
+              <TouchableOpacity onPress={() => setReportOpen(false)} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textSecondary }}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => void submitReport()} disabled={actionBusy} style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: "#1A56DB", opacity: actionBusy ? 0.6 : 1 }}>
+              <TouchableOpacity onPress={() => void submitReport()} disabled={actionBusy} style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.action, opacity: actionBusy ? 0.6 : 1 }}>
                 <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF" }}>Submit report</Text>
               </TouchableOpacity>
             </View>

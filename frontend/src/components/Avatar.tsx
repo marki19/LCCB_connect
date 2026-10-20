@@ -40,7 +40,10 @@ type Props = {
   showPresence?: boolean;
 };
 
+import { useTheme } from "../contexts/ThemeContext";
+
 export default function Avatar({ name, size = 48, mode = null, showPresence = false }: Props) {
+  const { colors } = useTheme();
   const dot = Math.round(size * 0.3);
   const ring = Math.max(2, Math.round(size * 0.06));
   return (
@@ -50,12 +53,12 @@ export default function Avatar({ name, size = 48, mode = null, showPresence = fa
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: "#DBEAFE",
+          backgroundColor: colors.actionSurfaceAlt,
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Text style={{ fontSize: Math.round(size * 0.36), fontWeight: "700", color: "#1E293B" }}>
+        <Text style={{ fontSize: Math.round(size * 0.36), fontWeight: "700", color: colors.textPrimary }}>
           {initialsOf(name)}
         </Text>
       </View>
@@ -70,7 +73,7 @@ export default function Avatar({ name, size = 48, mode = null, showPresence = fa
             borderRadius: dot / 2,
             backgroundColor: PRESENCE_COLORS[mode] ?? "#CBD5E1",
             borderWidth: ring,
-            borderColor: "#FFFFFF",
+            borderColor: colors.surface,
           }}
         />
       ) : null}

@@ -1,21 +1,27 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Linking, TextInput, Image, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Linking, TextInput, Image, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming } from "react-native-reanimated";
 import { ArrowLeft, Heart, MessageCircle, Share2, ExternalLink, Send, Tag, Calendar, Pencil, Trash2, MoreVertical } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useTheme } from "../../src/contexts/ThemeContext";
+import { ThemeTokens } from "../../src/lib/tokens";
 import type { Post } from "../../src/types";
 import { apiFetch, deletePost, updateComment, deleteComment } from "../../src/lib/api";
+import { safeBack } from "../../src/lib/navigation";
 
-const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  website:  { label: "Website",  bg: "#DBEAFE", text: "#1D4ED8" },
-  thesis:   { label: "Thesis",   bg: "#EDE9FE", text: "#6D28D9" },
-  capstone: { label: "Capstone", bg: "#D1FAE5", text: "#047857" },
-  project:  { label: "Project",  bg: "#FEF3C7", text: "#B45309" },
-  text:     { label: "Update",   bg: "#F1F5F9", text: "#475569" },
-  image:    { label: "Image",    bg: "#FCE7F3", text: "#BE185D" },
-};
+function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
+  const configs: Record<string, { label: string; bg: string; text: string }> = {
+    website:  { label: "Website",  bg: colors.badgeWebsiteBg,  text: colors.badgeWebsiteText },
+    thesis:   { label: "Thesis",   bg: colors.badgeThesisBg,   text: colors.badgeThesisText },
+    capstone: { label: "Capstone", bg: colors.badgeCapstoneBg, text: colors.badgeCapstoneText },
+    project:  { label: "Project",  bg: colors.badgeProjectBg,  text: colors.badgeProjectText },
+    text:     { label: "Update",   bg: colors.badgeUpdateBg,   text: colors.badgeUpdateText },
+    image:    { label: "Image",    bg: colors.badgeImageBg,    text: colors.badgeImageText },
+  };
+  return configs[type] || configs["text"];
+}
 
 type Comment = { id: string; author: string; initials: string; avatarColor: string; text: string; time: string };
 
@@ -23,6 +29,7 @@ export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { profile } = useAuth();
+  const { colors, isDark } = useTheme();
   const isGuest = profile?.role === "guest";
 
   const [post, setPost] = useState<any>(null);
@@ -101,27 +108,6 @@ export default function PostDetailScreen() {
 
     if (id) fetchDetails();
   }, [id]);
-
-  if (loading) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F7FF", alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ color: "#64748B" }}>Loading post...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  if (!post) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F7FF", alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ color: "#64748B" }}>Post not found.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
-          <Text style={{ color: "#1A56DB", fontWeight: "600" }}>Go back</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    );
-  }
-
-  const typeConfig = TYPE_CONFIG[post.type] || TYPE_CONFIG['text'];
 
   const handleLike = async () => {
     if (!profile?.id || isGuest) {
@@ -249,7 +235,7 @@ export default function PostDetailScreen() {
           onPress: async () => {
             try {
               await deletePost(post.id);
-              router.back();
+              safeBack("/(tabs)");
             } catch (e: any) {
               Alert.alert("Error", e.message || "Failed to delete post");
             }
@@ -259,40 +245,58 @@ export default function PostDetailScreen() {
     );
   };
 
+  if (!post && loading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage, alignItems: "center", justifyContent: "center" }} edges={["top"]}>
+        <ActivityIndicator size="small" color={colors.action} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!post) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage, alignItems: "center", justifyContent: "center" }} edges={["top"]}>
+        <Text style={{ color: colors.textTertiary, fontSize: 16 }}>Post not found.</Text>
+      </SafeAreaView>
+    );
+  }
+
+  const typeConfig = getTypeConfig(post.type, colors);
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F7FF" }} edges={["top"]}>
-      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#DBEAFE" }}>
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-          <ArrowLeft size={20} color="#1A56DB" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }} edges={["top"]}>
+      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <TouchableOpacity onPress={() => safeBack("/(tabs)")} activeOpacity={0.7} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: colors.actionSurface, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+          <ArrowLeft size={20} color={colors.action} />
         </TouchableOpacity>
-        <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B", flex: 1 }} numberOfLines={1}>{post.title}</Text>
+        <Text style={{ fontSize: 17, fontWeight: "700", color: colors.textPrimary, flex: 1 }} numberOfLines={1}>{post.title}</Text>
         {isOwner && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <TouchableOpacity onPress={handleEdit} activeOpacity={0.7}
-              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center" }}>
-              <Pencil size={17} color="#1A56DB" />
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.actionSurface, alignItems: "center", justifyContent: "center" }}>
+              <Pencil size={17} color={colors.action} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleDelete} activeOpacity={0.7}
-              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FEF2F2", alignItems: "center", justifyContent: "center" }}>
-              <Trash2 size={17} color="#EF4444" />
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: isDark ? "hsl(360, 40%, 20%)" : "#FEF2F2", alignItems: "center", justifyContent: "center" }}>
+              <Trash2 size={17} color={colors.destructive} />
             </TouchableOpacity>
           </View>
         )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        <View style={{ backgroundColor: "#FFFFFF", margin: 16, borderRadius: 20, borderWidth: 1, borderColor: "#DBEAFE", overflow: "hidden", shadowColor: "#1A56DB", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8, elevation: 3 }}>
+        <View style={{ backgroundColor: colors.surface, margin: 16, borderRadius: 20, borderWidth: 1, borderColor: colors.border, overflow: "hidden", shadowColor: colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.35 : 0.07, shadowRadius: 8, elevation: 3 }}>
           <View style={{ flexDirection: "row", alignItems: "center", padding: 16 }}>
-            <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: post.author.avatarColor, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-              <Text style={{ fontSize: 17, fontWeight: "800", color: "#1E293B" }}>{post.author.initials}</Text>
+            <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: colors.actionSurfaceAlt, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+              <Text style={{ fontSize: 17, fontWeight: "800", color: colors.textPrimary }}>{post.author.initials}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B" }}>{post.author.name}</Text>
-              <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>{post.author.course} - {post.author.yearLevel}</Text>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }}>{post.author.name}</Text>
+              <Text style={{ fontSize: 13, color: colors.textTertiary, marginTop: 2 }}>{post.author.course} - {post.author.yearLevel}</Text>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Calendar size={13} color="#94A3B8" />
-              <Text style={{ fontSize: 12, color: "#94A3B8", marginLeft: 4 }}>{post.createdAt}</Text>
+              <Calendar size={13} color={colors.textTertiary} />
+              <Text style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 4 }}>{post.createdAt}</Text>
             </View>
           </View>
 
@@ -302,24 +306,24 @@ export default function PostDetailScreen() {
             </View>
           </View>
 
-          <Text style={{ fontSize: 20, fontWeight: "800", color: "#1E293B", paddingHorizontal: 16, marginBottom: 10, lineHeight: 28 }}>{post.title}</Text>
-          <Text style={{ fontSize: 14, color: "#475569", paddingHorizontal: 16, marginBottom: 16, lineHeight: 22 }}>{post.description}</Text>
+          <Text style={{ fontSize: 20, fontWeight: "800", color: colors.textPrimary, paddingHorizontal: 16, marginBottom: 10, lineHeight: 28 }}>{post.title}</Text>
+          <Text style={{ fontSize: 14, color: colors.textSecondary, paddingHorizontal: 16, marginBottom: 16, lineHeight: 22 }}>{post.description}</Text>
 
           {post.imageUrl ? (
             <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
               <Image 
                 source={{ uri: post.imageUrl }} 
-                style={{ width: "100%", height: 250, borderRadius: 14, backgroundColor: "#F1F5F9" }}
+                style={{ width: "100%", height: 250, borderRadius: 14, backgroundColor: colors.surfaceSunken }}
                 resizeMode="cover"
               />
             </View>
           ) : null}
 
           <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, marginBottom: 16, gap: 6, alignItems: "center" }}>
-            <Tag size={14} color="#94A3B8" />
+            <Tag size={14} color={colors.textTertiary} />
             {(post.tags || []).map((tag: string) => (
-              <View key={tag} style={{ backgroundColor: "#F1F5F9", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0" }}>
-                <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "500" }}>#{tag}</Text>
+              <View key={tag} style={{ backgroundColor: colors.surfaceSunken, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: "500" }}>#{tag}</Text>
               </View>
             ))}
           </View>
@@ -335,101 +339,101 @@ export default function PostDetailScreen() {
               style={{
                 marginHorizontal: 16,
                 marginBottom: 16,
-                backgroundColor: "#F8FAFC",
+                backgroundColor: colors.surfaceSunken,
                 borderRadius: 14,
                 borderWidth: 1,
-                borderColor: "#E2E8F0",
+                borderColor: colors.border,
                 overflow: "hidden",
               }}
             >
               {post.preview_metadata.image ? (
                 <Image
                   source={{ uri: post.preview_metadata.image }}
-                  style={{ width: "100%", height: 180, backgroundColor: "#E2E8F0" }}
+                  style={{ width: "100%", height: 180, backgroundColor: colors.surfaceSunken }}
                   resizeMode="cover"
                 />
               ) : null}
               <View style={{ padding: 14 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
-                  <ExternalLink size={14} color="#0284C7" />
-                  <Text numberOfLines={1} style={{ fontSize: 13, color: "#0284C7", fontWeight: "700", marginLeft: 6, flex: 1 }}>
+                  <ExternalLink size={14} color={colors.action} />
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: colors.action, fontWeight: "700", marginLeft: 6, flex: 1 }}>
                     {post.preview_metadata.siteName || post.preview_metadata.url}
                   </Text>
                 </View>
                 {post.preview_metadata.title ? (
-                  <Text numberOfLines={2} style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>
+                  <Text numberOfLines={2} style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary, marginBottom: 4 }}>
                     {post.preview_metadata.title}
                   </Text>
                 ) : null}
                 {post.preview_metadata.description ? (
-                  <Text numberOfLines={3} style={{ fontSize: 13, color: "#64748B", lineHeight: 18, marginBottom: 8 }}>
+                  <Text numberOfLines={3} style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: 8 }}>
                     {post.preview_metadata.description}
                   </Text>
                 ) : null}
-                <View style={{ alignSelf: "flex-start", backgroundColor: "#0284C7", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                <View style={{ alignSelf: "flex-start", backgroundColor: colors.action, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
                   <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "700" }}>Visit Website</Text>
                 </View>
               </View>
             </TouchableOpacity>
           ) : post.previewUrl ? (
             <TouchableOpacity onPress={() => Linking.openURL(post.previewUrl!)} activeOpacity={0.8}
-              style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: "#EFF6FF", borderRadius: 14, borderWidth: 1, borderColor: "#BFDBFE", padding: 14, flexDirection: "row", alignItems: "center" }}>
-              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-                <ExternalLink size={18} color="#1A56DB" />
+              style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: colors.actionSurface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, flexDirection: "row", alignItems: "center" }}>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.actionSurfaceAlt, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                <ExternalLink size={18} color={colors.action} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#1A56DB" }}>View Live Project</Text>
-                <Text numberOfLines={1} style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>{post.previewUrl}</Text>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: colors.action }}>View Live Project</Text>
+                <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>{post.previewUrl}</Text>
               </View>
             </TouchableOpacity>
           ) : null}
 
-          <View style={{ height: 1, backgroundColor: "#F1F5F9" }} />
+          <View style={{ height: 1, backgroundColor: colors.border }} />
 
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 6, paddingVertical: 8 }}>
             <Animated.View style={animatedStyle}>
               <TouchableOpacity onPress={handleLike} activeOpacity={0.7} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8 }}>
-                <Heart size={20} color={liked ? "#EF4444" : "#94A3B8"} fill={liked ? "#EF4444" : "transparent"} strokeWidth={2} />
-                <Text style={{ fontSize: 14, color: liked ? "#EF4444" : "#94A3B8", marginLeft: 6, fontWeight: "600" }}>{likeCount}</Text>
+                <Heart size={20} color={liked ? colors.destructive : colors.textTertiary} fill={liked ? colors.destructive : "transparent"} strokeWidth={2} />
+                <Text style={{ fontSize: 14, color: liked ? colors.destructive : colors.textTertiary, marginLeft: 6, fontWeight: "600" }}>{likeCount}</Text>
               </TouchableOpacity>
             </Animated.View>
             <TouchableOpacity activeOpacity={0.7} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8 }}>
-              <MessageCircle size={20} color="#94A3B8" strokeWidth={2} />
-              <Text style={{ fontSize: 14, color: "#94A3B8", marginLeft: 6, fontWeight: "600" }}>{comments.length + post.comments}</Text>
+              <MessageCircle size={20} color={colors.textTertiary} strokeWidth={2} />
+              <Text style={{ fontSize: 14, color: colors.textTertiary, marginLeft: 6, fontWeight: "600" }}>{comments.length + post.comments}</Text>
             </TouchableOpacity>
             <View style={{ flex: 1 }} />
             <TouchableOpacity activeOpacity={0.7} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8 }}>
-              <Share2 size={20} color="#94A3B8" strokeWidth={2} />
-              <Text style={{ fontSize: 14, color: "#94A3B8", marginLeft: 6, fontWeight: "600" }}>Share</Text>
+              <Share2 size={20} color={colors.textTertiary} strokeWidth={2} />
+              <Text style={{ fontSize: 14, color: colors.textTertiary, marginLeft: 6, fontWeight: "600" }}>Share</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={{ marginHorizontal: 16 }}>
-          <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B", marginBottom: 14 }}>Comments ({comments.length + post.comments})</Text>
+          <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary, marginBottom: 14 }}>Comments ({comments.length + post.comments})</Text>
 
           {isGuest ? (
-            <View style={{ backgroundColor: "#EFF6FF", borderRadius: 16, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: "#DBEAFE" }}>
-              <Text style={{ fontSize: 13, color: "#1E40AF", textAlign: "center", fontWeight: "600" }}>
+            <View style={{ backgroundColor: colors.actionSurface, borderRadius: 16, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ fontSize: 13, color: colors.action, textAlign: "center", fontWeight: "600" }}>
                 Browsing as guest. Sign in with your school account to comment.
               </Text>
             </View>
           ) : (
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 20 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#BFDBFE", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-                <Text style={{ fontSize: 12, fontWeight: "800", color: "#1E293B" }}>MA</Text>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.actionSurfaceAlt, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: "800", color: colors.textPrimary }}>MA</Text>
               </View>
-              <TextInput value={commentText} onChangeText={setCommentText} placeholder="Write a comment..." placeholderTextColor="#94A3B8"
-                style={{ flex: 1, backgroundColor: "#FFFFFF", borderRadius: 20, borderWidth: 1, borderColor: "#DBEAFE", paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: "#1E293B" }} />
+              <TextInput value={commentText} onChangeText={setCommentText} placeholder="Write a comment..." placeholderTextColor={colors.textTertiary}
+                style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: colors.textPrimary }} />
               <TouchableOpacity onPress={handleComment} disabled={!commentText.trim()} activeOpacity={0.7}
-                style={{ marginLeft: 8, width: 38, height: 38, borderRadius: 19, backgroundColor: commentText.trim() ? "#1A56DB" : "#E2E8F0", alignItems: "center", justifyContent: "center" }}>
+                style={{ marginLeft: 8, width: 38, height: 38, borderRadius: 19, backgroundColor: commentText.trim() ? colors.action : colors.surfaceSunken, alignItems: "center", justifyContent: "center" }}>
                 <Send size={16} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           )}
 
           {comments.length === 0 && (
-            <Text style={{ color: "#94A3B8", fontSize: 14, textAlign: "center", marginTop: 16 }}>No comments yet. Be the first!</Text>
+            <Text style={{ color: colors.textTertiary, fontSize: 14, textAlign: "center", marginTop: 16 }}>No comments yet. Be the first!</Text>
           )}
 
           {comments.map((c) => {
@@ -438,22 +442,22 @@ export default function PostDetailScreen() {
             const isMenuOpen = commentMenuId === c.id;
             return (
               <View key={c.id} style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 16 }}>
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c.avatarColor, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-                  <Text style={{ fontSize: 12, fontWeight: "800", color: "#1E293B" }}>{c.initials}</Text>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.actionSurfaceAlt, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "800", color: colors.textPrimary }}>{c.initials}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 12, borderWidth: 1, borderColor: "#DBEAFE" }}>
+                  <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: colors.border }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B" }}>{c.author}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}>{c.author}</Text>
                       <View style={{ flexDirection: "row", alignItems: "center" }}>
-                        <Text style={{ fontSize: 11, color: "#94A3B8" }}>{c.time}</Text>
+                        <Text style={{ fontSize: 11, color: colors.textTertiary }}>{c.time}</Text>
                         {isCommentOwner && (
                           <TouchableOpacity
                             onPress={() => setCommentMenuId(isMenuOpen ? null : c.id)}
                             activeOpacity={0.7}
                             style={{ marginLeft: 6, padding: 2 }}
                           >
-                            <MoreVertical size={14} color="#94A3B8" />
+                            <MoreVertical size={14} color={colors.textTertiary} />
                           </TouchableOpacity>
                         )}
                       </View>
@@ -466,44 +470,44 @@ export default function PostDetailScreen() {
                           multiline
                           autoFocus
                           placeholder="Edit your comment..."
-                          placeholderTextColor="#94A3B8"
-                          style={{ backgroundColor: "#F8FAFC", borderRadius: 12, borderWidth: 1, borderColor: "#DBEAFE", paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: "#1E293B" }}
+                          placeholderTextColor={colors.textTertiary}
+                          style={{ backgroundColor: colors.surfaceSunken, borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: colors.textPrimary }}
                         />
                         <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 8, alignItems: "center" }}>
                           <TouchableOpacity onPress={cancelEditComment} activeOpacity={0.7} style={{ paddingHorizontal: 12, paddingVertical: 6, marginRight: 6 }}>
-                            <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
+                            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textTertiary }}>Cancel</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => handleSaveComment(c)}
                             disabled={!editingText.trim()}
                             activeOpacity={0.7}
-                            style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: editingText.trim() ? "#1A56DB" : "#E2E8F0" }}
+                            style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: editingText.trim() ? colors.action : colors.surfaceSunken }}
                           >
                             <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFFFFF" }}>Save</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
                     ) : (
-                      <Text style={{ fontSize: 13, color: "#475569", lineHeight: 20 }}>{c.text}</Text>
+                      <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>{c.text}</Text>
                     )}
                   </View>
                   {isCommentOwner && isMenuOpen && !isEditingComment && (
-                    <View style={{ marginTop: 6, backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden" }}>
+                    <View style={{ marginTop: 6, backgroundColor: colors.surfaceSunken, borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden" }}>
                       <TouchableOpacity
                         onPress={() => startEditComment(c)}
                         activeOpacity={0.7}
-                        style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
+                        style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}
                       >
-                        <Pencil size={14} color="#1A56DB" />
-                        <Text style={{ fontSize: 13, color: "#1A56DB", fontWeight: "600", marginLeft: 8 }}>Edit Comment</Text>
+                        <Pencil size={14} color={colors.action} />
+                        <Text style={{ fontSize: 13, color: colors.action, fontWeight: "600", marginLeft: 8 }}>Edit Comment</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleDeleteComment(c)}
                         activeOpacity={0.7}
                         style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10 }}
                       >
-                        <Trash2 size={14} color="#EF4444" />
-                        <Text style={{ fontSize: 13, color: "#EF4444", fontWeight: "600", marginLeft: 8 }}>Delete Comment</Text>
+                        <Trash2 size={14} color={colors.destructive} />
+                        <Text style={{ fontSize: 13, color: colors.destructive, fontWeight: "600", marginLeft: 8 }}>Delete Comment</Text>
                       </TouchableOpacity>
                     </View>
                   )}

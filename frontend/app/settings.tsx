@@ -9,13 +9,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { X, Users, ShieldOff, Circle } from "lucide-react-native";
+import { X, Users, ShieldOff, Circle, Sun, Moon, Smartphone } from "lucide-react-native";
 import Avatar, { PRESENCE_COLORS, PRESENCE_LABELS } from "../src/components/Avatar";
 import { usePresence } from "../src/contexts/PresenceContext";
+import { useTheme } from "../src/contexts/ThemeContext";
 import { fetchDepartments } from "../src/lib/catalog";
 import { getMessagePolicy, setMessagePolicy, listBlocked, unblockUser } from "../src/lib/messages";
-import type { Department, MessagePolicy, PresenceMode } from "../src/types";
 import { apiFetch } from "../src/lib/api";
+import { safeBack } from "../src/lib/navigation";
+import type { Department, MessagePolicy, PresenceMode } from "../src/types";
 
 /**
  * Messaging settings (Messaging_plan.md §4, §8, §12):
@@ -38,6 +40,7 @@ type BlockRow = { id: string; blocked_id: string; created_at: string };
 export default function MessagingSettings() {
   const router = useRouter();
   const { mode, setMode } = usePresence();
+  const { colors, preference, setColorScheme, isDark, toggleTheme } = useTheme();
 
   const [policy, setPolicy] = useState<MessagePolicy>("department");
   const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
@@ -55,7 +58,7 @@ export default function MessagingSettings() {
           getMessagePolicy(),
           listBlocked(),
           fetchDepartments(),
-          apiFetch("/users"),
+          apiFetch("/public/peers"),
         ]);
         if (cancelled) return;
         setPolicy(policySetting.message_policy);
@@ -116,7 +119,7 @@ export default function MessagingSettings() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F7FF" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
       <View
         style={{
           flexDirection: "row",
@@ -124,30 +127,134 @@ export default function MessagingSettings() {
           justifyContent: "space-between",
           paddingHorizontal: 16,
           paddingVertical: 12,
-          backgroundColor: "#FFFFFF",
+          backgroundColor: colors.surface,
           borderBottomWidth: 1,
-          borderBottomColor: "#F1F5F9",
+          borderBottomColor: colors.border,
         }}
       >
-        <Text style={{ fontSize: 20, fontWeight: "800", color: "#0F172A" }}>Messaging settings</Text>
-        {saving ? <ActivityIndicator size="small" color="#1A56DB" /> : (
-          <TouchableOpacity onPress={() => router.back()} style={{ padding: 6 }}>
-            <X size={22} color="#64748B" />
+        <Text style={{ fontSize: 20, fontWeight: "800", color: colors.textPrimary }}>Settings</Text>
+        {saving ? <ActivityIndicator size="small" color={colors.action} /> : (
+          <TouchableOpacity onPress={() => safeBack("/(tabs)")} style={{ padding: 6 }}>
+            <X size={22} color={colors.textTertiary} />
           </TouchableOpacity>
         )}
       </View>
 
       {loading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="small" color="#1A56DB" />
+          <ActivityIndicator size="small" color={colors.action} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+          {/* Appearance */}
+          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textTertiary, letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
+            Appearance
+          </Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: colors.surface,
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              marginBottom: 10,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: colors.actionSurface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {isDark ? <Moon size={16} color={colors.action} /> : <Sun size={16} color={colors.action} />}
+              </View>
+              <View>
+                <Text style={{ fontSize: 15, fontWeight: "600", color: colors.textPrimary }}>Dark Mode</Text>
+                <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 1 }}>
+                  {preference === "system" ? "Follows device theme" : isDark ? "Always dark" : "Always light"}
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={isDark}
+              onValueChange={() => void toggleTheme()}
+              trackColor={{ true: colors.action, false: colors.borderStrong }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 14, overflow: "hidden", marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
+            {([
+              { value: "system", label: "System Default", hint: "Follow device theme", Icon: Smartphone },
+              { value: "light", label: "Light", hint: "Always light theme", Icon: Sun },
+              { value: "dark", label: "Dark", hint: "Always dark theme", Icon: Moon },
+            ] as const).map((opt, index) => {
+              const active = preference === opt.value;
+              const OptIcon = opt.Icon;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => void setColorScheme(opt.value)}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 14,
+                    paddingVertical: 13,
+                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopColor: colors.border,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: active ? colors.actionSurface : colors.surfaceSunken,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <OptIcon size={16} color={active ? colors.action : colors.textTertiary} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ fontSize: 15, fontWeight: active ? "700" : "500", color: colors.textPrimary }}>
+                      {opt.label}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 1 }}>
+                      {opt.hint}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      borderColor: active ? colors.action : colors.borderStrong,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {active && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.action }} />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           {/* Presence */}
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textTertiary, letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
             Presence
           </Text>
-          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 14, overflow: "hidden", marginBottom: 20 }}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 14, overflow: "hidden", marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
             {PRESENCE_ORDER.map((value, index) => {
               const active = mode === value;
               return (
@@ -160,24 +267,24 @@ export default function MessagingSettings() {
                     paddingHorizontal: 14,
                     paddingVertical: 13,
                     borderTopWidth: index === 0 ? 0 : 1,
-                    borderTopColor: "#F1F5F9",
+                    borderTopColor: colors.border,
                   }}
                 >
                   <Circle size={12} color={PRESENCE_COLORS[value]} fill={PRESENCE_COLORS[value]} />
-                  <Text style={{ flex: 1, fontSize: 15, color: "#0F172A", marginLeft: 10, fontWeight: active ? "700" : "500" }}>
+                  <Text style={{ flex: 1, fontSize: 15, color: colors.textPrimary, marginLeft: 10, fontWeight: active ? "700" : "500" }}>
                     {PRESENCE_LABELS[value]}
                   </Text>
-                  {active && <Text style={{ fontSize: 12, color: "#1A56DB", fontWeight: "700" }}>Active</Text>}
+                  {active && <Text style={{ fontSize: 12, color: colors.action, fontWeight: "700" }}>Active</Text>}
                 </TouchableOpacity>
               );
             })}
           </View>
 
           {/* Who can message me */}
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textTertiary, letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
             Who can message you
           </Text>
-          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 14, overflow: "hidden", marginBottom: 20 }}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 14, overflow: "hidden", marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
             {POLICY_OPTIONS.map((option, index) => {
               const active = policy === option.value;
               return (
@@ -190,7 +297,7 @@ export default function MessagingSettings() {
                     paddingHorizontal: 14,
                     paddingVertical: 13,
                     borderTopWidth: index === 0 ? 0 : 1,
-                    borderTopColor: "#F1F5F9",
+                    borderTopColor: colors.border,
                   }}
                 >
                   <View
@@ -199,17 +306,17 @@ export default function MessagingSettings() {
                       height: 20,
                       borderRadius: 10,
                       borderWidth: 2,
-                      borderColor: active ? "#1A56DB" : "#CBD5E1",
+                      borderColor: active ? colors.action : colors.borderStrong,
                       alignItems: "center",
                       justifyContent: "center",
                       marginTop: 1,
                     }}
                   >
-                    {active && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#1A56DB" }} />}
+                    {active && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.action }} />}
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={{ fontSize: 15, fontWeight: active ? "700" : "600", color: "#0F172A" }}>{option.label}</Text>
-                    <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2, lineHeight: 16 }}>{option.hint}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: active ? "700" : "600", color: colors.textPrimary }}>{option.label}</Text>
+                    <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2, lineHeight: 16 }}>{option.hint}</Text>
                   </View>
                 </TouchableOpacity>
               );
@@ -219,12 +326,12 @@ export default function MessagingSettings() {
           {/* Department allow-list (only for "selected") */}
           {policy === "selected" && (
             <>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textTertiary, letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
                 Allowed departments
               </Text>
-              <View style={{ backgroundColor: "#FFFFFF", borderRadius: 14, overflow: "hidden", marginBottom: 20 }}>
+              <View style={{ backgroundColor: colors.surface, borderRadius: 14, overflow: "hidden", marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
                 {departments.length === 0 ? (
-                  <Text style={{ padding: 14, fontSize: 13, color: "#94A3B8" }}>No departments available.</Text>
+                  <Text style={{ padding: 14, fontSize: 13, color: colors.textTertiary }}>No departments available.</Text>
                 ) : (
                   departments.map((dept, index) => {
                     const on = selectedDepts.includes(dept.id);
@@ -237,16 +344,16 @@ export default function MessagingSettings() {
                           paddingHorizontal: 14,
                           paddingVertical: 11,
                           borderTopWidth: index === 0 ? 0 : 1,
-                          borderTopColor: "#F1F5F9",
+                          borderTopColor: colors.border,
                         }}
                       >
-                        <Text style={{ flex: 1, fontSize: 14, color: "#0F172A", fontWeight: on ? "700" : "500" }}>
+                        <Text style={{ flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: on ? "700" : "500" }}>
                           {dept.name}
                         </Text>
                         <Switch
                           value={on}
                           onValueChange={() => toggleDept(dept.id)}
-                          trackColor={{ true: "#1A56DB", false: "#CBD5E1" }}
+                          trackColor={{ true: colors.action, false: colors.borderStrong }}
                           thumbColor="#FFFFFF"
                         />
                       </View>
@@ -260,22 +367,22 @@ export default function MessagingSettings() {
           {/* Friends shortcut */}
           <TouchableOpacity
             onPress={() => router.push("/friends")}
-            style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 20 }}
+            style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 20, borderWidth: 1, borderColor: colors.border }}
           >
-            <Users size={18} color="#1A56DB" />
-            <Text style={{ flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Friends & requests</Text>
-            <Text style={{ fontSize: 13, color: "#94A3B8" }}>Open</Text>
+            <Users size={18} color={colors.action} />
+            <Text style={{ flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600", color: colors.textPrimary }}>Friends & requests</Text>
+            <Text style={{ fontSize: 13, color: colors.textTertiary }}>Open</Text>
           </TouchableOpacity>
 
           {/* Blocked */}
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textTertiary, letterSpacing: 0.6, marginBottom: 8, textTransform: "uppercase" }}>
             Blocked users
           </Text>
-          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 14, overflow: "hidden" }}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: colors.border }}>
             {blocked.length === 0 ? (
               <View style={{ flexDirection: "row", alignItems: "center", padding: 14 }}>
-                <ShieldOff size={16} color="#94A3B8" />
-                <Text style={{ fontSize: 13, color: "#94A3B8", marginLeft: 8 }}>No blocked users.</Text>
+                <ShieldOff size={16} color={colors.textTertiary} />
+                <Text style={{ fontSize: 13, color: colors.textTertiary, marginLeft: 8 }}>No blocked users.</Text>
               </View>
             ) : (
               blocked.map((row, index) => (
@@ -287,18 +394,18 @@ export default function MessagingSettings() {
                     paddingHorizontal: 14,
                     paddingVertical: 11,
                     borderTopWidth: index === 0 ? 0 : 1,
-                    borderTopColor: "#F1F5F9",
+                    borderTopColor: colors.border,
                   }}
                 >
                   <Avatar name={names[row.blocked_id] || "User"} size={36} />
-                  <Text style={{ flex: 1, marginLeft: 10, fontSize: 14, fontWeight: "600", color: "#0F172A" }}>
+                  <Text style={{ flex: 1, marginLeft: 10, fontSize: 14, fontWeight: "600", color: colors.textPrimary }}>
                     {names[row.blocked_id] || "User"}
                   </Text>
                   <TouchableOpacity
                     onPress={() => void handleUnblock(row.blocked_id)}
-                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: "#EFF6FF" }}
+                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: colors.actionSurface }}
                   >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#1A56DB" }}>Unblock</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: colors.action }}>Unblock</Text>
                   </TouchableOpacity>
                 </View>
               ))

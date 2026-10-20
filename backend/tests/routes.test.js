@@ -13,6 +13,7 @@ const thesisModel = require("../models/thesisModel");
 const userModel = require("../models/userModel");
 const notificationService = require("../services/notificationService");
 const moderationService = require("../services/moderationService");
+const auditService = require("../services/auditService");
 
 // The controllers fire off background notification/moderation work after
 // responding. Stub it so the suite stays hermetic (and quiet).
@@ -23,6 +24,8 @@ stub(notificationService, "notifyAuthorOnAction", async () => undefined);
 stub(moderationService, "scanPost", async () => ({ flagged: false }));
 stub(moderationService, "scanComment", async () => ({ flagged: false }));
 stub(moderationService, "scanThesis", async () => ({ flagged: false }));
+stub(thesisModel, "getFlaggedTheses", async () => []);
+stub(auditService, "recordRequest", async () => undefined);
 
 const STORAGE_URL = "https://test-project.supabase.co/storage/v1/object/public";
 
@@ -255,7 +258,7 @@ describe("profile writes: self-or-admin only", () => {
     assert.equal(m.updateUser.calls.length, 0);
   });
 
-  it("lets a student edit their own profile but strips role", async () => {
+  it("rejects a role write through the legacy profile endpoint", async () => {
     m.updateUser.setImpl(async () => ({ id: "u1" }));
 
     const res = await request(app)
@@ -263,14 +266,11 @@ describe("profile writes: self-or-admin only", () => {
       .set(AUTH)
       .send({ full_name: "Me", role: "superadmin" });
 
-    assert.equal(res.status, 200);
-    const [id, payload] = m.updateUser.calls[0];
-    assert.equal(id, "u1");
-    assert.equal(payload.full_name, "Me");
-    assert.equal(payload.role, undefined, "a student must not be able to set a role");
+    assert.equal(res.status, 400);
+    assert.equal(m.updateUser.calls.length, 0, "role writes must use the admin endpoint");
   });
 
-  it("lets an admin change a role on a lower-ranked account", async () => {
+  it("rejects an admin role change through the legacy profile endpoint", async () => {
     session.id = "admin1";
     session.role = "admin";
     m.getUserById.setImpl(async () => ({ id: "u9", role: "student" }));
@@ -278,8 +278,8 @@ describe("profile writes: self-or-admin only", () => {
 
     const res = await request(app).put("/api/users/u9").set(AUTH).send({ role: "faculty" });
 
-    assert.equal(res.status, 200);
-    assert.equal(m.updateUser.calls[0][1].role, "faculty");
+    assert.equal(res.status, 400);
+    assert.equal(m.updateUser.calls.length, 0);
   });
 
   it("never lets a caller self-assign a role at signup", async () => {
@@ -301,7 +301,7 @@ describe("profile writes: self-or-admin only", () => {
 // An admin must not be able to raise its own rank, and must not be able to
 // edit or delete an account of equal or higher rank.
 describe("role escalation is closed", () => {
-  it("403 when an admin tries to promote itself to superadmin", async () => {
+  it("rejects an admin promoting itself to superadmin", async () => {
     session.id = "admin1";
     session.role = "admin";
 
@@ -310,11 +310,11 @@ describe("role escalation is closed", () => {
       .set(AUTH)
       .send({ role: "superadmin" });
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 400);
     assert.equal(m.updateUser.calls.length, 0, "the escalation must never reach the DB");
   });
 
-  it("403 for the camelCase `superAdmin` spelling too", async () => {
+  it("rejects the camelCase `superAdmin` spelling too", async () => {
     session.id = "admin1";
     session.role = "admin";
 
@@ -323,22 +323,22 @@ describe("role escalation is closed", () => {
       .set(AUTH)
       .send({ role: "superAdmin" });
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 400);
     assert.equal(m.updateUser.calls.length, 0);
   });
 
-  it("403 when an admin grants superadmin to someone else", async () => {
+  it("rejects an admin granting superadmin to someone else", async () => {
     session.id = "admin1";
     session.role = "admin";
     m.getUserById.setImpl(async () => ({ id: "u9", role: "student" }));
 
     const res = await request(app).put("/api/users/u9").set(AUTH).send({ role: "superadmin" });
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 400);
     assert.equal(m.updateUser.calls.length, 0);
   });
 
-  it("lets a superadmin grant superadmin", async () => {
+  it("rejects a superadmin role grant through the legacy endpoint too", async () => {
     session.id = "super1";
     session.role = "superadmin";
     m.getUserById.setImpl(async () => ({ id: "u9", role: "admin" }));
@@ -346,8 +346,8 @@ describe("role escalation is closed", () => {
 
     const res = await request(app).put("/api/users/u9").set(AUTH).send({ role: "superadmin" });
 
-    assert.equal(res.status, 200);
-    assert.equal(m.updateUser.calls[0][1].role, "superadmin");
+    assert.equal(res.status, 400);
+    assert.equal(m.updateUser.calls.length, 0);
   });
 
   it("403 when an admin edits a peer admin", async () => {
@@ -375,7 +375,7 @@ describe("role escalation is closed", () => {
     assert.equal(m.deleteUser.calls.length, 0);
   });
 
-  it("still lets an admin manage a lower-ranked account", async () => {
+  it("does not let an admin delete a lower-ranked account through the legacy route", async () => {
     session.id = "admin1";
     session.role = "admin";
     m.getUserById.setImpl(async () => ({ id: "s1", role: "student" }));
@@ -383,8 +383,8 @@ describe("role escalation is closed", () => {
 
     const res = await request(app).delete("/api/users/s1").set(AUTH);
 
-    assert.equal(res.status, 200);
-    assert.deepEqual(m.deleteUser.calls, [["s1"]]);
+    assert.equal(res.status, 403);
+    assert.equal(m.deleteUser.calls.length, 0);
   });
 
   it("never looks up the target for a non-admin (no id probing)", async () => {
@@ -409,7 +409,7 @@ describe("moderation is confined to a department admin's own department", () => 
     const res = await request(app)
       .post("/api/moderation/comments/c1")
       .set(AUTH)
-      .send({ action: "hide" });
+      .send({ action: "hide", reason: "Department scope check" });
 
     assert.equal(res.status, 403);
     assert.equal(m.updateCommentModeration.calls.length, 0);
@@ -423,7 +423,7 @@ describe("moderation is confined to a department admin's own department", () => 
     const res = await request(app)
       .post("/api/moderation/comments/c1")
       .set(AUTH)
-      .send({ action: "delete" });
+      .send({ action: "delete", reason: "Department scope check" });
 
     assert.equal(res.status, 403);
     assert.equal(m.deleteComment.calls.length, 0);
@@ -438,7 +438,7 @@ describe("moderation is confined to a department admin's own department", () => 
     const res = await request(app)
       .post("/api/moderation/comments/c1")
       .set(AUTH)
-      .send({ action: "hide" });
+      .send({ action: "hide", reason: "Department scope check" });
 
     assert.equal(res.status, 200);
     assert.equal(m.updateCommentModeration.calls.length, 1);
@@ -452,7 +452,7 @@ describe("moderation is confined to a department admin's own department", () => 
     const res = await request(app)
       .post("/api/moderation/posts/p1")
       .set(AUTH)
-      .send({ action: "hide" });
+      .send({ action: "hide", reason: "Department scope check" });
 
     assert.equal(res.status, 403);
     assert.equal(m.updatePostModeration.calls.length, 0);
@@ -466,7 +466,7 @@ describe("moderation is confined to a department admin's own department", () => 
     const res = await request(app)
       .post("/api/moderation/posts/p1")
       .set(AUTH)
-      .send({ action: "hide" });
+      .send({ action: "hide", reason: "Department scope check" });
 
     assert.equal(res.status, 403);
     assert.equal(m.updatePostModeration.calls.length, 0);
@@ -481,7 +481,7 @@ describe("moderation is confined to a department admin's own department", () => 
     const res = await request(app)
       .post("/api/moderation/posts/p1")
       .set(AUTH)
-      .send({ action: "hide" });
+      .send({ action: "hide", reason: "Department scope check" });
 
     assert.equal(res.status, 200);
     assert.equal(m.updatePostModeration.calls.length, 1);
@@ -571,6 +571,7 @@ describe("errors and pagination limits", () => {
   });
 
   it("applies the same clamping to theses and users", async () => {
+    session.role = "admin";
     m.getAllTheses.setImpl(async () => []);
     m.getAllUsers.setImpl(async () => []);
 

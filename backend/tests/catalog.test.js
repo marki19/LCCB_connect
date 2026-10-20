@@ -11,6 +11,7 @@ const { stub } = require("./stub.helper");
 const auth = require("../middleware/auth");
 const departmentModel = require("../models/departmentModel");
 const userModel = require("../models/userModel");
+const auditService = require("../services/auditService");
 
 const DEPT = "11111111-1111-4111-8111-111111111111";
 const COURSE = "22222222-2222-4222-8222-222222222222";
@@ -44,6 +45,8 @@ const m = {
   setCourseActive: stub(departmentModel, "setCourseActive"),
   updateUser: stub(userModel, "updateUser"),
 };
+
+stub(auditService, "recordRequest", async () => undefined);
 
 const app = require("../app");
 const AUTH = { Authorization: "Bearer test-token" };

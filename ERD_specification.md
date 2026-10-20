@@ -1,6 +1,8 @@
 # LCCB Connect — Database ERD & Schema Specification
 
-Complete relational database model for LCCB Connect, covering the existing campus feed, thesis archive, administrative catalog, and planned realtime messaging subsystem.
+> **Status:** high-level ERD. Some details are out of date (presence columns, `department_id` links, `message_policy_departments`, and a few constraints). See [`DATABASE.md`](./DATABASE.md) for the current table reference and the live Supabase drift audit.
+
+Complete relational database model for LCCB Connect, covering the existing campus feed, thesis archive, administrative catalog, and realtime messaging subsystem.
 
 ---
 

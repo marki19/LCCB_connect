@@ -7,12 +7,15 @@ import * as DocumentPicker from "expo-document-picker";
 import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
+import { useTheme } from "../src/contexts/ThemeContext";
 import { uploadToStorage } from "../src/lib/upload";
 import { apiFetch, updateThesis } from "../src/lib/api";
+import { safeBack } from "../src/lib/navigation";
 
 export default function UploadThesisScreen() {
   const router = useRouter();
   const { profile } = useAuth();
+  const { colors, isDark } = useTheme();
 
   // Edit mode: set when the uploader opens "Edit" on their own thesis card.
   const { thesisId } = useLocalSearchParams<{ thesisId?: string }>();
@@ -122,7 +125,7 @@ export default function UploadThesisScreen() {
           ? "Changes saved to the repository!"
           : "Manuscript successfully uploaded to the repository!"
       );
-      router.back();
+      safeBack("/(tabs)/search");
     } catch (error: any) {
       console.error("Upload error:", error);
       Alert.alert("Upload Failed", error.message || "An unknown error occurred.");
@@ -133,94 +136,94 @@ export default function UploadThesisScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator size="large" color="#4F46E5" />
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color={colors.action} />
       </SafeAreaView>
     );
   }
 
   if (loadError) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <AlertCircle size={44} color="#EF4444" />
-        <Text className="text-slate-700 font-bold text-lg mt-4 text-center">{loadError}</Text>
-        <TouchableOpacity onPress={() => router.back()} className="mt-6">
-          <Text className="text-indigo-600 font-semibold">Go back</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage, alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <AlertCircle size={44} color={colors.destructive} />
+        <Text style={{ color: colors.textPrimary, fontWeight: "700", fontSize: 18, marginTop: 16, textAlign: "center" }}>{loadError}</Text>
+        <TouchableOpacity onPress={() => safeBack("/(tabs)/search")} style={{ marginTop: 24 }}>
+          <Text style={{ color: colors.action, fontWeight: "600" }}>Go back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-      <LinearGradient colors={["#F8FAFC", "#EEF2FF"]} style={{ flex: 1 }}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <LinearGradient colors={[colors.surfacePage, isDark ? "hsl(215, 30%, 14%)" : "#EEF2FF"]} style={{ flex: 1 }}>
         <SafeAreaView style={{ flex: 1 }}>
-          <View className="flex-row items-center justify-between px-6 py-4 bg-white/80 border-b border-slate-200/50">
-            <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
-              <ArrowLeft color="#1E293B" size={28} />
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <TouchableOpacity onPress={() => safeBack("/(tabs)/search")} style={{ padding: 6, marginLeft: -6 }}>
+              <ArrowLeft color={colors.textPrimary} size={24} />
             </TouchableOpacity>
-            <Text className="text-slate-900 font-extrabold text-xl tracking-tight">{isEditing ? "Edit Manuscript" : "Deposit Manuscript"}</Text>
-            <View className="w-10" />
+            <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 18, letterSpacing: -0.3 }}>{isEditing ? "Edit Manuscript" : "Deposit Manuscript"}</Text>
+            <View style={{ width: 32 }} />
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 24 }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
             
-            <Animated.View entering={FadeInDown.duration(400).springify()} className="mb-8 items-center">
-              <View className="w-16 h-16 bg-indigo-100 rounded-full items-center justify-center mb-4">
-                <BookOpen color="#4F46E5" size={32} />
+            <Animated.View entering={FadeInDown.duration(400).springify()} style={{ marginBottom: 28, alignItems: "center" }}>
+              <View style={{ width: 60, height: 60, backgroundColor: colors.actionSurface, borderRadius: 30, alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                <BookOpen color={colors.action} size={28} />
               </View>
-              <Text className="text-slate-900 font-extrabold text-2xl text-center">{isEditing ? "Update Your Manuscript" : "Contribute to the Repository"}</Text>
-              <Text className="text-slate-500 text-center mt-2 px-4 leading-5">{isEditing ? "Apply changes to your deposited capstone or dissertation." : "Upload your capstone or dissertation to the LCCB Digital Thesis Repository."}</Text>
+              <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 22, textAlign: "center" }}>{isEditing ? "Update Your Manuscript" : "Contribute to the Repository"}</Text>
+              <Text style={{ color: colors.textTertiary, textAlign: "center", marginTop: 8, paddingHorizontal: 16, lineHeight: 20, fontSize: 14 }}>{isEditing ? "Apply changes to your deposited capstone or dissertation." : "Upload your capstone or dissertation to the LCCB Digital Thesis Repository."}</Text>
             </Animated.View>
 
             <Animated.View entering={FadeInRight.delay(100).duration(400).springify()}>
-              <View className="mb-6">
-                <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Manuscript Title</Text>
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>Manuscript Title</Text>
                 <TextInput
-                  className="bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base font-semibold text-slate-900 shadow-sm shadow-slate-100"
+                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, fontWeight: "600", color: colors.textPrimary }}
                   placeholder="e.g. AI-Powered Farming Assistance..."
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textTertiary}
                   value={title}
                   onChangeText={setTitle}
                 />
               </View>
 
-              <View className="mb-6">
-                <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Department / Program</Text>
-                <View className="bg-slate-100 border border-slate-200 rounded-2xl px-5 py-4">
-                  <Text className="text-base text-slate-900">
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>Department / Program</Text>
+                <View style={{ backgroundColor: colors.surfaceSunken, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14 }}>
+                  <Text style={{ fontSize: 16, color: colors.textPrimary }}>
                     {profile?.department_name || "No department on file"}
                   </Text>
                 </View>
-                <Text className="text-slate-400 text-xs mt-2">
+                <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 8 }}>
                   Your manuscript is filed under your department of record.
                 </Text>
               </View>
 
-              <View className="mb-6">
-                <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Category</Text>
-                <View className="flex-row gap-3">
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>Category</Text>
+                <View style={{ flexDirection: "row", gap: 12 }}>
                   <TouchableOpacity 
                     onPress={() => setCategory("Undergraduate Capstone")}
-                    className={`flex-1 p-4 rounded-2xl border items-center justify-center ${category === "Undergraduate Capstone" ? "bg-indigo-50 border-indigo-500 shadow-sm shadow-indigo-100" : "bg-white border-slate-200"}`}
+                    style={{ flex: 1, padding: 14, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: category === "Undergraduate Capstone" ? colors.actionSurface : colors.surface, borderColor: category === "Undergraduate Capstone" ? colors.action : colors.border }}
                   >
-                    <Text className={`font-bold ${category === "Undergraduate Capstone" ? "text-indigo-700" : "text-slate-500"}`}>Undergraduate</Text>
+                    <Text style={{ fontWeight: "700", color: category === "Undergraduate Capstone" ? colors.action : colors.textTertiary }}>Undergraduate</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
                     onPress={() => setCategory("Graduate Dissertation")}
-                    className={`flex-1 p-4 rounded-2xl border items-center justify-center ${category === "Graduate Dissertation" ? "bg-indigo-50 border-indigo-500 shadow-sm shadow-indigo-100" : "bg-white border-slate-200"}`}
+                    style={{ flex: 1, padding: 14, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: category === "Graduate Dissertation" ? colors.actionSurface : colors.surface, borderColor: category === "Graduate Dissertation" ? colors.action : colors.border }}
                   >
-                    <Text className={`font-bold ${category === "Graduate Dissertation" ? "text-indigo-700" : "text-slate-500"}`}>Graduate</Text>
+                    <Text style={{ fontWeight: "700", color: category === "Graduate Dissertation" ? colors.action : colors.textTertiary }}>Graduate</Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
-              <View className="mb-6">
-                <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">Abstract</Text>
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>Abstract</Text>
                 <TextInput
-                  className="bg-white border border-slate-200 rounded-2xl px-5 py-4 text-base text-slate-800 min-h-[140px] shadow-sm shadow-slate-100"
+                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: colors.textPrimary, minHeight: 140 }}
                   placeholder="Provide a brief summary of the research..."
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textTertiary}
                   multiline
                   textAlignVertical="top"
                   value={abstract}
@@ -228,44 +231,44 @@ export default function UploadThesisScreen() {
                 />
               </View>
 
-              <View className="mb-8">
-                <Text className="text-slate-700 font-bold mb-2 uppercase tracking-wide text-xs">PDF Document</Text>
+              <View style={{ marginBottom: 28 }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>PDF Document</Text>
                 <TouchableOpacity 
                   onPress={pickDocument}
-                  className={`border-2 border-dashed rounded-2xl p-8 items-center justify-center ${pdfFile ? "bg-emerald-50/50 border-emerald-200" : "bg-white border-slate-300"}`}
+                  style={{ borderWidth: 2, borderStyle: "dashed", borderRadius: 16, padding: 28, alignItems: "center", justifyContent: "center", backgroundColor: pdfFile ? (isDark ? "hsl(150, 30%, 15%)" : "#ECFDF5") : colors.surface, borderColor: pdfFile ? "#10B981" : colors.border }}
                 >
                   {pdfFile ? (
                     <>
-                      <CheckCircle2 color="#10B981" size={40} className="mb-2" />
-                      <Text className="text-emerald-700 font-bold mt-2 text-center">{pdfFile.name}</Text>
-                      <Text className="text-emerald-500 font-semibold mt-1 text-xs">Tap to change file</Text>
+                      <CheckCircle2 color="#10B981" size={38} />
+                      <Text style={{ color: isDark ? "#6EE7B7" : "#047857", fontWeight: "700", marginTop: 8, textAlign: "center" }}>{pdfFile.name}</Text>
+                      <Text style={{ color: isDark ? "#34D399" : "#059669", fontWeight: "600", marginTop: 4, fontSize: 12 }}>Tap to change file</Text>
                     </>
                   ) : (
                     <>
-                      <FileText color="#94A3B8" size={40} className="mb-2" />
-                      <Text className="text-slate-700 font-semibold mt-2">{isEditing ? "Keep current PDF — tap to replace" : "Upload PDF Manuscript"}</Text>
-                      <Text className="text-slate-500 text-xs mt-1">Maximum size: 25MB</Text>
+                      <FileText color={colors.textTertiary} size={38} />
+                      <Text style={{ color: colors.textPrimary, fontWeight: "600", marginTop: 8 }}>{isEditing ? "Keep current PDF — tap to replace" : "Upload PDF Manuscript"}</Text>
+                      <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 4 }}>Maximum size: 25MB</Text>
                     </>
                   )}
                 </TouchableOpacity>
               </View>
 
             </Animated.View>
-            <View className="h-10" />
+            <View style={{ height: 20 }} />
           </ScrollView>
 
-          <View className="p-6 bg-white/90 border-t border-slate-100">
+          <View style={{ padding: 18, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }}>
             <TouchableOpacity 
               onPress={handleUpload}
               disabled={isUploading}
-              className={`w-full py-4 rounded-2xl flex-row justify-center items-center shadow-lg ${isUploading ? 'bg-indigo-400 shadow-indigo-400/20' : 'bg-indigo-600 shadow-indigo-600/40'}`}
+              style={{ width: "100%", paddingVertical: 14, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", backgroundColor: isUploading ? colors.surfaceSunken : colors.action }}
             >
               {isUploading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <>
-                  <UploadCloud color="#FFFFFF" size={20} className="mr-2" />
-                  <Text className="text-white font-bold text-lg">{isEditing ? "Save Changes" : "Deposit to Repository"}</Text>
+                  <UploadCloud color="#FFFFFF" size={20} style={{ marginRight: 8 }} />
+                  <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 16 }}>{isEditing ? "Save Changes" : "Deposit to Repository"}</Text>
                 </>
               )}
             </TouchableOpacity>

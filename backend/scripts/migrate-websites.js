@@ -10,6 +10,7 @@ async function applyWebsiteMigration() {
 
     -- 2. Update type CHECK constraint to include 'website'
     ALTER TABLE public.posts DROP CONSTRAINT IF EXISTS posts_type_check;
+    ALTER TABLE public.posts DROP CONSTRAINT IF EXISTS chk_posts_type;
     ALTER TABLE public.posts ADD CONSTRAINT posts_type_check
       CHECK (type IN ('text', 'image', 'project', 'capstone', 'website'));
   `;

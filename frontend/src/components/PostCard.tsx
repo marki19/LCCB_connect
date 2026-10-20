@@ -10,16 +10,21 @@ import { Heart, MessageCircle, Share2, ExternalLink, MoreVertical, Pencil, Trash
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
+import { ThemeTokens } from "../lib/tokens";
 import { apiFetch, deletePost, deleteThesis } from "../lib/api";
 
-const TYPE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  website:  { label: "Website",  bg: "#DBEAFE", text: "#1D4ED8" },
-  thesis:   { label: "Thesis",   bg: "#EDE9FE", text: "#6D28D9" },
-  capstone: { label: "Capstone", bg: "#D1FAE5", text: "#047857" },
-  project:  { label: "Project",  bg: "#FEF3C7", text: "#B45309" },
-  text:     { label: "Update",   bg: "#F1F5F9", text: "#475569" },
-  image:    { label: "Image",    bg: "#FCE7F3", text: "#BE185D" },
-};
+function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
+  const configs: Record<string, { label: string; bg: string; text: string }> = {
+    website:  { label: "Website",  bg: colors.badgeWebsiteBg,  text: colors.badgeWebsiteText },
+    thesis:   { label: "Thesis",   bg: colors.badgeThesisBg,   text: colors.badgeThesisText },
+    capstone: { label: "Capstone", bg: colors.badgeCapstoneBg, text: colors.badgeCapstoneText },
+    project:  { label: "Project",  bg: colors.badgeProjectBg,  text: colors.badgeProjectText },
+    text:     { label: "Update",   bg: colors.badgeUpdateBg,   text: colors.badgeUpdateText },
+    image:    { label: "Image",    bg: colors.badgeImageBg,    text: colors.badgeImageText },
+  };
+  return configs[type] || configs["text"];
+}
 
 export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: (id: string | number) => void }) {
   const router = useRouter();
@@ -33,6 +38,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   }));
 
   const { profile } = useAuth();
+  const { colors, isDark } = useTheme();
   const isOwner = !!profile?.id && profile.id === post.author.id;
 
   const handleEdit = () => {
@@ -109,7 +115,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
     }
   };
 
-  const typeConfig = TYPE_CONFIG[post.type] || TYPE_CONFIG['text'];
+  const typeConfig = getTypeConfig(post.type, colors);
 
   return (
     <TouchableOpacity
@@ -124,15 +130,15 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         router.push(`/post/${post.id}`);
       }}
       style={{
-        backgroundColor: "#FFFFFF",
+        backgroundColor: colors.surface,
         borderRadius: 20,
         marginHorizontal: 16,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: "#DBEAFE",
-        shadowColor: "#1A56DB",
+        borderColor: colors.border,
+        shadowColor: colors.shadow,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07,
+        shadowOpacity: isDark ? 0.35 : 0.07,
         shadowRadius: 8,
         elevation: 3,
         overflow: "hidden",
@@ -141,21 +147,21 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
       {/* Author row */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 }}>
         <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: post.author.avatarColor, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: "#1E293B" }}>{post.author.initials}</Text>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: "#FFFFFF" }}>{post.author.initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E293B" }}>{post.author.name}</Text>
-          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>{post.author.course || "—"} · {post.author.yearLevel || "—"}</Text>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }}>{post.author.name}</Text>
+          <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 1 }}>{post.author.course || "—"} · {post.author.yearLevel || "—"}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={{ fontSize: 11, color: "#94A3B8" }}>{post.createdAt}</Text>
+          <Text style={{ fontSize: 11, color: colors.textTertiary }}>{post.createdAt}</Text>
           {isOwner && (
             <TouchableOpacity
               onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }}
               activeOpacity={0.7}
               style={{ marginLeft: 6, padding: 4 }}
             >
-              <MoreVertical size={16} color="#94A3B8" />
+              <MoreVertical size={16} color={colors.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
@@ -163,37 +169,37 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
 
       {/* Owner edit/delete dropdown */}
       {isOwner && menuOpen && (
-        <View style={{ marginHorizontal: 14, marginBottom: 8, backgroundColor: "#F8FAFC", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden" }}>
+        <View style={{ marginHorizontal: 14, marginBottom: 8, backgroundColor: colors.surfaceSunken, borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden" }}>
           <TouchableOpacity
             onPress={(e) => { e.stopPropagation?.(); handleEdit(); }}
             activeOpacity={0.7}
-            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
+            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.border }}
           >
-            <Pencil size={15} color="#1A56DB" />
-            <Text style={{ fontSize: 14, color: "#1A56DB", fontWeight: "600", marginLeft: 10 }}>Edit Post</Text>
+            <Pencil size={15} color={colors.action} />
+            <Text style={{ fontSize: 14, color: colors.action, fontWeight: "600", marginLeft: 10 }}>Edit Post</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={(e) => { e.stopPropagation?.(); handleDelete(); }}
             activeOpacity={0.7}
             style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 11 }}
           >
-            <Trash2 size={15} color="#EF4444" />
-            <Text style={{ fontSize: 14, color: "#EF4444", fontWeight: "600", marginLeft: 10 }}>Delete Post</Text>
+            <Trash2 size={15} color={colors.destructive} />
+            <Text style={{ fontSize: 14, color: colors.destructive, fontWeight: "600", marginLeft: 10 }}>Delete Post</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* Title + description */}
       <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
-        <Text style={{ fontSize: 16, fontWeight: "700", color: "#1E293B", marginBottom: 5 }}>{post.title}</Text>
-        <Text numberOfLines={2} style={{ fontSize: 13, color: "#64748B", lineHeight: 20 }}>{post.description}</Text>
+        <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary, marginBottom: 5 }}>{post.title}</Text>
+        <Text numberOfLines={2} style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>{post.description}</Text>
       </View>
 
       {post.imageUrl ? (
         <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
           <Image 
             source={{ uri: post.imageUrl }} 
-            style={{ width: "100%", height: 200, borderRadius: 12, backgroundColor: "#F1F5F9" }}
+            style={{ width: "100%", height: 200, borderRadius: 12, backgroundColor: colors.surfaceSunken }}
             resizeMode="cover"
           />
         </View>
@@ -205,8 +211,8 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           <Text style={{ fontSize: 11, fontWeight: "700", color: typeConfig.text }}>{typeConfig.label}</Text>
         </View>
         {(post.tags || []).map((tag) => (
-          <View key={tag} style={{ backgroundColor: "#F1F5F9", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-            <Text style={{ fontSize: 11, color: "#64748B" }}>#{tag}</Text>
+          <View key={tag} style={{ backgroundColor: colors.surfaceSunken, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+            <Text style={{ fontSize: 11, color: colors.textSecondary }}>#{tag}</Text>
           </View>
         ))}
       </View>
@@ -223,37 +229,37 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           style={{
             marginHorizontal: 14,
             marginBottom: 12,
-            backgroundColor: "#F8FAFC",
+            backgroundColor: colors.surfaceSunken,
             borderRadius: 14,
             borderWidth: 1,
-            borderColor: "#E2E8F0",
+            borderColor: colors.border,
             overflow: "hidden",
           }}
         >
           {post.preview_metadata.image ? (
             <Image
               source={{ uri: post.preview_metadata.image }}
-              style={{ width: "100%", height: 160, backgroundColor: "#E2E8F0" }}
+              style={{ width: "100%", height: 160, backgroundColor: colors.surfaceSunken }}
               resizeMode="cover"
             />
           ) : null}
           <View style={{ padding: 12 }}>
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
-              <ExternalLink size={13} color="#0284C7" />
+              <ExternalLink size={13} color={colors.action} />
               <Text
                 numberOfLines={1}
-                style={{ fontSize: 12, color: "#0284C7", fontWeight: "700", marginLeft: 6, flex: 1 }}
+                style={{ fontSize: 12, color: colors.action, fontWeight: "700", marginLeft: 6, flex: 1 }}
               >
                 {post.preview_metadata.siteName || post.preview_metadata.url}
               </Text>
             </View>
             {post.preview_metadata.title ? (
-              <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", marginBottom: 2 }}>
+              <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary, marginBottom: 2 }}>
                 {post.preview_metadata.title}
               </Text>
             ) : null}
             {post.preview_metadata.description ? (
-              <Text numberOfLines={2} style={{ fontSize: 12, color: "#64748B", lineHeight: 17 }}>
+              <Text numberOfLines={2} style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }}>
                 {post.preview_metadata.description}
               </Text>
             ) : null}
@@ -263,15 +269,15 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         <TouchableOpacity
           onPress={(e) => { e.stopPropagation?.(); Linking.openURL(post.previewUrl!); }}
           activeOpacity={0.8}
-          style={{ marginHorizontal: 14, marginBottom: 12, backgroundColor: "#EFF6FF", borderRadius: 12, borderWidth: 1, borderColor: "#BFDBFE", paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center" }}
+          style={{ marginHorizontal: 14, marginBottom: 12, backgroundColor: colors.actionSurface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center" }}
         >
-          <ExternalLink size={13} color="#1A56DB" />
-          <Text numberOfLines={1} style={{ fontSize: 12, color: "#1A56DB", fontWeight: "600", marginLeft: 6, flex: 1 }}>{post.previewUrl}</Text>
+          <ExternalLink size={13} color={colors.action} />
+          <Text numberOfLines={1} style={{ fontSize: 12, color: colors.action, fontWeight: "600", marginLeft: 6, flex: 1 }}>{post.previewUrl}</Text>
         </TouchableOpacity>
       ) : null}
 
       {/* Divider */}
-      <View style={{ height: 1, backgroundColor: "#F1F5F9" }} />
+      <View style={{ height: 1, backgroundColor: colors.border }} />
 
       {/* Actions — likes/comments do not apply to thesis deposits */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 6, paddingVertical: 6 }}>
@@ -283,8 +289,8 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
                 activeOpacity={0.7}
                 style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
               >
-                <Heart size={18} color={liked ? "#EF4444" : "#94A3B8"} fill={liked ? "#EF4444" : "transparent"} strokeWidth={2} />
-                <Text style={{ fontSize: 12, color: liked ? "#EF4444" : "#94A3B8", marginLeft: 5, fontWeight: "600" }}>{likeCount}</Text>
+                <Heart size={18} color={liked ? colors.destructive : colors.textTertiary} fill={liked ? colors.destructive : "transparent"} strokeWidth={2} />
+                <Text style={{ fontSize: 12, color: liked ? colors.destructive : colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>{likeCount}</Text>
               </TouchableOpacity>
             </Animated.View>
 
@@ -293,8 +299,8 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
               activeOpacity={0.7}
               style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
             >
-              <MessageCircle size={18} color="#94A3B8" strokeWidth={2} />
-              <Text style={{ fontSize: 12, color: "#94A3B8", marginLeft: 5, fontWeight: "600" }}>{post.comments}</Text>
+              <MessageCircle size={18} color={colors.textTertiary} strokeWidth={2} />
+              <Text style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>{post.comments}</Text>
             </TouchableOpacity>
           </>
         )}
@@ -310,8 +316,8 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           activeOpacity={0.7}
           style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
         >
-          <Share2 size={18} color="#94A3B8" strokeWidth={2} />
-          <Text style={{ fontSize: 12, color: "#94A3B8", marginLeft: 5, fontWeight: "600" }}>Share</Text>
+          <Share2 size={18} color={colors.textTertiary} strokeWidth={2} />
+          <Text style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>Share</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>

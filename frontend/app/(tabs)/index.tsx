@@ -5,12 +5,14 @@ import HomeHeader from "../../src/components/HomeHeader";
 import PostCard from "../../src/components/PostCard";
 import SettingsSidebar from "../../src/components/SettingsSidebar";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useTheme } from "../../src/contexts/ThemeContext";
 import { useFocusEffect, useRouter } from "expo-router";
 import { apiFetch } from "../../src/lib/api";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
+  const { colors, isDark } = useTheme();
   const isGuest = profile?.role === "guest";
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -34,7 +36,7 @@ export default function HomeScreen() {
   // Fetch real users from backend / database
   const fetchActivePeers = async () => {
     try {
-      const res = await apiFetch(`/users`);
+      const res = await apiFetch(`/public/peers`);
       if (res.ok) {
         const users = await res.json();
         if (users && users.length > 0) {
@@ -169,17 +171,17 @@ export default function HomeScreen() {
           paddingHorizontal: 16, 
           paddingVertical: 8, 
           borderRadius: 20, 
-          backgroundColor: active ? "#1D4ED8" : "#EFF6FF",
+          backgroundColor: active ? colors.action : colors.surfaceSunken,
           marginRight: 8 
         }}
       >
-        <Text style={{ fontSize: 13, fontWeight: "600", color: active ? "#FFFFFF" : "#1D4ED8" }}>{label}</Text>
+        <Text style={{ fontSize: 13, fontWeight: "600", color: active ? "#FFFFFF" : colors.textPrimary }}>{label}</Text>
       </TouchableOpacity>
     );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F0F7FF" }}>
+    <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
       <HomeHeader onMenuPress={() => setSidebarOpen(true)} />
 
       {/* Main 3-Column Container */}
@@ -187,49 +189,49 @@ export default function HomeScreen() {
         
         {/* LEFT SIDEBAR (Desktop Web Facebook Style) */}
         {isDesktopWeb && (
-          <View style={{ width: 280, paddingHorizontal: 16, paddingTop: 18, borderRightWidth: 1, borderRightColor: "#DBEAFE" }}>
+          <View style={{ width: 280, paddingHorizontal: 16, paddingTop: 18, borderRightWidth: 1, borderRightColor: colors.border }}>
             {/* User Profile Card from Database */}
             <TouchableOpacity 
               onPress={() => router.push("/(tabs)/profile")}
-              style={{ flexDirection: "row", alignItems: "center", padding: 12, borderRadius: 12, backgroundColor: "#FFFFFF", marginBottom: 16, borderWidth: 1, borderColor: "#DBEAFE" }}
+              style={{ flexDirection: "row", alignItems: "center", padding: 12, borderRadius: 12, backgroundColor: colors.surface, marginBottom: 16, borderWidth: 1, borderColor: colors.border }}
             >
-              <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: "#BFDBFE", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-                <Text style={{ fontWeight: "800", color: "#1E293B", fontSize: 14 }}>{getInitials(activeUser.full_name)}</Text>
+              <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: colors.actionSurfaceAlt, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                <Text style={{ fontWeight: "800", color: colors.textPrimary, fontSize: 14 }}>{getInitials(activeUser.full_name)}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: "700", color: "#0F172A", fontSize: 14 }} numberOfLines={1}>{activeUser.full_name}</Text>
-                <Text style={{ color: "#64748B", fontSize: 11 }}>{activeUser.department_name || "No department"} {activeUser.year_level ? `· ${activeUser.year_level}` : ""}</Text>
+                <Text style={{ fontWeight: "700", color: colors.textPrimary, fontSize: 14 }} numberOfLines={1}>{activeUser.full_name}</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 11 }}>{activeUser.department_name || "No department"} {activeUser.year_level ? `· ${activeUser.year_level}` : ""}</Text>
               </View>
             </TouchableOpacity>
 
             {/* Navigation Shortcuts */}
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", marginBottom: 8, paddingLeft: 8 }}>Shortcuts</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textTertiary, textTransform: "uppercase", marginBottom: 8, paddingLeft: 8 }}>Shortcuts</Text>
             
-            <TouchableOpacity onPress={() => setFilter("all")} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10, backgroundColor: filter === "all" ? "#EFF6FF" : "transparent" }}>
-              <Users size={18} color="#1A56DB" />
-              <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }}>Campus Feed</Text>
+            <TouchableOpacity onPress={() => setFilter("all")} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10, backgroundColor: filter === "all" ? colors.actionSurface : "transparent" }}>
+              <Users size={18} color={colors.action} />
+              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textPrimary }}>Campus Feed</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.push("/(tabs)/search")} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10 }}>
-              <BookOpen size={18} color="#1A56DB" />
-              <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }}>Thesis Repository</Text>
+              <BookOpen size={18} color={colors.action} />
+              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textPrimary }}>Thesis Repository</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setFilter("projects")} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10, backgroundColor: filter === "projects" ? "#EFF6FF" : "transparent" }}>
+            <TouchableOpacity onPress={() => setFilter("projects")} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10, backgroundColor: filter === "projects" ? colors.actionSurface : "transparent" }}>
               <FolderGit2 size={18} color="#10B981" />
-              <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }}>Capstones & Projects</Text>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textPrimary }}>Capstones & Projects</Text>
             </TouchableOpacity>
 
             {!isGuest && (
               <TouchableOpacity onPress={() => router.push("/messages")} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10 }}>
                 <MessageSquare size={18} color="#8B5CF6" />
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }}>Messages</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textPrimary }}>Messages</Text>
               </TouchableOpacity>
             )}
 
             <TouchableOpacity onPress={() => setSidebarOpen(true)} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10 }}>
-              <Settings size={18} color="#64748B" />
-              <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }}>Settings & Privacy</Text>
+              <Settings size={18} color={colors.textTertiary} />
+              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textPrimary }}>Settings & Privacy</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -253,15 +255,15 @@ export default function HomeScreen() {
                       marginHorizontal: 16,
                       marginBottom: 12,
                       padding: 14,
-                      backgroundColor: "#FFFFFF",
+                      backgroundColor: colors.surface,
                       borderRadius: 16,
                       borderWidth: 1,
-                      borderColor: "#DBEAFE",
+                      borderColor: colors.border,
                       flexDirection: "row",
                       alignItems: "center",
-                      shadowColor: "#1A56DB",
+                      shadowColor: colors.shadow,
                       shadowOffset: { width: 0, height: 1 },
-                      shadowOpacity: 0.05,
+                      shadowOpacity: isDark ? 0.3 : 0.05,
                       shadowRadius: 4,
                       elevation: 2,
                     }}
@@ -271,27 +273,27 @@ export default function HomeScreen() {
                         width: 38,
                         height: 38,
                         borderRadius: 19,
-                        backgroundColor: "#BFDBFE",
+                        backgroundColor: colors.actionSurfaceAlt,
                         alignItems: "center",
                         justifyContent: "center",
                         marginRight: 10,
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: "800", color: "#1E293B" }}>{getInitials(activeUser.full_name)}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "800", color: colors.textPrimary }}>{getInitials(activeUser.full_name)}</Text>
                     </View>
                     <View
                       style={{
                         flex: 1,
                         height: 38,
-                        backgroundColor: "#F0F7FF",
+                        backgroundColor: colors.surfaceSunken,
                         borderRadius: 19,
                         borderWidth: 1,
-                        borderColor: "#DBEAFE",
+                        borderColor: colors.border,
                         justifyContent: "center",
                         paddingHorizontal: 14,
                       }}
                     >
-                      <Text style={{ color: "#94A3B8", fontSize: 13 }}>
+                      <Text style={{ color: colors.textTertiary, fontSize: 13 }}>
                         Share your project or deposit thesis...
                       </Text>
                     </View>
@@ -313,8 +315,8 @@ export default function HomeScreen() {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                colors={["#1A56DB"]}
-                tintColor="#1A56DB"
+                colors={[colors.action]}
+                tintColor={colors.action}
               />
             }
           />
@@ -322,11 +324,11 @@ export default function HomeScreen() {
 
         {/* RIGHT SIDEBAR (Desktop Web: Deadlines & Live DB Active Peers) */}
         {isDesktopWeb && (
-          <View style={{ width: 300, paddingHorizontal: 18, paddingTop: 18, borderLeftWidth: 1, borderLeftColor: "#DBEAFE" }}>
+          <View style={{ width: 300, paddingHorizontal: 18, paddingTop: 18, borderLeftWidth: 1, borderLeftColor: colors.border }}>
             
             {/* Quick Deposit Banner */}
             {!isGuest && (
-              <View style={{ backgroundColor: "#1A56DB", borderRadius: 16, padding: 16, marginBottom: 18 }}>
+              <View style={{ backgroundColor: isDark ? "hsl(215, 35%, 18%)" : "#1A56DB", borderRadius: 16, padding: 16, marginBottom: 18, borderWidth: isDark ? 1 : 0, borderColor: colors.border }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <UploadCloud size={20} color="#FFFFFF" />
                   <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 14 }}>Deposit Manuscript</Text>
@@ -336,25 +338,25 @@ export default function HomeScreen() {
                 </Text>
                 <TouchableOpacity
                   onPress={() => router.push("/upload-thesis")}
-                  style={{ backgroundColor: "#FFFFFF", paddingVertical: 8, borderRadius: 8, alignItems: "center" }}
+                  style={{ backgroundColor: colors.surface, paddingVertical: 8, borderRadius: 8, alignItems: "center" }}
                 >
-                  <Text style={{ color: "#1A56DB", fontWeight: "700", fontSize: 12 }}>Upload PDF</Text>
+                  <Text style={{ color: colors.action, fontWeight: "700", fontSize: 12 }}>Upload PDF</Text>
                 </TouchableOpacity>
               </View>
             )}
 
             {/* Academic Deadlines */}
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", marginBottom: 10 }}>Academic Deadlines</Text>
-            <View style={{ backgroundColor: "#FFFFFF", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#DBEAFE", marginBottom: 18 }}>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textTertiary, textTransform: "uppercase", marginBottom: 10 }}>Academic Deadlines</Text>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border, marginBottom: 18 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <Calendar size={15} color="#1A56DB" />
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E293B" }}>Capstone Title Defense</Text>
+                <Calendar size={15} color={colors.action} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textPrimary }}>Capstone Title Defense</Text>
               </View>
-              <Text style={{ fontSize: 11, color: "#64748B" }}>College of Computer Studies • Term 1</Text>
+              <Text style={{ fontSize: 11, color: colors.textTertiary }}>College of Computer Studies • Term 1</Text>
             </View>
 
             {/* Live Active Peers (Fetched from database via raw SQL backend) */}
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", marginBottom: 8 }}>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textTertiary, textTransform: "uppercase", marginBottom: 8 }}>
               Active Peers ({activePeers.length})
             </Text>
             
@@ -365,14 +367,14 @@ export default function HomeScreen() {
                 style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, gap: 10 }}
               >
                 <View style={{ position: "relative" }}>
-                  <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#4338CA" }}>{getInitials(peer.full_name)}</Text>
+                  <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.actionSurfaceAlt, alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.action }}>{getInitials(peer.full_name)}</Text>
                   </View>
-                  <View style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: "#22C55E", borderWidth: 2, borderColor: "#FFFFFF" }} />
+                  <View style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: "#22C55E", borderWidth: 2, borderColor: colors.surface }} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }} numberOfLines={1}>{peer.full_name}</Text>
-                  <Text style={{ fontSize: 10, color: "#94A3B8" }}>{peer.department_name || "No department"} {peer.year_level ? `· ${peer.year_level}` : ""}</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textPrimary }} numberOfLines={1}>{peer.full_name}</Text>
+                  <Text style={{ fontSize: 10, color: colors.textTertiary }}>{peer.department_name || "No department"} {peer.year_level ? `· ${peer.year_level}` : ""}</Text>
                 </View>
               </TouchableOpacity>
             ))}

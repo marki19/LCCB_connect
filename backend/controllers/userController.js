@@ -3,13 +3,16 @@ const departmentModel = require("../models/departmentModel");
 const { clampLimit } = require("../models/pagination");
 const {
   isAdmin,
-  isSuperAdmin,
-  normalizeRole,
   canManage,
 } = require("../middleware/auth");
 
 const getUsers = async (req, res, next) => {
   try {
+    // The directory moved to GET /api/public/peers. This endpoint remains for
+    // the console only.
+    if (!isAdmin(req)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     // Optional keyset pagination: ?limit=<1..100>&cursor=<last id>
     const users = await userModel.getAllUsers({
       limit: clampLimit(req.query.limit),
@@ -24,6 +27,10 @@ const getUsers = async (req, res, next) => {
 const getUser = async (req, res, next) => {
   try {
     const { id } = req.params;
+    // Self or admin only. Other callers get 404 so ids cannot be probed.
+    if (String(req.user.id) !== String(id) && !isAdmin(req)) {
+      return res.status(404).json({ message: "User not found" });
+    }
     const user = await userModel.getUserById(id);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -126,18 +133,12 @@ const updateUser = async (req, res, next) => {
 
     const payload = { ...req.body };
 
-    // Role assignment rules:
-    //  - only an admin may change a role at all (everyone else has it stripped)
-    //  - only a superadmin may grant `superadmin` — this also stops an admin
-    //    from promoting themselves
+    // Role writes belong to the audited console endpoint. Reject rather than
+    // silently ignore so an old client cannot believe the change succeeded.
     if (payload.role !== undefined) {
-      if (!isAdmin(req)) {
-        delete payload.role;
-      } else if (normalizeRole(payload.role) === "superadmin" && !isSuperAdmin(req)) {
-        return res.status(403).json({
-          error: "Forbidden: only a superadmin can grant the superadmin role",
-        });
-      }
+      return res.status(400).json({
+        error: "Role changes must use /api/admin/users/:id/role",
+      });
     }
 
     // Department/course is the messaging access key. A non-admin may CLAIM it
@@ -179,9 +180,11 @@ const updateUser = async (req, res, next) => {
 const deleteUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const authz = await authorizeAccountAction(req, id);
-    if (!authz.ok) {
-      return res.status(authz.status).json(authz.body);
+
+    // Self-delete only. Account deletion by an admin must go through the
+    // audited superadmin endpoint so the Auth user is removed too.
+    if (String(req.user.id) !== String(id)) {
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     const deletedUser = await userModel.deleteUser(id);
