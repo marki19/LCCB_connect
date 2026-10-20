@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Building2, GraduationCap, Plus, Power, Check } from "lucide-react-native";
 import { apiFetch } from "../../src/lib/api";
+import { useTheme } from "../../src/contexts/ThemeContext";
 import type { Department, Course } from "../../src/types";
 
 /**
@@ -19,6 +20,7 @@ import type { Department, Course } from "../../src/types";
  * profile/course references stay valid.
  */
 export default function AdminDepartmentsScreen() {
+  const { colors } = useTheme();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -166,58 +168,111 @@ export default function AdminDepartmentsScreen() {
     });
 
   return (
-    <ScrollView className="flex-1 p-8" showsVerticalScrollIndicator={false}>
-      <View className="mb-6">
-        <Text className="text-3xl font-black text-slate-900 tracking-tight">
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.surfacePage }}
+      contentContainerStyle={{ padding: 32 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={{ marginBottom: 24 }}>
+        <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
           Departments &amp; Courses
         </Text>
-        <Text className="text-slate-500 text-lg mt-1">
+        <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: 4 }}>
           These drive registration and who can message whom. Entries are deactivated, never deleted.
         </Text>
       </View>
 
       {error ? (
-        <View className="bg-red-50 border border-red-100 rounded-xl p-3 mb-4">
-          <Text className="text-red-600 font-semibold">{error}</Text>
+        <View
+          style={{
+            marginBottom: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.destructive,
+            backgroundColor: colors.destructiveSurface,
+            padding: 14,
+          }}
+        >
+          <Text style={{ fontWeight: "600", color: colors.destructiveText }}>{error}</Text>
         </View>
       ) : null}
 
-      <View className="flex-row gap-6" style={{ alignItems: "flex-start" }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
         {/* Departments */}
-        <View className="w-96 bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
-          <View className="flex-row items-center mb-4">
-            <Building2 color="#1D4ED8" size={20} />
-            <Text className="text-lg font-bold text-slate-800 ml-2">Departments</Text>
+        <View
+          style={{
+            width: 380,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            padding: 24,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+            <Building2 color={colors.primary} size={20} />
+            <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary, marginLeft: 8 }}>
+              Departments
+            </Text>
           </View>
 
-          <View className="flex-row gap-2 mb-4">
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
             <TextInput
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900"
+              style={{
+                flex: 1,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.inputBorder,
+                backgroundColor: colors.inputBg,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                fontSize: 13,
+                color: colors.textPrimary,
+              }}
               placeholder="Department name"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={colors.textMuted}
               value={newDept}
               onChangeText={setNewDept}
             />
             <TextInput
-              className="w-24 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900"
+              style={{
+                width: 80,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.inputBorder,
+                backgroundColor: colors.inputBg,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                fontSize: 13,
+                color: colors.textPrimary,
+              }}
               placeholder="Code"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={colors.textMuted}
               value={newDeptCode}
               onChangeText={setNewDeptCode}
             />
             <TouchableOpacity
               onPress={addDepartment}
               disabled={busy}
-              className="bg-[#1D4ED8] rounded-xl px-4 items-center justify-center"
+              style={{
+                borderRadius: 12,
+                backgroundColor: colors.primary,
+                paddingHorizontal: 14,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: busy ? 0.5 : 1,
+              }}
             >
-              <Plus color="#FFFFFF" size={20} />
+              <Plus color={colors.textOnPrimary} size={18} />
             </TouchableOpacity>
           </View>
 
           {loading ? (
-            <ActivityIndicator color="#1D4ED8" />
+            <ActivityIndicator color={colors.primary} />
           ) : departments.length === 0 ? (
-            <Text className="text-slate-500 text-sm italic">No departments yet.</Text>
+            <Text style={{ fontSize: 13, fontStyle: "italic", color: colors.textTertiary }}>
+              No departments yet.
+            </Text>
           ) : (
             departments.map((d) => (
               <TouchableOpacity
@@ -226,22 +281,32 @@ export default function AdminDepartmentsScreen() {
                   setSelectedId(d.id);
                   setCourses([]);
                 }}
-                className={`flex-row items-center justify-between rounded-xl px-3 py-3 mb-1 border ${
-                  selectedId === d.id ? "border-[#1D4ED8] bg-blue-50" : "border-transparent"
-                } ${d.is_active ? "" : "opacity-50"}`}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  marginBottom: 6,
+                  borderWidth: 1,
+                  borderColor: selectedId === d.id ? colors.primary : colors.divider,
+                  backgroundColor: selectedId === d.id ? colors.primarySurface : colors.surfaceSunken,
+                  opacity: d.is_active ? 1 : 0.5,
+                }}
               >
-                <View className="flex-1 pr-2">
+                <View style={{ flex: 1, paddingRight: 8 }}>
                   <TextInput
-                    className="text-slate-900 font-semibold"
+                    style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}
                     defaultValue={d.name}
                     onEndEditing={(e) => renameDepartment(d, e.nativeEvent.text)}
                   />
                   {d.code ? (
-                    <Text className="text-slate-400 text-xs">{d.code}</Text>
+                    <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 2 }}>{d.code}</Text>
                   ) : null}
                 </View>
-                <TouchableOpacity onPress={() => toggleDepartment(d)} className="p-2">
-                  <Power color={d.is_active ? "#22C55E" : "#94A3B8"} size={18} />
+                <TouchableOpacity onPress={() => toggleDepartment(d)} style={{ padding: 6 }}>
+                  <Power color={d.is_active ? colors.success : colors.textDisabled} size={17} />
                 </TouchableOpacity>
               </TouchableOpacity>
             ))
@@ -249,71 +314,121 @@ export default function AdminDepartmentsScreen() {
         </View>
 
         {/* Courses of the selected department */}
-        <View className="flex-1 bg-white rounded-2xl border border-slate-100 p-6 shadow-sm min-h-[400px]">
-          <View className="flex-row items-center mb-4">
-            <GraduationCap color="#1D4ED8" size={20} />
-            <Text className="text-lg font-bold text-slate-800 ml-2">
+        <View
+          style={{
+            flex: 1,
+            minWidth: 420,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            padding: 24,
+            minHeight: 400,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+            <GraduationCap color={colors.primary} size={20} />
+            <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary, marginLeft: 8 }}>
               {selected ? `Courses — ${selected.name}` : "Courses"}
             </Text>
           </View>
 
           {!selected ? (
-            <Text className="text-slate-500 text-sm italic">
+            <Text style={{ fontSize: 13, fontStyle: "italic", color: colors.textTertiary }}>
               Select a department to manage its courses.
             </Text>
           ) : (
             <>
-              <View className="flex-row gap-2 mb-4">
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
                 <TextInput
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900"
+                  style={{
+                    flex: 1,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.inputBorder,
+                    backgroundColor: colors.inputBg,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    fontSize: 13,
+                    color: colors.textPrimary,
+                  }}
                   placeholder="Course name (e.g. BS Information Technology)"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textMuted}
                   value={newCourse}
                   onChangeText={setNewCourse}
                 />
                 <TextInput
-                  className="w-24 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900"
+                  style={{
+                    width: 80,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.inputBorder,
+                    backgroundColor: colors.inputBg,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    fontSize: 13,
+                    color: colors.textPrimary,
+                  }}
                   placeholder="Code"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textMuted}
                   value={newCourseCode}
                   onChangeText={setNewCourseCode}
                 />
                 <TouchableOpacity
                   onPress={addCourse}
                   disabled={busy}
-                  className="bg-[#1D4ED8] rounded-xl px-4 items-center justify-center"
+                  style={{
+                    borderRadius: 12,
+                    backgroundColor: colors.primary,
+                    paddingHorizontal: 14,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: busy ? 0.5 : 1,
+                  }}
                 >
-                  <Plus color="#FFFFFF" size={20} />
+                  <Plus color={colors.textOnPrimary} size={18} />
                 </TouchableOpacity>
               </View>
 
               {courses.length === 0 ? (
-                <Text className="text-slate-500 text-sm italic">No courses yet.</Text>
+                <Text style={{ fontSize: 13, fontStyle: "italic", color: colors.textTertiary }}>
+                  No courses yet.
+                </Text>
               ) : (
                 courses.map((c) => (
                   <View
                     key={c.id}
-                    className={`flex-row items-center justify-between rounded-xl px-3 py-3 mb-1 ${
-                      c.is_active ? "" : "opacity-50"
-                    }`}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      borderRadius: 12,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      marginBottom: 6,
+                      borderWidth: 1,
+                      borderColor: colors.divider,
+                      backgroundColor: colors.surfaceSunken,
+                      opacity: c.is_active ? 1 : 0.5,
+                    }}
                   >
-                    <View className="flex-1 pr-2">
+                    <View style={{ flex: 1, paddingRight: 8 }}>
                       <TextInput
-                        className="text-slate-900 font-semibold"
+                        style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}
                         defaultValue={c.name}
                         onEndEditing={(e) => renameCourse(c, e.nativeEvent.text)}
                       />
-                      <View className="flex-row items-center">
+                      <View style={{ flexDirection: "row", alignItems: "center", marginTop: 2 }}>
                         {c.code ? (
-                          <Text className="text-slate-400 text-xs mr-2">{c.code}</Text>
+                          <Text style={{ fontSize: 11, color: colors.textTertiary, marginRight: 8 }}>
+                            {c.code}
+                          </Text>
                         ) : null}
-                        {c.is_active ? (
-                          <Check color="#22C55E" size={12} />
-                        ) : null}
+                        {c.is_active ? <Check color={colors.success} size={12} /> : null}
                       </View>
                     </View>
-                    <TouchableOpacity onPress={() => toggleCourse(c)} className="p-2">
-                      <Power color={c.is_active ? "#22C55E" : "#94A3B8"} size={18} />
+                    <TouchableOpacity onPress={() => toggleCourse(c)} style={{ padding: 6 }}>
+                      <Power color={c.is_active ? colors.success : colors.textDisabled} size={17} />
                     </TouchableOpacity>
                   </View>
                 ))
@@ -325,3 +440,4 @@ export default function AdminDepartmentsScreen() {
     </ScrollView>
   );
 }
+

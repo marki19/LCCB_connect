@@ -5,10 +5,12 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { GraduationCap, AlertCircle, ArrowRight } from "lucide-react-native";
+import { AlertCircle, ArrowRight } from "lucide-react-native";
 import { useAuth } from "../src/contexts/AuthContext";
+import { useTheme } from "../src/contexts/ThemeContext";
 import { apiFetch } from "../src/lib/api";
 import { fetchDepartments, fetchCourses } from "../src/lib/catalog";
 import type { Department, Course } from "../src/types";
@@ -25,6 +27,7 @@ import SelectField from "../src/components/SelectField";
 export default function CompleteProfileScreen() {
   const router = useRouter();
   const { session, refreshProfile } = useAuth();
+  const { colors, isDark } = useTheme();
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -69,8 +72,6 @@ export default function CompleteProfileScreen() {
       const courseName = courses.find((c) => c.id === courseId)?.name || null;
       const res = await apiFetch(`/users/${session.user.id}`, {
         method: "PUT",
-        // `course` (free text) is mirrored for legacy displays; the access key
-        // is `department_id`.
         body: JSON.stringify({
           department_id: departmentId,
           course_id: courseId,
@@ -92,34 +93,92 @@ export default function CompleteProfileScreen() {
   };
 
   return (
-    <View className="flex-1 bg-[#F8FAFC]">
-      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
-        <View className="w-full max-w-lg self-center p-6">
-          <View className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
-            <View className="items-center mb-6">
-              <View className="w-16 h-16 rounded-full bg-[#DBEAFE] items-center justify-center mb-4">
-                <GraduationCap color="#1D4ED8" size={30} />
+    <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingVertical: 24 }}>
+        <View style={{ width: "100%", maxWidth: 500, alignSelf: "center", padding: 24 }}>
+          <View 
+            style={{ 
+              backgroundColor: colors.surface, 
+              borderRadius: 28, 
+              padding: 32, 
+              borderWidth: 1, 
+              borderColor: colors.border, 
+              shadowColor: colors.shadow, 
+              shadowOffset: { width: 0, height: 10 }, 
+              shadowOpacity: isDark ? 0.35 : 0.08, 
+              shadowRadius: 20, 
+              elevation: 6 
+            }}
+          >
+            <View style={{ alignItems: "center", marginBottom: 28 }}>
+              {/* Official Seal Logo */}
+              <View 
+                style={{ 
+                  width: 76, 
+                  height: 76, 
+                  borderRadius: 38, 
+                  backgroundColor: colors.actionSurfaceAlt, 
+                  alignItems: "center", 
+                  justifyContent: "center", 
+                  marginBottom: 14,
+                  borderWidth: 1.5,
+                  borderColor: isDark ? "rgba(76, 132, 255, 0.3)" : "#DBEAFE",
+                  padding: 6,
+                }}
+              >
+                <Image 
+                  source={require("../assets/images/logo-seal.png")} 
+                  style={{ width: 56, height: 56 }} 
+                  resizeMode="contain" 
+                />
               </View>
-              <Text className="text-2xl font-extrabold text-slate-900 text-center">
-                Complete your profile
+
+              <View 
+                style={{ 
+                  paddingHorizontal: 12, 
+                  paddingVertical: 4, 
+                  borderRadius: 12, 
+                  backgroundColor: isDark ? "rgba(76, 132, 255, 0.1)" : "#EBF1FF", 
+                  borderWidth: 1, 
+                  borderColor: isDark ? "rgba(76, 132, 255, 0.2)" : "#DBEAFE",
+                  marginBottom: 8,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: "700", color: colors.primary, letterSpacing: 1.2, textTransform: "uppercase" }}>
+                  La Consolacion College Bacolod
+                </Text>
+              </View>
+
+              <Text style={{ fontSize: 24, fontWeight: "800", color: colors.textPrimary, textAlign: "center", letterSpacing: -0.4 }}>
+                Complete Your Profile
               </Text>
-              <Text className="text-slate-500 text-sm mt-2 text-center leading-5">
-                Choose your department and course. This is required to message
-                classmates and appears on your profile.
+              <Text style={{ color: colors.textTertiary, fontSize: 13, marginTop: 6, textAlign: "center", lineHeight: 18 }}>
+                Choose your department and course. This connects you with faculty and peers across campus.
               </Text>
             </View>
 
             {error ? (
-              <View className="bg-red-50 rounded-xl p-3 flex-row items-center mb-4">
-                <AlertCircle color="#EF4444" size={18} />
-                <Text className="text-red-600 font-semibold ml-3 flex-1">{error}</Text>
+              <View 
+                style={{ 
+                  backgroundColor: colors.destructiveSurface, 
+                  borderRadius: 12, 
+                  padding: 12, 
+                  flexDirection: "row", 
+                  alignItems: "center", 
+                  marginBottom: 18,
+                  borderWidth: 1,
+                  borderColor: colors.destructiveSurfaceAlt,
+                }}
+              >
+                <AlertCircle color={colors.destructive} size={18} />
+                <Text style={{ color: colors.destructiveText, fontWeight: "600", fontSize: 13, marginLeft: 10, flex: 1 }}>{error}</Text>
               </View>
             ) : null}
 
-            <Text className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>
               Department
             </Text>
-            <View className="mb-4">
+            <View style={{ marginBottom: 16 }}>
               <SelectField
                 value={departmentId}
                 options={departments.map((d) => ({ label: d.name, value: d.id }))}
@@ -134,10 +193,10 @@ export default function CompleteProfileScreen() {
               />
             </View>
 
-            <Text className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>
               Course
             </Text>
-            <View className="mb-6">
+            <View style={{ marginBottom: 24 }}>
               <SelectField
                 value={courseId}
                 options={courses.map((c) => ({ label: c.name, value: c.id }))}
@@ -156,17 +215,29 @@ export default function CompleteProfileScreen() {
             <TouchableOpacity
               onPress={handleSave}
               disabled={saving || loading}
-              activeOpacity={0.8}
-              className={`h-14 rounded-2xl flex-row items-center justify-center ${
-                saving || loading ? "bg-indigo-300" : "bg-[#4F46E5]"
-              }`}
+              activeOpacity={0.85}
+              style={{
+                height: 52,
+                borderRadius: 14,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: (saving || loading) ? colors.surfaceSunken : colors.primary,
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: isDark ? 0.35 : 0.22,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
             >
               {saving ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
-                  <Text className="text-white font-bold text-base mr-2">Save and continue</Text>
-                  <ArrowRight color="#FFFFFF" size={20} />
+                  <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 15, marginRight: 8 }}>
+                    Save and Continue
+                  </Text>
+                  <ArrowRight color="#FFFFFF" size={18} />
                 </>
               )}
             </TouchableOpacity>
