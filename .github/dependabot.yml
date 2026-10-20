@@ -21,6 +21,25 @@ updates:
       frontend-minor-patch:
         patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      # SDK-coupled packages only move via `expo install` during a planned SDK
+      # upgrade. Expo Go currently supports SDK 57 only, so SDK 58 bumps
+      # cannot be smoke-tested yet.
+      - dependency-name: "expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "expo-*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "@types/react"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-reanimated"
+      - dependency-name: "react-native-worklets"
+      - dependency-name: "react-native-screens"
+      - dependency-name: "react-native-safe-area-context"
+      - dependency-name: "react-native-svg"
+      - dependency-name: "react-native-web"
+      - dependency-name: "react-native-webview"
 
   - package-ecosystem: github-actions
     directory: /
