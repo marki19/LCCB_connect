@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { LogOut, ShieldAlert } from "lucide-react-native";
 import { useAuth } from "../src/contexts/AuthContext";
+import { useTheme } from "../src/contexts/ThemeContext";
 
 function formatUntil(value?: string | null) {
   if (!value) return "Until an administrator restores the account";
@@ -13,6 +14,7 @@ function formatUntil(value?: string | null) {
 export default function SuspendedScreen() {
   const router = useRouter();
   const { profile, signOut } = useAuth();
+  const { colors } = useTheme();
 
   const handleSignOut = async () => {
     await signOut();
@@ -20,41 +22,95 @@ export default function SuspendedScreen() {
   };
 
   return (
-    <View className="flex-1 items-center justify-center bg-slate-50 p-6">
-      <View className="w-full max-w-[560px] rounded-3xl border border-red-100 bg-white p-8 shadow-sm">
-        <View className="mb-5 h-14 w-14 items-center justify-center rounded-2xl bg-red-50">
-          <ShieldAlert size={28} color="#DC2626" />
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.surfacePage,
+        padding: 24,
+      }}
+    >
+      <View
+        style={{
+          width: "100%",
+          maxWidth: 560,
+          borderRadius: 24,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+          padding: 32,
+          shadowColor: colors.shadowStrong,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 16,
+          elevation: 4,
+        }}
+      >
+        <View
+          style={{
+            marginBottom: 20,
+            height: 56,
+            width: 56,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 16,
+            backgroundColor: colors.destructiveSurface,
+          }}
+        >
+          <ShieldAlert size={28} color={colors.destructiveText} />
         </View>
-        <Text className="text-2xl font-black tracking-tight text-slate-900">
+        <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
           Account suspended
         </Text>
-        <Text className="mt-2 text-base leading-6 text-slate-500">
+        <Text style={{ marginTop: 8, fontSize: 15, lineHeight: 22, color: colors.textSecondary }}>
           This account cannot use LCCB Connect while the suspension is active.
         </Text>
 
-        <View className="mt-6 rounded-2xl bg-slate-50 p-4">
-          <Text className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        <View
+          style={{
+            marginTop: 24,
+            borderRadius: 16,
+            backgroundColor: colors.surfaceSunken,
+            padding: 16,
+          }}
+        >
+          <Text style={{ fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
             Reason
           </Text>
-          <Text className="mt-1 text-sm leading-5 text-slate-700">
+          <Text style={{ marginTop: 4, fontSize: 14, lineHeight: 20, color: colors.textPrimary }}>
             {profile?.suspension_reason || "No reason was recorded."}
           </Text>
-          <Text className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">
+          <Text style={{ marginTop: 16, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
             Duration
           </Text>
-          <Text className="mt-1 text-sm leading-5 text-slate-700">
+          <Text style={{ marginTop: 4, fontSize: 14, lineHeight: 20, color: colors.textPrimary }}>
             {formatUntil(profile?.suspended_until)}
           </Text>
         </View>
 
         <TouchableOpacity
           onPress={() => void handleSignOut()}
-          className="mt-6 flex-row items-center justify-center rounded-xl border border-slate-200 px-4 py-3"
+          style={{
+            marginTop: 24,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.borderStrong,
+            backgroundColor: colors.surface,
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+          }}
         >
-          <LogOut size={18} color="#475569" />
-          <Text className="ml-2 font-bold text-slate-700">Sign out</Text>
+          <LogOut size={18} color={colors.textSecondary} />
+          <Text style={{ marginLeft: 8, fontSize: 14, fontWeight: "700", color: colors.textSecondary }}>
+            Sign out
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
+

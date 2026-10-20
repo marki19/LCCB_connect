@@ -21,6 +21,8 @@ import {
 } from "lucide-react-native";
 import { getAdminOverview, type AdminOverview } from "../../src/lib/adminApi";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useTheme } from "../../src/contexts/ThemeContext";
+import { ThemeTokens } from "../../src/lib/tokens";
 import { isSuperAdminRole } from "../../src/lib/roles";
 
 const ACTION_LABELS: Record<string, string> = {
@@ -64,24 +66,52 @@ type StatCardProps = {
   detail?: string;
   icon: any;
   color: string;
+  colors: ThemeTokens;
 };
 
-function StatCard({ title, value, detail, icon: Icon, color }: StatCardProps) {
+function StatCard({ title, value, detail, icon: Icon, color, colors }: StatCardProps) {
   return (
-    <View className="min-w-[210px] flex-1 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-      <View className="mb-4 flex-row items-start justify-between">
+    <View
+      style={{
+        minWidth: 210,
+        flex: 1,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        padding: 20,
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 2,
+      }}
+    >
+      <View style={{ marginBottom: 14, flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
         <View
-          className="h-11 w-11 items-center justify-center rounded-full"
-          style={{ backgroundColor: `${color}15` }}
+          style={{
+            height: 44,
+            width: 44,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 12,
+            backgroundColor: `${color}18`,
+          }}
         >
           <Icon color={color} size={22} />
         </View>
       </View>
-      <Text className="text-3xl font-black tracking-tight text-slate-800">
+      <Text style={{ fontSize: 28, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
         {value}
       </Text>
-      <Text className="mt-1 text-sm font-semibold text-slate-500">{title}</Text>
-      {detail ? <Text className="mt-2 text-xs text-slate-400">{detail}</Text> : null}
+      <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
+        {title}
+      </Text>
+      {detail ? (
+        <Text style={{ marginTop: 6, fontSize: 12, color: colors.textTertiary }}>
+          {detail}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -89,6 +119,7 @@ function StatCard({ title, value, detail, icon: Icon, color }: StatCardProps) {
 export default function AdminOverviewScreen() {
   const router = useRouter();
   const { profile } = useAuth();
+  const { colors } = useTheme();
   const [data, setData] = useState<AdminOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -119,117 +150,196 @@ export default function AdminOverviewScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-[#F8FAFC] p-8"
+      style={{ flex: 1, backgroundColor: colors.surfacePage }}
+      contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View className="mb-7 flex-row flex-wrap items-start justify-between gap-4">
+      <View style={{ marginBottom: 28, flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <View>
-          <Text className="text-3xl font-black tracking-tight text-slate-900">
+          <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
             Overview
           </Text>
-          <Text className="mt-1 text-base text-slate-500">
+          <Text style={{ marginTop: 4, fontSize: 14, color: colors.textSecondary }}>
             Campus health and moderation at a glance.
           </Text>
         </View>
         <TouchableOpacity
           onPress={() => void load()}
-          className="flex-row items-center rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+          }}
         >
-          <RefreshCw size={16} color="#475569" />
-          <Text className="ml-2 text-sm font-semibold text-slate-700">Refresh</Text>
+          <RefreshCw size={15} color={colors.textSecondary} />
+          <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
+            Refresh
+          </Text>
         </TouchableOpacity>
       </View>
 
       {error ? (
-        <View className="mb-5 rounded-xl border border-red-100 bg-red-50 p-4">
-          <Text className="font-semibold text-red-600">{error}</Text>
+        <View
+          style={{
+            marginBottom: 20,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.destructive,
+            backgroundColor: colors.destructiveSurface,
+            padding: 16,
+          }}
+        >
+          <Text style={{ fontWeight: "600", color: colors.destructiveText }}>{error}</Text>
         </View>
       ) : null}
 
       {loading && !data ? (
-        <View className="min-h-[300px] items-center justify-center">
-          <ActivityIndicator size="large" color="#1D4ED8" />
+        <View style={{ minHeight: 300, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : data ? (
         <>
-          <View className="mb-5 flex-row flex-wrap gap-4">
+          <View style={{ marginBottom: 20, flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
             <StatCard
               title="Total users"
               value={data.users.total}
               detail={`${data.users.students} students · ${data.users.faculty} faculty`}
               icon={Users}
-              color="#1D4ED8"
+              color={colors.primary}
+              colors={colors}
             />
             <StatCard
               title="Content items"
               value={data.content.posts + data.content.theses}
               detail={`${data.content.posts} posts · ${data.content.theses} theses`}
               icon={FileText}
-              color="#0F766E"
+              color={colors.info}
+              colors={colors}
             />
             <StatCard
               title="Open reports"
               value={openReports}
               detail={`${data.reports.message_reports} messages · ${flaggedTotal} flagged`}
               icon={Flag}
-              color="#DC2626"
+              color={colors.destructive}
+              colors={colors}
             />
             <StatCard
               title="Active last 7 days"
               value={data.users.active_7d}
               detail={`${data.users.new_7d} joined this week`}
               icon={Activity}
-              color="#D97706"
+              color={colors.warning}
+              colors={colors}
             />
           </View>
 
-          <View className="mb-6 flex-row flex-wrap gap-3">
-            <View className="flex-row items-center rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <EyeOff size={16} color="#64748B" />
-              <Text className="ml-2 text-sm text-slate-500">
+          <View style={{ marginBottom: 24, flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+              }}
+            >
+              <EyeOff size={16} color={colors.textTertiary} />
+              <Text style={{ marginLeft: 8, fontSize: 13, color: colors.textSecondary }}>
                 Hidden{" "}
-                <Text className="font-bold text-slate-800">{data.content.hidden}</Text>
+                <Text style={{ fontWeight: "800", color: colors.textPrimary }}>{data.content.hidden}</Text>
               </Text>
             </View>
-            <View className="flex-row items-center rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <AlertTriangle size={16} color="#D97706" />
-              <Text className="ml-2 text-sm text-slate-500">
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+              }}
+            >
+              <AlertTriangle size={16} color={colors.warning} />
+              <Text style={{ marginLeft: 8, fontSize: 13, color: colors.textSecondary }}>
                 Flagged{" "}
-                <Text className="font-bold text-slate-800">{data.content.flagged}</Text>
+                <Text style={{ fontWeight: "800", color: colors.textPrimary }}>{data.content.flagged}</Text>
               </Text>
             </View>
-            <View className="flex-row items-center rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <ShieldAlert size={16} color="#DC2626" />
-              <Text className="ml-2 text-sm text-slate-500">
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+              }}
+            >
+              <ShieldAlert size={16} color={colors.destructive} />
+              <Text style={{ marginLeft: 8, fontSize: 13, color: colors.textSecondary }}>
                 Suspended{" "}
-                <Text className="font-bold text-slate-800">{data.users.suspended}</Text>
+                <Text style={{ fontWeight: "800", color: colors.textPrimary }}>{data.users.suspended}</Text>
               </Text>
             </View>
-            <View className="flex-row items-center rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <Megaphone size={16} color="#4F46E5" />
-              <Text className="ml-2 text-sm text-slate-500">
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+              }}
+            >
+              <Megaphone size={16} color={colors.primary} />
+              <Text style={{ marginLeft: 8, fontSize: 13, color: colors.textSecondary }}>
                 Announcements{" "}
-                <Text className="font-bold text-slate-800">
+                <Text style={{ fontWeight: "800", color: colors.textPrimary }}>
                   {data.announcements.sent_30d}
                 </Text>
               </Text>
             </View>
           </View>
 
-          <View className="flex-row flex-wrap gap-6">
-            <View className="min-w-[420px] flex-1 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-              <View className="mb-4 flex-row items-center justify-between">
-                <Text className="text-lg font-bold text-slate-800">
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 24 }}>
+            <View
+              style={{
+                minWidth: 400,
+                flex: 1,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                padding: 24,
+              }}
+            >
+              <View style={{ marginBottom: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary }}>
                   Needs attention
                 </Text>
-                <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <Text style={{ fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
                   Oldest first
                 </Text>
               </View>
               {data.needs_attention.length === 0 ? (
-                <View className="items-center justify-center py-10">
-                  <ShieldAlert size={28} color="#CBD5E1" />
-                  <Text className="mt-2 text-sm text-slate-400">
+                <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }}>
+                  <ShieldAlert size={32} color={colors.textDisabled} />
+                  <Text style={{ marginTop: 8, fontSize: 13, color: colors.textTertiary }}>
                     Nothing in the queue.
                   </Text>
                 </View>
@@ -238,56 +348,95 @@ export default function AdminOverviewScreen() {
                   <TouchableOpacity
                     key={`${item.kind}-${item.id}`}
                     onPress={() => router.push("/(admin)/content" as any)}
-                    className="mb-2 flex-row items-center rounded-xl border border-slate-100 p-3 hover:bg-slate-50"
+                    style={{
+                      marginBottom: 8,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      padding: 12,
+                      backgroundColor: colors.surfaceSunken,
+                    }}
                   >
-                    <View className="mr-3 h-9 w-9 items-center justify-center rounded-lg bg-amber-50">
-                      <AlertTriangle size={17} color="#D97706" />
+                    <View
+                      style={{
+                        marginRight: 12,
+                        height: 36,
+                        width: 36,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 10,
+                        backgroundColor: colors.warningSurface,
+                      }}
+                    >
+                      <AlertTriangle size={17} color={colors.warning} />
                     </View>
-                    <View className="flex-1">
-                      <Text className="text-sm font-semibold text-slate-800" numberOfLines={1}>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}
+                        numberOfLines={1}
+                      >
                         {item.label || "Untitled"}
                       </Text>
-                      <Text className="mt-0.5 text-xs text-slate-500">
+                      <Text style={{ marginTop: 2, fontSize: 12, color: colors.textTertiary }}>
                         {ATTENTION_LABELS[item.kind] || item.kind}
                         {item.author ? ` · ${item.author}` : ""} · {timeAgo(item.created_at)}
                       </Text>
                     </View>
-                    <ArrowRight size={16} color="#94A3B8" />
+                    <ArrowRight size={16} color={colors.textTertiary} />
                   </TouchableOpacity>
                 ))
               )}
             </View>
 
             {isSuperAdminRole(profile?.role) ? (
-              <View className="min-w-[340px] flex-1 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-                <View className="mb-4 flex-row items-center justify-between">
-                  <Text className="text-lg font-bold text-slate-800">
+              <View
+                style={{
+                  minWidth: 340,
+                  flex: 1,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  padding: 24,
+                }}
+              >
+                <View style={{ marginBottom: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary }}>
                     Recent actions
                   </Text>
                   <TouchableOpacity onPress={() => router.push("/(admin)/audit" as any)}>
-                    <Text className="text-xs font-bold text-[#1D4ED8]">View audit</Text>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: colors.primary }}>
+                      View audit
+                    </Text>
                   </TouchableOpacity>
                 </View>
                 {(data.recent_actions || []).length === 0 ? (
-                  <Text className="py-8 text-center text-sm text-slate-400">
+                  <Text style={{ paddingVertical: 32, textAlign: "center", fontSize: 13, color: colors.textTertiary }}>
                     No governance actions yet.
                   </Text>
                 ) : (
                   (data.recent_actions || []).map((entry) => (
                     <View
                       key={entry.id}
-                      className="mb-3 border-b border-slate-100 pb-3 last:border-0"
+                      style={{
+                        marginBottom: 12,
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.divider,
+                        paddingBottom: 12,
+                      }}
                     >
-                      <Text className="text-sm font-semibold text-slate-800">
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}>
                         {ACTION_LABELS[entry.action] || entry.action}
                       </Text>
-                      <Text className="mt-0.5 text-xs text-slate-500">
+                      <Text style={{ marginTop: 2, fontSize: 12, color: colors.textTertiary }}>
                         {entry.actor_username || "system"} ·{" "}
                         {entry.target_label || entry.target_type} ·{" "}
                         {timeAgo(entry.created_at)}
                       </Text>
                       {entry.reason ? (
-                        <Text className="mt-1 text-xs italic text-slate-400">
+                        <Text style={{ marginTop: 4, fontSize: 12, fontStyle: "italic", color: colors.textMuted }}>
                           {entry.reason}
                         </Text>
                       ) : null}
@@ -302,3 +451,4 @@ export default function AdminOverviewScreen() {
     </ScrollView>
   );
 }
+

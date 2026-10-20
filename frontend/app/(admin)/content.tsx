@@ -32,6 +32,8 @@ import {
 import { apiJson } from "../../src/lib/api";
 import { fetchDepartments } from "../../src/lib/catalog";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useTheme } from "../../src/contexts/ThemeContext";
+import { ThemeTokens } from "../../src/lib/tokens";
 import { isSuperAdminRole } from "../../src/lib/roles";
 import type { Department } from "../../src/types";
 import ActionDialog from "../../src/components/admin/ActionDialog";
@@ -86,32 +88,42 @@ function formatDate(value?: string | null) {
   });
 }
 
-function statusStyle(status: string) {
-  if (status === "hidden") return "bg-red-50 text-red-600";
-  if (status === "flagged") return "bg-amber-50 text-amber-700";
-  return "bg-emerald-50 text-emerald-700";
+function getStatusBadgeStyle(status: string, colors: ThemeTokens) {
+  if (status === "hidden") return { bg: colors.destructiveSurface, text: colors.destructiveText };
+  if (status === "flagged") return { bg: colors.warningSurface, text: colors.warningText };
+  return { bg: colors.successSurface, text: colors.successText };
 }
 
 function FilterChip({
   label,
   active,
   onPress,
+  colors,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
+  colors: ThemeTokens;
 }) {
   return (
     <TouchableOpacity
       onPress={onPress}
-      className={`mr-2 rounded-full border px-3.5 py-1.5 ${
-        active ? "border-[#1D4ED8] bg-blue-50" : "border-slate-200 bg-white"
-      }`}
+      style={{
+        marginRight: 8,
+        borderRadius: 9999,
+        borderWidth: 1,
+        borderColor: active ? colors.primary : colors.border,
+        backgroundColor: active ? colors.primarySurface : colors.surface,
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+      }}
     >
       <Text
-        className={`text-xs font-bold ${
-          active ? "text-[#1D4ED8]" : "text-slate-500"
-        }`}
+        style={{
+          fontSize: 12,
+          fontWeight: "700",
+          color: active ? colors.primary : colors.textSecondary,
+        }}
       >
         {label}
       </Text>
@@ -122,6 +134,7 @@ function FilterChip({
 export default function AdminContentScreen() {
   const router = useRouter();
   const { profile } = useAuth();
+  const { colors } = useTheme();
   const superadmin = isSuperAdminRole(profile?.role);
 
   const [tab, setTab] = useState<"queue" | "library">("queue");
@@ -205,9 +218,8 @@ export default function AdminContentScreen() {
           key: `report-${report.id}`,
           kind: "report" as const,
           id: report.id,
-          title: `Reported message from ${
-            report.sender?.full_name || report.sender?.username || "Unknown"
-          }`,
+          title: `Reported message from ${report.sender?.full_name || report.sender?.username || "Unknown"
+            }`,
           excerpt: report.message_body || "",
           reason: report.reason,
           reporter:
@@ -342,8 +354,7 @@ export default function AdminContentScreen() {
           input.reason
         );
         setNotice(
-          `${pending.type[0].toUpperCase()}${pending.type.slice(1)} ${
-            pending.action === "restore" ? "restored" : pending.action === "hide" ? "hidden" : "deleted"
+          `${pending.type[0].toUpperCase()}${pending.type.slice(1)} ${pending.action === "restore" ? "restored" : pending.action === "hide" ? "hidden" : "deleted"
           }.`
         );
       }
@@ -366,40 +377,74 @@ export default function AdminContentScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-[#F8FAFC] p-8"
+      style={{ flex: 1, backgroundColor: colors.surfacePage }}
+      contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View className="mb-6 flex-row flex-wrap items-start justify-between gap-4">
+      <View style={{ marginBottom: 24, flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <View>
-          <Text className="text-3xl font-black tracking-tight text-slate-900">
+          <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
             Reports & Content
           </Text>
-          <Text className="mt-1 text-base text-slate-500">
+          <Text style={{ marginTop: 4, fontSize: 14, color: colors.textSecondary }}>
             Work the moderation queue or audit the full content library.
           </Text>
         </View>
         <TouchableOpacity
           onPress={refresh}
-          className="flex-row items-center rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+          }}
         >
-          <RefreshCw size={16} color="#475569" />
-          <Text className="ml-2 text-sm font-semibold text-slate-700">Refresh</Text>
+          <RefreshCw size={15} color={colors.textSecondary} />
+          <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
+            Refresh
+          </Text>
         </TouchableOpacity>
       </View>
 
       {notice ? (
-        <View className="mb-4 flex-row items-center rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-          <CheckCircle2 size={18} color="#059669" />
-          <Text className="ml-2 flex-1 font-semibold text-emerald-700">{notice}</Text>
+        <View
+          style={{
+            marginBottom: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.success,
+            backgroundColor: colors.successSurface,
+            padding: 16,
+          }}
+        >
+          <CheckCircle2 size={18} color={colors.success} />
+          <Text style={{ marginLeft: 8, flex: 1, fontWeight: "600", color: colors.successText }}>
+            {notice}
+          </Text>
         </View>
       ) : null}
       {actionError ? (
-        <View className="mb-4 rounded-xl border border-red-100 bg-red-50 p-4">
-          <Text className="font-semibold text-red-600">{actionError}</Text>
+        <View
+          style={{
+            marginBottom: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.destructive,
+            backgroundColor: colors.destructiveSurface,
+            padding: 16,
+          }}
+        >
+          <Text style={{ fontWeight: "600", color: colors.destructiveText }}>{actionError}</Text>
         </View>
       ) : null}
 
-      <View className="mb-5 flex-row items-center gap-2 border-b border-slate-200">
+      <View style={{ marginBottom: 20, flexDirection: "row", alignItems: "center", gap: 8, borderBottomWidth: 1, borderBottomColor: colors.divider }}>
         {[
           { value: "queue" as const, label: `Moderation queue (${queue.length})` },
           { value: "library" as const, label: "Content library" },
@@ -407,16 +452,20 @@ export default function AdminContentScreen() {
           <TouchableOpacity
             key={option.value}
             onPress={() => setTab(option.value)}
-            className={`-mb-px border-b-2 px-4 py-3 ${
-              tab === option.value
-                ? "border-[#1D4ED8]"
-                : "border-transparent"
-            }`}
+            style={{
+              marginBottom: -1,
+              borderBottomWidth: 2,
+              borderBottomColor: tab === option.value ? colors.primary : "transparent",
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+            }}
           >
             <Text
-              className={`text-sm font-bold ${
-                tab === option.value ? "text-[#1D4ED8]" : "text-slate-500"
-              }`}
+              style={{
+                fontSize: 14,
+                fontWeight: "700",
+                color: tab === option.value ? colors.primary : colors.textSecondary,
+              }}
             >
               {option.label}
             </Text>
@@ -427,63 +476,118 @@ export default function AdminContentScreen() {
       {tab === "queue" ? (
         <>
           {queueError ? (
-            <View className="mb-4 rounded-xl border border-red-100 bg-red-50 p-4">
-              <Text className="font-semibold text-red-600">{queueError}</Text>
+            <View
+              style={{
+                marginBottom: 16,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.destructive,
+                backgroundColor: colors.destructiveSurface,
+                padding: 16,
+              }}
+            >
+              <Text style={{ fontWeight: "600", color: colors.destructiveText }}>{queueError}</Text>
             </View>
           ) : null}
-          <View className="mb-4 flex-row flex-wrap gap-3">
-            <View className="flex-row items-center rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
-              <AlertTriangle size={16} color="#D97706" />
-              <Text className="ml-2 text-sm text-amber-700">
-                Content <Text className="font-bold">{queueCounts.content}</Text>
+          <View style={{ marginBottom: 16, flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.warning,
+                backgroundColor: colors.warningSurface,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+              }}
+            >
+              <AlertTriangle size={16} color={colors.warningText} />
+              <Text style={{ marginLeft: 8, fontSize: 13, color: colors.warningText }}>
+                Content <Text style={{ fontWeight: "800" }}>{queueCounts.content}</Text>
               </Text>
             </View>
-            <View className="flex-row items-center rounded-xl border border-red-100 bg-red-50 px-4 py-3">
-              <Flag size={16} color="#DC2626" />
-              <Text className="ml-2 text-sm text-red-700">
-                Message reports <Text className="font-bold">{queueCounts.reports}</Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.destructive,
+                backgroundColor: colors.destructiveSurface,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+              }}
+            >
+              <Flag size={16} color={colors.destructiveText} />
+              <Text style={{ marginLeft: 8, fontSize: 13, color: colors.destructiveText }}>
+                Message reports <Text style={{ fontWeight: "800" }}>{queueCounts.reports}</Text>
               </Text>
             </View>
           </View>
 
           {queueLoading ? (
-            <View className="items-center justify-center py-20">
-              <ActivityIndicator size="large" color="#1D4ED8" />
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 80 }}>
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
           ) : queue.length === 0 ? (
-            <View className="items-center justify-center rounded-2xl border border-slate-100 bg-white py-20">
-              <ShieldCheck size={32} color="#CBD5E1" />
-              <Text className="mt-3 text-base font-semibold text-slate-500">
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                paddingVertical: 80,
+              }}
+            >
+              <ShieldCheck size={32} color={colors.textDisabled} />
+              <Text style={{ marginTop: 12, fontSize: 15, fontWeight: "600", color: colors.textSecondary }}>
                 The queue is clear.
               </Text>
             </View>
           ) : (
-            <View className="flex-row flex-wrap gap-4">
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
               {queue.map((item) => (
                 <View
                   key={item.key}
-                  className="min-w-[340px] flex-1 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"
+                  style={{
+                    minWidth: 340,
+                    flex: 1,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    padding: 20,
+                  }}
                 >
-                  <View className="mb-3 flex-row items-start justify-between">
-                    <View className="flex-row items-center">
+                  <View style={{ marginBottom: 12, flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
                       <View
-                        className={`mr-3 h-9 w-9 items-center justify-center rounded-lg ${
-                          item.kind === "report" ? "bg-red-50" : "bg-amber-50"
-                        }`}
+                        style={{
+                          marginRight: 12,
+                          height: 36,
+                          width: 36,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderRadius: 10,
+                          backgroundColor: item.kind === "report" ? colors.destructiveSurface : colors.warningSurface,
+                        }}
                       >
                         {item.kind === "report" ? (
-                          <Flag size={16} color="#DC2626" />
+                          <Flag size={16} color={colors.destructiveText} />
                         ) : item.kind === "comment" ? (
-                          <MessageSquare size={16} color="#D97706" />
+                          <MessageSquare size={16} color={colors.warningText} />
                         ) : (
-                          <FileText size={16} color="#D97706" />
+                          <FileText size={16} color={colors.warningText} />
                         )}
                       </View>
                       <View>
-                        <Text className="text-sm font-bold text-slate-800">
-                          {item.kind === "report" ? "Reported message" : `${item.kind}`}
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}>
+                          {item.kind === "report" ? "Reported message" : item.kind}
                         </Text>
-                        <Text className="text-xs text-slate-400">
+                        <Text style={{ fontSize: 11, color: colors.textTertiary }}>
                           {formatDate(item.createdAt)}
                         </Text>
                       </View>
@@ -492,44 +596,60 @@ export default function AdminContentScreen() {
                       <TouchableOpacity
                         onPress={() => router.push(`/post/${item.postId}` as any)}
                       >
-                        <ArrowUpRight size={16} color="#64748B" />
+                        <ArrowUpRight size={16} color={colors.textTertiary} />
                       </TouchableOpacity>
                     ) : null}
                   </View>
 
-                  <Text className="text-sm font-bold text-slate-800" numberOfLines={2}>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }} numberOfLines={2}>
                     {item.title}
                   </Text>
-                  <Text className="mt-1 text-sm leading-5 text-slate-500" numberOfLines={3}>
+                  <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: colors.textSecondary }} numberOfLines={3}>
                     {item.excerpt || "No text content."}
                   </Text>
                   {item.reason ? (
-                    <Text className="mt-2 text-xs font-semibold text-red-500">
+                    <Text style={{ marginTop: 8, fontSize: 12, fontWeight: "600", color: colors.destructiveText }}>
                       Report reason: {item.reason}
                     </Text>
                   ) : null}
-                  <Text className="mt-2 text-xs text-slate-400">
+                  <Text style={{ marginTop: 8, fontSize: 12, color: colors.textTertiary }}>
                     By {item.author}
                     {item.reporter ? ` · Reported by ${item.reporter}` : ""}
                   </Text>
 
-                  <View className="mt-4 flex-row flex-wrap gap-2 border-t border-slate-100 pt-3">
+                  <View style={{ marginTop: 16, flexDirection: "row", flexWrap: "wrap", gap: 8, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 12 }}>
                     {item.kind === "report" ? (
                       <>
                         <TouchableOpacity
                           onPress={() => openReportAction(item, "reviewed")}
-                          className="flex-row items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.success,
+                            backgroundColor: colors.successSurface,
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                          }}
                         >
-                          <CheckCircle2 size={14} color="#059669" />
-                          <Text className="ml-1.5 text-xs font-bold text-emerald-700">
+                          <CheckCircle2 size={14} color={colors.successText} />
+                          <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: "700", color: colors.successText }}>
                             Reviewed
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => openReportAction(item, "dismissed")}
-                          className="rounded-lg border border-slate-200 px-3 py-2"
+                          style={{
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.borderStrong,
+                            backgroundColor: colors.surfaceSunken,
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                          }}
                         >
-                          <Text className="text-xs font-bold text-slate-600">
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary }}>
                             Dismiss
                           </Text>
                         </TouchableOpacity>
@@ -547,10 +667,19 @@ export default function AdminContentScreen() {
                               "restore"
                             )
                           }
-                          className="flex-row items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.success,
+                            backgroundColor: colors.successSurface,
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                          }}
                         >
-                          <CheckCircle2 size={14} color="#059669" />
-                          <Text className="ml-1.5 text-xs font-bold text-emerald-700">
+                          <CheckCircle2 size={14} color={colors.successText} />
+                          <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: "700", color: colors.successText }}>
                             Restore
                           </Text>
                         </TouchableOpacity>
@@ -565,10 +694,19 @@ export default function AdminContentScreen() {
                               "hide"
                             )
                           }
-                          className="flex-row items-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2"
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: colors.warning,
+                            backgroundColor: colors.warningSurface,
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                          }}
                         >
-                          <EyeOff size={14} color="#D97706" />
-                          <Text className="ml-1.5 text-xs font-bold text-amber-700">
+                          <EyeOff size={14} color={colors.warningText} />
+                          <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: "700", color: colors.warningText }}>
                             Hide
                           </Text>
                         </TouchableOpacity>
@@ -584,10 +722,19 @@ export default function AdminContentScreen() {
                                 "delete"
                               )
                             }
-                            className="flex-row items-center rounded-lg border border-red-200 bg-red-50 px-3 py-2"
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              borderRadius: 10,
+                              borderWidth: 1,
+                              borderColor: colors.destructive,
+                              backgroundColor: colors.destructiveSurface,
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                            }}
                           >
-                            <Trash2 size={14} color="#DC2626" />
-                            <Text className="ml-1.5 text-xs font-bold text-red-600">
+                            <Trash2 size={14} color={colors.destructiveText} />
+                            <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: "700", color: colors.destructiveText }}>
                               Delete
                             </Text>
                           </TouchableOpacity>
@@ -602,47 +749,77 @@ export default function AdminContentScreen() {
         </>
       ) : (
         <>
-          <View className="mb-5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-            <View className="flex-row flex-wrap items-center gap-3">
-              <View className="min-w-[260px] flex-1 flex-row items-center rounded-xl border border-slate-200 bg-slate-50 px-3">
-                <Search size={18} color="#94A3B8" />
+          <View
+            style={{
+              marginBottom: 20,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              padding: 16,
+            }}
+          >
+            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+              <View
+                style={{
+                  minWidth: 260,
+                  flex: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.inputBorder,
+                  backgroundColor: colors.inputBg,
+                  paddingHorizontal: 12,
+                }}
+              >
+                <Search size={18} color={colors.textTertiary} />
                 <TextInput
                   value={q}
                   onChangeText={setQ}
                   placeholder="Search titles and text…"
-                  placeholderTextColor="#94A3B8"
-                  className="ml-2 flex-1 py-2.5 text-slate-900"
+                  placeholderTextColor={colors.textMuted}
+                  style={{
+                    marginLeft: 8,
+                    flex: 1,
+                    paddingVertical: 10,
+                    fontSize: 14,
+                    color: colors.textPrimary,
+                  }}
                   autoCapitalize="none"
                 />
               </View>
-              <Text className="text-sm text-slate-400">
+              <Text style={{ fontSize: 13, color: colors.textTertiary }}>
                 {libraryLoading ? "Loading…" : `${total} item${total === 1 ? "" : "s"}`}
               </Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 14 }}>
               {TYPE_OPTIONS.map((option) => (
                 <FilterChip
                   key={`type-${option.value}`}
                   label={option.label}
                   active={type === option.value}
                   onPress={() => setType(option.value)}
+                  colors={colors}
                 />
               ))}
             </ScrollView>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
               {STATUS_OPTIONS.map((option) => (
                 <FilterChip
                   key={`status-${option.value}`}
                   label={option.label}
                   active={status === option.value}
                   onPress={() => setStatus(option.value)}
+                  colors={colors}
                 />
               ))}
-              <View className="mx-2 my-1 w-px bg-slate-200" />
+              <View style={{ marginHorizontal: 8, marginVertical: 4, width: 1, backgroundColor: colors.divider }} />
               <FilterChip
                 label="All departments"
                 active={!departmentId}
                 onPress={() => setDepartmentId("")}
+                colors={colors}
               />
               {departments.map((department) => (
                 <FilterChip
@@ -650,123 +827,181 @@ export default function AdminContentScreen() {
                   label={department.name}
                   active={departmentId === department.id}
                   onPress={() => setDepartmentId(department.id)}
+                  colors={colors}
                 />
               ))}
             </ScrollView>
           </View>
 
           {libraryError ? (
-            <View className="mb-4 rounded-xl border border-red-100 bg-red-50 p-4">
-              <Text className="font-semibold text-red-600">{libraryError}</Text>
+            <View
+              style={{
+                marginBottom: 16,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.destructive,
+                backgroundColor: colors.destructiveSurface,
+                padding: 16,
+              }}
+            >
+              <Text style={{ fontWeight: "600", color: colors.destructiveText }}>{libraryError}</Text>
             </View>
           ) : null}
 
-          <View className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-            <View className="flex-row items-center border-b border-slate-100 bg-slate-50 px-5 py-3">
-              <Text className="w-20 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <View
+            style={{
+              overflow: "hidden",
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderBottomWidth: 1,
+                borderBottomColor: colors.divider,
+                backgroundColor: colors.tableHeaderBg,
+                paddingHorizontal: 20,
+                paddingVertical: 12,
+              }}
+            >
+              <Text style={{ width: 80, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
                 Type
               </Text>
-              <Text className="flex-[2] text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <Text style={{ flex: 2, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
                 Content
               </Text>
-              <Text className="flex-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <Text style={{ flex: 1, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
                 Author
               </Text>
-              <Text className="flex-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <Text style={{ flex: 1, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
                 Department
               </Text>
-              <Text className="w-24 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <Text style={{ width: 96, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
                 Status
               </Text>
-              <Text className="w-28 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <Text style={{ width: 112, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
                 Created
               </Text>
-              <Text className="w-32 text-right text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <Text style={{ width: 128, textAlign: "right", fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
                 Actions
               </Text>
             </View>
 
             {libraryLoading ? (
-              <View className="items-center justify-center py-16">
-                <ActivityIndicator size="large" color="#1D4ED8" />
+              <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
+                <ActivityIndicator size="large" color={colors.primary} />
               </View>
             ) : items.length === 0 ? (
-              <View className="items-center justify-center py-16">
-                <FileText size={30} color="#CBD5E1" />
-                <Text className="mt-3 text-slate-500">No content matches these filters.</Text>
+              <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
+                <FileText size={30} color={colors.textDisabled} />
+                <Text style={{ marginTop: 12, fontSize: 15, fontWeight: "600", color: colors.textSecondary }}>No content matches these filters.</Text>
               </View>
             ) : (
-              items.map((item) => (
-                <View
-                  key={`${item.type}-${item.id}`}
-                  className="flex-row items-center border-b border-slate-50 px-5 py-3.5"
-                >
-                  <View className="w-20 flex-row items-center">
-                    {item.type === "comment" ? (
-                      <MessageSquare size={15} color="#64748B" />
-                    ) : (
-                      <FileText size={15} color="#64748B" />
-                    )}
-                    <Text className="ml-1.5 text-xs font-semibold text-slate-500">
-                      {item.type}
-                    </Text>
-                  </View>
-                  <View className="flex-[2] pr-4">
-                    <Text className="text-sm font-semibold text-slate-800" numberOfLines={1}>
-                      {item.title || "Untitled"}
-                    </Text>
-                    <Text className="text-xs text-slate-400" numberOfLines={1}>
-                      {item.excerpt || "No text"}
-                    </Text>
-                  </View>
-                  <Text className="flex-1 pr-2 text-xs text-slate-600" numberOfLines={1}>
-                    {item.author.full_name || item.author.username || "Unknown"}
-                  </Text>
-                  <Text className="flex-1 pr-2 text-xs text-slate-600" numberOfLines={1}>
-                    {item.department_name || "—"}
-                  </Text>
-                  <View className="w-24">
-                    <View
-                      className={`self-start rounded-full px-2.5 py-1 ${statusStyle(item.status)}`}
-                    >
-                      <Text className="text-[11px] font-bold">{item.status}</Text>
-                    </View>
-                  </View>
-                  <Text className="w-28 text-xs text-slate-500">
-                    {formatDate(item.created_at)}
-                  </Text>
-                  <View className="w-32 flex-row justify-end gap-1">
-                    <TouchableOpacity
-                      onPress={() =>
-                        openContentAction(
-                          { id: item.id, type: item.type, title: item.title },
-                          item.status === "approved" ? "hide" : "restore"
-                        )
-                      }
-                      className="rounded-lg border border-slate-200 p-2"
-                    >
-                      {item.status === "approved" ? (
-                        <EyeOff size={13} color="#64748B" />
+              items.map((item) => {
+                const badgeStyle = getStatusBadgeStyle(item.status, colors);
+                return (
+                  <View
+                    key={`${item.type}-${item.id}`}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.tableRowBorder,
+                      paddingHorizontal: 20,
+                      paddingVertical: 14,
+                    }}
+                  >
+                    <View style={{ width: 80, flexDirection: "row", alignItems: "center" }}>
+                      {item.type === "comment" ? (
+                        <MessageSquare size={15} color={colors.textTertiary} />
                       ) : (
-                        <CheckCircle2 size={13} color="#059669" />
+                        <FileText size={15} color={colors.textTertiary} />
                       )}
-                    </TouchableOpacity>
-                    {superadmin ? (
+                      <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: "600", color: colors.textSecondary, textTransform: "capitalize" }}>
+                        {item.type}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 2, paddingRight: 16 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>
+                        {item.title || "Untitled"}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: colors.textTertiary }} numberOfLines={1}>
+                        {item.excerpt || "No text"}
+                      </Text>
+                    </View>
+                    <Text style={{ flex: 1, paddingRight: 8, fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
+                      {item.author.full_name || item.author.username || "Unknown"}
+                    </Text>
+                    <Text style={{ flex: 1, paddingRight: 8, fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
+                      {item.department_name || "—"}
+                    </Text>
+                    <View style={{ width: 96 }}>
+                      <View
+                        style={{
+                          alignSelf: "flex-start",
+                          borderRadius: 9999,
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          backgroundColor: badgeStyle.bg,
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: "700", color: badgeStyle.text, textTransform: "capitalize" }}>
+                          {item.status}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ width: 112, fontSize: 12, color: colors.textTertiary }}>
+                      {formatDate(item.created_at)}
+                    </Text>
+                    <View style={{ width: 128, flexDirection: "row", justifyContent: "flex-end", gap: 6 }}>
                       <TouchableOpacity
                         onPress={() =>
                           openContentAction(
                             { id: item.id, type: item.type, title: item.title },
-                            "delete"
+                            item.status === "approved" ? "hide" : "restore"
                           )
                         }
-                        className="rounded-lg border border-red-100 bg-red-50 p-2"
+                        style={{
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: colors.borderStrong,
+                          backgroundColor: colors.surfaceSunken,
+                          padding: 8,
+                        }}
                       >
-                        <Trash2 size={13} color="#DC2626" />
+                        {item.status === "approved" ? (
+                          <EyeOff size={13} color={colors.textSecondary} />
+                        ) : (
+                          <CheckCircle2 size={13} color={colors.successText} />
+                        )}
                       </TouchableOpacity>
-                    ) : null}
+                      {superadmin ? (
+                        <TouchableOpacity
+                          onPress={() =>
+                            openContentAction(
+                              { id: item.id, type: item.type, title: item.title },
+                              "delete"
+                            )
+                          }
+                          style={{
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: colors.destructive,
+                            backgroundColor: colors.destructiveSurface,
+                            padding: 8,
+                          }}
+                        >
+                          <Trash2 size={13} color={colors.destructiveText} />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
 
@@ -774,12 +1009,22 @@ export default function AdminContentScreen() {
             <TouchableOpacity
               onPress={() => void loadLibrary(cursor, true)}
               disabled={loadingMore}
-              className="mt-4 flex-row items-center justify-center rounded-xl border border-slate-200 bg-white py-3 shadow-sm"
+              style={{
+                marginTop: 16,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                paddingVertical: 12,
+              }}
             >
               {loadingMore ? (
-                <ActivityIndicator size="small" color="#1D4ED8" />
+                <ActivityIndicator size="small" color={colors.primary} />
               ) : (
-                <Text className="text-sm font-bold text-slate-700">Load more</Text>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textSecondary }}>Load more</Text>
               )}
             </TouchableOpacity>
           ) : null}
@@ -801,3 +1046,4 @@ export default function AdminContentScreen() {
     </ScrollView>
   );
 }
+

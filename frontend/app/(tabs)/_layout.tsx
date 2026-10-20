@@ -1,5 +1,5 @@
 import { Tabs, useRouter } from "expo-router";
-import { View, Text, Pressable, StyleSheet, Platform, useWindowDimensions } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform, useWindowDimensions, Image } from "react-native";
 import { Home, Plus, Bell, User, BookOpen, GraduationCap, Sun, Moon, Shield } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -40,12 +40,21 @@ function TabBar({ state, navigation }: any) {
       >
         {/* Left: Brand Logo */}
         <View style={styles.webBrand}>
-          <View style={[styles.webLogoIcon, { backgroundColor: colors.action }]}>
-            <GraduationCap size={20} color="#FFFFFF" />
+          <View style={[styles.webLogoIcon, { backgroundColor: isDark ? "rgba(76, 132, 255, 0.12)" : "#EBF1FF", borderWidth: 1, borderColor: isDark ? "rgba(76, 132, 255, 0.25)" : "#DBEAFE" }]}>
+            <Image
+              source={require("../../assets/images/logo-seal.png")}
+              style={{ width: 26, height: 26 }}
+              resizeMode="contain"
+            />
           </View>
-          <Text style={[styles.webBrandTitle, { color: colors.textPrimary }]}>
-            LCCB <Text style={{ color: colors.action }}>Connect</Text>
-          </Text>
+          <View>
+            <Text style={[styles.webBrandTitle, { color: colors.textPrimary }]}>
+              LCCB <Text style={{ color: colors.primary }}>Connect</Text>
+            </Text>
+            <Text style={{ fontSize: 9.5, fontWeight: "600", color: colors.textTertiary, letterSpacing: 0.5, marginTop: -2 }}>
+              Founded 1919
+            </Text>
+          </View>
         </View>
 
         {/* Center: Navigation Links */}

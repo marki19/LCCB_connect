@@ -23,6 +23,8 @@ import {
   type Announcement,
 } from "../../src/lib/adminApi";
 import { fetchDepartments } from "../../src/lib/catalog";
+import { useTheme } from "../../src/contexts/ThemeContext";
+import { ThemeTokens } from "../../src/lib/tokens";
 import type { Department } from "../../src/types";
 import ActionDialog from "../../src/components/admin/ActionDialog";
 
@@ -53,22 +55,33 @@ function Chip({
   label,
   active,
   onPress,
+  colors,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
+  colors: ThemeTokens;
 }) {
   return (
     <TouchableOpacity
       onPress={onPress}
-      className={`mb-2 mr-2 rounded-full border px-3.5 py-2 ${
-        active ? "border-[#1D4ED8] bg-blue-50" : "border-slate-200 bg-white"
-      }`}
+      style={{
+        marginBottom: 8,
+        marginRight: 8,
+        borderRadius: 9999,
+        borderWidth: 1,
+        borderColor: active ? colors.primary : colors.border,
+        backgroundColor: active ? colors.primarySurface : colors.surface,
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+      }}
     >
       <Text
-        className={`text-xs font-bold ${
-          active ? "text-[#1D4ED8]" : "text-slate-600"
-        }`}
+        style={{
+          fontSize: 12,
+          fontWeight: "700",
+          color: active ? colors.primary : colors.textSecondary,
+        }}
       >
         {label}
       </Text>
@@ -77,6 +90,7 @@ function Chip({
 }
 
 export default function AdminAnnouncementsScreen() {
+  const { colors } = useTheme();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audienceType, setAudienceType] = useState<AudienceType>("all");
@@ -202,8 +216,7 @@ export default function AdminAnnouncementsScreen() {
       setTitle("");
       setBody("");
       setNotice(
-        `Announcement sent to ${result.recipients} recipient${
-          result.recipients === 1 ? "" : "s"
+        `Announcement sent to ${result.recipients} recipient${result.recipients === 1 ? "" : "s"
         }.`
       );
       await loadHistory(null, false);
@@ -217,52 +230,110 @@ export default function AdminAnnouncementsScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-[#F8FAFC] p-8"
+      style={{ flex: 1, backgroundColor: colors.surfacePage }}
+      contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View className="mb-6 flex-row flex-wrap items-start justify-between gap-4">
+      <View style={{ marginBottom: 24, flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <View>
-          <Text className="text-3xl font-black tracking-tight text-slate-900">
+          <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
             Announcements
           </Text>
-          <Text className="mt-1 text-base text-slate-500">
+          <Text style={{ marginTop: 4, fontSize: 14, color: colors.textSecondary }}>
             Send one message to a counted audience. Delivery is in-app.
           </Text>
         </View>
         <TouchableOpacity
           onPress={() => void loadHistory(null, false)}
-          className="flex-row items-center rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+          }}
         >
-          <RefreshCw size={16} color="#475569" />
-          <Text className="ml-2 text-sm font-semibold text-slate-700">Refresh</Text>
+          <RefreshCw size={15} color={colors.textSecondary} />
+          <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
+            Refresh
+          </Text>
         </TouchableOpacity>
       </View>
 
       {error ? (
-        <View className="mb-4 rounded-xl border border-red-100 bg-red-50 p-4">
-          <Text className="font-semibold text-red-600">{error}</Text>
+        <View
+          style={{
+            marginBottom: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.destructive,
+            backgroundColor: colors.destructiveSurface,
+            padding: 16,
+          }}
+        >
+          <Text style={{ fontWeight: "600", color: colors.destructiveText }}>{error}</Text>
         </View>
       ) : null}
       {notice ? (
-        <View className="mb-4 flex-row items-center rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-          <CheckCircle2 size={18} color="#059669" />
-          <Text className="ml-2 flex-1 font-semibold text-emerald-700">{notice}</Text>
+        <View
+          style={{
+            marginBottom: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.success,
+            backgroundColor: colors.successSurface,
+            padding: 16,
+          }}
+        >
+          <CheckCircle2 size={18} color={colors.success} />
+          <Text style={{ marginLeft: 8, flex: 1, fontWeight: "600", color: colors.successText }}>
+            {notice}
+          </Text>
         </View>
       ) : null}
 
-      <View className="flex-row flex-wrap gap-6">
-        <View className="min-w-[420px] flex-[1.3] rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-          <View className="mb-5 flex-row items-center">
-            <View className="mr-3 h-10 w-10 items-center justify-center rounded-xl bg-blue-50">
-              <Megaphone size={19} color="#1D4ED8" />
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 24 }}>
+        <View
+          style={{
+            minWidth: 420,
+            flex: 1.3,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            padding: 24,
+          }}
+        >
+          <View style={{ marginBottom: 20, flexDirection: "row", alignItems: "center" }}>
+            <View
+              style={{
+                marginRight: 12,
+                height: 40,
+                width: 40,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 12,
+                backgroundColor: colors.primarySurface,
+              }}
+            >
+              <Megaphone size={19} color={colors.primary} />
             </View>
             <View>
-              <Text className="text-lg font-bold text-slate-800">New announcement</Text>
-              <Text className="text-xs text-slate-400">Title and body are required.</Text>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary }}>
+                New announcement
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.textTertiary }}>
+                Title and body are required.
+              </Text>
             </View>
           </View>
 
-          <Text className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+          <Text style={{ marginBottom: 6, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
             Title
           </Text>
           <TextInput
@@ -270,11 +341,21 @@ export default function AdminAnnouncementsScreen() {
             onChangeText={setTitle}
             maxLength={120}
             placeholder="e.g. Enrollment opens Monday"
-            placeholderTextColor="#94A3B8"
-            className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-900"
+            placeholderTextColor={colors.textMuted}
+            style={{
+              marginBottom: 16,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.inputBorder,
+              backgroundColor: colors.inputBg,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 14,
+              color: colors.textPrimary,
+            }}
           />
 
-          <Text className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+          <Text style={{ marginBottom: 6, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
             Body
           </Text>
           <TextInput
@@ -284,73 +365,101 @@ export default function AdminAnnouncementsScreen() {
             numberOfLines={6}
             maxLength={2000}
             placeholder="Write the announcement…"
-            placeholderTextColor="#94A3B8"
-            className="mb-4 min-h-[140px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-900"
+            placeholderTextColor={colors.textMuted}
             textAlignVertical="top"
+            style={{
+              marginBottom: 16,
+              minHeight: 140,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.inputBorder,
+              backgroundColor: colors.inputBg,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 14,
+              color: colors.textPrimary,
+            }}
           />
 
-          <Text className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+          <Text style={{ marginBottom: 8, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
             Audience
           </Text>
-          <View className="flex-row flex-wrap">
+          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
             <Chip
               label="Everyone"
               active={audienceType === "all"}
               onPress={() => setAudienceType("all")}
+              colors={colors}
             />
             <Chip
               label="By role"
               active={audienceType === "role"}
               onPress={() => setAudienceType("role")}
+              colors={colors}
             />
             <Chip
               label="By department"
               active={audienceType === "department"}
               onPress={() => setAudienceType("department")}
+              colors={colors}
             />
           </View>
 
           {audienceType === "role" ? (
-            <View className="mt-2 flex-row flex-wrap">
+            <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap" }}>
               {ROLE_OPTIONS.map((option) => (
                 <Chip
                   key={option.value}
                   label={option.label}
                   active={role === option.value}
                   onPress={() => setRole(option.value)}
+                  colors={colors}
                 />
               ))}
             </View>
           ) : null}
 
           {audienceType === "department" ? (
-            <View className="mt-2 flex-row flex-wrap">
+            <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap" }}>
               {departments.map((department) => (
                 <Chip
                   key={department.id}
                   label={department.name}
                   active={departmentId === department.id}
                   onPress={() => setDepartmentId(department.id)}
+                  colors={colors}
                 />
               ))}
             </View>
           ) : null}
 
-          <View className="mt-5 flex-row items-center rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+          <View
+            style={{
+              marginTop: 20,
+              flexDirection: "row",
+              alignItems: "center",
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceSunken,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+            }}
+          >
             {audienceType === "department" ? (
-              <Building2 size={17} color="#64748B" />
+              <Building2 size={17} color={colors.textTertiary} />
             ) : audienceType === "role" ? (
-              <Users size={17} color="#64748B" />
+              <Users size={17} color={colors.textTertiary} />
             ) : (
-              <ShieldCheck size={17} color="#64748B" />
+              <ShieldCheck size={17} color={colors.textTertiary} />
             )}
-            <Text className="ml-2 flex-1 text-sm text-slate-600">
+            <Text style={{ marginLeft: 8, flex: 1, fontSize: 13, color: colors.textSecondary }}>
               {audienceLabel}
             </Text>
             {countLoading ? (
-              <ActivityIndicator size="small" color="#1D4ED8" />
+              <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Text className="text-sm font-bold text-slate-800">
+              <Text style={{ fontSize: 13, fontWeight: "800", color: colors.textPrimary }}>
                 {count ?? "—"} recipient{count === 1 ? "" : "s"}
               </Text>
             )}
@@ -359,56 +468,81 @@ export default function AdminAnnouncementsScreen() {
           <TouchableOpacity
             onPress={() => setConfirming(true)}
             disabled={!canSend}
-            className={`mt-5 flex-row items-center justify-center rounded-xl bg-[#1D4ED8] px-5 py-3 ${
-              !canSend ? "opacity-40" : ""
-            }`}
+            style={{
+              marginTop: 20,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 12,
+              backgroundColor: colors.primary,
+              paddingHorizontal: 20,
+              paddingVertical: 12,
+              opacity: !canSend ? 0.45 : 1,
+            }}
           >
-            <Send size={17} color="#FFFFFF" />
-            <Text className="ml-2 font-bold text-white">Send announcement</Text>
+            <Send size={16} color={colors.textOnPrimary} />
+            <Text style={{ marginLeft: 8, fontSize: 14, fontWeight: "700", color: colors.textOnPrimary }}>
+              Send announcement
+            </Text>
           </TouchableOpacity>
           {count === 0 ? (
-            <Text className="mt-2 text-xs text-red-500">
+            <Text style={{ marginTop: 8, fontSize: 12, color: colors.destructiveText }}>
               This audience has no eligible recipients.
             </Text>
           ) : null}
         </View>
 
-        <View className="min-w-[360px] flex-1 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-          <View className="mb-4 flex-row items-center justify-between">
-            <Text className="text-lg font-bold text-slate-800">History</Text>
-            <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <View
+          style={{
+            minWidth: 360,
+            flex: 1,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            padding: 24,
+          }}
+        >
+          <View style={{ marginBottom: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary }}>History</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
               {historyTotal} sent
             </Text>
           </View>
 
           {historyLoading ? (
-            <View className="items-center justify-center py-12">
-              <ActivityIndicator size="large" color="#1D4ED8" />
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 48 }}>
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
           ) : history.length === 0 ? (
-            <Text className="py-10 text-center text-sm text-slate-400">
+            <Text style={{ paddingVertical: 40, textAlign: "center", fontSize: 13, color: colors.textTertiary }}>
               No announcements sent yet.
             </Text>
           ) : (
             history.map((item) => (
               <View
                 key={item.id}
-                className="mb-3 border-b border-slate-100 pb-4 last:border-0"
+                style={{
+                  marginBottom: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.divider,
+                  paddingBottom: 14,
+                }}
               >
-                <Text className="text-sm font-bold text-slate-800">{item.title}</Text>
-                <Text className="mt-1 text-xs leading-5 text-slate-500" numberOfLines={3}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }}>{item.title}</Text>
+                <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: colors.textSecondary }} numberOfLines={3}>
                   {item.body}
                 </Text>
-                <Text className="mt-2 text-xs text-slate-400">
+                <Text style={{ marginTop: 8, fontSize: 12, color: colors.textTertiary }}>
                   {item.recipients} recipient{item.recipients === 1 ? "" : "s"} ·{" "}
                   {formatDate(item.created_at)} · {item.actor_username || "system"}
                 </Text>
-                <Text className="mt-0.5 text-[11px] uppercase tracking-wide text-slate-400">
+                <Text style={{ marginTop: 2, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, color: colors.textMuted }}>
                   {item.audience?.type === "role"
                     ? `Role: ${item.audience.role}`
                     : item.audience?.type === "department"
-                      ? "Department audience"
-                      : "Everyone"}
+                    ? "Department audience"
+                    : "Everyone"}
                 </Text>
               </View>
             ))
@@ -418,12 +552,22 @@ export default function AdminAnnouncementsScreen() {
             <TouchableOpacity
               onPress={() => void loadHistory(historyCursor, true)}
               disabled={historyMore}
-              className="mt-2 flex-row items-center justify-center rounded-xl border border-slate-200 py-2.5"
+              style={{
+                marginTop: 8,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                paddingVertical: 10,
+              }}
             >
               {historyMore ? (
-                <ActivityIndicator size="small" color="#1D4ED8" />
+                <ActivityIndicator size="small" color={colors.primary} />
               ) : (
-                <Text className="text-sm font-bold text-slate-700">Load more</Text>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textSecondary }}>Load more</Text>
               )}
             </TouchableOpacity>
           ) : null}
