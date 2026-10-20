@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+﻿import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInAsGuest = () => {
     setSession({ access_token: "guest", refresh_token: "guest", expires_in: 9999, token_type: "bearer", user: { id: "guest", app_metadata: {}, user_metadata: {}, aud: "authenticated", created_at: "" } });
-    setProfile({ id: "guest", username: "guest", full_name: "Guest User", avatar_url: null, bio: "Exploring as a guest.", course: null, year_level: null, role: "guest" });
+    setProfile({ id: "guest", username: "guest", full_name: "Guest User", avatar_url: null, bio: "Exploring as a guest.", course: null, year_level: null, role: "guest", skills: [] });
     setInitialized(true);
   };
 
