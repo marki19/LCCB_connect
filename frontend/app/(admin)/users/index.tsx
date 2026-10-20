@@ -20,6 +20,8 @@ import {
 import { listAdminUsers, type AdminUser } from "../../../src/lib/adminApi";
 import { fetchDepartments } from "../../../src/lib/catalog";
 import type { Department } from "../../../src/types";
+import { useTheme } from "../../../src/contexts/ThemeContext";
+import { ThemeTokens } from "../../../src/lib/tokens";
 
 const ROLE_OPTIONS = [
   { value: "", label: "All roles" },
@@ -36,13 +38,21 @@ const STATUS_OPTIONS = [
   { value: "suspended", label: "Suspended" },
 ];
 
-const ROLE_STYLE: Record<string, { bg: string; text: string }> = {
-  student: { bg: "bg-slate-100", text: "text-slate-600" },
-  faculty: { bg: "bg-teal-50", text: "text-teal-700" },
-  departmentAdmin: { bg: "bg-indigo-50", text: "text-indigo-700" },
-  admin: { bg: "bg-blue-50", text: "text-blue-700" },
-  superadmin: { bg: "bg-violet-50", text: "text-violet-700" },
-};
+function getRoleBadgeStyle(role: string | null, colors: ThemeTokens) {
+  switch (role) {
+    case "faculty":
+      return { bg: colors.infoSurface, text: colors.infoText };
+    case "departmentAdmin":
+      return { bg: colors.primarySurfaceAlt, text: colors.primary };
+    case "admin":
+      return { bg: colors.primarySurface, text: colors.primary };
+    case "superadmin":
+      return { bg: colors.goldSurface, text: colors.goldText };
+    case "student":
+    default:
+      return { bg: colors.surfaceSunken, text: colors.textSecondary };
+  }
+}
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -64,24 +74,32 @@ function Chip({
   label,
   active,
   onPress,
+  colors,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
+  colors: ThemeTokens;
 }) {
   return (
     <TouchableOpacity
       onPress={onPress}
-      className={`mr-2 rounded-full border px-3.5 py-1.5 ${
-        active
-          ? "border-[#1D4ED8] bg-blue-50"
-          : "border-slate-200 bg-white"
-      }`}
+      style={{
+        marginRight: 8,
+        borderRadius: 9999,
+        borderWidth: 1,
+        borderColor: active ? colors.primary : colors.border,
+        backgroundColor: active ? colors.primarySurface : colors.surface,
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+      }}
     >
       <Text
-        className={`text-xs font-bold ${
-          active ? "text-[#1D4ED8]" : "text-slate-500"
-        }`}
+        style={{
+          fontSize: 12,
+          fontWeight: "700",
+          color: active ? colors.primary : colors.textSecondary,
+        }}
       >
         {label}
       </Text>
@@ -91,6 +109,7 @@ function Chip({
 
 export default function AdminUsersScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -167,37 +186,76 @@ export default function AdminUsersScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-[#F8FAFC] p-8"
+      style={{ flex: 1, backgroundColor: colors.surfacePage }}
+      contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View className="mb-6 flex-row flex-wrap items-start justify-between gap-4">
+      <View style={{ marginBottom: 24, flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <View>
-          <Text className="text-3xl font-black tracking-tight text-slate-900">
+          <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
             Users
           </Text>
-          <Text className="mt-1 text-base text-slate-500">
+          <Text style={{ marginTop: 4, fontSize: 14, color: colors.textSecondary }}>
             Profiles, roles, and account sanctions.
           </Text>
         </View>
         <TouchableOpacity
           onPress={() => void fetchUsers(null, false)}
-          className="flex-row items-center rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+          }}
         >
-          <RefreshCw size={16} color="#475569" />
-          <Text className="ml-2 text-sm font-semibold text-slate-700">Refresh</Text>
+          <RefreshCw size={15} color={colors.textSecondary} />
+          <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
+            Refresh
+          </Text>
         </TouchableOpacity>
       </View>
 
-      <View className="mb-5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-        <View className="flex-row flex-wrap items-center gap-3">
-          <View className="min-w-[260px] flex-1 flex-row items-center rounded-xl border border-slate-200 bg-slate-50 px-3">
-            <Search size={18} color="#94A3B8" />
+      <View
+        style={{
+          marginBottom: 20,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+          padding: 16,
+        }}
+      >
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+          <View
+            style={{
+              minWidth: 260,
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "center",
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.inputBorder,
+              backgroundColor: colors.inputBg,
+              paddingHorizontal: 12,
+            }}
+          >
+            <Search size={18} color={colors.textTertiary} />
             <TextInput
               value={q}
               onChangeText={setQ}
               placeholder="Search name or username…"
-              placeholderTextColor="#94A3B8"
-              className="ml-2 flex-1 py-2.5 text-slate-900"
+              placeholderTextColor={colors.textMuted}
+              style={{
+                marginLeft: 8,
+                flex: 1,
+                paddingVertical: 10,
+                fontSize: 14,
+                color: colors.textPrimary,
+              }}
               autoCapitalize="none"
             />
           </View>
@@ -209,44 +267,55 @@ export default function AdminUsersScreen() {
                 setStatus("");
                 setDepartmentId("");
               }}
-              className="flex-row items-center rounded-xl border border-slate-200 px-3 py-2.5"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.borderStrong,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+              }}
             >
-              <Filter size={15} color="#64748B" />
-              <Text className="ml-1.5 text-xs font-bold text-slate-500">
+              <Filter size={15} color={colors.textSecondary} />
+              <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: "700", color: colors.textSecondary }}>
                 Clear filters
               </Text>
             </TouchableOpacity>
           ) : null}
-          <Text className="text-sm text-slate-400">
+          <Text style={{ fontSize: 13, color: colors.textTertiary }}>
             {loading ? "Loading…" : `${total} account${total === 1 ? "" : "s"}`}
           </Text>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 14 }}>
           {ROLE_OPTIONS.map((option) => (
             <Chip
               key={`role-${option.value}`}
               label={option.label}
               active={role === option.value}
               onPress={() => setRole(option.value)}
+              colors={colors}
             />
           ))}
         </ScrollView>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
           {STATUS_OPTIONS.map((option) => (
             <Chip
               key={`status-${option.value}`}
               label={option.label}
               active={status === option.value}
               onPress={() => setStatus(option.value)}
+              colors={colors}
             />
           ))}
-          <View className="mx-2 my-1 w-px bg-slate-200" />
+          <View style={{ marginHorizontal: 8, marginVertical: 4, width: 1, backgroundColor: colors.divider }} />
           <Chip
             label="All departments"
             active={!departmentId}
             onPress={() => setDepartmentId("")}
+            colors={colors}
           />
           {departments.map((department) => (
             <Chip
@@ -254,113 +323,167 @@ export default function AdminUsersScreen() {
               label={department.name}
               active={departmentId === department.id}
               onPress={() => setDepartmentId(department.id)}
+              colors={colors}
             />
           ))}
         </ScrollView>
       </View>
 
       {error ? (
-        <View className="mb-4 rounded-xl border border-red-100 bg-red-50 p-4">
-          <Text className="font-semibold text-red-600">{error}</Text>
+        <View
+          style={{
+            marginBottom: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.destructive,
+            backgroundColor: colors.destructiveSurface,
+            padding: 16,
+          }}
+        >
+          <Text style={{ fontWeight: "600", color: colors.destructiveText }}>{error}</Text>
         </View>
       ) : null}
 
-      <View className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-        <View className="flex-row items-center border-b border-slate-100 bg-slate-50 px-5 py-3">
-          <Text className="flex-[2] text-[11px] font-bold uppercase tracking-wide text-slate-400">
+      <View
+        style={{
+          overflow: "hidden",
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            borderBottomWidth: 1,
+            borderBottomColor: colors.divider,
+            backgroundColor: colors.tableHeaderBg,
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+          }}
+        >
+          <Text style={{ flex: 2, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
             Account
           </Text>
-          <Text className="flex-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <Text style={{ flex: 1, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
             Role
           </Text>
-          <Text className="flex-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <Text style={{ flex: 1, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
             Department
           </Text>
-          <Text className="w-24 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <Text style={{ width: 96, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
             Status
           </Text>
-          <Text className="w-28 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <Text style={{ width: 112, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
             Joined
           </Text>
-          <View className="w-6" />
+          <View style={{ width: 24 }} />
         </View>
 
         {loading ? (
-          <View className="items-center justify-center py-16">
-            <ActivityIndicator size="large" color="#1D4ED8" />
+          <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : users.length === 0 ? (
-          <View className="items-center justify-center py-16">
-            <Users size={32} color="#CBD5E1" />
-            <Text className="mt-3 text-base font-semibold text-slate-500">
+          <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
+            <Users size={32} color={colors.textDisabled} />
+            <Text style={{ marginTop: 12, fontSize: 15, fontWeight: "600", color: colors.textSecondary }}>
               No accounts match these filters.
             </Text>
           </View>
         ) : (
           users.map((user) => {
-            const style = ROLE_STYLE[user.role || ""] || ROLE_STYLE.student;
+            const roleStyle = getRoleBadgeStyle(user.role, colors);
             const suspended = user.status === "suspended";
             return (
               <TouchableOpacity
                 key={user.id}
                 onPress={() => router.push(`/(admin)/users/${user.id}` as any)}
-                className="flex-row items-center border-b border-slate-50 px-5 py-3.5 hover:bg-slate-50"
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.tableRowBorder,
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                }}
               >
-                <View className="flex-[2] flex-row items-center">
-                  <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                <View style={{ flex: 2, flexDirection: "row", alignItems: "center" }}>
+                  <View
+                    style={{
+                      marginRight: 12,
+                      height: 38,
+                      width: 38,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 19,
+                      backgroundColor: colors.surfaceSunken,
+                    }}
+                  >
                     {user.avatar_url ? (
-                      <View className="h-10 w-10 overflow-hidden rounded-full">
-                        <Text className="text-center leading-10 text-sm font-bold text-slate-500">
+                      <View style={{ height: 38, width: 38, overflow: "hidden", borderRadius: 19 }}>
+                        <Text style={{ textAlign: "center", lineHeight: 38, fontSize: 14, fontWeight: "700", color: colors.textSecondary }}>
                           {(user.full_name || user.username || "?")[0]}
                         </Text>
                       </View>
                     ) : (
-                      <UserRound size={18} color="#64748B" />
+                      <UserRound size={18} color={colors.textTertiary} />
                     )}
                   </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-bold text-slate-800" numberOfLines={1}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>
                       {user.full_name || user.username || "Unnamed account"}
                     </Text>
-                    <Text className="text-xs text-slate-400" numberOfLines={1}>
+                    <Text style={{ fontSize: 12, color: colors.textTertiary }} numberOfLines={1}>
                       @{user.username || "unknown"}
                     </Text>
                   </View>
                 </View>
-                <View className="flex-1">
-                  <View className={`self-start rounded-full px-2.5 py-1 ${style.bg}`}>
-                    <Text className={`text-[11px] font-bold ${style.text}`}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ alignSelf: "flex-start", borderRadius: 9999, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: roleStyle.bg }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: roleStyle.text }}>
                       {roleLabel(user.role)}
                     </Text>
                   </View>
                 </View>
-                <Text className="flex-1 text-sm text-slate-600" numberOfLines={1}>
+                <Text style={{ flex: 1, fontSize: 13, color: colors.textSecondary }} numberOfLines={1}>
                   {user.department_name || "—"}
                 </Text>
-                <View className="w-24">
+                <View style={{ width: 96 }}>
                   <View
-                    className={`self-start flex-row items-center rounded-full px-2.5 py-1 ${
-                      suspended ? "bg-red-50" : "bg-emerald-50"
-                    }`}
+                    style={{
+                      alignSelf: "flex-start",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderRadius: 9999,
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      backgroundColor: suspended ? colors.destructiveSurface : colors.successSurface,
+                    }}
                   >
                     {suspended ? (
-                      <ShieldAlert size={11} color="#DC2626" />
+                      <ShieldAlert size={12} color={colors.destructiveText} />
                     ) : (
-                      <View className="mr-1 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      <View style={{ marginRight: 5, height: 6, width: 6, borderRadius: 3, backgroundColor: colors.success }} />
                     )}
                     <Text
-                      className={`text-[11px] font-bold ${
-                        suspended ? "ml-1 text-red-600" : "text-emerald-700"
-                      }`}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "700",
+                        marginLeft: suspended ? 4 : 0,
+                        color: suspended ? colors.destructiveText : colors.successText,
+                      }}
                     >
                       {suspended ? "Suspended" : "Active"}
                     </Text>
                   </View>
                 </View>
-                <Text className="w-28 text-xs text-slate-500">
+                <Text style={{ width: 112, fontSize: 12, color: colors.textTertiary }}>
                   {formatDate(user.created_at)}
                 </Text>
-                <ChevronRight size={17} color="#94A3B8" />
+                <ChevronRight size={17} color={colors.textTertiary} />
               </TouchableOpacity>
             );
           })
@@ -371,15 +494,26 @@ export default function AdminUsersScreen() {
         <TouchableOpacity
           onPress={() => void fetchUsers(cursor, true)}
           disabled={loadingMore}
-          className="mt-4 flex-row items-center justify-center rounded-xl border border-slate-200 bg-white py-3 shadow-sm"
+          style={{
+            marginTop: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            paddingVertical: 12,
+          }}
         >
           {loadingMore ? (
-            <ActivityIndicator size="small" color="#1D4ED8" />
+            <ActivityIndicator size="small" color={colors.primary} />
           ) : (
-            <Text className="text-sm font-bold text-slate-700">Load more</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textSecondary }}>Load more</Text>
           )}
         </TouchableOpacity>
       ) : null}
     </ScrollView>
   );
 }
+

@@ -12,6 +12,8 @@ interface ThemeContextValue {
   colors: ThemeTokens;
   setColorScheme: (preference: ColorSchemePreference) => Promise<void>;
   toggleTheme: () => Promise<void>;
+  /** Cycle through Light → Dark → System */
+  cycleTheme: () => Promise<void>;
 }
 
 const STORAGE_KEY = "theme_preference";
@@ -23,6 +25,7 @@ const ThemeContext = createContext<ThemeContextValue>({
   colors: LIGHT_TOKENS,
   setColorScheme: async () => {},
   toggleTheme: async () => {},
+  cycleTheme: async () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -67,6 +70,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     await setColorScheme(next);
   }, [isDark, setColorScheme]);
 
+  /** Cycle: light → dark → system → light … */
+  const cycleTheme = useCallback(async () => {
+    const cycle: Record<ColorSchemePreference, ColorSchemePreference> = {
+      light: "dark",
+      dark: "system",
+      system: "light",
+    };
+    await setColorScheme(cycle[preference]);
+  }, [preference, setColorScheme]);
+
   return (
     <ThemeContext.Provider
       value={{
@@ -76,6 +89,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         colors,
         setColorScheme,
         toggleTheme,
+        cycleTheme,
       }}
     >
       {children}

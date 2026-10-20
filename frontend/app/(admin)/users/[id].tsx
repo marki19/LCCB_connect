@@ -38,6 +38,8 @@ import {
   isSuperAdminRole,
 } from "../../../src/lib/roles";
 import { useAuth } from "../../../src/contexts/AuthContext";
+import { useTheme } from "../../../src/contexts/ThemeContext";
+import { ThemeTokens } from "../../../src/lib/tokens";
 import ActionDialog from "../../../src/components/admin/ActionDialog";
 
 type DialogKind = "role" | "suspend" | "unsuspend" | "force" | "delete" | null;
@@ -71,23 +73,36 @@ function Detail({
   label,
   value,
   icon: Icon,
+  colors,
 }: {
   label: string;
   value: string;
   icon?: any;
+  colors: ThemeTokens;
 }) {
   return (
-    <View className="mb-4 flex-row items-start">
+    <View style={{ marginBottom: 16, flexDirection: "row", alignItems: "flex-start" }}>
       {Icon ? (
-        <View className="mr-3 mt-0.5 h-8 w-8 items-center justify-center rounded-lg bg-slate-50">
-          <Icon size={15} color="#64748B" />
+        <View
+          style={{
+            marginRight: 12,
+            marginTop: 2,
+            height: 32,
+            width: 32,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 8,
+            backgroundColor: colors.surfaceSunken,
+          }}
+        >
+          <Icon size={15} color={colors.textTertiary} />
         </View>
       ) : null}
-      <View className="flex-1">
-        <Text className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
           {label}
         </Text>
-        <Text className="mt-0.5 text-sm font-semibold text-slate-700">
+        <Text style={{ marginTop: 2, fontSize: 13, fontWeight: "600", color: colors.textPrimary }}>
           {value}
         </Text>
       </View>
@@ -99,6 +114,7 @@ export default function AdminUserDossierScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { profile } = useAuth();
+  const { colors } = useTheme();
   const [target, setTarget] = useState<AdminDossier | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -254,96 +270,191 @@ export default function AdminUserDossierScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-[#F8FAFC] p-8"
+      style={{ flex: 1, backgroundColor: colors.surfacePage }}
+      contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View className="mb-6 flex-row flex-wrap items-center justify-between gap-3">
+      <View style={{ marginBottom: 24, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <TouchableOpacity
           onPress={() => router.push("/(admin)/users" as any)}
-          className="flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+          }}
         >
-          <ArrowLeft size={16} color="#475569" />
-          <Text className="ml-2 text-sm font-semibold text-slate-700">Users</Text>
+          <ArrowLeft size={16} color={colors.textSecondary} />
+          <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
+            Users
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => void load()}
-          className="flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+          }}
         >
-          <RefreshCw size={16} color="#475569" />
-          <Text className="ml-2 text-sm font-semibold text-slate-700">Refresh</Text>
+          <RefreshCw size={16} color={colors.textSecondary} />
+          <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
+            Refresh
+          </Text>
         </TouchableOpacity>
       </View>
 
       {error ? (
-        <View className="mb-4 rounded-xl border border-red-100 bg-red-50 p-4">
-          <Text className="font-semibold text-red-600">{error}</Text>
+        <View
+          style={{
+            marginBottom: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.destructive,
+            backgroundColor: colors.destructiveSurface,
+            padding: 16,
+          }}
+        >
+          <Text style={{ fontWeight: "600", color: colors.destructiveText }}>{error}</Text>
         </View>
       ) : null}
       {notice ? (
-        <View className="mb-4 flex-row items-center rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-          <CheckCircle2 size={18} color="#059669" />
-          <Text className="ml-2 flex-1 font-semibold text-emerald-700">{notice}</Text>
+        <View
+          style={{
+            marginBottom: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.success,
+            backgroundColor: colors.successSurface,
+            padding: 16,
+          }}
+        >
+          <CheckCircle2 size={18} color={colors.success} />
+          <Text style={{ marginLeft: 8, flex: 1, fontWeight: "600", color: colors.successText }}>
+            {notice}
+          </Text>
         </View>
       ) : null}
 
       {loading && !target ? (
-        <View className="min-h-[320px] items-center justify-center">
-          <ActivityIndicator size="large" color="#1D4ED8" />
+        <View style={{ minHeight: 320, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : !target ? (
-        <View className="items-center justify-center rounded-2xl border border-slate-100 bg-white py-20">
-          <UserRound size={32} color="#CBD5E1" />
-          <Text className="mt-3 text-slate-500">Account not found.</Text>
+        <View
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            paddingVertical: 80,
+          }}
+        >
+          <UserRound size={32} color={colors.textDisabled} />
+          <Text style={{ marginTop: 12, color: colors.textTertiary }}>Account not found.</Text>
         </View>
       ) : (
-        <View className="flex-row flex-wrap gap-6">
-          <View className="min-w-[300px] flex-[0.9] rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-            <View className="items-center">
-              <View className="h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-blue-100">
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 24 }}>
+          <View
+            style={{
+              minWidth: 300,
+              flex: 0.9,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              padding: 24,
+            }}
+          >
+            <View style={{ alignItems: "center" }}>
+              <View
+                style={{
+                  height: 96,
+                  width: 96,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  borderRadius: 48,
+                  backgroundColor: colors.primarySurface,
+                  borderWidth: 2,
+                  borderColor: colors.border,
+                }}
+              >
                 {target.avatar_url ? (
                   <Image
                     source={{ uri: target.avatar_url }}
                     style={{ width: 96, height: 96 }}
                   />
                 ) : (
-                  <Text className="text-3xl font-black text-blue-700">
+                  <Text style={{ fontSize: 32, fontWeight: "900", color: colors.primary }}>
                     {(target.full_name || target.username || "?")[0]}
                   </Text>
                 )}
               </View>
-              <Text className="mt-4 text-center text-xl font-black text-slate-900">
+              <Text
+                style={{
+                  marginTop: 16,
+                  textAlign: "center",
+                  fontSize: 20,
+                  fontWeight: "900",
+                  color: colors.textPrimary,
+                }}
+              >
                 {target.full_name || target.username || "Unnamed account"}
               </Text>
-              <Text className="mt-0.5 text-sm text-slate-400">
+              <Text style={{ marginTop: 2, fontSize: 13, color: colors.textTertiary }}>
                 @{target.username || "unknown"}
               </Text>
               <View
-                className={`mt-3 flex-row items-center rounded-full px-3 py-1 ${
-                  suspended ? "bg-red-50" : "bg-emerald-50"
-                }`}
+                style={{
+                  marginTop: 12,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  borderRadius: 9999,
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  backgroundColor: suspended ? colors.destructiveSurface : colors.successSurface,
+                }}
               >
                 {suspended ? (
-                  <ShieldAlert size={13} color="#DC2626" />
+                  <ShieldAlert size={13} color={colors.destructiveText} />
                 ) : (
-                  <ShieldCheck size={13} color="#059669" />
+                  <ShieldCheck size={13} color={colors.successText} />
                 )}
                 <Text
-                  className={`ml-1.5 text-xs font-bold ${
-                    suspended ? "text-red-600" : "text-emerald-700"
-                  }`}
+                  style={{
+                    marginLeft: 6,
+                    fontSize: 12,
+                    fontWeight: "700",
+                    color: suspended ? colors.destructiveText : colors.successText,
+                  }}
                 >
                   {suspended ? "Suspended" : "Active"}
                 </Text>
               </View>
             </View>
 
-            <View className="mt-7 border-t border-slate-100 pt-5">
-              <Detail label="Email" value={target.email || "—"} icon={Mail} />
-              <Detail label="Role" value={target.role || "—"} icon={ShieldCheck} />
+            <View style={{ marginTop: 28, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 20 }}>
+              <Detail label="Email" value={target.email || "—"} icon={Mail} colors={colors} />
+              <Detail label="Role" value={target.role || "—"} icon={ShieldCheck} colors={colors} />
               <Detail
                 label="Department"
                 value={target.department_name || "—"}
                 icon={BookOpen}
+                colors={colors}
               />
               <Detail
                 label="Course / year"
@@ -353,28 +464,40 @@ export default function AdminUserDossierScreen() {
                     .join(" · ") || "—"
                 }
                 icon={FileText}
+                colors={colors}
               />
               <Detail
                 label="Joined"
                 value={formatDate(target.created_at)}
                 icon={CalendarDays}
+                colors={colors}
               />
               <Detail
                 label="Last seen"
                 value={formatDate(target.last_seen_at, true)}
                 icon={CalendarDays}
+                colors={colors}
               />
             </View>
 
             {suspended ? (
-              <View className="mt-2 rounded-xl border border-red-100 bg-red-50 p-4">
-                <Text className="text-[11px] font-bold uppercase tracking-wide text-red-500">
+              <View
+                style={{
+                  marginTop: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.destructive,
+                  backgroundColor: colors.destructiveSurface,
+                  padding: 16,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.destructiveText }}>
                   Current suspension
                 </Text>
-                <Text className="mt-1 text-sm leading-5 text-red-800">
+                <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: colors.textPrimary }}>
                   {target.suspension_reason || "No reason recorded."}
                 </Text>
-                <Text className="mt-2 text-xs text-red-600">
+                <Text style={{ marginTop: 8, fontSize: 12, color: colors.destructiveText }}>
                   {target.suspended_until
                     ? `Until ${formatDate(target.suspended_until, true)}`
                     : "Indefinite"}
@@ -383,8 +506,8 @@ export default function AdminUserDossierScreen() {
             ) : null}
           </View>
 
-          <View className="min-w-[460px] flex-[1.6]">
-            <View className="mb-5 flex-row flex-wrap gap-3">
+          <View style={{ minWidth: 460, flex: 1.6 }}>
+            <View style={{ marginBottom: 20, flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
               {[
                 { label: "Posts", value: target.counts.posts, icon: FileText },
                 { label: "Theses", value: target.counts.theses, icon: BookOpen },
@@ -398,42 +521,70 @@ export default function AdminUserDossierScreen() {
               ].map(({ label, value, icon: Icon }) => (
                 <View
                   key={label}
-                  className="min-w-[110px] flex-1 rounded-xl border border-slate-100 bg-white p-4 shadow-sm"
+                  style={{
+                    minWidth: 110,
+                    flex: 1,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    padding: 16,
+                  }}
                 >
-                  <Icon size={16} color="#64748B" />
-                  <Text className="mt-2 text-2xl font-black text-slate-800">{value}</Text>
-                  <Text className="text-xs font-semibold text-slate-500">{label}</Text>
+                  <Icon size={16} color={colors.textTertiary} />
+                  <Text style={{ marginTop: 8, fontSize: 24, fontWeight: "900", color: colors.textPrimary }}>
+                    {value}
+                  </Text>
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary }}>
+                    {label}
+                  </Text>
                 </View>
               ))}
             </View>
 
-            <View className="mb-5 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-              <Text className="text-lg font-bold text-slate-800">Governance</Text>
-              <Text className="mt-1 text-sm text-slate-500">
+            <View
+              style={{
+                marginBottom: 20,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                padding: 24,
+              }}
+            >
+              <Text style={{ fontSize: 17, fontWeight: "800", color: colors.textPrimary }}>Governance</Text>
+              <Text style={{ marginTop: 4, fontSize: 13, color: colors.textSecondary }}>
                 Every action requires a reason and is written to the audit log.
               </Text>
 
-              <View className="mt-5">
-                <Text className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <View style={{ marginTop: 20 }}>
+                <Text style={{ marginBottom: 8, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
                   Role
                 </Text>
-                <View className="flex-row flex-wrap">
+                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                   {(canManageTarget ? roles : []).map((option) => {
                     const active = selectedRole === option;
                     return (
                       <TouchableOpacity
                         key={option}
                         onPress={() => setSelectedRole(option)}
-                        className={`mb-2 mr-2 rounded-full border px-3.5 py-2 ${
-                          active
-                            ? "border-[#1D4ED8] bg-blue-50"
-                            : "border-slate-200 bg-white"
-                        }`}
+                        style={{
+                          marginBottom: 8,
+                          marginRight: 8,
+                          borderRadius: 9999,
+                          borderWidth: 1,
+                          borderColor: active ? colors.primary : colors.border,
+                          backgroundColor: active ? colors.primarySurface : colors.surface,
+                          paddingHorizontal: 14,
+                          paddingVertical: 7,
+                        }}
                       >
                         <Text
-                          className={`text-xs font-bold ${
-                            active ? "text-[#1D4ED8]" : "text-slate-600"
-                          }`}
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: active ? colors.primary : colors.textSecondary,
+                          }}
                         >
                           {option}
                         </Text>
@@ -441,7 +592,7 @@ export default function AdminUserDossierScreen() {
                     );
                   })}
                   {!canManageTarget ? (
-                    <Text className="text-sm text-slate-400">
+                    <Text style={{ fontSize: 13, color: colors.textTertiary }}>
                       This account is outside your management scope.
                     </Text>
                   ) : null}
@@ -451,37 +602,63 @@ export default function AdminUserDossierScreen() {
                   <TouchableOpacity
                     onPress={() => setDialog("role")}
                     disabled={!selectedRole || selectedRole === target.role}
-                    className={`mt-2 flex-row items-center self-start rounded-xl bg-[#1D4ED8] px-4 py-2.5 ${
-                      !selectedRole || selectedRole === target.role ? "opacity-40" : ""
-                    }`}
+                    style={{
+                      marginTop: 8,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      alignSelf: "flex-start",
+                      borderRadius: 12,
+                      backgroundColor: colors.primary,
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      opacity: !selectedRole || selectedRole === target.role ? 0.45 : 1,
+                    }}
                   >
-                    <UserCog size={16} color="#FFFFFF" />
-                    <Text className="ml-2 text-sm font-bold text-white">
+                    <UserCog size={16} color={colors.textOnPrimary} />
+                    <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "700", color: colors.textOnPrimary }}>
                       Change role
                     </Text>
                   </TouchableOpacity>
                 ) : null}
               </View>
 
-              <View className="mt-6 flex-row flex-wrap gap-2 border-t border-slate-100 pt-5">
+              <View style={{ marginTop: 24, flexDirection: "row", flexWrap: "wrap", gap: 10, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 20 }}>
                 {canManageTarget ? (
                   suspended ? (
                     <TouchableOpacity
                       onPress={() => setDialog("unsuspend")}
-                      className="flex-row items-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5"
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.success,
+                        backgroundColor: colors.successSurface,
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                      }}
                     >
-                      <ShieldCheck size={16} color="#059669" />
-                      <Text className="ml-2 text-sm font-bold text-emerald-700">
+                      <ShieldCheck size={16} color={colors.successText} />
+                      <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "700", color: colors.successText }}>
                         Restore account
                       </Text>
                     </TouchableOpacity>
                   ) : (
                     <TouchableOpacity
                       onPress={() => setDialog("suspend")}
-                      className="flex-row items-center rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5"
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.warning,
+                        backgroundColor: colors.warningSurface,
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                      }}
                     >
-                      <ShieldAlert size={16} color="#D97706" />
-                      <Text className="ml-2 text-sm font-bold text-amber-700">
+                      <ShieldAlert size={16} color={colors.warningText} />
+                      <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "700", color: colors.warningText }}>
                         Suspend
                       </Text>
                     </TouchableOpacity>
@@ -491,10 +668,19 @@ export default function AdminUserDossierScreen() {
                 {canManageTarget && superadmin ? (
                   <TouchableOpacity
                     onPress={() => setDialog("force")}
-                    className="flex-row items-center rounded-xl border border-slate-200 bg-white px-4 py-2.5"
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.borderStrong,
+                      backgroundColor: colors.surface,
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                    }}
                   >
-                    <RefreshCw size={16} color="#475569" />
-                    <Text className="ml-2 text-sm font-bold text-slate-700">
+                    <RefreshCw size={16} color={colors.textSecondary} />
+                    <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "700", color: colors.textSecondary }}>
                       Force sign-out
                     </Text>
                   </TouchableOpacity>
@@ -503,10 +689,19 @@ export default function AdminUserDossierScreen() {
                 {canManageTarget && superadmin ? (
                   <TouchableOpacity
                     onPress={() => setDialog("delete")}
-                    className="flex-row items-center rounded-xl border border-red-200 bg-red-50 px-4 py-2.5"
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.destructive,
+                      backgroundColor: colors.destructiveSurface,
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                    }}
                   >
-                    <Trash2 size={16} color="#DC2626" />
-                    <Text className="ml-2 text-sm font-bold text-red-600">
+                    <Trash2 size={16} color={colors.destructiveText} />
+                    <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "700", color: colors.destructiveText }}>
                       Delete account
                     </Text>
                   </TouchableOpacity>
@@ -514,33 +709,61 @@ export default function AdminUserDossierScreen() {
               </View>
             </View>
 
-            <View className="mb-5 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-              <Text className="text-lg font-bold text-slate-800">Recent content</Text>
+            <View
+              style={{
+                marginBottom: 20,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                padding: 24,
+              }}
+            >
+              <Text style={{ fontSize: 17, fontWeight: "800", color: colors.textPrimary }}>Recent content</Text>
               {target.recent_content.length === 0 ? (
-                <Text className="py-6 text-sm text-slate-400">
+                <Text style={{ paddingVertical: 24, fontSize: 13, color: colors.textTertiary }}>
                   No posts or theses yet.
                 </Text>
               ) : (
                 target.recent_content.map((item) => (
                   <View
                     key={`${item.type}-${item.id}`}
-                    className="mt-3 flex-row items-center rounded-xl border border-slate-100 p-3"
+                    style={{
+                      marginTop: 12,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surfaceSunken,
+                      padding: 12,
+                    }}
                   >
-                    <View className="mr-3 h-9 w-9 items-center justify-center rounded-lg bg-slate-50">
+                    <View
+                      style={{
+                        marginRight: 12,
+                        height: 36,
+                        width: 36,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 10,
+                        backgroundColor: colors.surface,
+                      }}
+                    >
                       {item.type === "thesis" ? (
-                        <BookOpen size={16} color="#64748B" />
+                        <BookOpen size={16} color={colors.textTertiary} />
                       ) : (
-                        <FileText size={16} color="#64748B" />
+                        <FileText size={16} color={colors.textTertiary} />
                       )}
                     </View>
-                    <View className="flex-1">
+                    <View style={{ flex: 1 }}>
                       <Text
-                        className="text-sm font-semibold text-slate-800"
+                        style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}
                         numberOfLines={1}
                       >
                         {item.title || "Untitled"}
                       </Text>
-                      <Text className="text-xs text-slate-400">
+                      <Text style={{ marginTop: 2, fontSize: 12, color: colors.textTertiary }}>
                         {item.type} · {item.status} · {formatDate(item.created_at)}
                       </Text>
                     </View>
@@ -549,26 +772,39 @@ export default function AdminUserDossierScreen() {
               )}
             </View>
 
-            <View className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-              <Text className="text-lg font-bold text-slate-800">Sanctions</Text>
+            <View
+              style={{
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                padding: 24,
+              }}
+            >
+              <Text style={{ fontSize: 17, fontWeight: "800", color: colors.textPrimary }}>Sanctions</Text>
               {target.sanctions.length === 0 ? (
-                <Text className="py-6 text-sm text-slate-400">
+                <Text style={{ paddingVertical: 24, fontSize: 13, color: colors.textTertiary }}>
                   No sanctions recorded.
                 </Text>
               ) : (
                 target.sanctions.map((entry) => (
                   <View
                     key={entry.id}
-                    className="mt-3 border-b border-slate-50 pb-3 last:border-0"
+                    style={{
+                      marginTop: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.divider,
+                      paddingBottom: 12,
+                    }}
                   >
-                    <Text className="text-sm font-semibold text-slate-800">
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}>
                       {entry.action}
                     </Text>
-                    <Text className="mt-0.5 text-xs text-slate-500">
+                    <Text style={{ marginTop: 2, fontSize: 12, color: colors.textTertiary }}>
                       {entry.actor_username || "system"} · {formatDate(entry.created_at, true)}
                     </Text>
                     {entry.reason ? (
-                      <Text className="mt-1 text-xs italic text-slate-400">
+                      <Text style={{ marginTop: 4, fontSize: 12, fontStyle: "italic", color: colors.textMuted }}>
                         {entry.reason}
                       </Text>
                     ) : null}
@@ -596,3 +832,4 @@ export default function AdminUserDossierScreen() {
     </ScrollView>
   );
 }
+
