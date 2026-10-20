@@ -440,7 +440,7 @@ export default function ThreadScreen() {
                 <TouchableOpacity onPress={() => void loadOlder()} style={{ alignItems: "center", paddingVertical: 8 }}>
                   <Text style={{ fontSize: 12, color: colors.action, fontWeight: "600" }}>Load earlier messages</Text>
                 </TouchableOpacity>
-              ) : null
+              ) : undefined
             }
             ListFooterComponent={<>{pending.map((p) => <View key={p.clientMsgId}>{renderPending(p)}</View>)}</>}
             ListEmptyComponent={

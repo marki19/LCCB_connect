@@ -302,7 +302,7 @@ export default function MessagesInbox() {
                   <View key={`sent-${item.id}`}>{renderRequest({ item, kind: "sent" })}</View>
                 ))}
               </View>
-            ) : null
+            ) : undefined
           }
           ListEmptyComponent={
             <View style={{ alignItems: "center", paddingTop: 72, paddingHorizontal: 32 }}>
