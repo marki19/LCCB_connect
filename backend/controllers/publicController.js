@@ -41,9 +41,12 @@ const getPostById = async (req, res, next) => {
 const getComments = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const comments = await postModel.getCommentsByPostId(id, {
-      includeHidden: false,
-    });
+    const post = await postModel.getPostById(id, { includeHidden: false });
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    const comments = await postModel.getComments(id, { includeHidden: false });
     res.json(comments || []);
   } catch (error) {
     next(error);
@@ -56,7 +59,12 @@ const getTheses = async (req, res, next) => {
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
     });
-    res.json(theses || []);
+    // The model already filters hidden rows; keep the controller boundary safe
+    // too so a future query change cannot expose one.
+    const publicTheses = (theses || []).filter(
+      (thesis) => thesis.moderation_status !== "hidden"
+    );
+    res.json(publicTheses);
   } catch (error) {
     next(error);
   }
@@ -81,18 +89,15 @@ const getPeers = async (req, res, next) => {
       limit: clampLimit(req.query.limit || 20),
       cursor: req.query.cursor || null,
     });
-    // Sanitize to public-safe fields only
+    // Public peers only need the fields the guest feed renders. Keep bio,
+    // course, role, and department IDs behind authenticated endpoints.
     const publicPeers = (users || []).map((u) => ({
       id: u.id,
       username: u.username,
       full_name: u.full_name,
       avatar_url: u.avatar_url,
-      course: u.course,
       year_level: u.year_level,
-      department_id: u.department_id,
       department_name: u.department_name,
-      bio: u.bio,
-      role: u.role,
     }));
     res.json(publicPeers);
   } catch (error) {

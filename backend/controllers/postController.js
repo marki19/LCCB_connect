@@ -108,6 +108,11 @@ const toggleLike = async (req, res, next) => {
 const getComments = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const post = await postModel.getPostById(id, { includeHidden: false });
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
     const comments = await postModel.getComments(id);
     res.json(comments);
   } catch (error) {
@@ -119,6 +124,11 @@ const addComment = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
+    const post = await postModel.getPostById(id, { includeHidden: false });
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
     const comment = await postModel.addComment(id, req.user.id, content, {
       moderation_status: "approved",
     });

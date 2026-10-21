@@ -56,6 +56,8 @@ const m = {
   deletePost: stub(postModel, "deletePost"),
   toggleLike: stub(postModel, "toggleLike"),
   getCommentById: stub(postModel, "getCommentById"),
+  getComments: stub(postModel, "getComments"),
+  addComment: stub(postModel, "addComment"),
   updatePostModeration: stub(postModel, "updatePostModeration"),
   updateCommentModeration: stub(postModel, "updateCommentModeration"),
   adminDeletePost: stub(postModel, "adminDeletePost"),
@@ -148,6 +150,29 @@ describe("ownership is enforced in SQL (404, not 403)", () => {
     const res = await request(app).put("/api/theses/t1").set(AUTH).send({ title: "new" });
 
     assert.equal(res.status, 404);
+  });
+});
+
+describe("comments stay hidden with their parent post", () => {
+  it("404s when listing comments for a hidden or missing post", async () => {
+    m.getPostById.setImpl(async () => undefined);
+
+    const res = await request(app).get("/api/posts/p1/comments").set(AUTH);
+
+    assert.equal(res.status, 404);
+    assert.equal(m.getComments.calls.length, 0);
+  });
+
+  it("404s when commenting on a hidden or missing post", async () => {
+    m.getPostById.setImpl(async () => undefined);
+
+    const res = await request(app)
+      .post("/api/posts/p1/comments")
+      .set(AUTH)
+      .send({ content: "Hello" });
+
+    assert.equal(res.status, 404);
+    assert.equal(m.addComment.calls.length, 0);
   });
 });
 

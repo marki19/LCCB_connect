@@ -12,7 +12,7 @@ const userModel = require("../models/userModel");
 const m = {
   getAllPosts: stub(postModel, "getAllPosts", async () => []),
   getPostById: stub(postModel, "getPostById", async () => null),
-  getCommentsByPostId: stub(postModel, "getCommentsByPostId", async () => []),
+  getComments: stub(postModel, "getComments", async () => []),
   getAllTheses: stub(thesisModel, "getAllTheses", async () => []),
   getThesisById: stub(thesisModel, "getThesisById", async () => null),
   getAllUsers: stub(userModel, "getAllUsers", async () => []),
@@ -51,6 +51,30 @@ describe("Public read-only endpoints (Guest Mode)", () => {
     assert.equal(res.status, 404);
   });
 
+  it("returns comments for a visible public post", async () => {
+    m.getPostById.setImpl(async () => ({
+      id: "p1",
+      moderation_status: "approved",
+    }));
+    m.getComments.setImpl(async () => [{ id: "c1", content: "Hello" }]);
+
+    const res = await request(app).get("/api/public/posts/p1/comments");
+    assert.equal(res.status, 200);
+    assert.equal(res.body.length, 1);
+    assert.deepEqual(m.getComments.calls.at(-1), [
+      "p1",
+      { includeHidden: false },
+    ]);
+  });
+
+  it("returns 404 for comments on a hidden or missing public post", async () => {
+    m.getPostById.setImpl(async () => null);
+
+    const res = await request(app).get("/api/public/posts/p1/comments");
+    assert.equal(res.status, 404);
+    assert.equal(m.getComments.calls.length, 0);
+  });
+
   it("allows unauthenticated GET /api/public/theses", async () => {
     m.getAllTheses.setImpl(async () => [
       { id: "t1", title: "Thesis Research", department: "BSIT" },
@@ -60,6 +84,20 @@ describe("Public read-only endpoints (Guest Mode)", () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.length, 1);
     assert.equal(res.body[0].title, "Thesis Research");
+  });
+
+  it("excludes hidden theses from the public response even if the model leaks one", async () => {
+    m.getAllTheses.setImpl(async () => [
+      { id: "t1", title: "Visible", moderation_status: "approved" },
+      { id: "t2", title: "Hidden", moderation_status: "hidden" },
+    ]);
+
+    const res = await request(app).get("/api/public/theses");
+    assert.equal(res.status, 200);
+    assert.deepEqual(
+      res.body.map((thesis) => thesis.id),
+      ["t1"]
+    );
   });
 
   it("allows unauthenticated GET /api/public/peers and sanitizes profiles", async () => {
@@ -82,6 +120,10 @@ describe("Public read-only endpoints (Guest Mode)", () => {
     assert.equal(res.body.length, 1);
     assert.equal(res.body[0].username, "jane");
     assert.equal(res.body[0].secret_internal_flag, undefined);
+    assert.equal(res.body[0].bio, undefined);
+    assert.equal(res.body[0].role, undefined);
+    assert.equal(res.body[0].course, undefined);
+    assert.equal(res.body[0].department_id, undefined);
   });
 
   it("rejects write requests on /api/public", async () => {
@@ -92,18 +134,35 @@ describe("Public read-only endpoints (Guest Mode)", () => {
   it("blocks private, local, and metadata IP targets from link preview (SSRF protection)", async () => {
     const { validateUrlSafety } = require("../services/previewService");
 
-    await assert.rejects(
-      () => validateUrlSafety("http://localhost:3000"),
-      /restricted/i
+    const blockedTargets = [
+      "http://localhost:3000",
+      "http://127.0.0.1/admin",
+      "http://169.254.169.254/latest/meta-data",
+      "http://100.64.0.1/",
+      "http://198.18.0.1/",
+      "http://224.0.0.1/",
+      "http://240.0.0.1/",
+      "http://[::1]/",
+      "http://[::ffff:127.0.0.1]/",
+      "http://[::ffff:7f00:1]/",
+      "http://[::ffff:169.254.169.254]/",
+      "http://[fc01::1]/",
+      "http://[fd12::1]/",
+    ];
+
+    for (const target of blockedTargets) {
+      await assert.rejects(
+        () => validateUrlSafety(target),
+        /restricted/i,
+        `Expected ${target} to be rejected`
+      );
+    }
+
+    await assert.doesNotReject(
+      () => validateUrlSafety("http://8.8.8.8/"),
+      "Expected a public IP literal to be allowed"
     );
-    await assert.rejects(
-      () => validateUrlSafety("http://127.0.0.1/admin"),
-      /restricted/i
-    );
-    await assert.rejects(
-      () => validateUrlSafety("http://169.254.169.254/latest/meta-data"),
-      /restricted/i
-    );
+
     await assert.rejects(
       () => validateUrlSafety("ftp://example.com"),
       /protocols are supported/i

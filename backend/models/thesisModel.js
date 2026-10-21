@@ -5,21 +5,32 @@ const { DEFAULT_LIMIT } = require("./pagination");
 
 // Keyset pagination. Pass `cursor` = "<created_at>|<id>" of the last row you
 // saw; results are capped by models/pagination.js.
-const getAllTheses = async ({ limit = DEFAULT_LIMIT, cursor = null } = {}) => {
+const getAllTheses = async ({
+  limit = DEFAULT_LIMIT,
+  cursor = null,
+  includeHidden = false,
+} = {}) => {
   const params = [];
-  let whereClause = "";
+  const conditions = [];
 
   if (cursor) {
     const [createdAt, id] = String(cursor).split("|");
     if (createdAt && id) {
       params.push(createdAt, id);
-      whereClause = `
-    WHERE (
+      conditions.push(`(
       t.created_at < $1::timestamptz
       OR (t.created_at = $1::timestamptz AND t.id < $2::uuid)
-    )`;
+    )`);
     }
   }
+
+  if (!includeHidden) {
+    conditions.push("t.moderation_status <> 'hidden'");
+  }
+
+  const whereClause = conditions.length
+    ? `\n    WHERE ${conditions.join("\n      AND ")}`
+    : "";
 
   params.push(limit);
   const sql = `
@@ -55,7 +66,10 @@ const getAllTheses = async ({ limit = DEFAULT_LIMIT, cursor = null } = {}) => {
   return result.rows;
 };
 
-const getThesisById = async (id) => {
+const getThesisById = async (id, { includeHidden = false } = {}) => {
+  const hiddenFilter = includeHidden
+    ? ""
+    : "\n      AND t.moderation_status <> 'hidden'";
   const sql = `
     SELECT 
       t.id,
@@ -80,7 +94,7 @@ const getThesisById = async (id) => {
     FROM theses t
     LEFT JOIN profiles pr ON t.uploader_id = pr.id
     LEFT JOIN public.departments d ON d.id = pr.department_id
-    WHERE t.id = $1;
+    WHERE t.id = $1${hiddenFilter};
   `;
   const result = await db.query(sql, [id]);
   return result.rows[0];

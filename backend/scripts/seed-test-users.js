@@ -3,8 +3,9 @@
 //   node scripts/seed-test-users.js            # create/refresh accounts
 //   node scripts/seed-test-users.js --cleanup  # delete them
 //
-// Idempotent: re-running finds each auth user by email, resets the password,
-// and refreshes the profile instead of duplicating rows.
+// Idempotent: re-running finds each auth user by email, resets the password
+// from TEST_USER_PASSWORD, and refreshes the profile instead of duplicating
+// rows.
 //
 // Roles use the canonical spellings; the DB also accepts variants
 // (department_admin, superAdmin) for backward compatibility.
@@ -15,7 +16,7 @@ require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const db = require("../db");
 const { createClient } = require("@supabase/supabase-js");
 
-const PASSWORD = "123456";
+const PASSWORD = process.env.TEST_USER_PASSWORD;
 const YEAR_LEVEL = "3rd Year";
 
 const DEPARTMENT = {
@@ -167,6 +168,10 @@ async function upsertProfile(id, user, catalog) {
 }
 
 async function run() {
+  if (!PASSWORD) {
+    throw new Error("TEST_USER_PASSWORD must be set in backend/.env");
+  }
+
   const catalog = await seedCatalog();
   console.log(
     `catalog: ${DEPARTMENT.name} (${DEPARTMENT.code}) + ${COURSE.name} (${COURSE.code})`
@@ -175,9 +180,7 @@ async function run() {
   for (const user of TEST_USERS) {
     const id = await upsertAuthUser(user);
     await upsertProfile(id, user, catalog);
-    console.log(
-      `${user.role.padEnd(16)} ${user.email.padEnd(24)} password=${PASSWORD} id=${id}`
-    );
+    console.log(`${user.role.padEnd(16)} ${user.email.padEnd(24)} id=${id}`);
   }
 
   console.log(`\nseeded ${TEST_USERS.length} accounts`);
