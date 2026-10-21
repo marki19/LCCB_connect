@@ -37,6 +37,8 @@ const getAllTheses = async ({
     conditions.push(`(
       t.title ILIKE $${params.length} ESCAPE '!'
       OR t.abstract ILIKE $${params.length} ESCAPE '!'
+      OR pr.full_name ILIKE $${params.length} ESCAPE '!'
+      OR d.name ILIKE $${params.length} ESCAPE '!'
     )`);
   }
 
