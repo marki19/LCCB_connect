@@ -24,6 +24,7 @@ describe("user directory filters", () => {
     const [sql, params] = query.calls.at(-1);
     assert.match(sql, /p\.username ILIKE \$1 ESCAPE '!'/i);
     assert.match(sql, /p\.full_name ILIKE \$1 ESCAPE '!'/i);
+    assert.match(sql, /d\.name ILIKE \$1 ESCAPE '!'/i);
     assert.deepEqual(params, ["%jane%", 10]);
   });
 

@@ -25,6 +25,7 @@ const getAllUsers = async ({
     conditions.push(`(
       p.username ILIKE $${params.length} ESCAPE '!'
       OR p.full_name ILIKE $${params.length} ESCAPE '!'
+      OR d.name ILIKE $${params.length} ESCAPE '!'
     )`);
   }
 
