@@ -1,15 +1,35 @@
 const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
+const { escapeLike } = require("../utils/queryFilters");
 
 // RAW SQL QUERIES FOR POSTS (WITH JOIN FOR AUTHOR INFO)
 
 // Keyset pagination. Pass `cursor` = "<created_at>|<id>" of the last row you saw.
-const getAllPosts = async ({ limit = DEFAULT_LIMIT, cursor = null, includeHidden = false } = {}) => {
+const getAllPosts = async ({
+  limit = DEFAULT_LIMIT,
+  cursor = null,
+  includeHidden = false,
+  q = null,
+  authorId = null,
+} = {}) => {
   const params = [];
   const conditions = [];
 
   if (!includeHidden) {
     conditions.push("p.moderation_status != 'hidden'");
+  }
+
+  if (q) {
+    params.push(`%${escapeLike(q)}%`);
+    conditions.push(`(
+      p.title ILIKE $${params.length} ESCAPE '!'
+      OR p.content ILIKE $${params.length} ESCAPE '!'
+    )`);
+  }
+
+  if (authorId) {
+    params.push(authorId);
+    conditions.push(`p.author_id = $${params.length}::uuid`);
   }
 
   if (cursor) {

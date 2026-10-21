@@ -1,5 +1,6 @@
 const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
+const { escapeLike } = require("../utils/queryFilters");
 
 // RAW SQL QUERIES FOR THESES / MANUSCRIPTS
 
@@ -9,6 +10,9 @@ const getAllTheses = async ({
   limit = DEFAULT_LIMIT,
   cursor = null,
   includeHidden = false,
+  q = null,
+  uploaderId = null,
+  categories = null,
 } = {}) => {
   const params = [];
   const conditions = [];
@@ -26,6 +30,24 @@ const getAllTheses = async ({
 
   if (!includeHidden) {
     conditions.push("t.moderation_status <> 'hidden'");
+  }
+
+  if (q) {
+    params.push(`%${escapeLike(q)}%`);
+    conditions.push(`(
+      t.title ILIKE $${params.length} ESCAPE '!'
+      OR t.abstract ILIKE $${params.length} ESCAPE '!'
+    )`);
+  }
+
+  if (uploaderId) {
+    params.push(uploaderId);
+    conditions.push(`t.uploader_id = $${params.length}::uuid`);
+  }
+
+  if (Array.isArray(categories) && categories.length > 0) {
+    params.push(categories);
+    conditions.push(`t.category = ANY($${params.length}::text[])`);
   }
 
   const whereClause = conditions.length

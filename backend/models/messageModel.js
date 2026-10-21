@@ -212,6 +212,21 @@ const listRequests = async (userId, { limit = DEFAULT_LIMIT } = {}) => {
 };
 
 /**
+ * Total unread messages addressed to the caller across inbox and requests.
+ * The per-conversation `unread` field in list conversations is a subset; this
+ * endpoint exists for a tab badge that must not fetch every thread.
+ */
+const getUnreadCount = async (userId) => {
+  const result = await db.query(
+    `SELECT COUNT(*)::int AS unread
+       FROM public.messages
+      WHERE recipient_id = $1 AND read_at IS NULL;`,
+    [userId]
+  );
+  return { unread: result.rows[0]?.unread ?? 0 };
+};
+
+/**
  * Accepts a request. Only the addressee (participant who is not the requester)
  * may accept; anyone else gets `undefined` → 404. Returns the activated row so
  * the caller can notify the requester.
@@ -538,6 +553,7 @@ module.exports = {
   getConversationForParticipant,
   listConversations,
   listRequests,
+  getUnreadCount,
   acceptRequest,
   muteConversation,
   // messages

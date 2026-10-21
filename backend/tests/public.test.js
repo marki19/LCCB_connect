@@ -40,6 +40,27 @@ describe("Public read-only endpoints (Guest Mode)", () => {
     assert.equal(res.body[0].id, "p1");
   });
 
+  it("passes public post search and author filters to the model", async () => {
+    const authorId = "11111111-1111-4111-8111-111111111111";
+    m.getAllPosts.setImpl(async () => []);
+
+    await request(app)
+      .get("/api/public/posts")
+      .query({ q: "  react  ", author_id: authorId, limit: 5 });
+
+    assert.deepEqual(m.getAllPosts.calls.at(-1), [
+      { limit: 5, cursor: null, q: "react", authorId },
+    ]);
+  });
+
+  it("rejects a malformed public author_id with 400", async () => {
+    const res = await request(app).get("/api/public/posts?author_id=nope");
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: "Invalid author_id" });
+    assert.equal(m.getAllPosts.calls.length, 0);
+  });
+
   it("returns 404 for hidden posts on GET /api/public/posts/:id", async () => {
     m.getPostById.setImpl(async () => ({
       id: "p2",
@@ -86,6 +107,38 @@ describe("Public read-only endpoints (Guest Mode)", () => {
     assert.equal(res.body[0].title, "Thesis Research");
   });
 
+  it("passes public thesis search, uploader, and category filters to the model", async () => {
+    const uploaderId = "22222222-2222-4222-8222-222222222222";
+    m.getAllTheses.setImpl(async () => []);
+
+    await request(app)
+      .get("/api/public/theses")
+      .query({
+        q: "ai",
+        uploader_id: uploaderId,
+        category: "Graduate Dissertation",
+        limit: 5,
+      });
+
+    assert.deepEqual(m.getAllTheses.calls.at(-1), [
+      {
+        limit: 5,
+        cursor: null,
+        q: "ai",
+        uploaderId,
+        categories: ["Graduate Dissertation"],
+      },
+    ]);
+  });
+
+  it("rejects a malformed public uploader_id with 400", async () => {
+    const res = await request(app).get("/api/public/theses?uploader_id=nope");
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: "Invalid uploader_id" });
+    assert.equal(m.getAllTheses.calls.length, 0);
+  });
+
   it("excludes hidden theses from the public response even if the model leaks one", async () => {
     m.getAllTheses.setImpl(async () => [
       { id: "t1", title: "Visible", moderation_status: "approved" },
@@ -124,6 +177,38 @@ describe("Public read-only endpoints (Guest Mode)", () => {
     assert.equal(res.body[0].role, undefined);
     assert.equal(res.body[0].course, undefined);
     assert.equal(res.body[0].department_id, undefined);
+  });
+
+  it("passes public peer search, department, and year filters to the model", async () => {
+    const departmentId = "33333333-3333-4333-8333-333333333333";
+    m.getAllUsers.setImpl(async () => []);
+
+    await request(app)
+      .get("/api/public/peers")
+      .query({
+        q: "  jane  ",
+        department_id: departmentId,
+        year_level: "3rd Year",
+        limit: 5,
+      });
+
+    assert.deepEqual(m.getAllUsers.calls.at(-1), [
+      {
+        limit: 5,
+        cursor: null,
+        q: "jane",
+        departmentId,
+        yearLevel: "3rd Year",
+      },
+    ]);
+  });
+
+  it("rejects a malformed public department_id with 400", async () => {
+    const res = await request(app).get("/api/public/peers?department_id=nope");
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: "Invalid department_id" });
+    assert.equal(m.getAllUsers.calls.length, 0);
   });
 
   it("rejects write requests on /api/public", async () => {

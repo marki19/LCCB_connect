@@ -1,14 +1,28 @@
 const thesisModel = require("../models/thesisModel");
 const { clampLimit } = require("../models/pagination");
+const {
+  parseSearch,
+  parseUuidFilter,
+  parseCategoryFilter,
+} = require("../utils/queryFilters");
 const moderationService = require("../services/moderationService");
 const notificationService = require("../services/notificationService");
 
 const getTheses = async (req, res, next) => {
   try {
-    // Optional keyset pagination: ?limit=<1..100>&cursor=<created_at>|<id>
+    // Optional filters: ?q=<text>&uploader_id=<uuid>&category=<label>
+    // plus keyset pagination: ?limit=<1..100>&cursor=<created_at>|<id>
+    const uploader = parseUuidFilter(req.query.uploader_id, "uploader_id");
+    if (uploader.error) {
+      return res.status(400).json({ error: uploader.error });
+    }
+
     const theses = await thesisModel.getAllTheses({
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
+      q: parseSearch(req.query.q),
+      uploaderId: uploader.value,
+      categories: parseCategoryFilter(req.query.category),
     });
     res.json(theses);
   } catch (error) {

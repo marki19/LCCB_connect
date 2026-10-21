@@ -1,5 +1,6 @@
 const postModel = require("../models/postModel");
 const { clampLimit } = require("../models/pagination");
+const { parseSearch, parseUuidFilter } = require("../utils/queryFilters");
 const moderationService = require("../services/moderationService");
 const notificationService = require("../services/notificationService");
 const previewService = require("../services/previewService");
@@ -8,10 +9,18 @@ const previewService = require("../services/previewService");
 // server-side and returns a generic message (never the raw DB error).
 const getPosts = async (req, res, next) => {
   try {
-    // Optional keyset pagination: ?limit=<1..100>&cursor=<created_at>|<id>
+    // Optional filters: ?q=<text>&author_id=<uuid>
+    // plus keyset pagination: ?limit=<1..100>&cursor=<created_at>|<id>
+    const author = parseUuidFilter(req.query.author_id, "author_id");
+    if (author.error) {
+      return res.status(400).json({ error: author.error });
+    }
+
     const posts = await postModel.getAllPosts({
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
+      q: parseSearch(req.query.q),
+      authorId: author.value,
     });
     res.json(posts);
   } catch (error) {
