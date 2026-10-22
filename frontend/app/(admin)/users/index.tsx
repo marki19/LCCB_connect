@@ -11,9 +11,9 @@ import { useRouter } from "expo-router";
 import {
   ChevronRight,
   Filter,
-  RefreshCw,
   Search,
   ShieldAlert,
+  ShieldCheck,
   UserRound,
   Users,
 } from "lucide-react-native";
@@ -22,6 +22,10 @@ import { fetchDepartments } from "../../../src/lib/catalog";
 import type { Department } from "../../../src/types";
 import { useTheme } from "../../../src/contexts/ThemeContext";
 import { ThemeTokens } from "../../../src/lib/tokens";
+import PageHeader from "../../../src/components/admin/PageHeader";
+import DataTable from "../../../src/components/admin/DataTable";
+import StatusBadge from "../../../src/components/admin/StatusBadge";
+import EmptyState from "../../../src/components/admin/EmptyState";
 
 const ROLE_OPTIONS = [
   { value: "", label: "All roles" },
@@ -190,34 +194,13 @@ export default function AdminUsersScreen() {
       contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ marginBottom: 24, flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
-        <View>
-          <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
-            Users
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 14, color: colors.textSecondary }}>
-            Profiles, roles, and account sanctions.
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => void fetchUsers(null, false)}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.surface,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-          }}
-        >
-          <RefreshCw size={15} color={colors.textSecondary} />
-          <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
-            Refresh
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <PageHeader
+        eyebrow="Governance / people"
+        title="Users"
+        description="Profiles, roles, and account sanctions — every change is reason-gated and audited."
+        onRefresh={() => void fetchUsers(null, false)}
+        refreshing={loading}
+      />
 
       <View
         style={{
@@ -344,73 +327,56 @@ export default function AdminUsersScreen() {
         </View>
       ) : null}
 
-      <View
-        style={{
-          overflow: "hidden",
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surface,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            borderBottomWidth: 1,
-            borderBottomColor: colors.divider,
-            backgroundColor: colors.tableHeaderBg,
-            paddingHorizontal: 20,
-            paddingVertical: 12,
-          }}
-        >
-          <Text style={{ flex: 2, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
-            Account
-          </Text>
-          <Text style={{ flex: 1, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
-            Role
-          </Text>
-          <Text style={{ flex: 1, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
-            Department
-          </Text>
-          <Text style={{ width: 96, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
-            Status
-          </Text>
-          <Text style={{ width: 112, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
-            Joined
-          </Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        {loading ? (
-          <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : users.length === 0 ? (
-          <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
-            <Users size={32} color={colors.textDisabled} />
-            <Text style={{ marginTop: 12, fontSize: 15, fontWeight: "600", color: colors.textSecondary }}>
-              No accounts match these filters.
-            </Text>
-          </View>
-        ) : (
-          users.map((user) => {
-            const roleStyle = getRoleBadgeStyle(user.role, colors);
-            const suspended = user.status === "suspended";
-            return (
-              <TouchableOpacity
-                key={user.id}
-                onPress={() => router.push(`/(admin)/users/${user.id}` as any)}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.tableRowBorder,
-                  paddingHorizontal: 20,
-                  paddingVertical: 14,
-                }}
-              >
-                <View style={{ flex: 2, flexDirection: "row", alignItems: "center" }}>
+      <DataTable<AdminUser>
+        columns={[
+          { key: "account", label: "Account", flex: 2.2 },
+          { key: "role", label: "Role", flex: 1 },
+          { key: "department", label: "Department", flex: 1.2 },
+          { key: "status", label: "Status", width: 104 },
+          { key: "joined", label: "Joined", width: 108 },
+          { key: "open", label: "", width: 28 },
+        ]}
+        rows={users}
+        keyExtractor={(user) => user.id}
+        loading={loading}
+        minWidth={820}
+        onRowPress={(user) => router.push(`/(admin)/users/${user.id}` as any)}
+        rowLabel={(user) =>
+          `${user.full_name || user.username || "Unnamed account"}, ${roleLabel(
+            user.role
+          )}, ${user.status === "suspended" ? "suspended" : "active"}`
+        }
+        empty={
+          <EmptyState
+            compact
+            icon={Users}
+            tone={hasFilters ? "warning" : "brand"}
+            title={hasFilters ? "No accounts match" : "No accounts yet"}
+            body={
+              hasFilters
+                ? "Try a different role, status, or department — or clear the filters."
+                : "New profiles will appear here as people join the campus."
+            }
+            actionLabel={hasFilters ? "Clear filters" : undefined}
+            onAction={
+              hasFilters
+                ? () => {
+                    setQ("");
+                    setRole("");
+                    setStatus("");
+                    setDepartmentId("");
+                  }
+                : undefined
+            }
+          />
+        }
+        renderCell={(user, column, tableColors) => {
+          const roleStyle = getRoleBadgeStyle(user.role, tableColors);
+          const suspended = user.status === "suspended";
+          switch (column.key) {
+            case "account":
+              return (
+                <View style={{ flexDirection: "row", alignItems: "center", minWidth: 0 }}>
                   <View
                     style={{
                       marginRight: 12,
@@ -419,76 +385,89 @@ export default function AdminUsersScreen() {
                       alignItems: "center",
                       justifyContent: "center",
                       borderRadius: 19,
-                      backgroundColor: colors.surfaceSunken,
+                      backgroundColor: tableColors.surfaceSunken,
                     }}
                   >
                     {user.avatar_url ? (
                       <View style={{ height: 38, width: 38, overflow: "hidden", borderRadius: 19 }}>
-                        <Text style={{ textAlign: "center", lineHeight: 38, fontSize: 14, fontWeight: "700", color: colors.textSecondary }}>
+                        <Text
+                          style={{
+                            textAlign: "center",
+                            lineHeight: 38,
+                            fontSize: 14,
+                            fontWeight: "700",
+                            color: tableColors.textSecondary,
+                          }}
+                        >
                           {(user.full_name || user.username || "?")[0]}
                         </Text>
                       </View>
                     ) : (
-                      <UserRound size={18} color={colors.textTertiary} />
+                      <UserRound size={18} color={tableColors.textTertiary} />
                     )}
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      style={{ fontSize: 13, fontWeight: "700", color: tableColors.textPrimary }}
+                      numberOfLines={1}
+                    >
                       {user.full_name || user.username || "Unnamed account"}
                     </Text>
-                    <Text style={{ fontSize: 12, color: colors.textTertiary }} numberOfLines={1}>
+                    <Text
+                      style={{ fontSize: 12, color: tableColors.textTertiary }}
+                      numberOfLines={1}
+                    >
                       @{user.username || "unknown"}
                     </Text>
                   </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ alignSelf: "flex-start", borderRadius: 9999, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: roleStyle.bg }}>
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: roleStyle.text }}>
-                      {roleLabel(user.role)}
-                    </Text>
-                  </View>
+              );
+            case "role":
+              return (
+                <View
+                  style={{
+                    alignSelf: "flex-start",
+                    borderRadius: 9999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    backgroundColor: roleStyle.bg,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: roleStyle.text }}>
+                    {roleLabel(user.role)}
+                  </Text>
                 </View>
-                <Text style={{ flex: 1, fontSize: 13, color: colors.textSecondary }} numberOfLines={1}>
+              );
+            case "department":
+              return (
+                <Text
+                  style={{ fontSize: 13, color: tableColors.textSecondary }}
+                  numberOfLines={1}
+                >
                   {user.department_name || "—"}
                 </Text>
-                <View style={{ width: 96 }}>
-                  <View
-                    style={{
-                      alignSelf: "flex-start",
-                      flexDirection: "row",
-                      alignItems: "center",
-                      borderRadius: 9999,
-                      paddingHorizontal: 10,
-                      paddingVertical: 4,
-                      backgroundColor: suspended ? colors.destructiveSurface : colors.successSurface,
-                    }}
-                  >
-                    {suspended ? (
-                      <ShieldAlert size={12} color={colors.destructiveText} />
-                    ) : (
-                      <View style={{ marginRight: 5, height: 6, width: 6, borderRadius: 3, backgroundColor: colors.success }} />
-                    )}
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: "700",
-                        marginLeft: suspended ? 4 : 0,
-                        color: suspended ? colors.destructiveText : colors.successText,
-                      }}
-                    >
-                      {suspended ? "Suspended" : "Active"}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={{ width: 112, fontSize: 12, color: colors.textTertiary }}>
+              );
+            case "status":
+              return (
+                <StatusBadge
+                  label={suspended ? "Suspended" : "Active"}
+                  tone={suspended ? "danger" : "success"}
+                  icon={suspended ? ShieldAlert : ShieldCheck}
+                />
+              );
+            case "joined":
+              return (
+                <Text style={{ fontSize: 12, color: tableColors.textTertiary }}>
                   {formatDate(user.created_at)}
                 </Text>
-                <ChevronRight size={17} color={colors.textTertiary} />
-              </TouchableOpacity>
-            );
-          })
-        )}
-      </View>
+              );
+            case "open":
+              return <ChevronRight size={17} color={tableColors.textTertiary} />;
+            default:
+              return null;
+          }
+        }}
+      />
 
       {cursor ? (
         <TouchableOpacity

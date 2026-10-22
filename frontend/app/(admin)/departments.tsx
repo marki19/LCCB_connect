@@ -11,6 +11,7 @@ import { Building2, GraduationCap, Plus, Power, Check } from "lucide-react-nativ
 import { apiFetch } from "../../src/lib/api";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import type { Department, Course } from "../../src/types";
+import PageHeader from "../../src/components/admin/PageHeader";
 
 /**
  * Admin catalog management (Messaging_plan.md §3).
@@ -173,14 +174,11 @@ export default function AdminDepartmentsScreen() {
       contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ marginBottom: 24 }}>
-        <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
-          Departments &amp; Courses
-        </Text>
-        <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: 4 }}>
-          These drive registration and who can message whom. Entries are deactivated, never deleted.
-        </Text>
-      </View>
+      <PageHeader
+        eyebrow="System / catalog"
+        title="Departments & Courses"
+        description="These drive registration and who can message whom. Entries are deactivated, never deleted."
+      />
 
       {error ? (
         <View
