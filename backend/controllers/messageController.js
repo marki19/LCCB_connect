@@ -58,6 +58,15 @@ const getRequests = async (req, res, next) => {
   }
 };
 
+const getUnreadCount = async (req, res, next) => {
+  try {
+    const total = await messageModel.getUnreadCount(req.user.id);
+    res.json(total);
+  } catch (error) {
+    next(error);
+  }
+};
+
 /**
  * Opens (or re-opens) the 1:1 thread with `peer_id`. The permission engine
  * decides whether it starts `active` (direct) or `requested`.
@@ -264,6 +273,7 @@ const reportMessage = async (req, res, next) => {
 module.exports = {
   getConversations,
   getRequests,
+  getUnreadCount,
   createConversation,
   acceptRequest,
   getMessages,

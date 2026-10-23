@@ -14,7 +14,7 @@ export default function AdminSettingsScreen() {
       <PageHeader
         eyebrow="System / preferences"
         title="System Settings"
-        description="Configure global application parameters."
+        description="Not available yet."
       />
 
       <View
@@ -24,14 +24,21 @@ export default function AdminSettingsScreen() {
           borderColor: colors.border,
           backgroundColor: colors.surface,
           padding: 24,
-          minHeight: 400,
+          maxWidth: 640,
         }}
       >
-        <Text style={{ fontSize: 13, fontStyle: "italic", color: colors.textTertiary }}>
-          Settings form will be implemented here.
+        <Text style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}>
+          No settings API exists.
+        </Text>
+        <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, color: colors.textSecondary }}>
+          Institution-level settings need product-defined keys and effects before this screen can
+          be built. Until then, this page stays read-only rather than showing controls that do not
+          change anything.
+        </Text>
+        <Text style={{ marginTop: 12, fontSize: 12, color: colors.textTertiary }}>
+          Tracked as API-REQ-001 in docs/API-REQUESTS.md.
         </Text>
       </View>
     </ScrollView>
   );
 }
-

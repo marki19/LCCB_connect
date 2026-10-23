@@ -6,7 +6,11 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 import { PresenceProvider } from "../src/contexts/PresenceContext";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
-import { isAdminRole, isSuspendedProfile } from "../src/lib/roles";
+import {
+  isAdminRole,
+  isModeratorRole,
+  isSuspendedProfile,
+} from "../src/lib/roles";
 import {
   isAdminAppPreview,
   setAdminAppPreview,
@@ -64,9 +68,11 @@ function RouteGuard() {
     const inAuth = segments[0] === "(auth)";
     const inComplete = segments[0] === "complete-profile";
     const inAdmin = segments[0] === "(admin)";
+    const inModeration = segments[0] === "(moderation)";
     const inTabs = segments[0] === "(tabs)";
     const inSuspended = segments[0] === "suspended";
     const adminUser = isAdminRole(profile?.role);
+    const moderatorUser = isModeratorRole(profile?.role);
     const suspended = !!profile && isSuspendedProfile(profile);
     const isAuthenticated = !!session || isGuest;
 
@@ -121,6 +127,15 @@ function RouteGuard() {
       // The panel is a desktop console. Never strand a mobile or non-admin
       // session on a screen it cannot use.
       router.replace("/(tabs)/");
+    } else if (
+      isAuthenticated &&
+      inModeration &&
+      profile &&
+      (!moderatorUser || !isDesktop)
+    ) {
+      // The moderation console is also desktop-only and limited to
+      // department admins and above.
+      router.replace("/(tabs)/");
     }
   }, [session, profile, initialized, segments, isGuest, isDesktop, router]);
 
@@ -138,6 +153,7 @@ function RouteGuard() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(admin)" />
+        <Stack.Screen name="(moderation)" />
         <Stack.Screen name="suspended" />
         <Stack.Screen name="complete-profile" options={{ presentation: "modal" }} />
         <Stack.Screen name="create" options={{ presentation: "modal" }} />

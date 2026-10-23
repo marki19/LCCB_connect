@@ -63,7 +63,14 @@ const getModerationQueue = async (req, res, next) => {
       departmentId = typeof q === "string" && UUID_RE.test(q.trim()) ? q.trim() : null;
     } else if (isDepartmentAdmin(req)) {
       // Department admins are strictly restricted to their own department.
+      // Fail closed if the profile has no department: passing null would
+      // remove the filter and expose every department's queue.
       departmentId = req.profile?.department_id || null;
+      if (!departmentId) {
+        return res.status(403).json({
+          error: "Forbidden: department admin has no department assigned",
+        });
+      }
     } else {
       return res.status(403).json({ error: "Forbidden: insufficient moderation permissions" });
     }
@@ -253,7 +260,8 @@ const moderateThesis = async (req, res, next) => {
       });
     }
 
-    const thesis = await thesisModel.getThesisById(id);
+    // Moderators must be able to see and restore a hidden thesis.
+    const thesis = await thesisModel.getThesisById(id, { includeHidden: true });
     if (!thesis) {
       return res.status(404).json({ error: "Thesis not found" });
     }

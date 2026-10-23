@@ -226,7 +226,7 @@ export default function FriendsScreen() {
               <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textTertiary, letterSpacing: 0.6, paddingHorizontal: 16, paddingBottom: 4, textTransform: "uppercase" }}>
                 Incoming
               </Text>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => (
             <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
@@ -266,14 +266,14 @@ export default function FriendsScreen() {
                   </View>
                 ))}
               </View>
-            ) : null
+            ) : undefined
           }
           ListEmptyComponent={
             requests.outgoing.length === 0 ? (
               <View style={{ alignItems: "center", paddingTop: 72, paddingHorizontal: 32 }}>
                 <Text style={{ fontSize: 15, color: colors.textTertiary, fontWeight: "500" }}>No friend requests</Text>
               </View>
-            ) : null
+            ) : undefined
           }
         />
       )}

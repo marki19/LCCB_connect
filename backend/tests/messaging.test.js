@@ -37,6 +37,7 @@ const m = {
   getOrCreateConversation: stub(messageModel, "getOrCreateConversation"),
   listConversations: stub(messageModel, "listConversations"),
   listRequests: stub(messageModel, "listRequests"),
+  getUnreadCount: stub(messageModel, "getUnreadCount"),
   acceptRequest: stub(messageModel, "acceptRequest"),
   listMessages: stub(messageModel, "listMessages"),
   sendMessage: stub(messageModel, "sendMessage"),
@@ -68,6 +69,7 @@ describe("messaging requires auth", () => {
       ["get", "/api/conversations"],
       ["post", "/api/conversations"],
       ["get", "/api/conversations/requests"],
+      ["get", "/api/conversations/unread-count"],
       ["post", `/api/conversations/${CONV}/messages`],
       ["post", `/api/messages/${MSG}/delivered`],
       ["get", "/api/friends"],
@@ -236,6 +238,20 @@ describe("send a message (§11)", () => {
       assert.equal(res.status, 400, JSON.stringify(payload));
     }
     assert.equal(m.sendMessage.calls.length, 0);
+  });
+});
+
+describe("unread total", () => {
+  it("returns the caller's unread message count", async () => {
+    m.getUnreadCount.setImpl(async () => ({ unread: 4 }));
+
+    const res = await request(app)
+      .get("/api/conversations/unread-count")
+      .set(AUTH);
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { unread: 4 });
+    assert.deepEqual(m.getUnreadCount.calls[0], ["u1"]);
   });
 });
 

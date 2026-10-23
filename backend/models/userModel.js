@@ -1,14 +1,48 @@
 const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
+const { escapeLike } = require("../utils/queryFilters");
 
 // RAW SQL QUERIES ONLY (NO ORM METHODS)
 
 // Keyset pagination on the (text) primary key. `cursor` is the last `id` seen.
-const getAllUsers = async ({ limit = DEFAULT_LIMIT, cursor = null } = {}) => {
+const getAllUsers = async ({
+  limit = DEFAULT_LIMIT,
+  cursor = null,
+  q = null,
+  departmentId = null,
+  yearLevel = null,
+} = {}) => {
   const params = [];
-  const whereClause = cursor ? "WHERE p.id > $1" : "";
-  if (cursor) params.push(cursor);
+  const conditions = [];
+
+  if (cursor) {
+    params.push(cursor);
+    conditions.push(`p.id > $${params.length}`);
+  }
+
+  if (q) {
+    params.push(`%${escapeLike(q)}%`);
+    conditions.push(`(
+      p.username ILIKE $${params.length} ESCAPE '!'
+      OR p.full_name ILIKE $${params.length} ESCAPE '!'
+      OR d.name ILIKE $${params.length} ESCAPE '!'
+    )`);
+  }
+
+  if (departmentId) {
+    params.push(departmentId);
+    conditions.push(`p.department_id = $${params.length}::uuid`);
+  }
+
+  if (yearLevel) {
+    params.push(yearLevel);
+    conditions.push(`p.year_level = $${params.length}`);
+  }
+
   params.push(limit);
+  const whereClause = conditions.length
+    ? `WHERE ${conditions.join(" AND ")}`
+    : "";
 
   // Joins the catalog so callers can display department/course names without a
   // second round-trip. The ids remain the authorization source of truth.

@@ -15,6 +15,7 @@ import { usePresence } from "../src/contexts/PresenceContext";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { fetchDepartments } from "../src/lib/catalog";
 import { getMessagePolicy, setMessagePolicy, listBlocked, unblockUser } from "../src/lib/messages";
+import type { BlockedUser } from "../src/lib/messages";
 import { apiFetch } from "../src/lib/api";
 import { safeBack } from "../src/lib/navigation";
 import type { Department, MessagePolicy, PresenceMode } from "../src/types";
@@ -35,8 +36,6 @@ const POLICY_OPTIONS: { value: MessagePolicy; label: string; hint: string }[] = 
 
 const PRESENCE_ORDER: PresenceMode[] = ["online", "away", "busy", "dnd", "invisible"];
 
-type BlockRow = { id: string; blocked_id: string; created_at: string };
-
 export default function MessagingSettings() {
   const router = useRouter();
   const { mode, setMode } = usePresence();
@@ -45,7 +44,7 @@ export default function MessagingSettings() {
   const [policy, setPolicy] = useState<MessagePolicy>("department");
   const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [blocked, setBlocked] = useState<BlockRow[]>([]);
+  const [blocked, setBlocked] = useState<BlockedUser[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -387,7 +386,7 @@ export default function MessagingSettings() {
             ) : (
               blocked.map((row, index) => (
                 <View
-                  key={row.id}
+                  key={row.blocked_id}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",

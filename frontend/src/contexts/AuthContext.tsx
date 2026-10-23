@@ -32,6 +32,7 @@ export type Profile = {
   suspended_until?: string | null;
   suspension_reason?: string | null;
   suspended_by?: string | null;
+  created_at?: string | null;
 };
 
 type AuthContextType = { 

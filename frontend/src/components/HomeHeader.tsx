@@ -14,6 +14,7 @@ import { elevation, RADIUS, SPACE, TYPE } from "../lib/tokens";
 
 type Props = {
   onMenuPress: () => void;
+  unreadCount?: number;
 };
 
 function IconButton({
@@ -22,12 +23,14 @@ function IconButton({
   icon: Icon,
   iconColor,
   backgroundColor,
+  badgeCount = 0,
 }: {
   onPress: () => void;
   label: string;
   icon: any;
   iconColor: string;
   backgroundColor: string;
+  badgeCount?: number;
 }) {
   return (
     <Pressable
@@ -46,11 +49,31 @@ function IconButton({
       })}
     >
       <Icon size={19} color={iconColor} strokeWidth={2.1} />
+      {badgeCount > 0 ? (
+        <View
+          style={{
+            position: "absolute",
+            top: 5,
+            right: 5,
+            minWidth: 17,
+            height: 17,
+            borderRadius: 9,
+            paddingHorizontal: 4,
+            backgroundColor: "#DC2626",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: "#FFFFFF", fontSize: 9, fontWeight: "800" }}>
+            {badgeCount > 99 ? "99+" : badgeCount}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
 
-export default function HomeHeader({ onMenuPress }: Props) {
+export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { colors, isDark, toggleTheme } = useTheme();
@@ -146,10 +169,11 @@ export default function HomeHeader({ onMenuPress }: Props) {
         />
         <IconButton
           onPress={() => router.push("/messages")}
-          label="Open messages"
+          label={unreadCount > 0 ? `Messages, ${unreadCount} unread` : "Open messages"}
           icon={MessageSquare}
           iconColor={colors.brand}
           backgroundColor={colors.brandWash}
+          badgeCount={unreadCount}
         />
       </View>
     </View>

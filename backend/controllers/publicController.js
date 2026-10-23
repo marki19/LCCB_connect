@@ -2,6 +2,12 @@ const postModel = require("../models/postModel");
 const thesisModel = require("../models/thesisModel");
 const userModel = require("../models/userModel");
 const { clampLimit } = require("../models/pagination");
+const {
+  parseSearch,
+  parseUuidFilter,
+  parseCategoryFilter,
+  parseTextFilter,
+} = require("../utils/queryFilters");
 
 /**
  * Controller for unauthenticated / guest read-only public endpoints.
@@ -11,9 +17,17 @@ const { clampLimit } = require("../models/pagination");
 
 const getPosts = async (req, res, next) => {
   try {
+    // Optional filters: ?q=<text>&author_id=<uuid>
+    const author = parseUuidFilter(req.query.author_id, "author_id");
+    if (author.error) {
+      return res.status(400).json({ error: author.error });
+    }
+
     const posts = await postModel.getAllPosts({
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
+      q: parseSearch(req.query.q),
+      authorId: author.value,
     });
     // Ensure hidden content is never leaked to public visitors
     const publicPosts = (posts || []).filter(
@@ -41,9 +55,12 @@ const getPostById = async (req, res, next) => {
 const getComments = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const comments = await postModel.getCommentsByPostId(id, {
-      includeHidden: false,
-    });
+    const post = await postModel.getPostById(id, { includeHidden: false });
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    const comments = await postModel.getComments(id, { includeHidden: false });
     res.json(comments || []);
   } catch (error) {
     next(error);
@@ -52,11 +69,25 @@ const getComments = async (req, res, next) => {
 
 const getTheses = async (req, res, next) => {
   try {
+    // Optional filters: ?q=<text>&uploader_id=<uuid>&category=<label>
+    const uploader = parseUuidFilter(req.query.uploader_id, "uploader_id");
+    if (uploader.error) {
+      return res.status(400).json({ error: uploader.error });
+    }
+
     const theses = await thesisModel.getAllTheses({
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
+      q: parseSearch(req.query.q),
+      uploaderId: uploader.value,
+      categories: parseCategoryFilter(req.query.category),
     });
-    res.json(theses || []);
+    // The model already filters hidden rows; keep the controller boundary safe
+    // too so a future query change cannot expose one.
+    const publicTheses = (theses || []).filter(
+      (thesis) => thesis.moderation_status !== "hidden"
+    );
+    res.json(publicTheses);
   } catch (error) {
     next(error);
   }
@@ -77,22 +108,31 @@ const getThesisById = async (req, res, next) => {
 
 const getPeers = async (req, res, next) => {
   try {
+    // Optional directory filters: ?q=<name>&department_id=<uuid>&year_level=<text>
+    const department = parseUuidFilter(
+      req.query.department_id,
+      "department_id"
+    );
+    if (department.error) {
+      return res.status(400).json({ error: department.error });
+    }
+
     const users = await userModel.getAllUsers({
       limit: clampLimit(req.query.limit || 20),
       cursor: req.query.cursor || null,
+      q: parseSearch(req.query.q),
+      departmentId: department.value,
+      yearLevel: parseTextFilter(req.query.year_level, 50),
     });
-    // Sanitize to public-safe fields only
+    // Public peers only need the fields the guest feed renders. Keep bio,
+    // course, role, and department IDs behind authenticated endpoints.
     const publicPeers = (users || []).map((u) => ({
       id: u.id,
       username: u.username,
       full_name: u.full_name,
       avatar_url: u.avatar_url,
-      course: u.course,
       year_level: u.year_level,
-      department_id: u.department_id,
       department_name: u.department_name,
-      bio: u.bio,
-      role: u.role,
     }));
     res.json(publicPeers);
   } catch (error) {

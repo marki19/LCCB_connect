@@ -27,7 +27,13 @@ async function main() {
 
   const client = new Client({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    ssl: {
+      ca: fs.readFileSync(
+        path.join(__dirname, "..", "certs", "supabase-root-2021.crt"),
+        "utf8"
+      ),
+      rejectUnauthorized: true,
+    },
   });
 
   await client.connect();

@@ -1,11 +1,20 @@
+const fs = require("fs");
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const { Pool } = require("pg");
 
+// Supabase's public root CA. Bundling it lets the API verify the database
+// certificate instead of accepting any TLS certificate.
+const SUPABASE_CA = fs.readFileSync(
+  path.join(__dirname, "certs", "supabase-root-2021.crt"),
+  "utf8"
+);
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false,
+    ca: SUPABASE_CA,
+    rejectUnauthorized: true,
   },
 });
 

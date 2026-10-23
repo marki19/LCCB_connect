@@ -98,6 +98,9 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
       return;
     }
 
+    // Reanimated starts animations by mutating the shared value; the new
+    // eslint react-hooks/immutability rule flags this documented API pattern.
+    // eslint-disable-next-line react-hooks/immutability
     scale.value = withSequence(
       withTiming(1.35, { duration: 110 }),
       withTiming(0.88, { duration: 80 }),

@@ -11,10 +11,11 @@ const {
 } = require("../validation");
 
 // Mounted at /api/conversations behind requireAuth + loadProfile.
-// Ordering (/requests before /:id) keeps the literal paths unambiguous.
+// Ordering (literal paths before /:id) keeps them unambiguous.
 
 router.get("/", messageController.getConversations);
 router.get("/requests", messageController.getRequests);
+router.get("/unread-count", messageController.getUnreadCount);
 router.post("/", validate(createConversationSchema), messageController.createConversation);
 
 router.post("/:id/accept", messageController.acceptRequest);

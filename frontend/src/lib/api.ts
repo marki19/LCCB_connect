@@ -22,14 +22,14 @@ export async function apiFetch(
   const method = (init.method || "GET").toUpperCase();
 
   // If there is no active session (guest visitor) and this is a read request,
-  // route to the dedicated public read-only endpoints.
+  // route to the dedicated public read-only endpoints. Guests must call
+  // `/public/*` explicitly for anything else; `/users/:id` has no public
+  // equivalent, so it must not be rewritten to a different resource shape.
   if (!session?.access_token && method === "GET") {
     if (path.startsWith("/posts")) {
       targetPath = `/public${path}`;
     } else if (path.startsWith("/theses")) {
       targetPath = `/public${path}`;
-    } else if (path.startsWith("/users")) {
-      targetPath = path.replace(/^\/users/, "/public/peers");
     }
   }
 

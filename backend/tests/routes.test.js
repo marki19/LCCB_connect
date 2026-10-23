@@ -56,6 +56,8 @@ const m = {
   deletePost: stub(postModel, "deletePost"),
   toggleLike: stub(postModel, "toggleLike"),
   getCommentById: stub(postModel, "getCommentById"),
+  getComments: stub(postModel, "getComments"),
+  addComment: stub(postModel, "addComment"),
   updatePostModeration: stub(postModel, "updatePostModeration"),
   updateCommentModeration: stub(postModel, "updateCommentModeration"),
   adminDeletePost: stub(postModel, "adminDeletePost"),
@@ -148,6 +150,29 @@ describe("ownership is enforced in SQL (404, not 403)", () => {
     const res = await request(app).put("/api/theses/t1").set(AUTH).send({ title: "new" });
 
     assert.equal(res.status, 404);
+  });
+});
+
+describe("comments stay hidden with their parent post", () => {
+  it("404s when listing comments for a hidden or missing post", async () => {
+    m.getPostById.setImpl(async () => undefined);
+
+    const res = await request(app).get("/api/posts/p1/comments").set(AUTH);
+
+    assert.equal(res.status, 404);
+    assert.equal(m.getComments.calls.length, 0);
+  });
+
+  it("404s when commenting on a hidden or missing post", async () => {
+    m.getPostById.setImpl(async () => undefined);
+
+    const res = await request(app)
+      .post("/api/posts/p1/comments")
+      .set(AUTH)
+      .send({ content: "Hello" });
+
+    assert.equal(res.status, 404);
+    assert.equal(m.addComment.calls.length, 0);
   });
 });
 
@@ -559,14 +584,21 @@ describe("errors and pagination limits", () => {
     m.getAllPosts.setImpl(async () => []);
 
     await request(app).get("/api/posts?limit=500").set(AUTH);
-    assert.deepEqual(m.getAllPosts.calls.at(-1), [{ limit: 100, cursor: null }]);
+    assert.deepEqual(m.getAllPosts.calls.at(-1), [
+      { limit: 100, cursor: null, q: null, authorId: null },
+    ]);
 
     await request(app)
       .get("/api/posts")
       .query({ limit: 2, cursor: "2026-01-01T00:00:00.000Z|abc" })
       .set(AUTH);
     assert.deepEqual(m.getAllPosts.calls.at(-1), [
-      { limit: 2, cursor: "2026-01-01T00:00:00.000Z|abc" },
+      {
+        limit: 2,
+        cursor: "2026-01-01T00:00:00.000Z|abc",
+        q: null,
+        authorId: null,
+      },
     ]);
   });
 
@@ -576,9 +608,109 @@ describe("errors and pagination limits", () => {
     m.getAllUsers.setImpl(async () => []);
 
     await request(app).get("/api/theses?limit=9999").set(AUTH);
-    assert.deepEqual(m.getAllTheses.calls.at(-1), [{ limit: 100, cursor: null }]);
+    assert.deepEqual(m.getAllTheses.calls.at(-1), [
+      {
+        limit: 100,
+        cursor: null,
+        q: null,
+        uploaderId: null,
+        categories: null,
+      },
+    ]);
 
     await request(app).get("/api/users?limit=0").set(AUTH);
     assert.deepEqual(m.getAllUsers.calls.at(-1), [{ limit: 100, cursor: null }]);
+  });
+});
+
+describe("post list filters", () => {
+  const AUTHOR = "11111111-1111-4111-8111-111111111111";
+
+  it("passes a trimmed search term and author id to the model", async () => {
+    m.getAllPosts.setImpl(async () => []);
+
+    const res = await request(app)
+      .get("/api/posts")
+      .query({ q: "  react  ", author_id: AUTHOR, limit: 5 })
+      .set(AUTH);
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(m.getAllPosts.calls.at(-1), [
+      { limit: 5, cursor: null, q: "react", authorId: AUTHOR },
+    ]);
+  });
+
+  it("caps an overlong search term at 100 characters", async () => {
+    m.getAllPosts.setImpl(async () => []);
+
+    await request(app)
+      .get("/api/posts")
+      .query({ q: "x".repeat(150) })
+      .set(AUTH);
+
+    assert.equal(m.getAllPosts.calls.at(-1)[0].q.length, 100);
+  });
+
+  it("rejects a malformed author_id instead of letting Postgres cast it", async () => {
+    const res = await request(app)
+      .get("/api/posts?author_id=not-a-uuid")
+      .set(AUTH);
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: "Invalid author_id" });
+    assert.equal(m.getAllPosts.calls.length, 0);
+  });
+});
+
+describe("thesis list filters", () => {
+  const UPLOADER = "22222222-2222-4222-8222-222222222222";
+
+  it("passes search, uploader, and category filters to the model", async () => {
+    m.getAllTheses.setImpl(async () => []);
+
+    const res = await request(app)
+      .get("/api/theses")
+      .query({
+        q: "  ai  ",
+        uploader_id: UPLOADER,
+        category: "Graduate Dissertation",
+        limit: 5,
+      })
+      .set(AUTH);
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(m.getAllTheses.calls.at(-1), [
+      {
+        limit: 5,
+        cursor: null,
+        q: "ai",
+        uploaderId: UPLOADER,
+        categories: ["Graduate Dissertation"],
+      },
+    ]);
+  });
+
+  it("maps the undergraduate label to the legacy Capstone rows", async () => {
+    m.getAllTheses.setImpl(async () => []);
+
+    await request(app)
+      .get("/api/theses")
+      .query({ category: "Undergraduate Capstone" })
+      .set(AUTH);
+
+    assert.deepEqual(m.getAllTheses.calls.at(-1)[0].categories, [
+      "Undergraduate Capstone",
+      "Capstone",
+    ]);
+  });
+
+  it("rejects a malformed uploader_id with 400", async () => {
+    const res = await request(app)
+      .get("/api/theses?uploader_id=nope")
+      .set(AUTH);
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: "Invalid uploader_id" });
+    assert.equal(m.getAllTheses.calls.length, 0);
   });
 });

@@ -13,7 +13,7 @@ import { Home, Plus, Bell, User, BookOpen, Sun, Moon, Shield } from "lucide-reac
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { isAdminRole } from "../../src/lib/roles";
+import { isAdminRole, isDepartmentAdminRole } from "../../src/lib/roles";
 import { setAdminAppPreview } from "../../src/lib/panelMode";
 import {
   elevation,
@@ -154,6 +154,8 @@ function TabBar({ state, navigation }: any) {
   const { profile } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
   const isGuest = profile?.role === "guest";
+  const adminUser = isAdminRole(profile?.role);
+  const departmentAdmin = isDepartmentAdminRole(profile?.role);
   const visibleTabs = TAB_ITEMS.filter((item) => !isGuest || !item.isAction);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
@@ -274,7 +276,7 @@ function TabBar({ state, navigation }: any) {
             )}
           </Pressable>
 
-          {isAdminRole(profile?.role) ? (
+          {adminUser ? (
             <Pressable
               onPress={() => {
                 setAdminAppPreview(false);
@@ -296,6 +298,25 @@ function TabBar({ state, navigation }: any) {
                   Admin console
                 </Text>
               ) : null}
+            </Pressable>
+          ) : departmentAdmin ? (
+            <Pressable
+              onPress={() => router.push("/(moderation)" as any)}
+              accessibilityRole="button"
+              accessibilityLabel="Open the moderation console"
+              style={[
+                styles.webTab,
+                {
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  marginLeft: 8,
+                },
+              ]}
+            >
+              <Shield size={18} color={colors.action} strokeWidth={2.2} />
+              <Text style={[styles.webTabLabel, { color: colors.action }]}>
+                Moderation
+              </Text>
             </Pressable>
           ) : null}
         </View>

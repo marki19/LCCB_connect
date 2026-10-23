@@ -68,14 +68,6 @@ export default function RegisterScreen() {
     };
   }, [departmentId]);
 
-  // Clear errors when user types
-  useEffect(() => {
-    if (email) setEmailError("");
-    if (password) setPasswordError("");
-    if (fullName) setNameError("");
-    setGeneralError("");
-  }, [email, password, fullName]);
-
   async function signUpWithEmail() {
     let hasError = false;
 
@@ -270,7 +262,7 @@ export default function RegisterScreen() {
                     placeholder="Juan Dela Cruz"
                     placeholderTextColor={colors.textTertiary}
                     value={fullName}
-                    onChangeText={setFullName}
+                    onChangeText={(text) => { setFullName(text); if (text) setNameError(""); setGeneralError(""); }}
                     onFocus={() => setFocusedField("name")}
                     onBlur={() => setFocusedField(null)}
                     autoCapitalize="words"
@@ -352,7 +344,7 @@ export default function RegisterScreen() {
                     placeholder="student@lccb.edu.ph"
                     placeholderTextColor={colors.textTertiary}
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={(text) => { setEmail(text); if (text) setEmailError(""); setGeneralError(""); }}
                     onFocus={() => setFocusedField("email")}
                     onBlur={() => setFocusedField(null)}
                     autoCapitalize="none"
@@ -389,7 +381,7 @@ export default function RegisterScreen() {
                     placeholder="••••••••••••"
                     placeholderTextColor={colors.textTertiary}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(text) => { setPassword(text); if (text) setPasswordError(""); setGeneralError(""); }}
                     onFocus={() => setFocusedField("password")}
                     onBlur={() => setFocusedField(null)}
                     secureTextEntry={!showPassword}

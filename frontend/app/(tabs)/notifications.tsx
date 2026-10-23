@@ -44,6 +44,13 @@ export default function NotificationsScreen() {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  // "time ago" labels need a render-independent clock; refresh once per minute
+  useEffect(() => {
+    const refreshClock = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(refreshClock);
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -71,8 +78,37 @@ export default function NotificationsScreen() {
   }, []);
 
   useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+    // Canonical fetch-on-mount: all state updates happen after await, and the
+    // ignore flag makes unmounting safe. onRefresh reuses fetchNotifications.
+    let ignore = false;
+    (async () => {
+      try {
+        const res = await apiFetch("/moderation/notifications");
+        if (ignore) return;
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : data.notifications || [];
+          setNotifications(list);
+          setUnreadCount(
+            typeof data.unread === "number"
+              ? data.unread
+              : list.filter((n: NotificationItem) => !n.is_read).length
+          );
+        } else {
+          // Fallback: If unauthenticated or no moderation records yet
+          setNotifications([]);
+          setUnreadCount(0);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch notifications from backend:", err);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -168,7 +204,7 @@ export default function NotificationsScreen() {
     if (!isoString) return "";
     try {
       const date = new Date(isoString);
-      const diffMinutes = Math.floor((Date.now() - date.getTime()) / 60000);
+      const diffMinutes = Math.floor((now - date.getTime()) / 60000);
       if (diffMinutes < 1) return "Just now";
       if (diffMinutes < 60) return `${diffMinutes}m ago`;
       const diffHours = Math.floor(diffMinutes / 60);
@@ -293,7 +329,7 @@ export default function NotificationsScreen() {
                   lineHeight: 18,
                 }}
               >
-                When classmates post updates, submit research, or moderation actions occur, you'll see them here.
+                When classmates post updates, submit research, or moderation actions occur, you&apos;ll see them here.
               </Text>
             </View>
           }

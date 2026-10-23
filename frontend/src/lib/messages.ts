@@ -81,8 +81,13 @@ export function sendMessage(
 }
 
 /** Seen receipt: mark every received message up to `uptoSeq` as read. */
-export function markRead(conversationId: string, uptoSeq: number): Promise<{ updated: number }> {
-  return apiJson<{ updated: number }>(`/conversations/${conversationId}/read`, {
+export type MarkReadResult = {
+  updated: { id: string; seq: number }[];
+  last_read_seq: number;
+};
+
+export function markRead(conversationId: string, uptoSeq: number): Promise<MarkReadResult> {
+  return apiJson<MarkReadResult>(`/conversations/${conversationId}/read`, {
     method: "POST",
     body: JSON.stringify({ upto_seq: uptoSeq }),
   });
@@ -183,9 +188,18 @@ export function removeFriend(userId: string): Promise<unknown> {
 
 // ---- blocks (§7) -----------------------------------------------------------
 
-export function listBlocked(): Promise<
-  { id: string; blocked_id: string; created_at: string }[]
-> {
+export type BlockedUser = {
+  blocked_id: string;
+  created_at: string;
+  peer?: {
+    id: string;
+    username: string | null;
+    full_name: string | null;
+    avatar_url: string | null;
+  } | null;
+};
+
+export function listBlocked(): Promise<BlockedUser[]> {
   return apiJson(`/users/me/blocks`);
 }
 

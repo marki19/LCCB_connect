@@ -13,6 +13,38 @@ import { fetchLinkPreview, LinkPreviewData } from "../src/lib/linkPreview";
 import { safeBack } from "../src/lib/navigation";
 
 type PostType = "text" | "image" | "project" | "capstone" | "website" | null;
+type ConcretePostType = Exclude<PostType, null>;
+
+function OptionCard({ type, title, desc, Icon, color, bg, selected, onSelect }: { type: ConcretePostType, title: string, desc: string, Icon: any, color: string, bg?: string, selected: boolean, onSelect: (type: ConcretePostType) => void }) {
+  const { colors, isDark } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={() => onSelect(type)}
+      style={{
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        borderWidth: 1.5,
+        borderColor: selected ? colors.action : colors.border,
+        backgroundColor: selected ? colors.actionSurface : colors.surface,
+      }}
+      activeOpacity={0.7}
+    >
+      <View style={{ width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginRight: 14, backgroundColor: isDark ? colors.surfaceSunken : (bg || colors.actionSurface) }}>
+        <Icon color={color} size={24} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }}>{title}</Text>
+        <Text style={{ fontSize: 13, color: colors.textTertiary, marginTop: 2, lineHeight: 18 }}>{desc}</Text>
+      </View>
+      <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: selected ? colors.action : colors.borderStrong, alignItems: "center", justifyContent: "center", backgroundColor: selected ? colors.action : "transparent" }}>
+        {selected && <CheckCircle2 color="#FFFFFF" size={14} />}
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export default function CreatePostModal() {
   const router = useRouter();
@@ -154,37 +186,6 @@ export default function CreatePostModal() {
     if (result) setImageUri(result.uri);
   };
 
-  const OptionCard = ({ type, title, desc, Icon, color, bg }: any) => {
-    const isSelected = postType === type;
-    return (
-      <TouchableOpacity
-        onPress={() => setPostType(type)}
-        style={{
-          padding: 16,
-          borderRadius: 16,
-          marginBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          borderWidth: 1.5,
-          borderColor: isSelected ? colors.action : colors.border,
-          backgroundColor: isSelected ? colors.actionSurface : colors.surface,
-        }}
-        activeOpacity={0.7}
-      >
-        <View style={{ width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginRight: 14, backgroundColor: isDark ? colors.surfaceSunken : (bg || colors.actionSurface) }}>
-          <Icon color={color} size={24} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }}>{title}</Text>
-          <Text style={{ fontSize: 13, color: colors.textTertiary, marginTop: 2, lineHeight: 18 }}>{desc}</Text>
-        </View>
-        <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: isSelected ? colors.action : colors.borderStrong, alignItems: "center", justifyContent: "center", backgroundColor: isSelected ? colors.action : "transparent" }}>
-          {isSelected && <CheckCircle2 color="#FFFFFF" size={14} />}
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.surfacePage }}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -206,11 +207,11 @@ export default function CreatePostModal() {
           {step === 1 && (
             <Animated.View entering={FadeInDown.duration(400).springify()}>
               <Text style={{ color: colors.textTertiary, fontWeight: "700", textTransform: "uppercase", fontSize: 11, letterSpacing: 0.8, marginBottom: 14 }}>Step 1 of 3: Select Format</Text>
-              <OptionCard type="website" title="Live Website / Web App" desc="Share a hosted web project with automatic link preview." Icon={Globe} color="#0284C7" bg="#E0F2FE" />
-              <OptionCard type="project" title="Showcase Project" desc="Display a coding project with tech stack and repo." Icon={FolderOpen} color="#10B981" bg="#D1FAE5" />
-              <OptionCard type="capstone" title="Publish Capstone" desc="Officially share your final year capstone." Icon={GraduationCap} color="#F59E0B" bg="#FEF3C7" />
-              <OptionCard type="text" title="Start a Discussion" desc="Share thoughts, ask questions, or start a debate." Icon={Type} color="#3B82F6" bg="#DBEAFE" />
-              <OptionCard type="image" title="Share an Update" desc="Post an image with a caption of your recent work." Icon={ImageIcon} color="#8B5CF6" bg="#EDE9FE" />
+              <OptionCard type="website" title="Live Website / Web App" desc="Share a hosted web project with automatic link preview." Icon={Globe} color="#0284C7" bg="#E0F2FE" selected={postType === "website"} onSelect={setPostType} />
+              <OptionCard type="project" title="Showcase Project" desc="Display a coding project with tech stack and repo." Icon={FolderOpen} color="#10B981" bg="#D1FAE5" selected={postType === "project"} onSelect={setPostType} />
+              <OptionCard type="capstone" title="Publish Capstone" desc="Officially share your final year capstone." Icon={GraduationCap} color="#F59E0B" bg="#FEF3C7" selected={postType === "capstone"} onSelect={setPostType} />
+              <OptionCard type="text" title="Start a Discussion" desc="Share thoughts, ask questions, or start a debate." Icon={Type} color="#3B82F6" bg="#DBEAFE" selected={postType === "text"} onSelect={setPostType} />
+              <OptionCard type="image" title="Share an Update" desc="Post an image with a caption of your recent work." Icon={ImageIcon} color="#8B5CF6" bg="#EDE9FE" selected={postType === "image"} onSelect={setPostType} />
             </Animated.View>
           )}
 

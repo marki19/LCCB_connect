@@ -103,6 +103,15 @@ describe("moderation queue includes reported messages (§7)", () => {
 
     assert.deepEqual(reports.listOpenMessageReports.calls[0], [{ departmentId: DEPT_A }]);
   });
+
+  it("fails closed for a department admin with no department on file", async () => {
+    profile = { id: "u1", role: "departmentAdmin", department_id: null };
+
+    const res = await request(app).get("/api/moderation/queue").set(AUTH);
+
+    assert.equal(res.status, 403);
+    assert.equal(reports.listOpenMessageReports.calls.length, 0);
+  });
 });
 
 describe("resolve a reported message (§7)", () => {

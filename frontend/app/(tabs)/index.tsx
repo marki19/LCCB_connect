@@ -113,6 +113,7 @@ function SideLink({
   onPress,
   colors,
   tone = colors.brand,
+  badgeCount = 0,
 }: {
   icon: any;
   label: string;
@@ -120,6 +121,7 @@ function SideLink({
   onPress: () => void;
   colors: ThemeTokens;
   tone?: string;
+  badgeCount?: number;
 }) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -127,7 +129,7 @@ function SideLink({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={badgeCount > 0 ? `${label}, ${badgeCount} unread` : label}
       accessibilityState={{ selected: !!active }}
       onPress={onPress}
       onHoverIn={() => setHovered(true)}
@@ -162,6 +164,24 @@ function SideLink({
       >
         {label}
       </Text>
+      {badgeCount > 0 ? (
+        <View
+          style={{
+            marginLeft: "auto",
+            minWidth: 20,
+            height: 20,
+            borderRadius: 10,
+            paddingHorizontal: 6,
+            backgroundColor: "#DC2626",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "800" }}>
+            {badgeCount > 99 ? "99+" : badgeCount}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -210,6 +230,7 @@ export default function HomeScreen() {
 
   const [posts, setPosts] = useState<any[]>([]);
   const [activePeers, setActivePeers] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -237,21 +258,35 @@ export default function HomeScreen() {
     }
   }, []);
 
-  // Current active user: use authenticated profile or primary user from database
-  const activeUser =
-    profile?.full_name
-      ? profile
-      : activePeers[0] || {
-          full_name: "Mark Antipo",
-          username: "mark_antipo",
-          department_name: null,
-          year_level: "3rd Year",
-        };
+  const fetchUnreadCount = useCallback(async () => {
+    if (isGuest || !profile?.id) {
+      setUnreadCount(0);
+      return;
+    }
+
+    try {
+      const res = await apiFetch("/conversations/unread-count");
+      if (!res.ok) {
+        setUnreadCount(0);
+        return;
+      }
+
+      const data = await res.json();
+      const next = Number(data?.unread);
+      setUnreadCount(Number.isFinite(next) ? next : 0);
+    } catch (err) {
+      console.error("Failed to load unread count:", err);
+    }
+  }, [isGuest, profile?.id]);
+
+  // Current active user: only the authenticated profile or the local guest
+  // profile. Never substitute another campus member's identity.
+  const activeUser = profile;
+  const activeName = activeUser?.full_name || (isGuest ? "Guest Visitor" : "You");
 
   const fetchUnifiedFeed = useCallback(async () => {
     if (!loadedRef.current) setLoading(true);
     setError("");
-
     let postItems: any[] = [];
     let thesisItems: any[] = [];
     let postFailed = false;
@@ -362,7 +397,8 @@ export default function HomeScreen() {
     useCallback(() => {
       void fetchUnifiedFeed();
       void fetchActivePeers();
-    }, [fetchActivePeers, fetchUnifiedFeed])
+      void fetchUnreadCount();
+    }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount])
   );
 
   useEffect(() => {
@@ -373,18 +409,21 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchUnifiedFeed(), fetchActivePeers()]);
+    await Promise.all([fetchUnifiedFeed(), fetchActivePeers(), fetchUnreadCount()]);
     setRefreshing(false);
-  }, [fetchActivePeers, fetchUnifiedFeed]);
+  }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount]);
 
-  const firstName = profile?.full_name?.split(" ")[0] || (isGuest ? "there" : activeUser.full_name?.split(" ")[0]) || "there";
+  const firstName = profile?.full_name?.split(" ")[0] || "there";
   const emptyCopy = FILTER_COPY[filter];
 
   const goCreate = () => router.push("/create");
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
-      <HomeHeader onMenuPress={() => setSidebarOpen(true)} />
+      <HomeHeader
+        onMenuPress={() => setSidebarOpen(true)}
+        unreadCount={unreadCount}
+      />
 
       <View style={{ flex: 1, flexDirection: "row" }}>
         {/* LEFT RAIL — desktop only */}
@@ -428,7 +467,7 @@ export default function HomeScreen() {
                 }}
               >
                 <Text style={{ fontWeight: "800", color: colors.brand, fontSize: 14 }}>
-                  {getInitials(activeUser.full_name)}
+                  {getInitials(activeName)}
                 </Text>
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -436,11 +475,11 @@ export default function HomeScreen() {
                   style={{ fontWeight: "700", color: colors.ink, fontSize: 14 }}
                   numberOfLines={1}
                 >
-                  {activeUser.full_name}
+                  {activeName}
                 </Text>
                 <Text style={{ color: colors.inkFaint, fontSize: 11 }} numberOfLines={1}>
-                  {activeUser.department_name || "No department"}
-                  {activeUser.year_level ? ` · ${activeUser.year_level}` : ""}
+                  {activeUser?.department_name || "No department"}
+                  {activeUser?.year_level ? ` · ${activeUser.year_level}` : ""}
                 </Text>
               </View>
             </Pressable>
@@ -487,6 +526,7 @@ export default function HomeScreen() {
                 onPress={() => router.push("/messages")}
                 colors={colors}
                 tone={colors.infoText}
+                badgeCount={unreadCount}
               />
             )}
             <SideLink
@@ -712,7 +752,7 @@ export default function HomeScreen() {
                       }}
                     >
                       <Text style={{ fontSize: 13, fontWeight: "800", color: colors.brand }}>
-                        {getInitials(activeUser.full_name)}
+                        {getInitials(activeName)}
                       </Text>
                     </View>
                     <View

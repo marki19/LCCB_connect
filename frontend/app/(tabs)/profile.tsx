@@ -1,96 +1,171 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Settings, MapPin, Calendar, LogOut } from "lucide-react-native";
+import { Settings, Calendar, LogOut } from "lucide-react-native";
 import PostCard from "../../src/components/PostCard";
 import { useAuth } from "../../src/contexts/AuthContext";
-import type { Post } from "../../src/types";
 import { apiFetch } from "../../src/lib/api";
 
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/contexts/ThemeContext";
 
+function getInitials(name: string | null) {
+  if (!name) return "??";
+  return name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
+}
+
+function formatPostRows(rows: any[], user: any) {
+  return rows.map((row) => ({
+    id: row.id,
+    author: {
+      id: user.id,
+      name: user.full_name,
+      initials: getInitials(user.full_name),
+      avatarColor: "#BFDBFE",
+      course: user.department_name,
+      yearLevel: user.year_level,
+    },
+    title: row.title || "Post Update",
+    description: row.content || row.description || "",
+    type: row.type || "text",
+    tags: row.technologies || row.tags || [],
+    previewUrl: row.github_url || row.preview_url,
+    imageUrl: row.image_url,
+    likes: row.likes || 0,
+    comments: row.comments || 0,
+    createdAt: new Date(row.created_at).toLocaleDateString(),
+    isLiked: false,
+  }));
+}
+
 export default function ProfileScreen() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, refreshProfile, initialized } = useAuth();
   const { colors, isDark } = useTheme();
   const isGuest = profile?.role === "guest";
   const router = useRouter();
-  
-  const currentUser = profile || {
-    id: "u1",
-    full_name: "Mark Antipo",
-    username: "mark_antipo",
-    avatar_url: null,
-    bio: "Full stack developer & capstone project lead.",
-    department_name: null,
-    year_level: "3rd Year",
-    skills: ["React Native", "PostgreSQL", "Node.js"],
-  };
 
-  const getInitials = (name: string | null) => {
-    if (!name) return "??";
-    return name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
-  };
+  const currentUser = profile;
 
   const handleSignOut = async () => {
     await signOut();
   };
 
   const [myPosts, setMyPosts] = useState<any[]>([]);
-  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const isGuestUser = !currentUser?.id || currentUser.id === "guest" || isGuest;
+  const visiblePosts = isGuestUser ? [] : myPosts;
 
   useEffect(() => {
-    if (!currentUser.id || currentUser.id === 'guest' || isGuest) {
-      setLoadingPosts(false);
-      setMyPosts([]);
+    const user = currentUser;
+    if (!user?.id || user.id === "guest" || isGuest) {
       return;
     }
-    
-    const fetchPosts = async () => {
-      setLoadingPosts(true);
-      let posts: any[] = [];
 
+    let cancelled = false;
+
+    const fetchFirstPage = async () => {
       try {
-        const res = await apiFetch(`/posts`);
-        if (res.ok) {
-          const allPosts = await res.json();
-          posts = allPosts.filter((p: any) => p.author_id === currentUser.id);
+        const res = await apiFetch(
+          `/posts?limit=100&author_id=${encodeURIComponent(user.id)}`
+        );
+        if (cancelled) return;
+
+        if (!res.ok) {
+          setMyPosts([]);
+          setNextCursor(null);
+          setHasMore(false);
+          return;
         }
+
+        const rows = await res.json();
+        if (cancelled) return;
+
+        const list = Array.isArray(rows) ? rows : [];
+        setMyPosts(formatPostRows(list, user));
+
+        const last = list[list.length - 1];
+        const canLoadMore = list.length === 100 && Boolean(last?.created_at && last?.id);
+        setHasMore(canLoadMore);
+        setNextCursor(canLoadMore ? `${last.created_at}|${last.id}` : null);
       } catch (err) {
         console.error("Failed to load user posts from SQL backend:", err);
+        if (!cancelled) {
+          setMyPosts([]);
+          setNextCursor(null);
+          setHasMore(false);
+        }
       }
-        
-      if (posts && posts.length > 0) {
-        const formattedPosts = posts.map((row: any) => ({
-          id: row.id,
-          author: {
-            id: currentUser.id,
-            name: currentUser.full_name,
-            initials: getInitials(currentUser.full_name),
-            avatarColor: "#BFDBFE",
-            course: currentUser.department_name,
-            yearLevel: currentUser.year_level,
-          },
-          title: row.title || "Post Update",
-          description: row.content || row.description || "",
-          type: row.type || "text",
-          tags: row.technologies || row.tags || [],
-          previewUrl: row.github_url || row.preview_url,
-          imageUrl: row.image_url,
-          likes: row.likes || 0,
-          comments: row.comments || 0,
-          createdAt: new Date(row.created_at).toLocaleDateString(),
-          isLiked: false,
-        }));
-        setMyPosts(formattedPosts);
-      } else {
-        setMyPosts([]);
-      }
-      setLoadingPosts(false);
     };
-    
-    fetchPosts();
-  }, [currentUser.id, isGuest]);
+
+    void fetchFirstPage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, isGuest]);
+
+  const loadMorePosts = async () => {
+    if (!currentUser || !nextCursor || loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const res = await apiFetch(
+        `/posts?limit=100&author_id=${encodeURIComponent(currentUser.id)}&cursor=${encodeURIComponent(nextCursor)}`
+      );
+      if (!res.ok) return;
+
+      const rows = await res.json();
+      const list = Array.isArray(rows) ? rows : [];
+      if (list.length === 0) {
+        setHasMore(false);
+        setNextCursor(null);
+        return;
+      }
+
+      setMyPosts((prev) => [...prev, ...formatPostRows(list, currentUser)]);
+
+      const last = list[list.length - 1];
+      const canLoadMore = list.length === 100 && Boolean(last?.created_at && last?.id);
+      setHasMore(canLoadMore);
+      setNextCursor(canLoadMore ? `${last.created_at}|${last.id}` : null);
+    } catch (err) {
+      console.error("Failed to load more user posts:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  if (!currentUser) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+          {!initialized ? (
+            <ActivityIndicator size="large" color={colors.action} />
+          ) : (
+            <>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: colors.textPrimary, textAlign: "center" }}>
+                Could not load your profile.
+              </Text>
+              <TouchableOpacity
+                onPress={() => void refreshProfile()}
+                style={{
+                  marginTop: 16,
+                  borderRadius: 9999,
+                  backgroundColor: colors.action,
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                }}
+              >
+                <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Retry</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
@@ -123,16 +198,19 @@ export default function ProfileScreen() {
             {isGuest ? "Viewing LCCB academic projects and theses as a guest." : (currentUser.bio || "No bio yet.")}
           </Text>
 
-          <View style={{ flexDirection: "row", marginTop: 12, gap: 16 }}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <MapPin size={14} color={colors.textTertiary} />
-              <Text style={{ fontSize: 13, color: colors.textTertiary, marginLeft: 4 }}>Bacolod City</Text>
+          {currentUser.created_at ? (
+            <View style={{ flexDirection: "row", marginTop: 12, gap: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Calendar size={14} color={colors.textTertiary} />
+                <Text style={{ fontSize: 13, color: colors.textTertiary, marginLeft: 4 }}>
+                  Joined {new Date(currentUser.created_at).toLocaleDateString(undefined, {
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </Text>
+              </View>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Calendar size={14} color={colors.textTertiary} />
-              <Text style={{ fontSize: 13, color: colors.textTertiary, marginLeft: 4 }}>Joined Aug 2023</Text>
-            </View>
-          </View>
+          ) : null}
 
           {currentUser.skills && currentUser.skills.length > 0 && (
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
@@ -147,15 +225,15 @@ export default function ProfileScreen() {
           {/* Stats */}
           <View style={{ flexDirection: "row", marginTop: 20, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
             <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{myPosts.length}</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{visiblePosts.length}</Text>
               <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Projects</Text>
             </View>
             <View style={{ flex: 1, alignItems: "center", borderLeftWidth: 1, borderRightWidth: 1, borderColor: colors.border }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{myPosts.reduce((s, p) => s + p.likes, 0)}</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{visiblePosts.reduce((s, p) => s + p.likes, 0)}</Text>
               <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Likes</Text>
             </View>
             <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{myPosts.reduce((s, p) => s + p.comments, 0)}</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{visiblePosts.reduce((s, p) => s + p.comments, 0)}</Text>
               <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Comments</Text>
             </View>
           </View>
@@ -164,12 +242,37 @@ export default function ProfileScreen() {
         {/* Portfolio */}
         <View style={{ padding: 16 }}>
           <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary, marginBottom: 16 }}>Portfolio</Text>
-          {myPosts.length === 0 ? (
+          {visiblePosts.length === 0 ? (
             <View style={{ alignItems: "center", paddingVertical: 40 }}>
               <Text style={{ fontSize: 15, color: colors.textTertiary, fontWeight: "500" }}>No posts yet</Text>
             </View>
           ) : (
-            myPosts.map((post) => <PostCard key={post.id} post={post} />)
+            <>
+              {visiblePosts.map((post) => <PostCard key={post.id} post={post} />)}
+              {hasMore && (
+                <TouchableOpacity
+                  onPress={() => void loadMorePosts()}
+                  disabled={loadingMore}
+                  activeOpacity={0.8}
+                  style={{
+                    marginTop: 8,
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                  }}
+                >
+                  {loadingMore ? (
+                    <ActivityIndicator size="small" color={colors.action} />
+                  ) : (
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: colors.action }}>Load more posts</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
       </ScrollView>

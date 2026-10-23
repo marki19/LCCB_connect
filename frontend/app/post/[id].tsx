@@ -114,6 +114,9 @@ export default function PostDetailScreen() {
       Alert.alert("Sign In Required", "Please sign in with your institutional account to like posts.");
       return;
     }
+    // Reanimated starts animations by mutating the shared value; the new
+    // eslint react-hooks/immutability rule flags this documented API pattern.
+    // eslint-disable-next-line react-hooks/immutability
     scale.value = withSequence(withTiming(1.4, { duration: 110 }), withTiming(0.85, { duration: 80 }), withTiming(1, { duration: 110 }));
     const newLiked = !liked;
     setLiked(newLiked);
