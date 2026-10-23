@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { View, FlatList, RefreshControl, Text, ScrollView, TouchableOpacity, Platform, useWindowDimensions } from "react-native";
 import { BookOpen, FolderGit2, MessageSquare, Settings, UploadCloud, Users, Calendar } from "lucide-react-native";
 import HomeHeader from "../../src/components/HomeHeader";
@@ -23,6 +23,11 @@ function FilterTab({ label, value, active, onSelect }: { label: string, value: F
   );
 }
 
+function getInitials(name?: string | null) {
+  if (!name) return "LC";
+  return name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
@@ -33,6 +38,7 @@ export default function HomeScreen() {
 
   const [posts, setPosts] = useState<any[]>([]);
   const [activePeers, setActivePeers] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filter, setFilter] = useState<FeedFilter>("all");
@@ -42,13 +48,8 @@ export default function HomeScreen() {
     setPosts((prev) => prev.filter((p) => String(p.id) !== String(id)));
   }, []);
 
-  const getInitials = (name?: string | null) => {
-    if (!name) return "LC";
-    return name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
-  };
-
   // Fetch real users from backend / database
-  const fetchActivePeers = async () => {
+  const fetchActivePeers = useCallback(async () => {
     try {
       const res = await apiFetch(`/public/peers`);
       if (res.ok) {
@@ -60,17 +61,35 @@ export default function HomeScreen() {
     } catch (e) {
       console.error("Failed to load peers from SQL backend:", e);
     }
-  };
+  }, []);
 
-  // Current active user: use authenticated profile or primary user from database
-  const activeUser = profile?.full_name ? profile : (activePeers[0] || {
-    full_name: "Mark Antipo",
-    username: "mark_antipo",
-    department_name: null,
-    year_level: "3rd Year",
-  });
+  const fetchUnreadCount = useCallback(async () => {
+    if (isGuest || !profile?.id) {
+      setUnreadCount(0);
+      return;
+    }
 
-  const fetchUnifiedFeed = async () => {
+    try {
+      const res = await apiFetch("/conversations/unread-count");
+      if (!res.ok) {
+        setUnreadCount(0);
+        return;
+      }
+
+      const data = await res.json();
+      const next = Number(data?.unread);
+      setUnreadCount(Number.isFinite(next) ? next : 0);
+    } catch (err) {
+      console.error("Failed to load unread count:", err);
+    }
+  }, [isGuest, profile?.id]);
+
+  // Current active user: only the authenticated profile or the local guest
+  // profile. Never substitute another campus member's identity.
+  const activeUser = profile;
+  const activeName = activeUser?.full_name || (isGuest ? "Guest Visitor" : "You");
+
+  const fetchUnifiedFeed = useCallback(async () => {
     let postItems: any[] = [];
     let thesisItems: any[] = [];
 
@@ -161,24 +180,28 @@ export default function HomeScreen() {
     }
 
     setPosts(unified);
-  };
+  }, [filter]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchUnifiedFeed();
-      fetchActivePeers();
-    }, [filter])
+      void fetchUnifiedFeed();
+      void fetchActivePeers();
+      void fetchUnreadCount();
+    }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount])
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchUnifiedFeed(), fetchActivePeers()]);
+    await Promise.all([fetchUnifiedFeed(), fetchActivePeers(), fetchUnreadCount()]);
     setRefreshing(false);
-  }, [filter]);
+  }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
-      <HomeHeader onMenuPress={() => setSidebarOpen(true)} />
+      <HomeHeader
+        onMenuPress={() => setSidebarOpen(true)}
+        unreadCount={unreadCount}
+      />
 
       {/* Main 3-Column Container */}
       <View style={{ flex: 1, flexDirection: "row", justifyContent: "center" }}>
@@ -192,11 +215,11 @@ export default function HomeScreen() {
               style={{ flexDirection: "row", alignItems: "center", padding: 12, borderRadius: 12, backgroundColor: colors.surface, marginBottom: 16, borderWidth: 1, borderColor: colors.border }}
             >
               <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: colors.actionSurfaceAlt, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-                <Text style={{ fontWeight: "800", color: colors.textPrimary, fontSize: 14 }}>{getInitials(activeUser.full_name)}</Text>
+                <Text style={{ fontWeight: "800", color: colors.textPrimary, fontSize: 14 }}>{getInitials(activeName)}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: "700", color: colors.textPrimary, fontSize: 14 }} numberOfLines={1}>{activeUser.full_name}</Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 11 }}>{activeUser.department_name || "No department"} {activeUser.year_level ? `· ${activeUser.year_level}` : ""}</Text>
+                <Text style={{ fontWeight: "700", color: colors.textPrimary, fontSize: 14 }} numberOfLines={1}>{activeName}</Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 11 }}>{activeUser?.department_name || "No department"} {activeUser?.year_level ? `· ${activeUser.year_level}` : ""}</Text>
               </View>
             </TouchableOpacity>
 
@@ -222,6 +245,11 @@ export default function HomeScreen() {
               <TouchableOpacity onPress={() => router.push("/messages")} style={{ flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, gap: 10 }}>
                 <MessageSquare size={18} color="#8B5CF6" />
                 <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textPrimary }}>Messages</Text>
+                {unreadCount > 0 && (
+                  <View style={{ marginLeft: "auto", minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, backgroundColor: "#DC2626", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "800" }}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             )}
 
@@ -275,7 +303,7 @@ export default function HomeScreen() {
                         marginRight: 10,
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: "800", color: colors.textPrimary }}>{getInitials(activeUser.full_name)}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "800", color: colors.textPrimary }}>{getInitials(activeName)}</Text>
                     </View>
                     <View
                       style={{

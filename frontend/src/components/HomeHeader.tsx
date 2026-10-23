@@ -6,9 +6,10 @@ import { useTheme } from "../contexts/ThemeContext";
 
 type Props = {
   onMenuPress: () => void;
+  unreadCount?: number;
 };
 
-export default function HomeHeader({ onMenuPress }: Props) {
+export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { colors, isDark, toggleTheme } = useTheme();
@@ -110,7 +111,7 @@ export default function HomeHeader({ onMenuPress }: Props) {
         <TouchableOpacity
           onPress={() => router.push("/messages")}
           activeOpacity={0.7}
-          accessibilityLabel="Messages"
+          accessibilityLabel={unreadCount > 0 ? `Messages, ${unreadCount} unread` : "Messages"}
           style={{
             width: 38,
             height: 38,
@@ -118,9 +119,15 @@ export default function HomeHeader({ onMenuPress }: Props) {
             backgroundColor: colors.actionSurface,
             alignItems: "center",
             justifyContent: "center",
+            position: "relative",
           }}
         >
           <MessageSquare size={18} color={colors.action} strokeWidth={2} />
+          {unreadCount > 0 && (
+            <View style={{ position: "absolute", top: -3, right: -3, minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4, backgroundColor: "#DC2626", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: "#FFFFFF", fontSize: 9, fontWeight: "800" }}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </View>

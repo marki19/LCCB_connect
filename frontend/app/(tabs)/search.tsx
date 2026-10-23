@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, FlatList, Linking, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Search as SearchIcon, Filter, BookOpen, Download, UploadCloud } from "lucide-react-native";
+import { Search as SearchIcon, BookOpen, UploadCloud } from "lucide-react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { apiFetch } from "../../src/lib/api";
@@ -10,44 +10,48 @@ export default function SearchScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"All" | "Undergraduate Capstone" | "Graduate Dissertation">("All");
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   
   const [theses, setTheses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const requestId = useRef(0);
 
-  const fetchTheses = async () => {
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const fetchTheses = useCallback(async () => {
+    const currentRequest = requestId.current + 1;
+    requestId.current = currentRequest;
     setLoading(true);
 
     try {
-      // 1. Fetch from raw SQL backend API
-      const res = await apiFetch(`/theses`);
+      const params = ["limit=100"];
+      if (debouncedQuery) params.push(`q=${encodeURIComponent(debouncedQuery)}`);
+      if (activeFilter !== "All") {
+        params.push(`category=${encodeURIComponent(activeFilter)}`);
+      }
+
+      const res = await apiFetch(`/theses?${params.join("&")}`);
+      if (currentRequest !== requestId.current) return;
+
       if (res.ok) {
         const data = await res.json();
-        let filtered = data;
-        if (activeFilter !== "All") {
-          filtered = filtered.filter((t: any) => t.category === activeFilter || t.category === "Capstone");
-        }
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          filtered = filtered.filter((t: any) =>
-            t.title?.toLowerCase().includes(q) ||
-            t.abstract?.toLowerCase().includes(q) ||
-            (t.uploader?.full_name || t.author?.full_name)?.toLowerCase().includes(q)
-          );
-        }
-        setTheses(filtered);
+        setTheses(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error("Failed to load theses from SQL backend:", err);
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
-  };
+  }, [activeFilter, debouncedQuery]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchTheses();
-    }, [activeFilter, searchQuery])
+      void fetchTheses();
+    }, [fetchTheses])
   );
 
   const ThesisCard = ({ item }: { item: any }) => (

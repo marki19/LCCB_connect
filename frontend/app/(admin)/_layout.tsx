@@ -16,7 +16,6 @@ import {
   FileText,
   Megaphone,
   Building2,
-  Settings,
   ScrollText,
   LogOut,
   ExternalLink,
@@ -174,7 +173,6 @@ export default function AdminLayout() {
       path: "/(admin)/departments",
       icon: Building2,
     },
-    { label: "Settings", path: "/(admin)/settings", icon: Settings },
   ];
 
   if (isSuperAdminRole(profile.role)) {

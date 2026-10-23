@@ -54,7 +54,7 @@ Mobile keeps the normal student/faculty experience. The panel is desktop-only.
 - Ownership failures return 404, never 403.
 - Announcements are in-app only. No email or push delivery in v1.
 - Deferred: impersonation, dedicated analytics page, departmentAdmin console, mobile admin UI, report assignment/handoffs.
-- Testing uses the cleaned Supabase database and the five `@lccb.edu.ph` accounts with password `123456`.
+- Testing uses the cleaned Supabase database and the five `@lccb.edu.ph` accounts; their passwords are stored in Supabase Auth, not in this repository.
 
 ## 5. Assumptions
 

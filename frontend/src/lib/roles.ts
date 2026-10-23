@@ -44,6 +44,15 @@ export function isAdminRole(role?: string | null): boolean {
   return rankOf(role) >= RANK.admin;
 }
 
+export function isDepartmentAdminRole(role?: string | null): boolean {
+  return rankOf(role) === RANK.departmentAdmin;
+}
+
+/** Any role with access to the moderation queue: departmentAdmin and above. */
+export function isModeratorRole(role?: string | null): boolean {
+  return rankOf(role) >= RANK.departmentAdmin;
+}
+
 export function isSuperAdminRole(role?: string | null): boolean {
   return rankOf(role) === RANK.superadmin;
 }

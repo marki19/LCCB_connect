@@ -42,16 +42,11 @@ export default function SettingsSidebar({ visible, onClose }: Props) {
   const [translateX] = useState(() => new Animated.Value(-SIDEBAR_WIDTH));
   const [backdrop] = useState(() => new Animated.Value(0));
 
-  const { profile } = useAuth();
-  
-  // Safe fallback if profile is missing
-  const currentUser = profile || {
-    full_name: "Mark Antipo",
-    username: "mark_antipo",
-    avatar_url: null,
-    department_name: null,
-    year_level: "3rd Year"
-  };
+  const { profile, isGuest } = useAuth();
+
+  // Never show a fabricated identity when the profile is still loading or
+  // unavailable. Use the local guest label or a neutral fallback instead.
+  const displayName = profile?.full_name || (isGuest ? "Guest Visitor" : "User");
 
   const getInitials = (name: string | null) => {
     if (!name) return "??";
@@ -99,11 +94,11 @@ export default function SettingsSidebar({ visible, onClose }: Props) {
           </TouchableOpacity>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.actionSurfaceAlt, alignItems: "center", justifyContent: "center", marginRight: 12, borderWidth: 2, borderColor: "rgba(255,255,255,0.4)" }}>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary }}>{getInitials(currentUser.full_name)}</Text>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary }}>{getInitials(displayName)}</Text>
             </View>
             <View>
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#FFFFFF" }}>{currentUser.full_name}</Text>
-              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{currentUser.department_name || "No department"} · {currentUser.year_level || "—"}</Text>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#FFFFFF" }}>{displayName}</Text>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{profile?.department_name || "No department"} · {profile?.year_level || "—"}</Text>
             </View>
           </View>
         </View>

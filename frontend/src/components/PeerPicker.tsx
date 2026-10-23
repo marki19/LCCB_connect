@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Modal,
   View,
@@ -44,8 +44,15 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
   const [peers, setPeers] = useState<Peer[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [requested, setRequested] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!visible) return;
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query, visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -53,7 +60,9 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
     (async () => {
       setLoading(true);
       try {
-        const res = await apiFetch("/public/peers?limit=100");
+        const params = ["limit=100"];
+        if (debouncedQuery) params.push(`q=${encodeURIComponent(debouncedQuery)}`);
+        const res = await apiFetch(`/public/peers?${params.join("&")}`);
         const data: Peer[] = res.ok ? await res.json() : [];
         if (cancelled) return;
         setPeers(Array.isArray(data) ? data.filter((p) => p.id !== profile?.id) : []);
@@ -66,21 +75,20 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [visible, profile?.id]);
+  }, [visible, profile?.id, debouncedQuery]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return peers;
-    return peers.filter((p) =>
-      [p.full_name, p.username, p.department_name].some((v) => v?.toLowerCase().includes(q))
-    );
-  }, [peers, query]);
+  const handleClose = () => {
+    setQuery("");
+    setDebouncedQuery("");
+    setPeers([]);
+    onClose();
+  };
 
   const handleMessage = async (peer: Peer) => {
     setBusyId(peer.id);
     try {
       const conversation = await openConversation(peer.id);
-      onClose();
+      handleClose();
       onOpened?.(conversation.id);
     } catch (err) {
       Alert.alert("Can't message", err instanceof Error ? err.message : "Please try again.");
@@ -102,7 +110,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end" }}>
         <View
           style={{
@@ -124,7 +132,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
             }}
           >
             <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary }}>New message</Text>
-            <TouchableOpacity onPress={onClose} style={{ padding: 6 }}>
+            <TouchableOpacity onPress={handleClose} style={{ padding: 6 }}>
               <X size={20} color={colors.textTertiary} />
             </TouchableOpacity>
           </View>
@@ -144,7 +152,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Search people"
+              placeholder="Search by name, username, or department"
               placeholderTextColor={colors.textTertiary}
               style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: colors.textPrimary }}
             />
@@ -156,7 +164,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
             </View>
           ) : (
             <FlatList
-              data={filtered}
+              data={peers}
               keyExtractor={(item) => item.id}
               keyboardShouldPersistTaps="handled"
               ListEmptyComponent={
