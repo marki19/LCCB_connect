@@ -1,5 +1,6 @@
 import { View, Text, ScrollView } from "react-native";
 import { useTheme } from "../../src/contexts/ThemeContext";
+import PageHeader from "../../src/components/admin/PageHeader";
 
 export default function AdminSettingsScreen() {
   const { colors } = useTheme();
@@ -10,14 +11,11 @@ export default function AdminSettingsScreen() {
       contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ marginBottom: 24 }}>
-        <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
-          System Settings
-        </Text>
-        <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: 4 }}>
-          Not available yet.
-        </Text>
-      </View>
+      <PageHeader
+        eyebrow="System / preferences"
+        title="System Settings"
+        description="Not available yet."
+      />
 
       <View
         style={{

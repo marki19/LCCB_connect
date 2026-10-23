@@ -11,7 +11,6 @@ import {
   Building2,
   CheckCircle2,
   Megaphone,
-  RefreshCw,
   Send,
   ShieldCheck,
   Users,
@@ -27,6 +26,7 @@ import { useTheme } from "../../src/contexts/ThemeContext";
 import { ThemeTokens } from "../../src/lib/tokens";
 import type { Department } from "../../src/types";
 import ActionDialog from "../../src/components/admin/ActionDialog";
+import PageHeader from "../../src/components/admin/PageHeader";
 
 type AudienceType = "all" | "role" | "department";
 
@@ -234,34 +234,13 @@ export default function AdminAnnouncementsScreen() {
       contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ marginBottom: 24, flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
-        <View>
-          <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
-            Announcements
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 14, color: colors.textSecondary }}>
-            Send one message to a counted audience. Delivery is in-app.
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => void loadHistory(null, false)}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.surface,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-          }}
-        >
-          <RefreshCw size={15} color={colors.textSecondary} />
-          <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
-            Refresh
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <PageHeader
+        eyebrow="Governance / broadcast"
+        title="Announcements"
+        description="Send one message to a counted audience. Delivery is in-app."
+        onRefresh={() => void loadHistory(null, false)}
+        refreshing={historyLoading}
+      />
 
       {error ? (
         <View

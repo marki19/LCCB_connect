@@ -2,13 +2,14 @@ import { useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   ActivityIndicator,
   Platform,
   useWindowDimensions,
   Image,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter, usePathname } from "expo-router";
 import {
   LayoutDashboard,
@@ -22,58 +23,164 @@ import {
   ShieldCheck,
   Sun,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { ThemeTokens } from "../../src/lib/tokens";
+import {
+  focusRing,
+  RADIUS,
+  SPACE,
+  TYPE,
+  type ThemeTokens,
+} from "../../src/lib/tokens";
 import { isAdminRole, isSuperAdminRole } from "../../src/lib/roles";
 import { setAdminAppPreview } from "../../src/lib/panelMode";
+import StatusBadge from "../../src/components/admin/StatusBadge";
+
+type NavEntry = {
+  label: string;
+  path: string;
+  icon: any;
+};
 
 type NavItemProps = {
   icon: any;
   label: string;
-  path: string;
   active: boolean;
+  collapsed: boolean;
   onPress: () => void;
   colors: ThemeTokens;
 };
 
-function NavItem({ icon: Icon, label, active, onPress, colors }: NavItemProps) {
+function NavItem({ icon: Icon, label, active, collapsed, onPress, colors }: NavItemProps) {
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+
   return (
-    <TouchableOpacity
+    <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      // @ts-ignore web hover events
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        marginBottom: 4,
-        flexDirection: "row",
-        alignItems: "center",
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 11,
-        backgroundColor: active
-          ? colors.sidebarActiveBg
-          : hovered
-          ? colors.sidebarItemHover
-          : "transparent",
-      }}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={[
+        {
+          position: "relative",
+          minHeight: 42,
+          marginBottom: 3,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: collapsed ? "center" : "flex-start",
+          borderRadius: RADIUS.md,
+          paddingHorizontal: collapsed ? 0 : SPACE.x3,
+          backgroundColor: active
+            ? colors.navActiveBg
+            : hovered || focused
+            ? colors.navHoverBg
+            : "transparent",
+        },
+        focusRing(colors, focused),
+      ]}
     >
-      <Icon color={active ? colors.sidebarActiveText : colors.sidebarItemText} size={18} />
-      <Text
-        style={{
-          marginLeft: 12,
-          fontSize: 13,
-          fontWeight: active ? "700" : "600",
-          color: active ? colors.sidebarActiveText : colors.sidebarItemText,
-        }}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
+      {active ? (
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 11,
+            bottom: 11,
+            width: 3,
+            borderRadius: 2,
+            backgroundColor: colors.navAccent,
+          }}
+        />
+      ) : null}
+      <Icon
+        size={18}
+        color={active ? colors.navTextActive : colors.navText}
+        strokeWidth={active ? 2.4 : 2}
+      />
+      {!collapsed ? (
+        <Text
+          numberOfLines={1}
+          style={{
+            marginLeft: SPACE.x3,
+            ...TYPE.bodyStrong,
+            fontSize: 13,
+            fontWeight: active ? "700" : "600",
+            color: active ? colors.navTextActive : colors.navText,
+          }}
+        >
+          {label}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function UtilityRow({
+  icon: Icon,
+  label,
+  onPress,
+  collapsed,
+  colors,
+  danger = false,
+  iconColor,
+}: {
+  icon: any;
+  label: string;
+  onPress: () => void;
+  collapsed: boolean;
+  colors: ThemeTokens;
+  danger?: boolean;
+  iconColor?: string;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const tint = danger ? colors.destructiveText : iconColor ?? colors.navText;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={[
+        {
+          minHeight: 40,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: collapsed ? "center" : "flex-start",
+          borderRadius: RADIUS.md,
+          paddingHorizontal: collapsed ? 0 : SPACE.x3,
+          backgroundColor: hovered || focused ? colors.navHoverBg : "transparent",
+        },
+        focusRing(colors, focused),
+      ]}
+    >
+      <Icon size={16} color={tint} strokeWidth={2.1} />
+      {!collapsed ? (
+        <Text
+          numberOfLines={1}
+          style={{
+            marginLeft: SPACE.x3,
+            ...TYPE.caption,
+            fontWeight: "600",
+            color: danger ? colors.destructiveText : colors.navText,
+          }}
+        >
+          {label}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -85,59 +192,84 @@ export default function AdminLayout() {
   const { colors, isDark, preference, cycleTheme } = useTheme();
   const isDesktop = Platform.OS === "web" && width >= 768;
   const adminUser = isAdminRole(profile?.role);
+  const [collapseOverride, setCollapseOverride] = useState<boolean | null>(null);
+  const collapsed = collapseOverride ?? width < 1180;
 
-  if (!isDesktop || !adminUser) {
+  if (!isDesktop) {
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: colors.surfacePage,
-          padding: 24,
-        }}
+      <LinearGradient
+        colors={[colors.navBg, colors.navBgAlt]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: SPACE.x6 }}
       >
-        <ShieldCheck size={36} color={colors.primary} />
-        <Text
+        <View
           style={{
-            marginTop: 16,
-            fontSize: 20,
-            fontWeight: "700",
-            color: colors.textPrimary,
+            width: 74,
+            height: 74,
+            borderRadius: 24,
+            backgroundColor: "rgba(255,255,255,0.06)",
+            borderWidth: 1,
+            borderColor: colors.navLine,
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          {isDesktop ? "Admin access required" : "Desktop console"}
+          <Image
+            source={require("../../assets/images/logo-seal.png")}
+            style={{ width: 50, height: 50 }}
+            resizeMode="contain"
+          />
+        </View>
+        <Text style={{ ...TYPE.micro, color: colors.navAccent, marginTop: SPACE.x5 }}>
+          LCCB Connect
         </Text>
         <Text
           style={{
-            marginTop: 8,
-            maxWidth: 420,
+            ...TYPE.h1,
+            color: colors.navTextActive,
             textAlign: "center",
-            fontSize: 14,
-            color: colors.textSecondary,
-            lineHeight: 20,
+            marginTop: SPACE.x2,
+            maxWidth: 430,
           }}
         >
-          {isDesktop
-            ? "This account does not have access to the administration console."
-            : "The admin console is available on desktop web. Use the normal app on this device."}
+          The console is a desk, not a pocket.
         </Text>
-        <TouchableOpacity
+        <Text
           style={{
-            marginTop: 24,
-            borderRadius: 9999,
-            backgroundColor: colors.primary,
-            paddingHorizontal: 24,
-            paddingVertical: 12,
+            ...TYPE.body,
+            color: colors.navText,
+            textAlign: "center",
+            maxWidth: 390,
+            marginTop: SPACE.x3,
           }}
+        >
+          Open the admin console on desktop web. Your student and faculty experience is right
+          here on mobile.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
           onPress={() => {
             setAdminAppPreview(true);
             router.replace("/(tabs)/");
           }}
+          style={({ pressed }) => ({
+            marginTop: SPACE.x6,
+            minHeight: 46,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: SPACE.x2,
+            borderRadius: RADIUS.pill,
+            backgroundColor: colors.navAccent,
+            paddingHorizontal: SPACE.x6,
+            paddingVertical: SPACE.x3,
+            opacity: pressed ? 0.9 : 1,
+          })}
         >
-          <Text style={{ fontWeight: "700", color: colors.textOnPrimary }}>Go to App</Text>
-        </TouchableOpacity>
-      </View>
+          <Text style={{ ...TYPE.bodyStrong, color: "#20160A" }}>Go to App</Text>
+          <ExternalLink size={15} color="#20160A" />
+        </Pressable>
+      </LinearGradient>
     );
   }
 
@@ -149,9 +281,71 @@ export default function AdminLayout() {
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: colors.surfacePage,
+          gap: SPACE.x4,
         }}
       >
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.brandSolid} />
+        <Text style={{ ...TYPE.body, color: colors.inkSoft }}>Loading the console…</Text>
+      </View>
+    );
+  }
+
+  if (!adminUser) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.surfacePage,
+          padding: SPACE.x8,
+        }}
+      >
+        <View
+          style={{
+            width: 92,
+            height: 92,
+            borderRadius: 28,
+            backgroundColor: colors.coralWash,
+            alignItems: "center",
+            justifyContent: "center",
+            transform: [{ rotate: "-6deg" }],
+          }}
+        >
+          <ShieldCheck size={40} color={colors.coralText} strokeWidth={1.8} />
+        </View>
+        <Text style={{ ...TYPE.h1, color: colors.ink, marginTop: SPACE.x6 }}>
+          Admin access required
+        </Text>
+        <Text
+          style={{
+            ...TYPE.body,
+            color: colors.inkSoft,
+            textAlign: "center",
+            maxWidth: 420,
+            marginTop: SPACE.x2,
+          }}
+        >
+          This account does not have access to the administration console.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setAdminAppPreview(true);
+            router.replace("/(tabs)/");
+          }}
+          style={({ pressed }) => ({
+            marginTop: SPACE.x6,
+            minHeight: 44,
+            borderRadius: RADIUS.pill,
+            backgroundColor: colors.brandSolid,
+            paddingHorizontal: SPACE.x6,
+            paddingVertical: SPACE.x3,
+            opacity: pressed ? 0.88 : 1,
+          })}
+        >
+          <Text style={{ ...TYPE.bodyStrong, color: colors.textOnPrimary }}>Go to App</Text>
+        </Pressable>
       </View>
     );
   }
@@ -163,222 +357,305 @@ export default function AdminLayout() {
     return relative === target || relative.startsWith(`${target}/`);
   };
 
-  const nav = [
+  const governance: NavEntry[] = [
     { label: "Overview", path: "/(admin)", icon: LayoutDashboard },
     { label: "Users", path: "/(admin)/users", icon: Users },
     { label: "Reports & Content", path: "/(admin)/content", icon: FileText },
     { label: "Announcements", path: "/(admin)/announcements", icon: Megaphone },
-    {
-      label: "Departments & Courses",
-      path: "/(admin)/departments",
-      icon: Building2,
-    },
+  ];
+
+  const system: NavEntry[] = [
+    { label: "Departments & Courses", path: "/(admin)/departments", icon: Building2 },
   ];
 
   if (isSuperAdminRole(profile.role)) {
-    nav.push({ label: "Audit", path: "/(admin)/audit", icon: ScrollText });
+    system.unshift({ label: "Audit", path: "/(admin)/audit", icon: ScrollText });
   }
+
+  const sidebarWidth = collapsed ? 84 : 272;
 
   return (
     <View style={{ flex: 1, flexDirection: "row", backgroundColor: colors.surfacePage }}>
-      <View
+      <LinearGradient
+        colors={[colors.navBg, colors.navBgAlt]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={{
           height: "100%",
-          width: 256,
+          width: sidebarWidth,
           borderRightWidth: 1,
-          borderRightColor: colors.sidebarBorder,
-          backgroundColor: colors.sidebarBg,
+          borderRightColor: colors.navLine,
+          overflow: "hidden",
         }}
       >
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: -110,
+            right: -90,
+            width: 240,
+            height: 240,
+            borderRadius: 120,
+            backgroundColor: colors.heroGlow,
+            opacity: 0.10,
+          }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            bottom: 80,
+            left: -100,
+            width: 220,
+            height: 220,
+            borderRadius: 110,
+            backgroundColor: colors.navAccent,
+            opacity: 0.05,
+          }}
+        />
+
         <ScrollView
-          style={{ flex: 1, padding: 16 }}
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "space-between",
+            paddingHorizontal: collapsed ? SPACE.x2 : SPACE.x4,
+            paddingTop: SPACE.x5,
+            paddingBottom: SPACE.x4,
+          }}
           showsVerticalScrollIndicator={false}
         >
           <View>
             <View
               style={{
-                marginBottom: 24,
-                flexDirection: "row",
+                flexDirection: collapsed ? "column" : "row",
                 alignItems: "center",
-                paddingHorizontal: 4,
+                justifyContent: collapsed ? "center" : "flex-start",
+                gap: SPACE.x3,
+                paddingHorizontal: collapsed ? 0 : SPACE.x1,
+                marginBottom: SPACE.x6,
               }}
             >
-              <Image
-                source={require("../../assets/images/logo-seal.png")}
-                style={{ width: 38, height: 38, marginRight: 12, borderRadius: 19 }}
-                resizeMode="contain"
-              />
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "800",
-                    color: colors.textPrimary,
-                    letterSpacing: -0.2,
-                  }}
-                  numberOfLines={1}
-                >
-                  LCCB Connect
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 10,
-                    fontWeight: "700",
-                    textTransform: "uppercase",
-                    letterSpacing: 0.8,
-                    color: colors.primary,
-                    marginTop: 1,
-                  }}
-                >
-                  {isSuperAdminRole(profile.role) ? "Superadmin" : "Administrator"}
-                </Text>
+              <View
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: RADIUS.md,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "rgba(255,255,255,0.06)",
+                  borderWidth: 1,
+                  borderColor: colors.navLine,
+                }}
+              >
+                <Image
+                  source={require("../../assets/images/logo-seal.png")}
+                  style={{ width: 30, height: 30 }}
+                  resizeMode="contain"
+                />
               </View>
+              {!collapsed ? (
+                <View style={{ flex: 1 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ ...TYPE.title, fontSize: 15, color: colors.navTextActive }}
+                  >
+                    LCCB Connect
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{ ...TYPE.micro, fontSize: 8.5, color: colors.navAccent, marginTop: 2 }}
+                  >
+                    Admin Console
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
-            {nav.map((item) => (
+            {!collapsed ? (
+              <Text
+                style={{
+                  ...TYPE.micro,
+                  fontSize: 8.5,
+                  color: "rgba(169, 182, 204, 0.72)",
+                  paddingHorizontal: SPACE.x3,
+                  marginBottom: SPACE.x2,
+                }}
+              >
+                Governance
+              </Text>
+            ) : null}
+            {governance.map((item) => (
               <NavItem
                 key={item.path}
                 icon={item.icon}
                 label={item.label}
-                path={item.path}
                 active={isActive(item.path)}
+                collapsed={collapsed}
+                onPress={() => router.push(item.path as any)}
+                colors={colors}
+              />
+            ))}
+
+            <View
+              style={{
+                height: 1,
+                backgroundColor: colors.navLine,
+                marginVertical: SPACE.x3,
+                marginHorizontal: collapsed ? SPACE.x2 : 0,
+              }}
+            />
+            {!collapsed ? (
+              <Text
+                style={{
+                  ...TYPE.micro,
+                  fontSize: 8.5,
+                  color: "rgba(169, 182, 204, 0.72)",
+                  paddingHorizontal: SPACE.x3,
+                  marginBottom: SPACE.x2,
+                }}
+              >
+                System
+              </Text>
+            ) : null}
+            {system.map((item) => (
+              <NavItem
+                key={item.path}
+                icon={item.icon}
+                label={item.label}
+                active={isActive(item.path)}
+                collapsed={collapsed}
                 onPress={() => router.push(item.path as any)}
                 colors={colors}
               />
             ))}
           </View>
 
-          <View style={{ borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 16 }}>
+          <View style={{ marginTop: SPACE.x6 }}>
             <View
               style={{
-                marginBottom: 12,
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 6,
-                paddingVertical: 4,
+                borderTopWidth: 1,
+                borderTopColor: colors.navLine,
+                paddingTop: SPACE.x3,
+                marginBottom: SPACE.x2,
               }}
             >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: colors.primarySurface,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 10,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <Text style={{ fontWeight: "700", fontSize: 13, color: colors.primary }}>
-                  {(profile.full_name?.[0] || profile.username?.[0] || "A").toUpperCase()}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}
-                  numberOfLines={1}
+              {!collapsed ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: SPACE.x3,
+                    paddingHorizontal: SPACE.x2,
+                    paddingVertical: SPACE.x2,
+                  }}
                 >
-                  {profile.full_name || profile.username || "Admin"}
-                </Text>
-                <Text
-                  style={{ fontSize: 11, color: colors.textTertiary, textTransform: "capitalize" }}
-                  numberOfLines={1}
-                >
-                  {profile.role?.replace("_", " ") || "Admin"}
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              onPress={() => void cycleTheme()}
-              style={{
-                marginBottom: 4,
-                flexDirection: "row",
-                alignItems: "center",
-                borderRadius: 12,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                backgroundColor: isDark ? colors.surfaceElevated : colors.surfaceSunken,
-              }}
-            >
-              {isDark ? (
-                <Moon size={16} color={colors.warning} />
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 17,
+                      backgroundColor: colors.navActiveBg,
+                      borderWidth: 1,
+                      borderColor: colors.navLine,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      style={{ ...TYPE.bodyStrong, color: colors.navTextActive, fontSize: 12 }}
+                    >
+                      {(profile.full_name?.[0] || profile.username?.[0] || "A").toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{ ...TYPE.caption, fontWeight: "700", color: colors.navTextActive }}
+                    >
+                      {profile.full_name || profile.username || "Admin"}
+                    </Text>
+                    <View style={{ marginTop: 3 }}>
+                      <StatusBadge
+                        label={isSuperAdminRole(profile.role) ? "Superadmin" : "Administrator"}
+                        tone={isSuperAdminRole(profile.role) ? "warning" : "brand"}
+                      />
+                    </View>
+                  </View>
+                </View>
               ) : (
-                <Sun size={16} color={colors.warning} />
+                <View
+                  style={{
+                    alignItems: "center",
+                    paddingVertical: SPACE.x2,
+                    marginBottom: SPACE.x1,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 17,
+                      backgroundColor: colors.navActiveBg,
+                      borderWidth: 1,
+                      borderColor: colors.navLine,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      style={{ ...TYPE.bodyStrong, color: colors.navTextActive, fontSize: 12 }}
+                    >
+                      {(profile.full_name?.[0] || profile.username?.[0] || "A").toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
               )}
-              <Text
-                style={{
-                  marginLeft: 10,
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color: colors.textSecondary,
-                  flex: 1,
-                }}
-              >
-                Theme: {preference.charAt(0).toUpperCase() + preference.slice(1)}
-              </Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => {
-                setAdminAppPreview(true);
-                router.push("/(tabs)/");
-              }}
-              style={{
-                marginBottom: 4,
-                flexDirection: "row",
-                alignItems: "center",
-                borderRadius: 12,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-              }}
-            >
-              <ExternalLink size={16} color={colors.textSecondary} />
-              <Text
-                style={{
-                  marginLeft: 10,
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color: colors.textSecondary,
+              <UtilityRow
+                icon={isDark ? Moon : Sun}
+                label={`Theme: ${preference.charAt(0).toUpperCase() + preference.slice(1)}`}
+                onPress={() => void cycleTheme()}
+                collapsed={collapsed}
+                colors={colors}
+                iconColor={colors.navAccent}
+              />
+              <UtilityRow
+                icon={ExternalLink}
+                label="Back to App"
+                onPress={() => {
+                  setAdminAppPreview(true);
+                  router.push("/(tabs)/");
                 }}
-              >
-                Back to App
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => void signOut()}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                borderRadius: 12,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-              }}
-            >
-              <LogOut size={16} color={colors.destructiveText} />
-              <Text
-                style={{
-                  marginLeft: 10,
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color: colors.destructiveText,
-                }}
-              >
-                Sign Out
-              </Text>
-            </TouchableOpacity>
+                collapsed={collapsed}
+                colors={colors}
+              />
+              <UtilityRow
+                icon={LogOut}
+                label="Sign Out"
+                onPress={() => void signOut()}
+                collapsed={collapsed}
+                colors={colors}
+                danger
+              />
+              <UtilityRow
+                icon={collapsed ? PanelLeftOpen : PanelLeftClose}
+                label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                onPress={() => setCollapseOverride(!collapsed)}
+                collapsed={collapsed}
+                colors={colors}
+              />
+            </View>
           </View>
         </ScrollView>
-      </View>
+      </LinearGradient>
 
       <View style={{ flex: 1, overflow: "hidden", backgroundColor: colors.surfacePage }}>
         <Stack
           screenOptions={{
             headerShown: false,
+            animation: "fade",
             contentStyle: { backgroundColor: colors.surfacePage },
           }}
         />
@@ -386,4 +663,3 @@ export default function AdminLayout() {
     </View>
   );
 }
-

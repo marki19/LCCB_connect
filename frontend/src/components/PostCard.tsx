@@ -11,7 +11,7 @@ import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
-import { ThemeTokens } from "../lib/tokens";
+import { ThemeTokens, elevation, RADIUS } from "../lib/tokens";
 import { apiFetch, deletePost, deleteThesis } from "../lib/api";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
@@ -38,7 +38,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   }));
 
   const { profile } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const isOwner = !!profile?.id && profile.id === post.author.id;
 
   const handleEdit = () => {
@@ -123,6 +123,8 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   return (
     <TouchableOpacity
       activeOpacity={0.97}
+      accessibilityRole="button"
+      accessibilityLabel={`${post.author.name}: ${post.title}`}
       onPress={() => {
         // A thesis has no post-detail screen; open the deposited PDF instead
         // (mirrors the search screen's thesis card).
@@ -133,24 +135,20 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         router.push(`/post/${post.id}`);
       }}
       style={{
-        backgroundColor: colors.surface,
-        borderRadius: 20,
+        backgroundColor: colors.panel,
+        borderRadius: RADIUS.xxl,
         marginHorizontal: 16,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: colors.border,
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: isDark ? 0.35 : 0.07,
-        shadowRadius: 8,
-        elevation: 3,
+        borderColor: colors.line,
         overflow: "hidden",
+        ...elevation("sm", colors),
       }}
     >
       {/* Author row */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 }}>
         <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: post.author.avatarColor, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: "#FFFFFF" }}>{post.author.initials}</Text>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: colors.ink }}>{post.author.initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }}>{post.author.name}</Text>
@@ -162,7 +160,10 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
             <TouchableOpacity
               onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }}
               activeOpacity={0.7}
-              style={{ marginLeft: 6, padding: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel="Post options"
+              hitSlop={8}
+              style={{ marginLeft: 6, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
             >
               <MoreVertical size={16} color={colors.textTertiary} />
             </TouchableOpacity>
@@ -280,7 +281,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
       ) : null}
 
       {/* Divider */}
-      <View style={{ height: 1, backgroundColor: colors.border }} />
+      <View style={{ height: 1, backgroundColor: colors.divider }} />
 
       {/* Actions — likes/comments do not apply to thesis deposits */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 6, paddingVertical: 6 }}>
@@ -290,7 +291,9 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
               <TouchableOpacity
                 onPress={(e) => { e.stopPropagation?.(); handleLike(); }}
                 activeOpacity={0.7}
-                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={liked ? "Unlike this post" : "Like this post"}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, minHeight: 44 }}
               >
                 <Heart size={18} color={liked ? colors.destructive : colors.textTertiary} fill={liked ? colors.destructive : "transparent"} strokeWidth={2} />
                 <Text style={{ fontSize: 12, color: liked ? colors.destructive : colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>{likeCount}</Text>
@@ -300,7 +303,9 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
             <TouchableOpacity
               onPress={() => router.push(`/post/${post.id}`)}
               activeOpacity={0.7}
-              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Open comments"
+              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, minHeight: 44 }}
             >
               <MessageCircle size={18} color={colors.textTertiary} strokeWidth={2} />
               <Text style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>{post.comments}</Text>
@@ -317,7 +322,9 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
             if (target) Linking.openURL(target);
           }}
           activeOpacity={0.7}
-          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Share this post"
+          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, minHeight: 44 }}
         >
           <Share2 size={18} color={colors.textTertiary} strokeWidth={2} />
           <Text style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>Share</Text>

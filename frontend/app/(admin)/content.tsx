@@ -15,7 +15,6 @@ import {
   FileText,
   Flag,
   MessageSquare,
-  RefreshCw,
   Search,
   ShieldCheck,
   Trash2,
@@ -37,6 +36,7 @@ import { ThemeTokens } from "../../src/lib/tokens";
 import { isSuperAdminRole } from "../../src/lib/roles";
 import type { Department } from "../../src/types";
 import ActionDialog from "../../src/components/admin/ActionDialog";
+import PageHeader from "../../src/components/admin/PageHeader";
 
 type PendingAction = {
   report: boolean;
@@ -381,34 +381,13 @@ export default function AdminContentScreen() {
       contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ marginBottom: 24, flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
-        <View>
-          <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
-            Reports & Content
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 14, color: colors.textSecondary }}>
-            Work the moderation queue or audit the full content library.
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={refresh}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.surface,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-          }}
-        >
-          <RefreshCw size={15} color={colors.textSecondary} />
-          <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
-            Refresh
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <PageHeader
+        eyebrow="Governance / moderation"
+        title="Reports & Content"
+        description="Work the moderation queue or audit the full content library. Every decision carries a reason."
+        onRefresh={refresh}
+        refreshing={queueLoading || libraryLoading}
+      />
 
       {notice ? (
         <View

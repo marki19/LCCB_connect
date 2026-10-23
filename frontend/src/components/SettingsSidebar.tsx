@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, Animated, Dimensions, ScrollView, TouchableWithoutFeedback, Switch } from "react-native";
+import { View, Text, TouchableOpacity, Animated, Platform, ScrollView, TouchableWithoutFeedback, Switch, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X, UserCircle, Shield, Lock, Palette, BellRing, School, Flag, LogOut, ChevronRight, Users, MessageSquare, Sun, Moon } from "lucide-react-native";
 import { useRouter } from "expo-router";
@@ -8,8 +8,9 @@ import { supabase } from "../lib/supabase";
 
 import { useTheme } from "../contexts/ThemeContext";
 
-const SCREEN_WIDTH = Dimensions.get("window").width;
-const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.78;
+const DESKTOP_SIDEBAR_WIDTH = 360;
+const MOBILE_SIDEBAR_RATIO = 0.78;
+const MOBILE_SIDEBAR_MAX_WIDTH = 360;
 
 type Props   = { visible: boolean; onClose: () => void };
 type MenuItemProps = { icon: React.ReactNode; label: string; danger?: boolean; onPress?: () => void };
@@ -38,8 +39,13 @@ function SectionLabel({ label }: { label: string }) {
 export default function SettingsSidebar({ visible, onClose }: Props) {
   const insets     = useSafeAreaInsets();
   const router     = useRouter();
+  const { width }  = useWindowDimensions();
   const { colors, isDark, toggleTheme } = useTheme();
-  const [translateX] = useState(() => new Animated.Value(-SIDEBAR_WIDTH));
+  const sidebarWidth =
+    Platform.OS === "web" && width >= 768
+      ? DESKTOP_SIDEBAR_WIDTH
+      : Math.min(MOBILE_SIDEBAR_MAX_WIDTH, Math.round(width * MOBILE_SIDEBAR_RATIO));
+  const [translateX] = useState(() => new Animated.Value(-sidebarWidth));
   const [backdrop] = useState(() => new Animated.Value(0));
 
   const { profile, isGuest } = useAuth();
@@ -54,18 +60,20 @@ export default function SettingsSidebar({ visible, onClose }: Props) {
   };
 
   useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.spring(translateX, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 200 }),
-        Animated.timing(backdrop, { toValue: 1, duration: 250, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.spring(translateX, { toValue: -SIDEBAR_WIDTH, useNativeDriver: true, damping: 22, stiffness: 200 }),
-        Animated.timing(backdrop, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [visible]);
+    Animated.parallel([
+      Animated.spring(translateX, {
+        toValue: visible ? 0 : -sidebarWidth,
+        useNativeDriver: true,
+        damping: 22,
+        stiffness: 200,
+      }),
+      Animated.timing(backdrop, {
+        toValue: visible ? 1 : 0,
+        duration: visible ? 250 : 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [backdrop, sidebarWidth, translateX, visible]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -85,7 +93,7 @@ export default function SettingsSidebar({ visible, onClose }: Props) {
         <Animated.View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15,23,42,0.35)", opacity: backdrop }} />
       </TouchableWithoutFeedback>
 
-      <Animated.View style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: SIDEBAR_WIDTH, backgroundColor: colors.surface, transform: [{ translateX }], shadowColor: "#000", shadowOffset: { width: 4, height: 0 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 25 }}>
+      <Animated.View style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: sidebarWidth, backgroundColor: colors.surface, transform: [{ translateX }], shadowColor: "#000", shadowOffset: { width: 4, height: 0 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 25 }}>
 
         {/* Blue header */}
         <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 18, paddingBottom: 20, backgroundColor: isDark ? "hsl(215, 35%, 15%)" : "#1A56DB", borderBottomWidth: isDark ? 1 : 0, borderBottomColor: colors.border }}>

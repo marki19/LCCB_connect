@@ -1,22 +1,25 @@
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions, ScrollView, Image } from "react-native";
-import { useState, useEffect } from "react";
+import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Image, Pressable } from "react-native";
+import { useState } from "react";
 import { supabase } from "../../src/lib/supabase";
-import { Link, useRouter } from "expo-router";
-import { Eye, EyeOff, AlertCircle, ArrowRight, Sun, Moon } from "lucide-react-native";
+import { Link } from "expo-router";
+import { Eye, EyeOff, AlertCircle, Sun, Moon, Monitor } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { focusRing } from "../../src/lib/tokens";
 
 export default function LoginScreen() {
-  const router = useRouter();
   const { signInAsGuest } = useAuth();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors, isDark, preference, cycleTheme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isWeb, setIsWeb] = useState(false);
   const [focusedField, setFocusedField] = useState<"email" | "password" | null>(null);
+  const [hoveredControl, setHoveredControl] = useState<string | null>(null);
+  const [focusedControl, setFocusedControl] = useState<string | null>(null);
 
   // Validation States
   const [emailError, setEmailError] = useState("");
@@ -26,12 +29,25 @@ export default function LoginScreen() {
   const isValidEmailDomain = email.trim().toLowerCase().endsWith("@lccb.edu.ph");
   const showEmailFormatError = email.length > 0 && !isValidEmailDomain;
 
-  useEffect(() => {
-    const handleResize = () => setIsWeb(Dimensions.get("window").width > 768);
-    handleResize();
-    const subscription = Dimensions.addEventListener("change", handleResize);
-    return () => subscription?.remove();
-  }, []);
+  const themeLabel = preference === "system" ? "System" : preference === "light" ? "Light" : "Dark";
+  const nextTheme = preference === "light" ? "dark" : preference === "dark" ? "system" : "light";
+  const nextThemeLabel = nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1);
+  const ThemeIcon = preference === "system" ? Monitor : preference === "light" ? Sun : Moon;
+  const signInHovered = hoveredControl === "signIn" && !loading;
+  const guestHovered = hoveredControl === "guest";
+  const createHovered = hoveredControl === "create";
+
+  function handleEmailChange(value: string) {
+    setEmail(value);
+    if (value) setEmailError("");
+    setGeneralError("");
+  }
+
+  function handlePasswordChange(value: string) {
+    setPassword(value);
+    if (value) setPasswordError("");
+    setGeneralError("");
+  }
 
   async function signInWithEmail() {
     let hasError = false;
@@ -65,36 +81,58 @@ export default function LoginScreen() {
         colors={isDark ? ["#0B1220", "#0E182A", "#080E18"] : ["#F0F5FF", "#E8EFFF", "#F8FAFF"]} 
         style={{ flex: 1 }}
       >
-        {/* Top bar with Theme Switcher */}
-        <View style={{ width: "100%", maxWidth: 470, alignSelf: "center", flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: 24, paddingTop: 16 }}>
-          <TouchableOpacity
-            onPress={() => void toggleTheme()}
-            activeOpacity={0.7}
-            accessibilityLabel={isDark ? "Switch to light theme" : "Switch to dark theme"}
-            style={{
+        {/* Viewport-level theme control, independent of the centered form column */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Theme: ${themeLabel}. Switch to ${nextThemeLabel}.`}
+          accessibilityHint="Cycles between system, light, and dark themes"
+          onPress={() => void cycleTheme()}
+          onFocus={() => setFocusedControl("theme")}
+          onBlur={() => setFocusedControl(null)}
+          onHoverIn={() => setHoveredControl("theme")}
+          onHoverOut={() => setHoveredControl(null)}
+          style={({ pressed }) => [
+            {
+              position: "absolute",
+              top: insets.top + 16,
+              right: insets.right + 16,
+              zIndex: 10,
+              minWidth: 44,
+              minHeight: 44,
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: colors.surface,
-              paddingHorizontal: 12,
-              paddingVertical: 7,
-              borderRadius: 20,
+              justifyContent: "center",
+              paddingHorizontal: 14,
+              borderRadius: 22,
               borderWidth: 1,
               borderColor: colors.border,
+              backgroundColor: hoveredControl === "theme" ? colors.surfaceSunken : colors.surface,
               shadowColor: colors.shadow,
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: isDark ? 0.3 : 0.05,
-              shadowRadius: 3,
-              elevation: 2,
-            }}
-          >
-            {isDark ? <Sun size={15} color={colors.primary} /> : <Moon size={15} color={colors.textSecondary} />}
-            <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary, marginLeft: 6 }}>
-              {isDark ? "Light Mode" : "Dark Mode"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: isDark ? 0.35 : 0.08,
+              shadowRadius: 6,
+              elevation: 3,
+              opacity: pressed ? 0.75 : 1,
+            },
+            focusRing(colors, focusedControl === "theme"),
+          ]}
+        >
+          <ThemeIcon size={16} color={colors.primary} />
+          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginLeft: 6 }}>
+            {themeLabel}
+          </Text>
+        </Pressable>
 
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", alignItems: "center" }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            paddingTop: insets.top + 76,
+            paddingBottom: insets.bottom + 24,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
 
           <View style={{ width: "100%", maxWidth: 470, padding: 24 }}>
             <View style={{ backgroundColor: colors.surface, borderRadius: 28, padding: 32, borderWidth: 1, borderColor: colors.border, shadowColor: colors.shadow, shadowOffset: { width: 0, height: 12 }, shadowOpacity: isDark ? 0.45 : 0.08, shadowRadius: 24, elevation: 8 }}>
@@ -145,10 +183,10 @@ export default function LoginScreen() {
                 </View>
 
                 <Text style={{ color: colors.textPrimary, fontSize: 26, fontWeight: "800", letterSpacing: -0.5 }}>
-                  Welcome back
+                  Welcome
                 </Text>
                 <Text style={{ color: colors.textTertiary, fontSize: 13, marginTop: 4, textAlign: "center" }}>
-                  Sign in to LCCB Connect • Founded 1919
+                  Sign in to LCCB Connect
                 </Text>
               </View>
 
@@ -181,7 +219,7 @@ export default function LoginScreen() {
                     placeholder="student@lccb.edu.ph"
                     placeholderTextColor={colors.textTertiary}
                     value={email}
-                    onChangeText={(text) => { setEmail(text); if (text) setEmailError(""); setGeneralError(""); }}
+                    onChangeText={handleEmailChange}
                     onFocus={() => setFocusedField("email")}
                     onBlur={() => setFocusedField(null)}
                     autoCapitalize="none"
@@ -218,14 +256,37 @@ export default function LoginScreen() {
                     placeholder="••••••••••••"
                     placeholderTextColor={colors.textTertiary}
                     value={password}
-                    onChangeText={(text) => { setPassword(text); if (text) setPasswordError(""); setGeneralError(""); }}
+                    onChangeText={handlePasswordChange}
                     onFocus={() => setFocusedField("password")}
                     onBlur={() => setFocusedField(null)}
                     secureTextEntry={!showPassword}
                   />
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                    {showPassword ? <EyeOff color={colors.textTertiary} size={18} /> : <Eye color={colors.textTertiary} size={18} />}
-                  </TouchableOpacity>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    onPress={() => setShowPassword(!showPassword)}
+                    onHoverIn={() => setHoveredControl("password")}
+                    onHoverOut={() => setHoveredControl(null)}
+                    onFocus={() => setFocusedControl("password")}
+                    onBlur={() => setFocusedControl(null)}
+                    style={({ pressed }) => [
+                      {
+                        width: 44,
+                        height: 44,
+                        marginRight: -9,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 22,
+                        backgroundColor: hoveredControl === "password" ? colors.hoverOverlay : "transparent",
+                        opacity: pressed ? 0.6 : 1,
+                      },
+                      focusRing(colors, focusedControl === "password"),
+                    ]}
+                  >
+                    {showPassword
+                      ? <EyeOff color={hoveredControl === "password" ? colors.primary : colors.textTertiary} size={18} />
+                      : <Eye color={hoveredControl === "password" ? colors.primary : colors.textTertiary} size={18} />}
+                  </Pressable>
                 </View>
                 {passwordError ? (
                   <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, marginLeft: 4 }}>
@@ -239,29 +300,39 @@ export default function LoginScreen() {
               </View>
 
               {/* Sign In Button */}
-              <TouchableOpacity
-                style={{ 
-                  backgroundColor: loading ? colors.surfaceSunken : colors.primary, 
-                  height: 52, 
-                  borderRadius: 14, 
-                  flexDirection: "row", 
-                  justifyContent: "center", 
-                  alignItems: "center", 
-                  shadowColor: colors.primary, 
-                  shadowOffset: { width: 0, height: 4 }, 
-                  shadowOpacity: isDark ? 0.35 : 0.22, 
-                  shadowRadius: 8, 
-                  elevation: 4 
-                }}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={loading ? "Signing in" : "Sign in"}
+                accessibilityState={{ disabled: loading, busy: loading }}
+                style={({ pressed }) => [
+                  {
+                    backgroundColor: loading ? colors.surfaceSunken : signInHovered ? colors.primaryHover : colors.primary,
+                    height: 52,
+                    borderRadius: 14,
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: signInHovered ? 6 : 4 },
+                    shadowOpacity: signInHovered ? (isDark ? 0.45 : 0.3) : (isDark ? 0.35 : 0.22),
+                    shadowRadius: signInHovered ? 12 : 8,
+                    elevation: signInHovered ? 6 : 4,
+                    transform: [{ translateY: signInHovered ? -1 : 0 }],
+                    opacity: pressed && !loading ? 0.88 : 1,
+                  },
+                  focusRing(colors, focusedControl === "signIn"),
+                ]}
                 onPress={signInWithEmail}
+                onHoverIn={() => setHoveredControl("signIn")}
+                onHoverOut={() => setHoveredControl(null)}
+                onFocus={() => setFocusedControl("signIn")}
+                onBlur={() => setFocusedControl(null)}
                 disabled={loading}
-                activeOpacity={0.85}
               >
-                <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 15, marginRight: 8 }}>
+                <Text style={{ color: loading ? colors.textSecondary : colors.textOnPrimary, fontWeight: "700", fontSize: 15 }}>
                   {loading ? "Authenticating..." : "Sign In"}
                 </Text>
-                {!loading ? <ArrowRight color="#FFFFFF" size={18} /> : null}
-              </TouchableOpacity>
+              </Pressable>
 
               {/* Divider */}
               <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 20 }}>
@@ -271,29 +342,55 @@ export default function LoginScreen() {
               </View>
 
               {/* Guest Button */}
-              <TouchableOpacity
-                style={{ 
-                  backgroundColor: colors.surfaceSunken, 
-                  height: 50, 
-                  borderRadius: 14, 
-                  justifyContent: "center", 
-                  alignItems: "center", 
-                  borderWidth: 1, 
-                  borderColor: colors.border 
-                }}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Explore as guest"
+                style={({ pressed }) => [
+                  {
+                    backgroundColor: guestHovered ? colors.primarySurface : colors.surfaceSunken,
+                    height: 50,
+                    borderRadius: 14,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: guestHovered ? colors.primary : colors.border,
+                    transform: [{ translateY: guestHovered ? -1 : 0 }],
+                    opacity: pressed ? 0.82 : 1,
+                  },
+                  focusRing(colors, focusedControl === "guest"),
+                ]}
                 onPress={signInAsGuest}
-                activeOpacity={0.7}
+                onHoverIn={() => setHoveredControl("guest")}
+                onHoverOut={() => setHoveredControl(null)}
+                onFocus={() => setFocusedControl("guest")}
+                onBlur={() => setFocusedControl(null)}
               >
-                <Text style={{ color: colors.textPrimary, fontWeight: "700", fontSize: 14 }}>Explore as Guest</Text>
-              </TouchableOpacity>
+                <Text style={{ color: guestHovered ? colors.primary : colors.textPrimary, fontWeight: "700", fontSize: 14 }}>Explore as Guest</Text>
+              </Pressable>
 
               {/* Footer Link */}
               <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 22 }}>
-                <Text style={{ color: colors.textTertiary, fontWeight: "500", fontSize: 13 }}>Don&apos;t have an account? </Text>
+                <Text style={{ color: colors.textTertiary, fontWeight: "500", fontSize: 13 }}>{"Don't have an account? "}</Text>
                 <Link href="/(auth)/register" asChild>
-                  <TouchableOpacity>
-                    <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 13 }}>Create one</Text>
-                  </TouchableOpacity>
+                  <Pressable
+                    accessibilityRole="link"
+                    accessibilityLabel="Create an account"
+                    onHoverIn={() => setHoveredControl("create")}
+                    onHoverOut={() => setHoveredControl(null)}
+                    onFocus={() => setFocusedControl("create")}
+                    onBlur={() => setFocusedControl(null)}
+                    style={({ pressed }) => [
+                      { borderRadius: 4, opacity: pressed ? 0.7 : 1 },
+                      focusRing(colors, focusedControl === "create"),
+                    ]}
+                  >
+                    <Text style={{
+                      color: createHovered ? colors.primaryHover : colors.primary,
+                      fontWeight: "700",
+                      fontSize: 13,
+                      textDecorationLine: createHovered ? "underline" : "none",
+                    }}>Create one</Text>
+                  </Pressable>
                 </Link>
               </View>
 
