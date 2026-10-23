@@ -7,10 +7,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { RefreshCw, ScrollText, Search } from "lucide-react-native";
+import { ScrollText, Search } from "lucide-react-native";
 import { listAdminAudit, type AuditEntry } from "../../src/lib/adminApi";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { ThemeTokens } from "../../src/lib/tokens";
+import PageHeader from "../../src/components/admin/PageHeader";
 
 const ACTION_OPTIONS = [
   { value: "", label: "All actions" },
@@ -155,34 +156,13 @@ export default function AdminAuditScreen() {
       contentContainerStyle={{ padding: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ marginBottom: 24, flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
-        <View>
-          <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
-            Audit log
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 14, color: colors.textSecondary }}>
-            The append-only record of governance actions. Superadmin only.
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => void load(null, false)}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.surface,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-          }}
-        >
-          <RefreshCw size={15} color={colors.textSecondary} />
-          <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
-            Refresh
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <PageHeader
+        eyebrow="System / record"
+        title="Audit log"
+        description="The append-only record of governance actions. Superadmin only."
+        onRefresh={() => void load(null, false)}
+        refreshing={loading}
+      />
 
       <View
         style={{
