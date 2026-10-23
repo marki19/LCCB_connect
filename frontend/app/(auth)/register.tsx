@@ -1,25 +1,29 @@
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions, ScrollView, Image } from "react-native";
+import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, Image, Pressable } from "react-native";
 import { useState, useEffect } from "react";
 import { supabase } from "../../src/lib/supabase";
 import { Link, useRouter } from "expo-router";
-import { Eye, EyeOff, AlertCircle, ArrowRight, Sun, Moon } from "lucide-react-native";
+import { Eye, EyeOff, AlertCircle, Sun, Moon, Monitor } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiFetch } from "../../src/lib/api";
 import SelectField from "../../src/components/SelectField";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { fetchDepartments, fetchCourses } from "../../src/lib/catalog";
+import { focusRing } from "../../src/lib/tokens";
 import type { Department, Course } from "../../src/types";
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors, isDark, preference, cycleTheme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isWeb, setIsWeb] = useState(false);
   const [focusedField, setFocusedField] = useState<"name" | "email" | "password" | null>(null);
+  const [hoveredControl, setHoveredControl] = useState<string | null>(null);
+  const [focusedControl, setFocusedControl] = useState<string | null>(null);
 
   // Validation States
   const [emailError, setEmailError] = useState("");
@@ -39,12 +43,31 @@ export default function RegisterScreen() {
   const isValidEmailDomain = email.trim().toLowerCase().endsWith("@lccb.edu.ph");
   const showEmailFormatError = email.length > 0 && !isValidEmailDomain;
 
-  useEffect(() => {
-    const handleResize = () => setIsWeb(Dimensions.get("window").width > 768);
-    handleResize();
-    const subscription = Dimensions.addEventListener("change", handleResize);
-    return () => subscription?.remove();
-  }, []);
+  const themeLabel = preference === "system" ? "System" : preference === "light" ? "Light" : "Dark";
+  const nextTheme = preference === "light" ? "dark" : preference === "dark" ? "system" : "light";
+  const nextThemeLabel = nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1);
+  const ThemeIcon = preference === "system" ? Monitor : preference === "light" ? Sun : Moon;
+  const signUpDisabled = loading || showEmailFormatError;
+  const signUpHovered = hoveredControl === "signUp" && !signUpDisabled;
+  const signInHovered = hoveredControl === "signIn";
+
+  function handleEmailChange(value: string) {
+    setEmail(value);
+    if (value) setEmailError("");
+    setGeneralError("");
+  }
+
+  function handlePasswordChange(value: string) {
+    setPassword(value);
+    if (value) setPasswordError("");
+    setGeneralError("");
+  }
+
+  function handleNameChange(value: string) {
+    setFullName(value);
+    if (value) setNameError("");
+    setGeneralError("");
+  }
 
   useEffect(() => {
     fetchDepartments()
@@ -67,14 +90,6 @@ export default function RegisterScreen() {
       active = false;
     };
   }, [departmentId]);
-
-  // Clear errors when user types
-  useEffect(() => {
-    if (email) setEmailError("");
-    if (password) setPasswordError("");
-    if (fullName) setNameError("");
-    setGeneralError("");
-  }, [email, password, fullName]);
 
   async function signUpWithEmail() {
     let hasError = false;
@@ -154,36 +169,58 @@ export default function RegisterScreen() {
         colors={isDark ? ["#0B1220", "#0E182A", "#080E18"] : ["#F0F5FF", "#E8EFFF", "#F8FAFF"]} 
         style={{ flex: 1 }}
       >
-        {/* Top bar with Theme Switcher */}
-        <View style={{ width: "100%", maxWidth: 470, alignSelf: "center", flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: 24, paddingTop: 16 }}>
-          <TouchableOpacity
-            onPress={() => void toggleTheme()}
-            activeOpacity={0.7}
-            accessibilityLabel={isDark ? "Switch to light theme" : "Switch to dark theme"}
-            style={{
+        {/* Viewport-level theme control, independent of the centered form column */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Theme: ${themeLabel}. Switch to ${nextThemeLabel}.`}
+          accessibilityHint="Cycles between system, light, and dark themes"
+          onPress={() => void cycleTheme()}
+          onFocus={() => setFocusedControl("theme")}
+          onBlur={() => setFocusedControl(null)}
+          onHoverIn={() => setHoveredControl("theme")}
+          onHoverOut={() => setHoveredControl(null)}
+          style={({ pressed }) => [
+            {
+              position: "absolute",
+              top: insets.top + 16,
+              right: insets.right + 16,
+              zIndex: 10,
+              minWidth: 44,
+              minHeight: 44,
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: colors.surface,
-              paddingHorizontal: 12,
-              paddingVertical: 7,
-              borderRadius: 20,
+              justifyContent: "center",
+              paddingHorizontal: 14,
+              borderRadius: 22,
               borderWidth: 1,
               borderColor: colors.border,
+              backgroundColor: hoveredControl === "theme" ? colors.surfaceSunken : colors.surface,
               shadowColor: colors.shadow,
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: isDark ? 0.3 : 0.05,
-              shadowRadius: 3,
-              elevation: 2,
-            }}
-          >
-            {isDark ? <Sun size={15} color={colors.primary} /> : <Moon size={15} color={colors.textSecondary} />}
-            <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary, marginLeft: 6 }}>
-              {isDark ? "Light Mode" : "Dark Mode"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: isDark ? 0.35 : 0.08,
+              shadowRadius: 6,
+              elevation: 3,
+              opacity: pressed ? 0.75 : 1,
+            },
+            focusRing(colors, focusedControl === "theme"),
+          ]}
+        >
+          <ThemeIcon size={16} color={colors.primary} />
+          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginLeft: 6 }}>
+            {themeLabel}
+          </Text>
+        </Pressable>
 
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", alignItems: "center", paddingVertical: 16 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            paddingTop: insets.top + 76,
+            paddingBottom: insets.bottom + 24,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
           
           <View style={{ width: "100%", maxWidth: 470, padding: 24 }}>
             <View style={{ backgroundColor: colors.surface, borderRadius: 28, padding: 32, borderWidth: 1, borderColor: colors.border, shadowColor: colors.shadow, shadowOffset: { width: 0, height: 12 }, shadowOpacity: isDark ? 0.45 : 0.08, shadowRadius: 24, elevation: 8 }}>
@@ -270,7 +307,7 @@ export default function RegisterScreen() {
                     placeholder="Juan Dela Cruz"
                     placeholderTextColor={colors.textTertiary}
                     value={fullName}
-                    onChangeText={setFullName}
+                    onChangeText={handleNameChange}
                     onFocus={() => setFocusedField("name")}
                     onBlur={() => setFocusedField(null)}
                     autoCapitalize="words"
@@ -352,7 +389,7 @@ export default function RegisterScreen() {
                     placeholder="student@lccb.edu.ph"
                     placeholderTextColor={colors.textTertiary}
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={handleEmailChange}
                     onFocus={() => setFocusedField("email")}
                     onBlur={() => setFocusedField(null)}
                     autoCapitalize="none"
@@ -389,14 +426,37 @@ export default function RegisterScreen() {
                     placeholder="••••••••••••"
                     placeholderTextColor={colors.textTertiary}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={handlePasswordChange}
                     onFocus={() => setFocusedField("password")}
                     onBlur={() => setFocusedField(null)}
                     secureTextEntry={!showPassword}
                   />
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                    {showPassword ? <EyeOff color={colors.textTertiary} size={18} /> : <Eye color={colors.textTertiary} size={18} />}
-                  </TouchableOpacity>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    onPress={() => setShowPassword(!showPassword)}
+                    onHoverIn={() => setHoveredControl("password")}
+                    onHoverOut={() => setHoveredControl(null)}
+                    onFocus={() => setFocusedControl("password")}
+                    onBlur={() => setFocusedControl(null)}
+                    style={({ pressed }) => [
+                      {
+                        width: 44,
+                        height: 44,
+                        marginRight: -9,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 22,
+                        backgroundColor: hoveredControl === "password" ? colors.hoverOverlay : "transparent",
+                        opacity: pressed ? 0.6 : 1,
+                      },
+                      focusRing(colors, focusedControl === "password"),
+                    ]}
+                  >
+                    {showPassword
+                      ? <EyeOff color={hoveredControl === "password" ? colors.primary : colors.textTertiary} size={18} />
+                      : <Eye color={hoveredControl === "password" ? colors.primary : colors.textTertiary} size={18} />}
+                  </Pressable>
                 </View>
                 {passwordError ? (
                   <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, marginLeft: 4 }}>
@@ -407,37 +467,77 @@ export default function RegisterScreen() {
               </View>
 
               {/* Sign Up Button */}
-              <TouchableOpacity 
-                style={{ 
-                  backgroundColor: (loading || showEmailFormatError) ? colors.surfaceSunken : colors.primary, 
-                  height: 52, 
-                  borderRadius: 14, 
-                  flexDirection: "row", 
-                  justifyContent: "center", 
-                  alignItems: "center", 
-                  shadowColor: colors.primary, 
-                  shadowOffset: { width: 0, height: 4 }, 
-                  shadowOpacity: isDark ? 0.35 : 0.22, 
-                  shadowRadius: 8, 
-                  elevation: 4 
-                }}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={loading ? "Creating account" : "Sign up"}
+                accessibilityState={{ disabled: signUpDisabled, busy: loading }}
+                style={({ pressed }) => [
+                  {
+                    backgroundColor: signUpDisabled
+                      ? colors.surfaceSunken
+                      : signUpHovered
+                        ? colors.primaryHover
+                        : colors.primary,
+                    height: 52,
+                    borderRadius: 14,
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: signUpHovered ? 6 : 4 },
+                    shadowOpacity: signUpHovered ? (isDark ? 0.45 : 0.3) : (isDark ? 0.35 : 0.22),
+                    shadowRadius: signUpHovered ? 12 : 8,
+                    elevation: signUpHovered ? 6 : 4,
+                    transform: [{ translateY: signUpHovered ? -1 : 0 }],
+                    opacity: pressed && !signUpDisabled ? 0.88 : 1,
+                  },
+                  focusRing(colors, focusedControl === "signUp"),
+                ]}
                 onPress={signUpWithEmail}
-                disabled={loading || showEmailFormatError}
-                activeOpacity={0.85}
+                onHoverIn={() => setHoveredControl("signUp")}
+                onHoverOut={() => setHoveredControl(null)}
+                onFocus={() => setFocusedControl("signUp")}
+                onBlur={() => setFocusedControl(null)}
+                disabled={signUpDisabled}
               >
-                <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 15, marginRight: 8 }}>
+                <Text
+                  style={{
+                    color: signUpDisabled ? colors.textSecondary : colors.textOnPrimary,
+                    fontWeight: "700",
+                    fontSize: 15,
+                  }}
+                >
                   {loading ? "Creating account..." : "Sign Up"}
                 </Text>
-                {!loading ? <ArrowRight color="#FFFFFF" size={18} /> : null}
-              </TouchableOpacity>
+              </Pressable>
 
               {/* Footer Link */}
               <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: 22 }}>
                 <Text style={{ color: colors.textTertiary, fontWeight: "500", fontSize: 13 }}>Already have an account? </Text>
                 <Link href="/(auth)/login" asChild>
-                  <TouchableOpacity>
-                    <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 13 }}>Sign in</Text>
-                  </TouchableOpacity>
+                  <Pressable
+                    accessibilityRole="link"
+                    accessibilityLabel="Sign in to your account"
+                    onHoverIn={() => setHoveredControl("signIn")}
+                    onHoverOut={() => setHoveredControl(null)}
+                    onFocus={() => setFocusedControl("signIn")}
+                    onBlur={() => setFocusedControl(null)}
+                    style={({ pressed }) => [
+                      { borderRadius: 4, opacity: pressed ? 0.7 : 1 },
+                      focusRing(colors, focusedControl === "signIn"),
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: signInHovered ? colors.primaryHover : colors.primary,
+                        fontWeight: "700",
+                        fontSize: 13,
+                        textDecorationLine: signInHovered ? "underline" : "none",
+                      }}
+                    >
+                      Sign in
+                    </Text>
+                  </Pressable>
                 </Link>
               </View>
 
