@@ -576,6 +576,21 @@ describe("file uploads use storage object keys", () => {
     assert.deepEqual(m.createThesis.calls.at(-1)[0].pdf_url, "u1/2.pdf");
   });
 
+  it("returns the created image as a public URL", async () => {
+    m.createPost.setImpl(async () => ({
+      id: "p2",
+      image_url: "posts/a/b.jpg",
+    }));
+
+    const res = await request(app)
+      .post("/api/posts")
+      .set(AUTH)
+      .send({ content: "x", type: "image", image_url: "posts/a/b.jpg" });
+
+    assert.equal(res.status, 201);
+    assert.deepEqual(res.body.image_url, `${STORAGE_URL}/assets/posts/a/b.jpg`);
+  });
+
   it("rejects a client-supplied department on a thesis (server-derived)", async () => {
     const res = await request(app).post("/api/theses").set(AUTH).send({
       title: "t",

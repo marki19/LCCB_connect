@@ -6,6 +6,7 @@ const rateLimit = require("express-rate-limit");
 // Read the middleware off the module object (rather than destructuring) so the
 // test suite can install spies before this app is built.
 const auth = require("./middleware/auth");
+const attachStorageUrls = require("./middleware/storageUrls");
 
 // Route modules
 const userRouter = require("./routes/userRouter");
@@ -83,6 +84,10 @@ app.disable("x-powered-by");
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "1mb" })); // bound request body size
+
+// File columns are stored as bucket-relative keys; expand them to public URLs
+// just before each response is serialized.
+app.use(attachStorageUrls);
 
 // Request log: method, path, status, duration. Never logs headers or bodies.
 // Silenced under NODE_ENV=test so test output stays readable.
