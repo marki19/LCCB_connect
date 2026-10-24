@@ -26,25 +26,28 @@ const HttpUrl = z
   }, "Must be a valid http(s) URL");
 
 /**
- * A URL that points inside THIS project's Supabase Storage. File columns
- * (`image_url`, `avatar_url`, `pdf_url`) must not accept arbitrary external
- * URLs — otherwise a caller can point them at any host (and a later consumer
- * might fetch it, turning that into SSRF).
+ * A bucket-relative storage object key, for example `posts/1/2.jpg`.
+ *
+ * The API stores *only* the object key, never the full public URL, so the
+ * database can be rendered with the names the files actually have. Unsafe
+ * paths and arbitrary external URLs are rejected.
  */
-const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
-const StorageUrl = z
+const StorageKey = z
   .string()
   .trim()
-  .max(2048)
+  .max(512)
   .refine(
     (value) =>
-      SUPABASE_URL !== "" && value.startsWith(`${SUPABASE_URL}/storage/v1/object/`),
-    "Must be a URL in this project's storage"
+      /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+$/.test(value) &&
+      !value.includes("..") &&
+      !/^https?:\/\//i.test(value) &&
+      !/^file:/i.test(value),
+    "Must be a storage object key"
   );
 
 const optionalText = (max) => z.string().trim().max(max).nullable().optional();
 const optionalUrl = () => HttpUrl.nullable().optional();
-const optionalStorageUrl = () => StorageUrl.nullable().optional();
+const optionalStorageUrl = () => StorageKey.nullable().optional();
 const stringArray = (maxItems, maxLen) =>
   z.array(z.string().trim().max(maxLen)).max(maxItems).nullable().optional();
 
@@ -96,7 +99,7 @@ const thesisFields = {
   title: z.string().trim().min(1).max(300),
   abstract: z.string().trim().min(1).max(10000),
   category: z.string().trim().min(1).max(100),
-  pdf_url: StorageUrl,
+  pdf_url: StorageKey,
 };
 
 const createThesisSchema = z.object(thesisFields).strict();

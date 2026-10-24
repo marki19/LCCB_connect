@@ -513,8 +513,8 @@ describe("moderation is confined to a department admin's own department", () => 
   });
 });
 
-describe("file URLs must live in this project's storage", () => {
-  it("rejects an external image_url", async () => {
+describe("file uploads use storage object keys", () => {
+  it("rejects an external URL on a post image", async () => {
     const res = await request(app)
       .post("/api/posts")
       .set(AUTH)
@@ -524,18 +524,33 @@ describe("file URLs must live in this project's storage", () => {
     assert.equal(m.createPost.calls.length, 0);
   });
 
-  it("accepts a storage-hosted image_url", async () => {
-    m.createPost.setImpl(async () => ({ id: "p2" }));
+  it("rejects a full storage URL on a post image (keys only)", async () => {
+    const res = await request(app)
+      .post("/api/posts")
+      .set(AUTH)
+      .send({
+        content: "x",
+        type: "image",
+        image_url: `${STORAGE_URL}/assets/posts/a.jpg`,
+      });
+
+    assert.equal(res.status, 400);
+    assert.equal(m.createPost.calls.length, 0);
+  });
+
+  it("accepts a bucket-relative storage key on a post image", async () => {
+    m.createPost.setImpl(async (data) => ({ id: "p2" }));
 
     const res = await request(app)
       .post("/api/posts")
       .set(AUTH)
-      .send({ content: "x", type: "image", image_url: `${STORAGE_URL}/assets/posts/a.jpg` });
+      .send({ content: "x", type: "image", image_url: "posts/a/b.jpg" });
 
     assert.equal(res.status, 201);
+    assert.deepEqual(m.createPost.calls.at(-1)[0].image_url, "posts/a/b.jpg");
   });
 
-  it("rejects an external pdf_url on a thesis", async () => {
+  it("rejects an external URL on a thesis pdf", async () => {
     const res = await request(app).post("/api/theses").set(AUTH).send({
       title: "t",
       abstract: "a",
@@ -547,13 +562,27 @@ describe("file URLs must live in this project's storage", () => {
     assert.equal(m.createThesis.calls.length, 0);
   });
 
+  it("accepts a bucket-relative storage key on a thesis pdf", async () => {
+    m.createThesis.setImpl(async (data) => ({ id: "t2" }));
+
+    const res = await request(app).post("/api/theses").set(AUTH).send({
+      title: "t",
+      abstract: "a",
+      category: "c",
+      pdf_url: "u1/2.pdf",
+    });
+
+    assert.equal(res.status, 201);
+    assert.deepEqual(m.createThesis.calls.at(-1)[0].pdf_url, "u1/2.pdf");
+  });
+
   it("rejects a client-supplied department on a thesis (server-derived)", async () => {
     const res = await request(app).post("/api/theses").set(AUTH).send({
       title: "t",
       abstract: "a",
       department: "somewhere else",
       category: "c",
-      pdf_url: `${STORAGE_URL}/assets/theses/a.pdf`,
+      pdf_url: "u1/2.pdf",
     });
 
     assert.equal(res.status, 400);
