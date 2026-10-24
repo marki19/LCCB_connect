@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
-import { pickImage, uploadToStorage } from "../src/lib/upload";
+import { pickImage, uploadToStorage, MAX_UPLOAD_BYTES } from "../src/lib/upload";
 import { Camera, X, Check } from "lucide-react-native";
 import { apiFetch } from "../src/lib/api";
 import { safeBack } from "../src/lib/navigation";
@@ -35,16 +35,13 @@ export default function EditProfileScreen() {
     
     setSaving(true);
     try {
-      let finalAvatarUrl = profile?.avatar_url;
-
       // If the user picked a new image (and it's a local file URI, not a remote http URL)
+      let finalAvatarKey: string | null = null;
       if (avatarUri && !avatarUri.startsWith('http')) {
         setUploadingImage(true);
         const path = `avatars/${session.user.id}-${Date.now()}.jpg`;
-        const uploadedUrl = await uploadToStorage(avatarUri, 'assets', path, 'image/jpeg');
-        if (uploadedUrl) {
-          finalAvatarUrl = uploadedUrl;
-        }
+        const uploaded = await uploadToStorage(avatarUri, 'assets', path, 'image/jpeg', MAX_UPLOAD_BYTES.avatar);
+        if (uploaded) finalAvatarKey = uploaded.key;
         setUploadingImage(false);
       }
 
@@ -55,7 +52,9 @@ export default function EditProfileScreen() {
           bio: bio.trim(),
           year_level: yearLevel.trim(),
           skills: skills,
-          avatar_url: finalAvatarUrl,
+          // Only sent when a new avatar was uploaded: the server stores object
+          // keys, and the existing (URL-rendered) value must not be echoed back.
+          ...(finalAvatarKey ? { avatar_url: finalAvatarKey } : {}),
         }),
       });
 

@@ -7,7 +7,7 @@ import Animated, { FadeIn, FadeInRight, FadeOutLeft, FadeInDown } from "react-na
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
-import { uploadToStorage, pickImage } from "../src/lib/upload";
+import { uploadToStorage, pickImage, MAX_UPLOAD_BYTES } from "../src/lib/upload";
 import { apiFetch, updatePost } from "../src/lib/api";
 import { fetchLinkPreview, LinkPreviewData } from "../src/lib/linkPreview";
 import { safeBack } from "../src/lib/navigation";
@@ -123,10 +123,11 @@ export default function CreatePostModal() {
     setIsPublishing(true);
 
     try {
-      let finalImageUrl: string | null = null;
+      let finalImageKey: string | null = null;
       if (imageUri) {
         const path = `posts/${profile.id}-${Date.now()}.jpg`;
-        finalImageUrl = await uploadToStorage(imageUri, 'assets', path, 'image/jpeg');
+        const uploaded = await uploadToStorage(imageUri, 'assets', path, 'image/jpeg', MAX_UPLOAD_BYTES.image);
+        if (uploaded) finalImageKey = uploaded.key;
       }
 
       let finalPreviewMetadata = previewData;
@@ -149,7 +150,7 @@ export default function CreatePostModal() {
           technologies: techArray,
           github_url: githubUrl || null,
           preview_metadata: finalPreviewMetadata || null,
-          ...(finalImageUrl ? { image_url: finalImageUrl } : {}),
+          ...(finalImageKey ? { image_url: finalImageKey } : {}),
         });
       } else {
         // Create mode — POST /posts
@@ -161,7 +162,7 @@ export default function CreatePostModal() {
             title: title || (finalPreviewMetadata?.title ?? null),
             technologies: techArray,
             github_url: githubUrl || null,
-            image_url: finalImageUrl,
+            image_url: finalImageKey,
             preview_metadata: finalPreviewMetadata || null,
           }),
         });

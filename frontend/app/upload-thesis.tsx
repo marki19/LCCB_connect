@@ -8,7 +8,7 @@ import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
-import { uploadToStorage } from "../src/lib/upload";
+import { uploadToStorage, MAX_UPLOAD_BYTES } from "../src/lib/upload";
 import { apiFetch, updateThesis } from "../src/lib/api";
 import { safeBack } from "../src/lib/navigation";
 
@@ -86,12 +86,13 @@ export default function UploadThesisScreen() {
     try {
       // Only upload when a file was picked; in edit mode an untouched picker
       // means "keep the stored manuscript".
-      let pdfUrl: string | null = null;
+      let pdfKey: string | null = null;
       if (pdfFile) {
         const ext = pdfFile.name.split('.').pop() || "pdf";
         const filePath = `${profile.id}/${Date.now()}.${ext}`;
-        pdfUrl = await uploadToStorage(pdfFile.uri, 'theses', filePath, pdfFile.mimeType || 'application/pdf');
-        if (!pdfUrl) throw new Error("Failed to upload the file to Supabase Storage.");
+        const uploaded = await uploadToStorage(pdfFile.uri, 'theses', filePath, pdfFile.mimeType || 'application/pdf', MAX_UPLOAD_BYTES.pdf);
+        if (!uploaded) throw new Error("Failed to upload the file to Supabase Storage.");
+        pdfKey = uploaded.key;
       }
 
       if (isEditing) {
@@ -100,7 +101,7 @@ export default function UploadThesisScreen() {
           title,
           abstract,
           category,
-          ...(pdfUrl ? { pdf_url: pdfUrl } : {}),
+          ...(pdfKey ? { pdf_url: pdfKey } : {}),
         });
       } else {
         const res = await apiFetch(`/theses`, {
@@ -109,7 +110,7 @@ export default function UploadThesisScreen() {
             title,
             abstract,
             category,
-            pdf_url: pdfUrl,
+            pdf_url: pdfKey,
           }),
         });
 
