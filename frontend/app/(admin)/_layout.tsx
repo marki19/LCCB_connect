@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Animated,
+  Easing,
   View,
   Text,
   Pressable,
@@ -23,6 +25,7 @@ import {
   ShieldCheck,
   Sun,
   Moon,
+  Monitor,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react-native";
@@ -38,6 +41,8 @@ import {
 import { isAdminRole, isSuperAdminRole } from "../../src/lib/roles";
 import { setAdminAppPreview } from "../../src/lib/panelMode";
 import StatusBadge from "../../src/components/admin/StatusBadge";
+
+const SIDEBAR_ANIMATION_MS = 240;
 
 type NavEntry = {
   label: string;
@@ -189,11 +194,37 @@ export default function AdminLayout() {
   const pathname = usePathname();
   const { width } = useWindowDimensions();
   const { signOut, profile } = useAuth();
-  const { colors, isDark, preference, cycleTheme } = useTheme();
+  const { colors, preference, cycleTheme } = useTheme();
   const isDesktop = Platform.OS === "web" && width >= 768;
   const adminUser = isAdminRole(profile?.role);
   const [collapseOverride, setCollapseOverride] = useState<boolean | null>(null);
   const collapsed = collapseOverride ?? width < 1180;
+  const sidebarTargetWidth = collapsed ? 84 : 272;
+  const [sidebarWidthAnim] = useState(() => new Animated.Value(sidebarTargetWidth));
+  const [contentCollapsed, setContentCollapsed] = useState(collapsed);
+  const ThemePreferenceIcon =
+    preference === "system" ? Monitor : preference === "light" ? Sun : Moon;
+
+  useEffect(() => {
+    const animation = Animated.timing(sidebarWidthAnim, {
+      toValue: sidebarTargetWidth,
+      duration: SIDEBAR_ANIMATION_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    animation.start(({ finished }) => {
+      if (finished) setContentCollapsed(collapsed);
+    });
+    return () => animation.stop();
+  }, [collapsed, sidebarTargetWidth, sidebarWidthAnim]);
+
+  // Keep labels and controls in their expanded layout while the rail slides
+  // closed, then swap to the compact icon-only layout once it has landed.
+  useEffect(() => {
+    if (collapsed) return;
+    const frame = requestAnimationFrame(() => setContentCollapsed(false));
+    return () => cancelAnimationFrame(frame);
+  }, [collapsed]);
 
   if (!isDesktop) {
     return (
@@ -372,22 +403,24 @@ export default function AdminLayout() {
     system.unshift({ label: "Audit", path: "/(admin)/audit", icon: ScrollText });
   }
 
-  const sidebarWidth = collapsed ? 84 : 272;
-
   return (
     <View style={{ flex: 1, flexDirection: "row", backgroundColor: colors.surfacePage }}>
-      <LinearGradient
-        colors={[colors.navBg, colors.navBgAlt]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      <Animated.View
+        testID="admin-sidebar"
         style={{
           height: "100%",
-          width: sidebarWidth,
+          width: sidebarWidthAnim,
           borderRightWidth: 1,
           borderRightColor: colors.navLine,
           overflow: "hidden",
         }}
       >
+        <LinearGradient
+          colors={[colors.navBg, colors.navBgAlt]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1 }}
+        >
         <View
           pointerEvents="none"
           style={{
@@ -420,7 +453,7 @@ export default function AdminLayout() {
           contentContainerStyle={{
             flexGrow: 1,
             justifyContent: "space-between",
-            paddingHorizontal: collapsed ? SPACE.x2 : SPACE.x4,
+            paddingHorizontal: contentCollapsed ? SPACE.x2 : SPACE.x4,
             paddingTop: SPACE.x5,
             paddingBottom: SPACE.x4,
           }}
@@ -429,11 +462,11 @@ export default function AdminLayout() {
           <View>
             <View
               style={{
-                flexDirection: collapsed ? "column" : "row",
+                flexDirection: contentCollapsed ? "column" : "row",
                 alignItems: "center",
-                justifyContent: collapsed ? "center" : "flex-start",
+                justifyContent: contentCollapsed ? "center" : "flex-start",
                 gap: SPACE.x3,
-                paddingHorizontal: collapsed ? 0 : SPACE.x1,
+                paddingHorizontal: contentCollapsed ? 0 : SPACE.x1,
                 marginBottom: SPACE.x6,
               }}
             >
@@ -455,7 +488,7 @@ export default function AdminLayout() {
                   resizeMode="contain"
                 />
               </View>
-              {!collapsed ? (
+              {!contentCollapsed ? (
                 <View style={{ flex: 1 }}>
                   <Text
                     numberOfLines={1}
@@ -473,7 +506,7 @@ export default function AdminLayout() {
               ) : null}
             </View>
 
-            {!collapsed ? (
+            {!contentCollapsed ? (
               <Text
                 style={{
                   ...TYPE.micro,
@@ -492,7 +525,7 @@ export default function AdminLayout() {
                 icon={item.icon}
                 label={item.label}
                 active={isActive(item.path)}
-                collapsed={collapsed}
+                collapsed={contentCollapsed}
                 onPress={() => router.push(item.path as any)}
                 colors={colors}
               />
@@ -503,10 +536,10 @@ export default function AdminLayout() {
                 height: 1,
                 backgroundColor: colors.navLine,
                 marginVertical: SPACE.x3,
-                marginHorizontal: collapsed ? SPACE.x2 : 0,
+                marginHorizontal: contentCollapsed ? SPACE.x2 : 0,
               }}
             />
-            {!collapsed ? (
+            {!contentCollapsed ? (
               <Text
                 style={{
                   ...TYPE.micro,
@@ -525,7 +558,7 @@ export default function AdminLayout() {
                 icon={item.icon}
                 label={item.label}
                 active={isActive(item.path)}
-                collapsed={collapsed}
+                collapsed={contentCollapsed}
                 onPress={() => router.push(item.path as any)}
                 colors={colors}
               />
@@ -541,7 +574,7 @@ export default function AdminLayout() {
                 marginBottom: SPACE.x2,
               }}
             >
-              {!collapsed ? (
+              {!contentCollapsed ? (
                 <View
                   style={{
                     flexDirection: "row",
@@ -614,10 +647,10 @@ export default function AdminLayout() {
               )}
 
               <UtilityRow
-                icon={isDark ? Moon : Sun}
+                icon={ThemePreferenceIcon}
                 label={`Theme: ${preference.charAt(0).toUpperCase() + preference.slice(1)}`}
                 onPress={() => void cycleTheme()}
-                collapsed={collapsed}
+                collapsed={contentCollapsed}
                 colors={colors}
                 iconColor={colors.navAccent}
               />
@@ -628,14 +661,14 @@ export default function AdminLayout() {
                   setAdminAppPreview(true);
                   router.push("/(tabs)/");
                 }}
-                collapsed={collapsed}
+                collapsed={contentCollapsed}
                 colors={colors}
               />
               <UtilityRow
                 icon={LogOut}
                 label="Sign Out"
                 onPress={() => void signOut()}
-                collapsed={collapsed}
+                collapsed={contentCollapsed}
                 colors={colors}
                 danger
               />
@@ -643,13 +676,14 @@ export default function AdminLayout() {
                 icon={collapsed ? PanelLeftOpen : PanelLeftClose}
                 label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 onPress={() => setCollapseOverride(!collapsed)}
-                collapsed={collapsed}
+                collapsed={contentCollapsed}
                 colors={colors}
               />
             </View>
           </View>
         </ScrollView>
-      </LinearGradient>
+        </LinearGradient>
+      </Animated.View>
 
       <View style={{ flex: 1, overflow: "hidden", backgroundColor: colors.surfacePage }}>
         <Stack
