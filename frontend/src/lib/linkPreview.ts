@@ -1,4 +1,4 @@
-import { apiFetch } from "./api";
+import { apiJson, ApiError } from "./api";
 
 export type LinkPreviewData = {
   title: string | null;
@@ -14,20 +14,17 @@ export type LinkPreviewData = {
  */
 export async function fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
   try {
-    const res = await apiFetch("/posts/preview", {
+    const data = await apiJson<LinkPreviewData>("/posts/preview", {
       method: "POST",
       body: JSON.stringify({ url }),
     });
-
-    if (!res.ok) {
-      console.warn("Backend link preview returned status", res.status);
-      return null;
-    }
-
-    const data = await res.json();
-    return data as LinkPreviewData;
+    return data;
   } catch (err) {
-    console.error("Failed to fetch link preview from backend", err);
+    if (err instanceof ApiError) {
+      console.warn("Backend link preview returned status", err.status);
+    } else {
+      console.error("Failed to fetch link preview from backend", err);
+    }
     return null;
   }
 }

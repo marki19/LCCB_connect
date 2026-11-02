@@ -1,6 +1,6 @@
 import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator, Alert } from "react-native";
 import { useState } from "react";
-import { useRouter } from "expo-router";
+/* router unused - back navigation happens via safeBack() */
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { pickImage, uploadToStorage, MAX_UPLOAD_BYTES } from "../src/lib/upload";
@@ -9,9 +9,8 @@ import { apiFetch } from "../src/lib/api";
 import { safeBack } from "../src/lib/navigation";
 
 export default function EditProfileScreen() {
-  const router = useRouter();
   const { profile, session } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   
   const [fullName, setFullName] = useState(profile?.full_name || "");
   const [bio, setBio] = useState(profile?.bio || "");

@@ -10,7 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { Search, MessageSquare, UserPlus, Check, X } from "lucide-react-native";
-import { apiFetch } from "../lib/api";
+import { apiJson } from "../lib/api";
 import { openConversation, sendFriendRequest } from "../lib/messages";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
@@ -62,10 +62,9 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
       try {
         const params = ["limit=100"];
         if (debouncedQuery) params.push(`q=${encodeURIComponent(debouncedQuery)}`);
-        const res = await apiFetch(`/public/peers?${params.join("&")}`);
-        const data: Peer[] = res.ok ? await res.json() : [];
+        const data: Peer[] = await apiJson<Peer[]>(`/public/peers?${params.join("&")}`);
         if (cancelled) return;
-        setPeers(Array.isArray(data) ? data.filter((p) => p.id !== profile?.id) : []);
+        setPeers(data.filter((p) => p.id !== profile?.id));
       } catch {
         // Leave the list empty; the user can reopen.
       } finally {

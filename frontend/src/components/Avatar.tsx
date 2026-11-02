@@ -1,6 +1,8 @@
 import { View, Text } from "react-native";
 import type { PresenceMode } from "../types";
 
+import { useTheme } from "../contexts/ThemeContext";
+
 /**
  * Shared avatar + presence dot. `mode === null` means "not tracked" (offline or
  * invisible), so no dot renders.
@@ -39,8 +41,6 @@ type Props = {
   mode?: PresenceMode | null;
   showPresence?: boolean;
 };
-
-import { useTheme } from "../contexts/ThemeContext";
 
 export default function Avatar({ name, size = 48, mode = null, showPresence = false }: Props) {
   const { colors } = useTheme();

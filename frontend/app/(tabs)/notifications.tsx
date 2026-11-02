@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   ShieldCheck,
   Bell,
-  Sparkles,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/contexts/ThemeContext";

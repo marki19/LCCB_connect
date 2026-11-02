@@ -1,6 +1,6 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
-import { Platform, useWindowDimensions } from "react-native";
+import { Platform, useWindowDimensions , LogBox } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
@@ -23,13 +23,13 @@ import {
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
 import "../global.css";
 
+
+
 // Disable strict Reanimated warnings for layout animations
 configureReanimatedLogger({
   level: ReanimatedLogLevel.warn,
   strict: false,
 });
-
-import { LogBox } from "react-native";
 LogBox.ignoreLogs([
   "Response.blob() is using React Native's Blob",
   "The action 'GO_BACK' was not handled by any navigator",

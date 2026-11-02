@@ -142,7 +142,15 @@ function queryString(params: Record<string, string | number | null | undefined>)
   return pairs.length ? `?${pairs.join("&")}` : "";
 }
 
-export function getAdminOverview() {
+const validateNonEmptyReason = (reason: string, label: string): string => {
+  const trimmed = reason.trim();
+  if (!trimmed) {
+    throw new Error(`${label} requires a non-empty reason`);
+  }
+  return trimmed;
+};
+
+export function getAdminOverview(): Promise<AdminOverview> {
   return apiJson<AdminOverview>("/admin/overview");
 }
 
@@ -153,18 +161,22 @@ export function listAdminUsers(params: {
   status?: string;
   limit?: number;
   cursor?: string | null;
-}) {
+}): Promise<Paged<AdminUser>> {
   return apiJson<Paged<AdminUser>>(`/admin/users${queryString(params)}`);
 }
 
-export function getAdminUser(id: string) {
+export function getAdminUser(id: string): Promise<AdminDossier> {
   return apiJson<AdminDossier>(`/admin/users/${encodeURIComponent(id)}`);
 }
 
-export function changeUserRole(id: string, role: CanonicalRole, reason: string) {
+export function changeUserRole(
+  id: string,
+  role: CanonicalRole,
+  reason: string
+): Promise<void> {
   return apiJson(`/admin/users/${encodeURIComponent(id)}/role`, {
     method: "PATCH",
-    body: JSON.stringify({ role, reason }),
+    body: JSON.stringify({ role, reason: validateNonEmptyReason(reason, "changeUserRole") }),
   });
 }
 
@@ -172,31 +184,40 @@ export function suspendUser(
   id: string,
   reason: string,
   until?: string | null
-) {
+): Promise<void> {
+  if (until !== null && until !== undefined) {
+    const d = new Date(until);
+    if (isNaN(d.getTime())) {
+      throw new Error("suspendUser requires a valid until date or null");
+    }
+  }
   return apiJson(`/admin/users/${encodeURIComponent(id)}/suspend`, {
     method: "POST",
-    body: JSON.stringify({ reason, until: until || null }),
+    body: JSON.stringify({
+      reason: validateNonEmptyReason(reason, "suspendUser"),
+      until: until || null,
+    }),
   });
 }
 
-export function unsuspendUser(id: string, reason: string) {
+export function unsuspendUser(id: string, reason: string): Promise<void> {
   return apiJson(`/admin/users/${encodeURIComponent(id)}/unsuspend`, {
     method: "POST",
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason: validateNonEmptyReason(reason, "unsuspendUser") }),
   });
 }
 
-export function forceSignOut(id: string, reason: string) {
+export function forceSignOut(id: string, reason: string): Promise<void> {
   return apiJson(`/admin/users/${encodeURIComponent(id)}/force-signout`, {
     method: "POST",
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason: validateNonEmptyReason(reason, "forceSignOut") }),
   });
 }
 
-export function deleteAdminUser(id: string, reason: string) {
+export function deleteAdminUser(id: string, reason: string): Promise<void> {
   return apiJson(`/admin/users/${encodeURIComponent(id)}`, {
     method: "DELETE",
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason: validateNonEmptyReason(reason, "deleteAdminUser") }),
   });
 }
 
@@ -208,7 +229,7 @@ export function listAdminContent(params: {
   author_id?: string;
   limit?: number;
   cursor?: string | null;
-}) {
+}): Promise<Paged<AdminContentItem>> {
   return apiJson<Paged<AdminContentItem>>(`/admin/content${queryString(params)}`);
 }
 
@@ -217,11 +238,11 @@ export function moderateContent(
   id: string,
   action: ModerationAction,
   reason: string
-) {
+): Promise<void> {
   const route = type === "thesis" ? "theses" : `${type}s`;
   return apiJson(`/moderation/${route}/${encodeURIComponent(id)}`, {
     method: "POST",
-    body: JSON.stringify({ action, reason }),
+    body: JSON.stringify({ action, reason: validateNonEmptyReason(reason, "moderateContent") }),
   });
 }
 
@@ -229,10 +250,10 @@ export function resolveMessageReport(
   id: string,
   action: "reviewed" | "dismissed",
   reason: string
-) {
+): Promise<void> {
   return apiJson(`/moderation/message-reports/${encodeURIComponent(id)}`, {
     method: "POST",
-    body: JSON.stringify({ action, reason }),
+    body: JSON.stringify({ action, reason: validateNonEmptyReason(reason, "resolveMessageReport") }),
   });
 }
 
@@ -246,7 +267,7 @@ export function listAdminAudit(params: {
   q?: string;
   limit?: number;
   cursor?: string | null;
-}) {
+}): Promise<Paged<AuditEntry>> {
   return apiJson<Paged<AuditEntry>>(`/admin/audit${queryString(params)}`);
 }
 
@@ -254,7 +275,7 @@ export function getAudienceCount(audience: {
   type: "all" | "role" | "department";
   role?: string;
   department_id?: string;
-}) {
+}): Promise<{ count: number }> {
   return apiJson<{ count: number }>(
     `/admin/announcements/audience-count${queryString({
       type: audience.type,
@@ -271,14 +292,17 @@ export function sendAnnouncement(input: {
     | { type: "all" }
     | { type: "role"; role: CanonicalRole }
     | { type: "department"; department_id: string };
-}) {
+}): Promise<{ id: string; recipients: number }> {
   return apiJson<{ id: string; recipients: number }>("/admin/announcements", {
     method: "POST",
     body: JSON.stringify(input),
   });
 }
 
-export function listAnnouncements(params: { limit?: number; cursor?: string | null }) {
+export function listAnnouncements(params: {
+  limit?: number;
+  cursor?: string | null;
+}): Promise<Paged<Announcement>> {
   return apiJson<Paged<Announcement>>(
     `/admin/announcements${queryString(params)}`
   );

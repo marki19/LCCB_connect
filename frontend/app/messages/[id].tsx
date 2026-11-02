@@ -12,7 +12,7 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import {
   ArrowLeft,
   Send,
@@ -66,7 +66,6 @@ function Ticks({ message }: { message: Message }) {
 export default function ThreadScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const conversationId = Array.isArray(params.id) ? params.id[0] : params.id ?? null;
-  const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user?.id ?? null;
   const { modeOf } = usePresence();

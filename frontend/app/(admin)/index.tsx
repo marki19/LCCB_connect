@@ -890,7 +890,7 @@ function RecentActionsPanel({ data, colors }: { data: AdminOverview; colors: The
                   }}
                 >
                   <Text style={{ ...TYPE.bodyStrong, color: colors.ink, flexShrink: 1 }}>
-                    {ACTION_LABELS[entry.action] || entry.action}
+                    {ACTION_LABELS[entry.action as string] || (typeof entry.action === "string" ? entry.action : "Unknown action")}
                   </Text>
                   <Text style={{ ...TYPE.caption, fontSize: 11, color: colors.inkFaint }}>
                     {timeAgo(entry.created_at)}

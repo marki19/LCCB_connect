@@ -33,3 +33,6 @@ Thumbs.db
 # Supabase CLI local state (never commit)
 supabase/.temp/
 frontend/supabase/.temp/
+
+# desloppify local state
+.desloppify/

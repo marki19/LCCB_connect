@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { apiFetch } from '../lib/api';
+import { apiJson, ApiError } from '../lib/api';
 import { unregisterForPush } from '../lib/push';
 
 export type Profile = {
@@ -92,28 +92,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const fetchProfile = async (userId: string, currentUser?: User | null) => {
+    // Happy path: fetch the profile, create if missing (404 -> auto-provision)
     try {
-      const res = await apiFetch(`/users/${userId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setProfile(data as Profile);
+      const data = await apiJson<Profile>(`/users/${userId}`);
+      setProfile(data);
+      return;
+    } catch (e) {
+      // 404 means user doesn't exist — create it from the current session
+      if (e instanceof ApiError && e.status === 404 && currentUser) {
+        try {
+          const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Student";
+          const username = (currentUser.email?.split("@")[0] || "user") + "_" + Math.floor(Math.random() * 1000);
+          const newProfile = await apiJson<Profile>(`/users`, {
+            method: "POST",
+            body: JSON.stringify({ username, full_name: fullName }),
+          });
+          setProfile(newProfile);
+          return;
+        } catch (createErr) {
+          console.error("Failed to auto-provision profile:", createErr);
+        }
         return;
       }
-      if (res.status === 404 && currentUser) {
-        const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Student";
-        const username = (currentUser.email?.split("@")[0] || "user") + "_" + Math.floor(Math.random() * 1000);
-        const createRes = await apiFetch(`/users`, {
-          method: "POST",
-          body: JSON.stringify({ username, full_name: fullName }),
-        });
-        if (createRes.ok) {
-          const newProfile = await createRes.json();
-          setProfile(newProfile as Profile);
-          return;
-        }
+
+      // 4xx (except 404) = permanent auth/profile error — log with status
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
+        console.error(`Profile fetch failed (${e.status}):`, e.message);
+        return;
       }
-    } catch (e) {
-      console.error("Failed to fetch profile from raw SQL backend:", e);
+
+      // Network or 5xx = transient — log for debugging, set null to retry
+      console.error("Network failure fetching profile:", e);
     }
     setProfile(null);
   };

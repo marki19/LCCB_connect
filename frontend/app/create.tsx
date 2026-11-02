@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, Globe, RefreshCw, ChevronRight, CheckCircle2, ChevronLeft, SendHorizontal, ExternalLink } from "lucide-react-native";
-import Animated, { FadeIn, FadeInRight, FadeOutLeft, FadeInDown } from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams } from "expo-router";
+import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, Globe, RefreshCw, ChevronRight, CheckCircle2, ChevronLeft, SendHorizontal } from "lucide-react-native";
+import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { uploadToStorage, pickImage, MAX_UPLOAD_BYTES } from "../src/lib/upload";
@@ -47,9 +46,8 @@ function OptionCard({ type, title, desc, Icon, color, bg, selected, onSelect }: 
 }
 
 export default function CreatePostModal() {
-  const router = useRouter();
   const { profile } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   // Edit mode: these params are set when navigating from PostCard / PostDetail
   const {

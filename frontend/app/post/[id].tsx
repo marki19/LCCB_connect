@@ -7,7 +7,6 @@ import { ArrowLeft, Heart, MessageCircle, Share2, ExternalLink, Send, Tag, Calen
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { ThemeTokens } from "../../src/lib/tokens";
-import type { Post } from "../../src/types";
 import { apiFetch, deletePost, updateComment, deleteComment } from "../../src/lib/api";
 import { safeBack } from "../../src/lib/navigation";
 
@@ -22,8 +21,6 @@ function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: 
   };
   return configs[type] || configs["text"];
 }
-
-type Comment = { id: string; author: string; initials: string; avatarColor: string; text: string; time: string };
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

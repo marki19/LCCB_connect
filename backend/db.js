@@ -45,8 +45,10 @@ const withTransaction = async (callback) => {
   } catch (err) {
     try {
       await client.query("ROLLBACK");
-    } catch {
-      // A failed ROLLBACK must not mask the original error.
+    } catch (rollbackErr) {
+      // A failed ROLLBACK must not mask the original error, but surface it so
+      // a broken connection pool is diagnosable.
+      console.warn("[db] rollback failed:", rollbackErr?.message ?? rollbackErr);
     }
     throw err;
   } finally {

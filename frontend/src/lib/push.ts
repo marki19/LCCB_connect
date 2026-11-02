@@ -5,10 +5,10 @@ import { Platform } from "react-native";
 import { registerDeviceToken, unregisterDeviceToken } from "./messages";
 
 /**
- * OS push (Messaging_plan.md §10, Phase 5).
+ * OS push (Messaging_plan.md Â§10, Phase 5).
  *
  * The third notification layer: the DB row + Realtime bell cover in-app, and
- * this covers "app backgrounded". It is **best-effort by design** — every entry
+ * this covers "app backgrounded". It is **best-effort by design** â€” every entry
  * point swallows its errors so a missing EAS project id, an Expo Go build, or a
  * denied permission can never break the app.
  *
@@ -20,7 +20,7 @@ const TOKEN_KEY = "lccb.push.expoToken";
 
 /**
  * The conversation currently on screen. Used to suppress the foreground banner
- * when the user is already reading the thread the push is about (§10 "when the
+ * when the user is already reading the thread the push is about (Â§10 "when the
  * recipient isn't in the thread").
  */
 let activeConversationId: string | null = null;
@@ -93,7 +93,6 @@ export async function registerForPush(): Promise<string | null> {
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
     if (!projectId) {
-      console.warn("[push] no EAS project id — skipping push registration");
       return null;
     }
 
@@ -103,7 +102,6 @@ export async function registerForPush(): Promise<string | null> {
     return token;
   } catch (err) {
     // Expected in Expo Go on Android and whenever Expo can't reach its servers.
-    console.warn("[push] registration skipped:", (err as Error)?.message);
     return null;
   }
 }
@@ -155,7 +153,7 @@ export function observeNotificationTaps(
     if (conversationId) onTap(conversationId);
   };
 
-  // The tap that launched the app (if any) — handled at most once.
+  // The tap that launched the app (if any) â€” handled at most once.
   if (!lastResponseHandled) {
     lastResponseHandled = true;
     redirect(Notifications.getLastNotificationResponse());

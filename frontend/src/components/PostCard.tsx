@@ -12,7 +12,7 @@ import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { ThemeTokens, elevation, RADIUS } from "../lib/tokens";
-import { apiFetch, deletePost, deleteThesis } from "../lib/api";
+import { apiJson, deletePost, deleteThesis } from "../lib/api";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
   const configs: Record<string, { label: string; bg: string; text: string }> = {
@@ -112,8 +112,10 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
     setLikeCount(newLiked ? likeCount + 1 : likeCount - 1);
 
     try {
-      await apiFetch(`/posts/${post.id}/like`, { method: "POST" });
+      await apiJson(`/posts/${post.id}/like`, { method: "POST" });
     } catch (e) {
+      setLiked(!newLiked);
+      setLikeCount(newLiked ? likeCount - 1 : likeCount + 1);
       console.error("Failed to toggle like via SQL backend:", e);
     }
   };

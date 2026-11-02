@@ -39,7 +39,7 @@ const formatWhen = (iso?: string | null) => {
 export default function MessagesInbox() {
   const router = useRouter();
   const { modeOf } = usePresence();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const [tab, setTab] = useState<"chats" | "requests">("chats");
   const [conversations, setConversations] = useState<Conversation[]>([]);

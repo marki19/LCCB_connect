@@ -12,7 +12,7 @@ import { ChevronDown, Check, X } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
 
 /**
- * A dependency-free modal select. Used for the Department → Course pickers in
+ * A dependency-free modal select. Used for the Department â†’ Course pickers in
  * registration and the profile-completion gate. Deliberately not a third-party
  * picker so it behaves the same on native and web with no extra native module.
  */
@@ -34,13 +34,13 @@ export default function SelectField({
   value,
   options,
   onChange,
-  placeholder = "Select…",
+  placeholder = "Selectâ€¦",
   disabled = false,
   loading = false,
   error = false,
   emptyText = "No options available",
 }: Props) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
 
@@ -71,7 +71,7 @@ export default function SelectField({
           }}
           numberOfLines={1}
         >
-          {loading ? "Loading…" : selected ? selected.label : placeholder}
+          {loading ? "Loadingâ€¦" : selected ? selected.label : placeholder}
         </Text>
         {loading ? (
           <ActivityIndicator size="small" color={colors.textTertiary} />

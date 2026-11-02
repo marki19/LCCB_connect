@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, UploadCloud, FileText, CheckCircle2, ChevronRight, BookOpen, AlertCircle } from "lucide-react-native";
+import { useLocalSearchParams } from "expo-router";
+import { ArrowLeft, UploadCloud, FileText, CheckCircle2, BookOpen, AlertCircle } from "lucide-react-native";
 import * as DocumentPicker from "expo-document-picker";
 import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
@@ -13,7 +13,6 @@ import { apiFetch, updateThesis } from "../src/lib/api";
 import { safeBack } from "../src/lib/navigation";
 
 export default function UploadThesisScreen() {
-  const router = useRouter();
   const { profile } = useAuth();
   const { colors, isDark } = useTheme();
 
