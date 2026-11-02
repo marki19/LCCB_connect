@@ -102,4 +102,25 @@ describe("withStorageUrls", () => {
       { id: "p5", github_url: "https://github.com/x" }
     );
   });
+
+  it("passes through opaque JSON metadata untouched", () => {
+    assert.deepEqual(
+      withStorageUrls({
+        id: "a1",
+        action: "user.suspend",
+        metadata: {
+          reason_code: 42,
+          extra: { deep: { nested: {} } },
+        },
+      }),
+      {
+        id: "a1",
+        action: "user.suspend",
+        metadata: {
+          reason_code: 42,
+          extra: { deep: { nested: {} } },
+        },
+      }
+    );
+  });
 });

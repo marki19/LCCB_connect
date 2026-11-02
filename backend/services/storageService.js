@@ -34,7 +34,10 @@ function publicStorageUrl(bucket, key) {
 
 /**
  * Recursively expands stored object keys into their public URLs.
- * Unrelated fields are passed through untouched.
+ * Only the known file fields (`image_url`, `pdf_url`, `avatar_url`) are transformed.
+ * Nested `author.avatar_url` is handled explicitly.
+ * Other nested objects (like `metadata: Record<string, any>`) are passed through untouched
+ * to avoid corrupting arbitrary JSON payloads.
  */
 function withStorageUrls(value) {
   if (Array.isArray(value)) {
@@ -47,9 +50,13 @@ function withStorageUrls(value) {
         output[field] = publicStorageUrl(bucket, output[field]);
       }
     }
-    return Object.fromEntries(
-      Object.entries(output).map(([key, child]) => [key, withStorageUrls(child)])
-    );
+    // Handle nested author.avatar_url for posts/users that embed author info.
+    if (output.author && typeof output.author === "object") {
+      if (typeof output.author.avatar_url === "string" && !isAbsoluteUrl(output.author.avatar_url)) {
+        output.author.avatar_url = publicStorageUrl("assets", output.author.avatar_url);
+      }
+    }
+    return output;
   }
   return value;
 }
