@@ -5,12 +5,14 @@ const { escapeLike } = require("../utils/queryFilters");
 // RAW SQL QUERIES FOR POSTS (WITH JOIN FOR AUTHOR INFO)
 
 // Keyset pagination. Pass `cursor` = "<created_at>|<id>" of the last row you saw.
+// Optionally pass `userId` to include `is_liked` for the current user.
 const getAllPosts = async ({
   limit = DEFAULT_LIMIT,
   cursor = null,
   includeHidden = false,
   q = null,
   authorId = null,
+  userId = null,
 } = {}) => {
   const params = [];
   const conditions = [];
@@ -46,6 +48,11 @@ const getAllPosts = async ({
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   params.push(limit);
 
+  // Build the is_liked subquery if userId is provided
+  const isLikedSubquery = userId
+    ? `, (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $${params.length + 1})) AS is_liked`
+    : "";
+
   const sql = `
     SELECT 
       p.id,
@@ -72,6 +79,7 @@ const getAllPosts = async ({
         'department_id', pr.department_id,
         'department_name', d.name
       ) AS author
+      ${isLikedSubquery}
     FROM posts p
     LEFT JOIN profiles pr ON p.author_id = pr.id
     LEFT JOIN public.departments d ON d.id = pr.department_id
@@ -79,16 +87,23 @@ const getAllPosts = async ({
     ORDER BY p.created_at DESC, p.id DESC
     LIMIT $${params.length};
   `;
-  const result = await db.query(sql, params);
+  
+  const queryParams = userId ? [...params, userId] : params;
+  const result = await db.query(sql, queryParams);
   return result.rows;
 };
 
-const getPostById = async (id, { includeHidden = false } = {}) => {
+const getPostById = async (id, { includeHidden = false, userId = null } = {}) => {
   const params = [id];
   let hiddenFilter = "";
   if (!includeHidden) {
     hiddenFilter = "AND p.moderation_status != 'hidden'";
   }
+
+  // Build the is_liked subquery if userId is provided
+  const isLikedSubquery = userId
+    ? `, (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $2)) AS is_liked`
+    : "";
 
   const sql = `
     SELECT 
@@ -116,6 +131,7 @@ const getPostById = async (id, { includeHidden = false } = {}) => {
         'department_id', pr.department_id,
         'department_name', d.name
       ) AS author
+      ${isLikedSubquery}
     FROM posts p
     LEFT JOIN profiles pr ON p.author_id = pr.id
     LEFT JOIN public.departments d ON d.id = pr.department_id

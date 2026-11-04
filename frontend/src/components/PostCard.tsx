@@ -125,7 +125,6 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   return (
     <TouchableOpacity
       activeOpacity={0.97}
-      accessibilityRole="button"
       accessibilityLabel={`${post.author.name}: ${post.title}`}
       onPress={() => {
         // A thesis has no post-detail screen; open the deposited PDF instead

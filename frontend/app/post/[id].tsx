@@ -71,9 +71,10 @@ export default function PostDetailScreen() {
               likes: postData.likes || 0,
               comments: postData.comments || 0,
               createdAt: new Date(postData.created_at).toLocaleDateString(),
-              isLiked: false,
+              isLiked: Boolean(postData.is_liked),
             });
             setLikeCount(postData.likes || 0);
+            setLiked(Boolean(postData.is_liked));
           }
         }
 

@@ -320,7 +320,7 @@ export default function HomeScreen() {
             comments: row.comments || 0,
             createdAt: new Date(row.created_at).toLocaleDateString(),
             rawDate: new Date(row.created_at).getTime(),
-            isLiked: false,
+            isLiked: Boolean(row.is_liked),
           };
         });
       } else {

@@ -629,7 +629,7 @@ describe("errors and pagination limits", () => {
 
     await request(app).get("/api/posts?limit=500").set(AUTH);
     assert.deepEqual(m.getAllPosts.calls.at(-1), [
-      { limit: 100, cursor: null, q: null, authorId: null },
+      { limit: 100, cursor: null, q: null, authorId: null, userId: "u1" },
     ]);
 
     await request(app)
@@ -642,6 +642,7 @@ describe("errors and pagination limits", () => {
         cursor: "2026-01-01T00:00:00.000Z|abc",
         q: null,
         authorId: null,
+        userId: "u1",
       },
     ]);
   });
@@ -680,7 +681,7 @@ describe("post list filters", () => {
 
     assert.equal(res.status, 200);
     assert.deepEqual(m.getAllPosts.calls.at(-1), [
-      { limit: 5, cursor: null, q: "react", authorId: AUTHOR },
+      { limit: 5, cursor: null, q: "react", authorId: AUTHOR, userId: "u1" },
     ]);
   });
 

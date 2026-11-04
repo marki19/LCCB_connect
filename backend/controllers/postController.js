@@ -21,6 +21,7 @@ const getPosts = async (req, res, next) => {
       cursor: req.query.cursor || null,
       q: parseSearch(req.query.q),
       authorId: author.value,
+      userId: req.user?.id || null,
     });
     res.json(posts);
   } catch (error) {
@@ -31,7 +32,9 @@ const getPosts = async (req, res, next) => {
 const getPost = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const post = await postModel.getPostById(id);
+    const post = await postModel.getPostById(id, {
+      userId: req.user?.id || null,
+    });
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }

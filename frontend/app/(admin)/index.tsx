@@ -82,8 +82,9 @@ const ATTENTION_ICONS: Record<string, any> = {
 };
 
 function timeAgo(value: string) {
+  if (typeof value !== "string") return "unknown";
   const date = new Date(value).getTime();
-  if (!Number.isFinite(date)) return value;
+  if (!Number.isFinite(date)) return "unknown";
   const seconds = Math.max(0, Math.floor((Date.now() - date) / 1000));
   if (seconds < 60) return "just now";
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
@@ -897,9 +898,9 @@ function RecentActionsPanel({ data, colors }: { data: AdminOverview; colors: The
                   </Text>
                 </View>
                 <Text numberOfLines={1} style={{ ...TYPE.caption, color: colors.inkSoft }}>
-                  {entry.actor_username || "system"} · {entry.target_label || entry.target_type}
+                  {typeof entry.actor_username === "string" ? entry.actor_username : "system"} · {typeof entry.target_label === "string" ? entry.target_label : (typeof entry.target_type === "string" ? entry.target_type : "item")}
                 </Text>
-                {entry.reason ? (
+                {typeof entry.reason === "string" && entry.reason ? (
                   <Text
                     numberOfLines={1}
                     style={{
