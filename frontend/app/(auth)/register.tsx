@@ -1,12 +1,12 @@
 import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, Image, Pressable } from "react-native";
 import { useState } from "react";
-import { supabase } from "../../src/lib/supabase";
 import { Link, useRouter } from "expo-router";
 import { Eye, EyeOff, AlertCircle, Sun, Moon, Monitor } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { focusRing } from "../../src/lib/tokens";
+import { requestSignup } from "../../src/lib/auth";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -108,30 +108,20 @@ export default function RegisterScreen() {
     setLoading(true);
     setGeneralError("");
 
-    const { error } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password,
-      options: {
-        data: {
-          full_name: trimmedFullName,
-        },
-      },
-    });
-
-    if (error) {
-      setGeneralError(error.message);
+    try {
+      await requestSignup(email.trim().toLowerCase(), password, trimmedFullName);
+      
+      // Backend created the Auth user and sent OTP. Send the student to the OTP
+      // screen — the session only exists after verifyOtp.
+      router.replace({
+        pathname: "/(auth)/verify-email",
+        params: { email: email.trim().toLowerCase(), flow: "signup" },
+      });
+    } catch (err: any) {
+      setGeneralError(err?.message || "Could not create account. Try again later.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Supabase signup confirmation is ON (plan D16), so the account is not
-    // usable until the 6-digit OTP is entered. Send the student to the OTP
-    // screen, not the login screen — the session only exists after verifyOtp.
-    router.replace({
-      pathname: "/(auth)/verify-email",
-      params: { email: email.trim().toLowerCase(), flow: "signup" },
-    });
-    setLoading(false);
   }
 
   return (

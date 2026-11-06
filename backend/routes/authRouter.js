@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
-const { login, verifySignup, resendSignup } = require("../controllers/authController");
-const { loginIpLimiter, loginIdentifierLimiter, resendSignupLimiter } = require("../middleware/loginLimits");
+const { login, verifySignup, resendSignup, requestSignup } = require("../controllers/authController");
+const { loginIpLimiter, loginIdentifierLimiter, resendSignupLimiter, requestSignupLimiter } = require("../middleware/loginLimits");
 const {
   validate,
   loginIdentifierSchema,
   verifySignupSchema,
   resendSignupSchema,
+  requestSignupSchema,
 } = require("../validation");
 
 /**
@@ -48,6 +49,20 @@ router.post(
   resendSignupLimiter,
   validate(resendSignupSchema),
   resendSignup
+);
+
+/**
+ * POST /api/auth/request-signup
+ *
+ * Initiates signup by creating Auth user and sending OTP email.
+ * Backend-owned: never exposes anon key to client.
+ * Rate limited: 3 requests per 10 minutes per email.
+ */
+router.post(
+  "/request-signup",
+  requestSignupLimiter,
+  validate(requestSignupSchema),
+  requestSignup
 );
 
 module.exports = router;

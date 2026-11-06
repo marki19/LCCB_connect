@@ -1,8 +1,8 @@
 // E2E test for signup flow: OTP verification creates profile, returns session,
 // and sets up proper state for onboarding and subsequent login.
 //
-// Covers: verify-signup endpoint, resend-signup endpoint, profile creation,
-// and error mapping for expired/used/invalid OTPs.
+// Covers: verify-signup endpoint, resend-signup endpoint, request-signup endpoint,
+// profile creation, and error mapping for expired/used/invalid OTPs.
 require("./env.helper");
 
 const { describe, it, beforeEach } = require("node:test");
@@ -29,15 +29,21 @@ const RESEND_EMAIL = "resend_user@lccbonline.edu.ph";
 let signInImpl;
 let verifyOtpImpl;
 let resendImpl;
+let listUsersImpl;
+let createUserAuthImpl;
 let currentUserMetadata;
 
-stub(supabaseAdmin, "getSupabaseAdmin", () => ({
+const getSupabaseAdminStub = stub(supabaseAdmin, "getSupabaseAdmin", () => ({
   auth: {
     signInWithPassword: async (args) => {
       return signInImpl(args);
     },
     verifyOtp: async (args) => verifyOtpImpl(args),
     resend: async (args) => resendImpl(args),
+    admin: {
+      listUsers: async () => listUsersImpl(),
+      createUser: async (args) => createUserAuthImpl(args),
+    },
   },
 }));
 
@@ -75,6 +81,11 @@ beforeEach(() => {
   signInImpl = async () => ({ data: { user: null, session: null } });
   verifyOtpImpl = async () => okVerifyOtp(TEST_EMAIL);
   resendImpl = async () => okResend();
+  listUsersImpl = async () => ({ data: { users: [] }, error: null });
+  createUserAuthImpl = async (args) => ({
+    data: { user: { id: USER_ID, email: args.email } },
+    error: null,
+  });
   currentUserMetadata = { full_name: "E2E Test User" };
   createUser.calls.length = 0;
   revokeSessions.calls.length = 0;
@@ -209,5 +220,131 @@ describe("POST /api/auth/resend-signup (E2E)", () => {
 
     assert.equal(res.status, 400);
     assert.equal(res.body.code, "resend_failed");
+  });
+});
+
+describe("POST /api/auth/request-signup (E2E)", () => {
+  const REQUEST_SIGNUP_EMAIL = "request_user@lccbonline.edu.ph";
+  const REQUEST_EXISTS_EMAIL = "exists_user@lccbonline.edu.ph";
+  const REQUEST_SIGNUP_EMAIL_2 = "request_user2@lccbonline.edu.ph";
+  const REQUEST_SIGNUP_EMAIL_3 = "request_user3@lccbonline.edu.ph";
+  const REQUEST_SIGNUP_EMAIL_4 = "request_user4@lccbonline.edu.ph";
+  const REQUEST_SIGNUP_EMAIL_5 = "request_user5@lccbonline.edu.ph";
+  const REQUEST_SIGNUP_EMAIL_6 = "request_user6@lccbonline.edu.ph";
+  const REQUEST_SIGNUP_EMAIL_7 = "request_user7@lccbonline.edu.ph";
+
+  beforeEach(() => {
+    listUsersImpl = async () => ({ data: { users: [] }, error: null });
+    createUserAuthImpl = async (args) => ({
+      data: { user: { id: USER_ID, email: args.email } },
+      error: null,
+    });
+  });
+
+  it("creates Auth user and sends OTP, returns 202", async () => {
+    const res = await request(app)
+      .post("/api/auth/request-signup")
+      .send({
+        email: REQUEST_SIGNUP_EMAIL,
+        password: "SecurePass123",
+        full_name: "Test User",
+      });
+
+    assert.equal(res.status, 202);
+    assert.equal(res.body.message, "Account created. Check your email for the verification code.");
+    assert.ok(res.body.retry_after > 0, "Should include retry_after seconds");
+  });
+
+  it("rejects non-LCCB email with 400 validation error", async () => {
+    const res = await request(app)
+      .post("/api/auth/request-signup")
+      .send({
+        email: NON_LCCB_EMAIL,
+        password: "SecurePass123",
+        full_name: "Test User",
+      });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.fields?.[0]?.path, "email");
+  });
+
+  it("rejects password shorter than 8 chars with 400", async () => {
+    const res = await request(app)
+      .post("/api/auth/request-signup")
+      .send({
+        email: REQUEST_SIGNUP_EMAIL_2,
+        password: "short",
+        full_name: "Test User",
+      });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.fields?.[0]?.path, "password");
+  });
+
+  it("rejects full_name shorter than 2 chars with 400", async () => {
+    const res = await request(app)
+      .post("/api/auth/request-signup")
+      .send({
+        email: REQUEST_SIGNUP_EMAIL_3,
+        password: "SecurePass123",
+        full_name: "A",
+      });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.fields?.[0]?.path, "full_name");
+  });
+
+  it("returns account_exists (409) when email already registered", async () => {
+    listUsersImpl = async () => ({
+      data: { users: [{ email: REQUEST_EXISTS_EMAIL }] },
+      error: null,
+    });
+
+    const res = await request(app)
+      .post("/api/auth/request-signup")
+      .send({
+        email: REQUEST_EXISTS_EMAIL,
+        password: "SecurePass123",
+        full_name: "Test User",
+      });
+
+    assert.equal(res.status, 409);
+    assert.equal(res.body.code, "account_exists");
+  });
+
+  it("handles Supabase createUser failure gracefully", async () => {
+    createUserAuthImpl = async () => ({
+      data: { user: null },
+      error: { message: "Weak password" },
+    });
+
+    const res = await request(app)
+      .post("/api/auth/request-signup")
+      .send({
+        email: REQUEST_SIGNUP_EMAIL_4,
+        password: "WeakPass123", // valid length but Supabase rejects it
+        full_name: "Test User",
+      });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.code, "creation_failed");
+  });
+
+  it("handles listUsers failure with service_unavailable", async () => {
+    listUsersImpl = async () => ({
+      data: { users: [] },
+      error: { message: "DB error" },
+    });
+
+    const res = await request(app)
+      .post("/api/auth/request-signup")
+      .send({
+        email: REQUEST_SIGNUP_EMAIL_5,
+        password: "SecurePass123",
+        full_name: "Test User",
+      });
+
+    assert.equal(res.status, 503);
+    assert.equal(res.body.code, "service_unavailable");
   });
 });

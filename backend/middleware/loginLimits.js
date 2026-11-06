@@ -55,8 +55,29 @@ const resendSignupLimiter = rateLimit({
   skipSuccessfulRequests: false,
 });
 
+/**
+ * Request signup limiter: 3 requests per 10 minutes per email.
+ * Prevents spam account creation.
+ */
+const requestSignupLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 3, // 3 signup attempts per window per email
+  message: { error: "Too many signup attempts. Try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: function (req) {
+    const email = req.body?.email || "";
+    if (typeof email === "string" && email.length > 0) {
+      return email.trim().toLowerCase();
+    }
+    return "unknown";
+  },
+  skipSuccessfulRequests: false,
+});
+
 module.exports = {
   loginIpLimiter,
   loginIdentifierLimiter,
   resendSignupLimiter,
+  requestSignupLimiter,
 };

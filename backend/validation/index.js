@@ -237,6 +237,32 @@ const resendSignupSchema = z
   })
   .strict();
 
+/**
+ * Request signup: creates the Auth user and sends OTP.
+ * Password is validated but never stored in plain text — Supabase handles hashing.
+ */
+const requestSignupSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(
+        /^[^@\s]+@lccbonline\.edu\.ph$/,
+        "Must be an @lccbonline.edu.ph address"
+      ),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(128, "Password too long"),
+    full_name: z
+      .string()
+      .trim()
+      .min(2, "Full name must be at least 2 characters")
+      .max(200, "Full name too long"),
+  })
+  .strict();
+
 // ---- profiles --------------------------------------------------------------
 const profileFields = {
   username: optionalText(50),
@@ -435,4 +461,5 @@ module.exports = {
   loginIdentifierSchema,
   verifySignupSchema,
   resendSignupSchema,
+  requestSignupSchema,
 };

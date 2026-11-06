@@ -207,8 +207,84 @@ async function resendSignup(req, res, next) {
   }
 }
 
+/**
+ * Requests signup: creates an Auth user and sends OTP email.
+ *
+ * Creates a Supabase Auth user with email_confirm: false, so the user
+ * cannot log in until they verify the OTP. The user's password is set
+ * via `auth.admin.createUser`. The full_name is stored in user_metadata
+ * for later profile creation.
+ *
+ * Rate limited: 3 requests per 10 minutes per email.
+ */
+async function requestSignup(req, res, next) {
+  try {
+    const { email, password, full_name } = req.body;
+
+    const supabase = adminClientOr503(res);
+    if (!supabase) return;
+
+    // Check if user already exists
+    const { data: existingUser, error: listError } = await supabase.auth.admin.listUsers();
+
+    if (listError) {
+      console.error("[auth] List users failed:", listError.message);
+      return res.status(503).json({
+        error: "Signup service temporarily unavailable.",
+        code: "service_unavailable",
+      });
+    }
+
+    const userAlreadyExists = existingUser.users?.some(u => u.email?.toLowerCase() === email.toLowerCase());
+
+    if (userAlreadyExists) {
+      return res.status(409).json({
+        error: "An account with this email already exists.",
+        code: "account_exists",
+      });
+    }
+
+    // Create the user with password
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: false,
+      user_metadata: {
+        full_name,
+      },
+    });
+
+    if (error) {
+      console.error("[auth] Create user failed:", error.message);
+      return res.status(400).json({
+        error: "Could not create account. Try again in a moment.",
+        code: "creation_failed",
+      });
+    }
+
+    // Trigger OTP email
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email,
+    });
+
+    if (resendError) {
+      console.error("[auth] Resend signup failed after creation:", resendError.message);
+      // Don't fail the request - user exists, they can resend
+    }
+
+    return res.status(202).json({
+      message: "Account created. Check your email for the verification code.",
+      retry_after: 60,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   login,
   verifySignup,
   resendSignup,
+  requestSignup,
 };

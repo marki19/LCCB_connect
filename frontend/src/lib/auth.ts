@@ -75,3 +75,18 @@ export async function resendSignupCode(email: string): Promise<{ retry_after: nu
     body: JSON.stringify({ email: email.trim().toLowerCase() }),
   });
 }
+
+/**
+ * Requests signup: creates Auth user and sends OTP email.
+ * Backend-owned: never exposes anon key to client.
+ */
+export async function requestSignup(email: string, password: string, fullName: string): Promise<void> {
+  await apiJson("/auth/request-signup", {
+    method: "POST",
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+      password,
+      full_name: fullName.trim(),
+    }),
+  });
+}
