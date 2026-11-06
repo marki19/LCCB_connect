@@ -17,6 +17,14 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     )
   ),
   skills TEXT[],
+  -- Identity verification (migration 016). `email` is a denormalized copy of
+  -- auth.users.email so the API can answer "who owns this address" without
+  -- touching the auth schema. `student_id` is the second login identifier.
+  email TEXT,
+  student_id TEXT,
+  verification_status TEXT NOT NULL DEFAULT 'unverified'
+    CHECK (verification_status IN ('unverified','pending','verified')),
+  verified_at TIMESTAMPTZ,
   -- Account suspension (migration 010). The API treats an expired
   -- `suspended_until` as active; the fields remain until an admin unsuspends.
   suspended_at TIMESTAMPTZ,
@@ -27,6 +35,45 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT profiles_suspension_dates_check CHECK (suspended_until IS NULL OR suspended_at IS NOT NULL)
 );
+
+-- One verified owner per student ID, case-insensitive. NULLs are unlimited.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_student_id
+  ON public.profiles (upper(student_id))
+  WHERE student_id IS NOT NULL;
+
+-- 1b. Identity verification requests (migration 016). Holds a snapshot of what
+-- the student submitted, so a later edit cannot change what the reviewer saw.
+CREATE TABLE IF NOT EXISTS public.profile_verification_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','approved','declined')),
+  full_name TEXT NOT NULL,
+  student_id TEXT NOT NULL,
+  department_id UUID NOT NULL REFERENCES public.departments(id),
+  course_id UUID NOT NULL REFERENCES public.courses(id),
+  year_level TEXT NOT NULL,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reviewed_by TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  review_note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_verification_one_pending
+  ON public.profile_verification_requests (user_id)
+  WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_verification_status
+  ON public.profile_verification_requests (status, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_verification_department
+  ON public.profile_verification_requests (department_id, status);
+
+DROP TRIGGER IF EXISTS set_verification_updated_at
+  ON public.profile_verification_requests;
+CREATE TRIGGER set_verification_updated_at
+  BEFORE UPDATE ON public.profile_verification_requests
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- 2. Posts table
 CREATE TABLE IF NOT EXISTS public.posts (
@@ -361,7 +408,7 @@ BEGIN
   FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
       EXECUTE format(
-        'REVOKE ALL ON public.profiles, public.posts, public.theses, public.likes, public.comments, public.notifications, public.admin_audit_log, public.departments, public.courses, public.friendships, public.message_policy_departments, public.conversations, public.messages, public.conversation_state, public.device_tokens, public.blocks, public.message_reports FROM %I',
+        'REVOKE ALL ON public.profiles, public.posts, public.theses, public.likes, public.comments, public.notifications, public.admin_audit_log, public.departments, public.courses, public.friendships, public.message_policy_departments, public.conversations, public.messages, public.conversation_state, public.device_tokens, public.blocks, public.message_reports, public.profile_verification_requests FROM %I',
         r
       );
       EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
@@ -415,5 +462,167 @@ BEGIN
     END LOOP;
   END IF;
 END $$;
+
+-- 9. Signup domain lockdown (migration 013).
+-- The client-side check in register.tsx is not a control: anyone with the public
+-- anon key can POST /auth/v1/signup directly. This trigger runs inside Supabase
+-- Auth's own insert transaction, so raising aborts the signup and no user row is
+-- written. Google OAuth signups carry the same email and are covered too.
+CREATE OR REPLACE FUNCTION public.enforce_signup_email_domain()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  allowed_domain CONSTANT text := 'lccbonline.edu.ph';
+  email_domain text;
+BEGIN
+  -- Phone-only and anonymous signups carry no email and are not part of this
+  -- product's flow; an email rule must not reject them for the wrong reason.
+  IF NEW.email IS NULL OR NEW.email = '' THEN
+    RETURN NEW;
+  END IF;
+
+  email_domain := lower(split_part(NEW.email, '@', 2));
+
+  IF email_domain <> allowed_domain THEN
+    RAISE EXCEPTION 'Signups are restricted to % addresses', allowed_domain
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.enforce_signup_email_domain() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.enforce_signup_email_domain() TO supabase_auth_admin;
+
+DROP TRIGGER IF EXISTS enforce_signup_email_domain ON auth.users;
+CREATE TRIGGER enforce_signup_email_domain
+  BEFORE INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_signup_email_domain();
+
+-- 10. Content visibility (migration 014).
+-- Each post/thesis carries one of public / friends / custom / private. The rule
+-- lives in visible_posts()/visible_theses() so no read path can forget it; the
+-- Express API selects FROM those. Moderation reads the base tables on purpose: a
+-- moderator who cannot see a hidden or private row cannot moderate it.
+-- EXECUTE is revoked from the public API roles because the viewer argument is
+-- caller-supplied: whoever can call visible_posts() could pass any user id.
+DO $$
+BEGIN
+  CREATE TYPE public.content_visibility AS ENUM ('public', 'friends', 'custom', 'private');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+ALTER TABLE public.posts
+  ADD COLUMN IF NOT EXISTS visibility public.content_visibility NOT NULL DEFAULT 'public';
+ALTER TABLE public.theses
+  ADD COLUMN IF NOT EXISTS visibility public.content_visibility NOT NULL DEFAULT 'public';
+
+CREATE TABLE IF NOT EXISTS public.post_audience (
+  post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  PRIMARY KEY (post_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.thesis_audience (
+  thesis_id UUID NOT NULL REFERENCES public.theses(id) ON DELETE CASCADE,
+  user_id   TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  PRIMARY KEY (thesis_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_post_audience_user
+  ON public.post_audience (user_id);
+CREATE INDEX IF NOT EXISTS idx_thesis_audience_user
+  ON public.thesis_audience (user_id);
+
+-- Normalized pair comparison so the existing uq_friends_pair expression index
+-- is used. least()/greatest() ignore NULLs, so a guest viewer (NULL) can never
+-- match a row, which satisfies chk_friends_distinct.
+CREATE OR REPLACE FUNCTION public.is_friend(a text, b text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+PARALLEL SAFE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.friendships f
+    WHERE f.status = 'accepted'
+      AND least(f.requester_id, f.addressee_id) = least(a, b)
+      AND greatest(f.requester_id, f.addressee_id) = greatest(a, b)
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.visible_posts(viewer text)
+RETURNS SETOF public.posts
+LANGUAGE sql
+STABLE
+PARALLEL SAFE
+AS $$
+  SELECT p.*
+  FROM public.posts p
+  WHERE p.moderation_status <> 'hidden'
+    AND (
+      p.author_id = viewer
+      OR p.visibility = 'public'
+      OR (p.visibility = 'friends' AND public.is_friend(p.author_id, viewer))
+      OR (
+        p.visibility = 'custom'
+        AND EXISTS (
+          SELECT 1
+          FROM public.post_audience a
+          WHERE a.post_id = p.id AND a.user_id = viewer
+        )
+      )
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION public.visible_theses(viewer text)
+RETURNS SETOF public.theses
+LANGUAGE sql
+STABLE
+PARALLEL SAFE
+AS $$
+  SELECT t.*
+  FROM public.theses t
+  WHERE t.moderation_status <> 'hidden'
+    AND (
+      t.uploader_id = viewer
+      OR t.visibility = 'public'
+      OR (t.visibility = 'friends' AND public.is_friend(t.uploader_id, viewer))
+      OR (
+        t.visibility = 'custom'
+        AND EXISTS (
+          SELECT 1
+          FROM public.thesis_audience a
+          WHERE a.thesis_id = t.id AND a.user_id = viewer
+        )
+      )
+    );
+$$;
+
+DO $$
+DECLARE r text;
+BEGIN
+  FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      EXECUTE format('REVOKE ALL ON FUNCTION public.visible_posts(text) FROM %I', r);
+      EXECUTE format('REVOKE ALL ON FUNCTION public.visible_theses(text) FROM %I', r);
+      EXECUTE format('REVOKE ALL ON FUNCTION public.is_friend(text, text) FROM %I', r);
+      EXECUTE format('REVOKE ALL ON public.post_audience, public.thesis_audience FROM %I', r);
+    END IF;
+  END LOOP;
+END $$;
+
+REVOKE ALL ON FUNCTION public.visible_posts(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.visible_theses(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_friend(text, text) FROM PUBLIC;
+REVOKE ALL ON public.post_audience, public.thesis_audience FROM PUBLIC;
+
+ALTER TABLE public.post_audience   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.thesis_audience ENABLE ROW LEVEL SECURITY;
 
 -- Upgrading an existing database? Apply migrations/001_rls_hardening.sql instead.

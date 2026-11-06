@@ -76,23 +76,26 @@ const getUserById = async (id) => {
 const createUser = async (userData) => {
   const {
     id, username, full_name, avatar_url, bio, course, year_level, role,
-    department_id, course_id,
+    department_id, course_id, email,
   } = userData;
   const sql = `
-    INSERT INTO profiles (id, username, full_name, avatar_url, bio, course, year_level, role, department_id, course_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    INSERT INTO profiles (id, username, full_name, avatar_url, bio, course, year_level, role, department_id, course_id, email)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     ON CONFLICT (id) DO UPDATE SET
       full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
       username = COALESCE(EXCLUDED.username, profiles.username),
       -- Department/course are CLAIM-ONCE: fill them only while still unset, so a
       -- repeat POST can never move a user into a different department.
       department_id = COALESCE(profiles.department_id, EXCLUDED.department_id),
-      course_id = COALESCE(profiles.course_id, EXCLUDED.course_id)
+      course_id = COALESCE(profiles.course_id, EXCLUDED.course_id),
+      -- The signup address is authoritative; a repeat self-provision must not
+      -- clobber a corrected one.
+      email = COALESCE(EXCLUDED.email, profiles.email)
     RETURNING *;
   `;
   const values = [
     id, username, full_name, avatar_url, bio, course, year_level, role || 'student',
-    department_id || null, course_id || null,
+    department_id || null, course_id || null, email || null,
   ];
   const result = await db.query(sql, values);
   return result.rows[0];
@@ -101,7 +104,7 @@ const createUser = async (userData) => {
 const updateUser = async (id, userData) => {
   const {
     username, full_name, avatar_url, bio, course, year_level, role, skills,
-    department_id, course_id, message_policy,
+    department_id, course_id, message_policy, student_id, verification_status,
   } = userData;
   const sql = `
     UPDATE profiles
@@ -115,8 +118,10 @@ const updateUser = async (id, userData) => {
         skills = COALESCE($8, skills),
         department_id = COALESCE($9, department_id),
         course_id = COALESCE($10, course_id),
-        message_policy = COALESCE($11, message_policy)
-    WHERE id = $12
+        message_policy = COALESCE($11, message_policy),
+        student_id = COALESCE($12, student_id),
+        verification_status = COALESCE($13, verification_status)
+    WHERE id = $14
     RETURNING *;
   `;
   const values = [
@@ -131,6 +136,8 @@ const updateUser = async (id, userData) => {
     department_id || null,
     course_id || null,
     message_policy || null,
+    student_id || null,
+    verification_status || null,
     id,
   ];
   const result = await db.query(sql, values);
@@ -143,10 +150,33 @@ const deleteUser = async (id) => {
   return result.rows[0];
 };
 
+/**
+ * Resolves the email behind a student ID so the login route can hand Supabase
+ * an email it understands. Only verified owners resolve: an unverified or
+ * declined ID must not be a usable login handle.
+ *
+ * Returns `{ id, email }` or null. The route logs the attempt server-side and
+ * always answers the same way whether the ID is unknown or the caller is
+ * unverified, so the response cannot be used to enumerate accounts.
+ */
+const getLoginEmailByStudentId = async (studentId) => {
+  const sql = `
+    SELECT id, email
+    FROM public.profiles
+    WHERE upper(student_id) = $1
+      AND verification_status = 'verified'
+      AND email IS NOT NULL
+    LIMIT 1;
+  `;
+  const result = await db.query(sql, [String(studentId).toUpperCase()]);
+  return result.rows[0] || null;
+};
+
 module.exports = {
   getAllUsers,
   getUserById,
   createUser,
   updateUser,
   deleteUser,
+  getLoginEmailByStudentId,
 };

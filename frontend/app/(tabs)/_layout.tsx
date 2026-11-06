@@ -148,7 +148,7 @@ function MobileTab({
   );
 }
 
-function TabBar({ state, navigation }: any) {
+function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { profile } = useAuth();
@@ -163,15 +163,16 @@ function TabBar({ state, navigation }: any) {
   const compactActions = width < 1320;
 
   const navigate = (name: string, focused: boolean) => {
-    const routeIndex = state.routes.findIndex((route: any) => route.name === name);
-    const route = state.routes[routeIndex];
-    if (!route) return;
-    const event = navigation.emit({
+    const route = state.routes.find((r: any) => r.name === name);
+    if (!route || focused) return;
+    const event = emitter.emit({
       type: "tabPress",
       target: route.key,
       canPreventDefault: true,
     });
-    if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+    if (!event.defaultPrevented) {
+      navigateToTab(route.key);
+    }
   };
 
   // Desktop Web: editorial top bar

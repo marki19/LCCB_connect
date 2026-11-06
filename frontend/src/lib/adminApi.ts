@@ -214,12 +214,8 @@ export function forceSignOut(id: string, reason: string): Promise<void> {
   });
 }
 
-export function deleteAdminUser(id: string, reason: string): Promise<void> {
-  return apiJson(`/admin/users/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    body: JSON.stringify({ reason: validateNonEmptyReason(reason, "deleteAdminUser") }),
-  });
-}
+// Account deletion removed per policy: permanent deletion is manual DB query only.
+// Admins/superadmins can only suspend/disable accounts via suspendUser/unsuspendUser.
 
 export function listAdminContent(params: {
   type?: string;

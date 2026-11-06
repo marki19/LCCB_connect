@@ -321,6 +321,7 @@ export default function HomeScreen() {
             createdAt: new Date(row.created_at).toLocaleDateString(),
             rawDate: new Date(row.created_at).getTime(),
             isLiked: Boolean(row.is_liked),
+            visibility: row.visibility,
           };
         });
       } else {

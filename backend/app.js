@@ -111,6 +111,15 @@ app.use("/api", (req, res, next) => (isWrite(req) ? writeLimiter(req, res, next)
 // Public read-only endpoints (no token required)
 app.use("/api/public", publicRouter);
 
+// Authentication routes (no requireAuth! Must come before authenticated routes)
+const authRouter = require("./routes/authRouter");
+app.use("/api/auth", authRouter);
+
+// Verification routes (requireAuth + loadProfile + requireActiveAccount, NOT requireVerified)
+// An unverified student is exactly who calls these.
+const verificationRouter = require("./routes/verificationRouter");
+app.use("/api/verification", verificationRouter);
+
 // Every API route requires a valid Supabase access token. Identity is taken
 // from the verified token, never from the request body.
 app.use(

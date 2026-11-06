@@ -1,5 +1,6 @@
 import axios from "axios";
 import { supabase } from "./supabase";
+import type { ContentVisibility } from "../types";
 
 const API_URL = (
   process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api"
@@ -48,6 +49,30 @@ client.interceptors.request.use(async (config) => {
  * authorize the caller — the server derives identity from the token, not from
  * the request body.
  */
+/**
+ * POST multipart/form-data through the authenticated client.
+ *
+ * Axios sets the `Content-Type` boundary itself when given a FormData object,
+ * so the caller must NOT set a Content-Type header — doing so would drop the
+ * boundary and the server would reject the upload.
+ */
+export async function apiFetchMultipart(
+  path: string,
+  formData: FormData
+): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
+  const res = await client.request({
+    url: path,
+    method: "POST",
+    data: formData,
+    validateStatus: () => true,
+  });
+  return {
+    ok: res.status >= 200 && res.status < 300,
+    status: res.status,
+    json: async () => res.data,
+  };
+}
+
 export async function apiFetch(
   path: string,
   init: RequestInit = {}
@@ -92,7 +117,8 @@ export async function apiJson<T = any>(
       const body = err.response.data as any;
       throw new ApiError(
         body?.error || body?.message || `Request failed (${err.response.status})`,
-        err.response.status
+        err.response.status,
+        body?.code
       );
     }
     throw err;
@@ -106,10 +132,12 @@ export async function apiJson<T = any>(
  */
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  code?: string;
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -123,6 +151,8 @@ export async function updatePost(
     image_url?: string | null;
     type?: string;
     preview_metadata?: any;
+    visibility?: ContentVisibility;
+    audience?: string[];
   }
 ): Promise<void> {
   return apiJson(`/posts/${id}`, {
@@ -160,6 +190,8 @@ export async function updateThesis(
     abstract?: string;
     category?: string;
     pdf_url?: string | null;
+    visibility?: ContentVisibility;
+    audience?: string[];
   }
 ): Promise<void> {
   return apiJson(`/theses/${id}`, {
@@ -170,4 +202,19 @@ export async function updateThesis(
 
 export async function deleteThesis(id: string | number): Promise<void> {
   return apiJson(`/theses/${id}`, { method: "DELETE" });
+}
+
+/**
+ * Fetches a short-lived signed URL for a thesis' manuscript.
+ *
+ * Manuscripts live in a private bucket (migration 015), so the client never
+ * receives a usable URL directly — it asks the backend, which checks
+ * visibility first, and gets back a URL that expires after 5 minutes.
+ */
+export async function getThesisFileUrl(id: string | number): Promise<string> {
+  const data = await apiJson<{ url?: string }>(`/theses/${id}/file`);
+  if (!data?.url) {
+    throw new ApiError("Could not generate file URL", 404);
+  }
+  return data.url;
 }

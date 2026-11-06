@@ -10,6 +10,8 @@ import { uploadToStorage, pickImage, MAX_UPLOAD_BYTES } from "../src/lib/upload"
 import { apiFetch, updatePost } from "../src/lib/api";
 import { fetchLinkPreview, LinkPreviewData } from "../src/lib/linkPreview";
 import { safeBack } from "../src/lib/navigation";
+import VisibilityPicker from "../src/components/VisibilityPicker";
+import type { ContentVisibility } from "../src/types";
 
 type PostType = "text" | "image" | "project" | "capstone" | "website" | null;
 type ConcretePostType = Exclude<PostType, null>;
@@ -57,6 +59,7 @@ export default function CreatePostModal() {
     editType,
     editTech,
     editUrl,
+    editVisibility,
   } = useLocalSearchParams<{
     postId?: string;
     editTitle?: string;
@@ -64,9 +67,18 @@ export default function CreatePostModal() {
     editType?: string;
     editTech?: string;
     editUrl?: string;
+    editVisibility?: string;
   }>();
 
   const isEditing = !!postId;
+
+  const [visibility, setVisibility] = useState<ContentVisibility>(
+    (editVisibility as ContentVisibility) || "public"
+  );
+  const [audience, setAudience] = useState<string[]>([]);
+  // Editing must not silently reset the stored visibility, so the picker is only
+  // sent when the user actually changes it.
+  const [visibilityTouched, setVisibilityTouched] = useState(false);
   
   const [step, setStep] = useState<1 | 2 | 3>(isEditing ? 2 : 1);
   const [postType, setPostType] = useState<PostType>(
@@ -118,6 +130,9 @@ export default function CreatePostModal() {
 
   const handlePublish = async () => {
     if (!profile?.id) return;
+    if (visibility === "custom" && audience.length === 0) {
+      return Alert.alert("Pick an audience", "Choose at least one friend who can see this.");
+    }
     setIsPublishing(true);
 
     try {
@@ -138,6 +153,9 @@ export default function CreatePostModal() {
       }
 
       const techArray = technologies ? technologies.split(',').map(t => t.trim()) : null;
+      const visibilityPayload = visibilityTouched
+        ? { visibility, ...(visibility === "custom" ? { audience } : {}) }
+        : {};
 
       if (isEditing && postId) {
         // Edit mode — PUT /posts/:id
@@ -149,6 +167,7 @@ export default function CreatePostModal() {
           github_url: githubUrl || null,
           preview_metadata: finalPreviewMetadata || null,
           ...(finalImageKey ? { image_url: finalImageKey } : {}),
+          ...visibilityPayload,
         });
       } else {
         // Create mode — POST /posts
@@ -162,6 +181,8 @@ export default function CreatePostModal() {
             github_url: githubUrl || null,
             image_url: finalImageKey,
             preview_metadata: finalPreviewMetadata || null,
+            visibility,
+            ...(visibility === "custom" ? { audience } : {}),
           }),
         });
 
@@ -322,6 +343,16 @@ export default function CreatePostModal() {
           {step === 3 && (
             <Animated.View entering={FadeInRight.duration(400).springify()}>
               <Text style={{ color: colors.textTertiary, fontWeight: "700", textTransform: "uppercase", fontSize: 11, letterSpacing: 0.8, marginBottom: 14 }}>Step 3 of 3: Final Details</Text>
+
+              <VisibilityPicker
+                visibility={visibility}
+                audience={audience}
+                onChange={(nextVisibility, nextAudience) => {
+                  setVisibility(nextVisibility);
+                  setAudience(nextAudience);
+                  setVisibilityTouched(true);
+                }}
+              />
               
               {(postType === "project" || postType === "capstone" || postType === "website") ? (
                 <>

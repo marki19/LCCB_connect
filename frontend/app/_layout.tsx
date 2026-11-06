@@ -66,7 +66,6 @@ function RouteGuard() {
     if (!initialized) return;
 
     const inAuth = segments[0] === "(auth)";
-    const inComplete = segments[0] === "complete-profile";
     const inAdmin = segments[0] === "(admin)";
     const inModeration = segments[0] === "(moderation)";
     const inTabs = segments[0] === "(tabs)";
@@ -79,15 +78,6 @@ function RouteGuard() {
     // A fresh sign-in always starts panel-first for desktop admins.
     if (inAuth) setAdminAppPreview(false);
 
-    // A real (non-guest, non-campus-admin) account missing a department must
-    // finish the one-time profile-completion gate before using the app.
-    const needsProfile =
-      !!session &&
-      !isGuest &&
-      !!profile &&
-      !adminUser &&
-      !profile.department_id;
-
     if (!isAuthenticated && !inAuth) {
       // Not logged in - send to login
       router.replace("/(auth)/login");
@@ -95,8 +85,6 @@ function RouteGuard() {
       router.replace("/suspended");
     } else if (isAuthenticated && !suspended && inSuspended) {
       router.replace(adminUser && isDesktop ? "/(admin)/" : "/(tabs)/");
-    } else if (isAuthenticated && needsProfile && !inComplete) {
-      router.replace("/complete-profile");
     } else if (isAuthenticated && inAuth) {
       // Panel-first on desktop for campus admins; everyone else (and admins on
       // mobile) goes to the normal app.
@@ -116,13 +104,6 @@ function RouteGuard() {
       // branch above may already have sent the admin to the feed. Catch that
       // case unless they explicitly chose "Back to App".
       router.replace("/(admin)/");
-    } else if (isAuthenticated && inComplete && !needsProfile) {
-      // Finished the gate - send home.
-      if (adminUser && isDesktop) {
-        router.replace("/(admin)/");
-      } else {
-        router.replace("/(tabs)/");
-      }
     } else if (isAuthenticated && inAdmin && (!adminUser || !isDesktop)) {
       // The panel is a desktop console. Never strand a mobile or non-admin
       // session on a screen it cannot use.
@@ -155,7 +136,8 @@ function RouteGuard() {
         <Stack.Screen name="(admin)" />
         <Stack.Screen name="(moderation)" />
         <Stack.Screen name="suspended" />
-        <Stack.Screen name="complete-profile" options={{ presentation: "modal" }} />
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="verify-requests" />
         <Stack.Screen name="create" options={{ presentation: "modal" }} />
         <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
         <Stack.Screen name="post/[id]" />

@@ -14,6 +14,7 @@ const userModel = require("../models/userModel");
 const notificationService = require("../services/notificationService");
 const moderationService = require("../services/moderationService");
 const auditService = require("../services/auditService");
+const accountService = require("../services/accountService");
 
 // The controllers fire off background notification/moderation work after
 // responding. Stub it so the suite stays hermetic (and quiet).
@@ -26,6 +27,33 @@ stub(moderationService, "scanComment", async () => ({ flagged: false }));
 stub(moderationService, "scanThesis", async () => ({ flagged: false }));
 stub(thesisModel, "getFlaggedTheses", async () => []);
 stub(auditService, "recordRequest", async () => undefined);
+
+// Account deletion must also remove the Supabase Auth user. Stub it so the
+// route stays hermetic and the call can be asserted.
+const revokeSessions = stub(accountService, "revokeSessions", async () => ({
+  sessions: 0,
+  refresh_tokens: 0,
+}));
+const deleteAuthUser = stub(accountService, "deleteAuthUser", async () => true);
+
+// The response middleware resolves private storage keys through Supabase. In
+// the test suite there is no Supabase, so the resolution is a no-op: the body
+// is shipped as-is. This keeps the HTTP contract assertions hermetic.
+const storageService = require("../services/storageService");
+stub(storageService, "withStorageUrls", async (body) => body);
+
+// The thesis upload path calls getSupabaseAdmin() to push bytes into Storage.
+// The model is stubbed, so the upload itself never runs in these tests — but
+// the factory must still resolve, otherwise the controller throws.
+const supabaseAdmin = require("../services/supabaseAdmin");
+stub(supabaseAdmin, "getSupabaseAdmin", () => ({
+  storage: {
+    from: () => ({
+      upload: async () => ({ error: null }),
+      remove: async () => ({ error: null }),
+    }),
+  },
+}));
 
 const STORAGE_URL = "https://test-project.supabase.co/storage/v1/object/public";
 
@@ -46,6 +74,7 @@ const defaultLoadProfile = (req, res, next) => {
 
 stub(auth, "requireAuth", defaultRequireAuth);
 stub(auth, "loadProfile", defaultLoadProfile);
+stub(auth, "requireVerified", (req, res, next) => next());
 
 // Every model method the routes touch.
 const m = {
@@ -314,11 +343,14 @@ describe("profile writes: self-or-admin only", () => {
     assert.equal(m.createUser.calls.length, 0);
   });
 
-  it("403 when a student deletes another account", async () => {
+  it("returns 404 for deleted user route per policy (manual DB query only)", async () => {
     const res = await request(app).delete("/api/users/u9").set(AUTH);
+    assert.equal(res.status, 404);
+  });
 
-    assert.equal(res.status, 403);
-    assert.equal(m.deleteUser.calls.length, 0);
+  it("self-delete route removed per policy", async () => {
+    const res = await request(app).delete("/api/users/u1").set(AUTH);
+    assert.equal(res.status, 404);
   });
 });
 
@@ -389,18 +421,18 @@ describe("role escalation is closed", () => {
     assert.equal(m.updateUser.calls.length, 0);
   });
 
-  it("403 when an admin deletes a superadmin", async () => {
+  it("404 for delete route per policy (manual DB query only)", async () => {
     session.id = "admin1";
     session.role = "admin";
     m.getUserById.setImpl(async () => ({ id: "super1", role: "superadmin" }));
 
     const res = await request(app).delete("/api/users/super1").set(AUTH);
 
-    assert.equal(res.status, 403);
-    assert.equal(m.deleteUser.calls.length, 0);
+    assert.equal(res.status, 404);
+    assert.equal(m.getUserById.calls.length, 0);
   });
 
-  it("does not let an admin delete a lower-ranked account through the legacy route", async () => {
+  it("404 for delete route per policy (manual DB query only)", async () => {
     session.id = "admin1";
     session.role = "admin";
     m.getUserById.setImpl(async () => ({ id: "s1", role: "student" }));
@@ -408,14 +440,14 @@ describe("role escalation is closed", () => {
 
     const res = await request(app).delete("/api/users/s1").set(AUTH);
 
-    assert.equal(res.status, 403);
-    assert.equal(m.deleteUser.calls.length, 0);
+    assert.equal(res.status, 404);
+    assert.equal(m.getUserById.calls.length, 0);
   });
 
   it("never looks up the target for a non-admin (no id probing)", async () => {
     const res = await request(app).delete("/api/users/ghost").set(AUTH);
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 404);
     assert.equal(m.getUserById.calls.length, 0);
   });
 });
@@ -551,6 +583,9 @@ describe("file uploads use storage object keys", () => {
   });
 
   it("rejects an external URL on a thesis pdf", async () => {
+    // Manuscripts now arrive as multipart/form-data, not a JSON `pdf_url`
+    // field — the JSON body is rejected by the schema before the file is
+    // even seen.
     const res = await request(app).post("/api/theses").set(AUTH).send({
       title: "t",
       abstract: "a",
@@ -563,20 +598,27 @@ describe("file uploads use storage object keys", () => {
   });
 
   it("accepts a bucket-relative storage key on a thesis pdf", async () => {
-    m.createThesis.setImpl(async (data) => ({ id: "t2" }));
+    m.createThesis.setImpl(async (data) => ({ id: "t2", ...data }));
 
-    const res = await request(app).post("/api/theses").set(AUTH).send({
-      title: "t",
-      abstract: "a",
-      category: "c",
-      pdf_url: "u1/2.pdf",
-    });
+    const res = await request(app)
+      .post("/api/theses")
+      .set(AUTH)
+      .field("title", "t")
+      .field("abstract", "a")
+      .field("category", "c")
+      .attach("pdf", Buffer.from("%PDF-1.4 fake manuscript"), "u1/2.pdf");
 
     assert.equal(res.status, 201);
-    assert.deepEqual(m.createThesis.calls.at(-1)[0].pdf_url, "u1/2.pdf");
+    // The path is `theses/<uid>/<timestamp>.pdf`; the filename comes from the
+    // upload, the prefix from the caller's identity.
+    const storedKey = m.createThesis.calls.at(-1)[0].pdf_url;
+    assert.ok(
+      storedKey.startsWith("theses/u1/") && storedKey.endsWith(".pdf"),
+      `unexpected stored key: ${storedKey}`
+    );
   });
 
-  it("returns the created image as a public URL", async () => {
+  it("returns the created image as a raw key (assets is private)", async () => {
     m.createPost.setImpl(async () => ({
       id: "p2",
       image_url: "posts/a/b.jpg",
@@ -588,7 +630,9 @@ describe("file uploads use storage object keys", () => {
       .send({ content: "x", type: "image", image_url: "posts/a/b.jpg" });
 
     assert.equal(res.status, 201);
-    assert.deepEqual(res.body.image_url, `${STORAGE_URL}/assets/posts/a/b.jpg`);
+    // `assets` is private (migration 015): the client must ask the backend
+    // for a signed URL, so the stored key is returned as-is.
+    assert.deepEqual(res.body.image_url, "posts/a/b.jpg");
   });
 
   it("rejects a client-supplied department on a thesis (server-derived)", async () => {
@@ -660,6 +704,7 @@ describe("errors and pagination limits", () => {
         q: null,
         uploaderId: null,
         categories: null,
+        viewerId: "u1",
       },
     ]);
 
@@ -731,6 +776,7 @@ describe("thesis list filters", () => {
         q: "ai",
         uploaderId: UPLOADER,
         categories: ["Graduate Dissertation"],
+        viewerId: "u1",
       },
     ]);
   });

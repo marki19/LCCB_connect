@@ -35,6 +35,7 @@ function formatPostRows(rows: any[], user: any) {
     comments: row.comments || 0,
     createdAt: new Date(row.created_at).toLocaleDateString(),
     isLiked: false,
+    visibility: row.visibility,
   }));
 }
 
@@ -191,7 +192,40 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.textPrimary, marginTop: 8 }}>{isGuest ? "Guest Visitor" : currentUser.full_name}</Text>
+          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.textPrimary, marginTop: 8 }}>{isGuest ? "Guest Visitor" : (currentUser.full_name || "Complete your profile")}</Text>
+          
+          {/* Verification status row */}
+          {!isGuest && (
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 }}>
+              {(() => {
+                const status = currentUser.verification_status;
+                if (status === "verified") {
+                  return (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: colors.successSurfaceAlt, borderRadius: 9999, borderWidth: 1, borderColor: colors.success }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.success, textTransform: "uppercase" }}>Verified</Text>
+                    </View>
+                  );
+                }
+                if (status === "pending") {
+                  return (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: colors.warningSurface, borderRadius: 9999, borderWidth: 1, borderColor: colors.warning }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.warning, textTransform: "uppercase" }}>Under review</Text>
+                    </View>
+                  );
+                }
+                // unverified or identity incomplete
+                return (
+                  <TouchableOpacity 
+                    onPress={() => router.push("/onboarding")}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: colors.actionSurface, borderRadius: 9999, borderWidth: 1, borderColor: colors.borderStrong }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.action }}>Complete profile</Text>
+                  </TouchableOpacity>
+                );
+              })()}
+            </View>
+          )}
+          
           <Text style={{ fontSize: 15, color: colors.textTertiary, marginTop: 2, fontWeight: "500" }}>{isGuest ? "External Visitor · Read-only" : `${currentUser.department_name || "No department"} · ${currentUser.year_level || "—"}`}</Text>
 
           <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: 12, lineHeight: 22 }}>

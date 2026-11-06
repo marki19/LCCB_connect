@@ -1,5 +1,8 @@
 export type PostType = "text" | "image" | "project" | "capstone" | "website" | "thesis";
 
+/** Who may read a post or thesis. Enforced in Postgres (see migration 014). */
+export type ContentVisibility = "public" | "friends" | "custom" | "private";
+
 export type User = {
   id: string;
   name: string;
@@ -38,6 +41,7 @@ export type Post = {
   createdAt: string;
   rawDate?: number;
   isLiked?: boolean;
+  visibility?: ContentVisibility;
 };
 
 export type Thesis = {
@@ -53,6 +57,7 @@ export type Thesis = {
   pdf_url: string;
   created_at: string;
   uploader?: User;
+  visibility?: ContentVisibility;
 };
 
 // Admin-managed catalog (Messaging_plan.md §3). Runtime data, never hardcoded.

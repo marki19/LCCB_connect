@@ -22,6 +22,9 @@ const ACTIONS = Object.freeze({
   CATALOG_UPDATE: "catalog.update",
   CATALOG_ACTIVATE: "catalog.activate",
   CATALOG_DEACTIVATE: "catalog.deactivate",
+  VERIFICATION_SUBMIT: "verification.submit",
+  VERIFICATION_APPROVE: "verification.approve",
+  VERIFICATION_DECLINE: "verification.decline",
 });
 
 function actorSnapshot(actor) {

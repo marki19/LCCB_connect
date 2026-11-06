@@ -283,18 +283,33 @@ function requireRole(...allowedRoles) {
   const normalizedAllowed = allowedRoles.map(normalizeRole);
   return (req, res, next) => {
     if (!req.profile) {
-      return res.status(403).json({ error: "Forbidden: profile not loaded" });
+      return res.status(403).json({ error: "Forbidden" });
     }
     const userRole = normalizeRole(req.profile.role);
     if (!normalizedAllowed.includes(userRole)) {
-      return res.status(403).json({
-        error: "Forbidden: insufficient role permission",
-        required: allowedRoles,
-        actual: req.profile.role || "student",
-      });
+      return res.status(403).json({ error: "Forbidden" });
     }
     return next();
   };
+}
+
+/**
+ * Blocks students who have not been verified from performing writes.
+ *
+ * Staff accounts (faculty, departmentAdmin, admin, superadmin) are never
+ * gated: they are provisioned by an admin and must not be trapped in
+ * onboarding (D12). The verification endpoints themselves are mounted
+ * without this middleware, and profile edits stay open because bio, avatar,
+ * and year level remain editable after approval (D11).
+ */
+function requireVerified(req, res, next) {
+  const role = normalizeRole(getRole(req));
+  if (role !== "student") return next();
+  if (req.profile?.verification_status === "verified") return next();
+  return res.status(403).json({
+    error: "Verify your identity to do that",
+    code: "not_verified",
+  });
 }
 
 // Composable role security gates
@@ -326,6 +341,7 @@ module.exports = {
   isFaculty,
   isStudent,
   isSuspendedProfile,
+  requireVerified,
   // Privilege ranking (account management)
   ROLE_RANK,
   rankOf,

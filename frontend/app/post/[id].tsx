@@ -72,6 +72,7 @@ export default function PostDetailScreen() {
               comments: postData.comments || 0,
               createdAt: new Date(postData.created_at).toLocaleDateString(),
               isLiked: Boolean(postData.is_liked),
+              visibility: postData.visibility,
             });
             setLikeCount(postData.likes || 0);
             setLiked(Boolean(postData.is_liked));
@@ -220,6 +221,7 @@ export default function PostDetailScreen() {
         editType: post.type ?? "text",
         editTech: (post.tags ?? []).join(", "),
         editUrl: post.previewUrl ?? "",
+        editVisibility: post.visibility ?? "public",
       },
     });
   };

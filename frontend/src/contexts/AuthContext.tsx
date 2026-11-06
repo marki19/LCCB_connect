@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { apiJson, ApiError } from '../lib/api';
@@ -14,6 +14,11 @@ export type Profile = {
   year_level: string | null;
   role: string | null;
   skills: string[] | null;
+  // Identity verification (migration 016). Denormalized auth email + app student_id.
+  email?: string | null;
+  student_id?: string | null;
+  verification_status?: 'unverified' | 'pending' | 'verified' | null;
+  verified_at?: string | null;
   // Catalog assignment (Messaging_plan.md §3). Null until the user completes
   // their profile; the ids are the authorization source of truth.
   department_id?: string | null;
@@ -39,6 +44,8 @@ type AuthContextType = {
   signInAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  clearAuthNotice: () => void;
+  authNotice: string | null;
   session: Session | null;
   user: User | null;
   profile: Profile | null;
@@ -50,6 +57,8 @@ const AuthContext = createContext<AuthContextType>({
   signInAsGuest: async () => {},
   signOut: async () => {},
   refreshProfile: async () => {},
+  clearAuthNotice: () => {},
+  authNotice: null,
   session: null,
   user: null,
   profile: null,
@@ -63,6 +72,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
+  // One-shot explanation shown on the login screen after the session was ended
+  // because the account no longer exists.
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+
+  const clearAuthNotice = useCallback(() => setAuthNotice(null), []);
 
   const signInAsGuest = async () => {
     // Pure local guest mode: No Supabase user or account needed.
@@ -91,45 +105,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
-  const fetchProfile = async (userId: string, currentUser?: User | null) => {
-    // Happy path: fetch the profile, create if missing (404 -> auto-provision)
+  const fetchProfile = async (userId: string) => {
     try {
       const data = await apiJson<Profile>(`/users/${userId}`);
       setProfile(data);
       return;
     } catch (e) {
-      // 404 means user doesn't exist — create it from the current session
-      if (e instanceof ApiError && e.status === 404 && currentUser) {
-        try {
-          const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "Student";
-          const username = (currentUser.email?.split("@")[0] || "user") + "_" + Math.floor(Math.random() * 1000);
-          const newProfile = await apiJson<Profile>(`/users`, {
-            method: "POST",
-            body: JSON.stringify({ username, full_name: fullName }),
-          });
-          setProfile(newProfile);
-          return;
-        } catch (createErr) {
-          console.error("Failed to auto-provision profile:", createErr);
-        }
+      // 404 = the profile is gone. Signup now creates the profile during OTP
+      // verification and login refuses profile-less accounts, so this is not a
+      // signup in progress: the account was deleted. End the session and say so.
+      if (e instanceof ApiError && e.status === 404) {
+        setAuthNotice(
+          "This account has been deleted. Contact the administrator if you think this is a mistake."
+        );
+        setProfile(null);
+        await supabase.auth.signOut();
         return;
       }
 
       // 4xx (except 404) = permanent auth/profile error — log with status
       if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
         console.error(`Profile fetch failed (${e.status}):`, e.message);
+        setProfile(null);
         return;
       }
 
       // Network or 5xx = transient — log for debugging, set null to retry
       console.error("Network failure fetching profile:", e);
+      setProfile(null);
     }
-    setProfile(null);
   };
 
   const refreshProfile = async () => {
     if (user?.id) {
-      await fetchProfile(user.id, user);
+      await fetchProfile(user.id);
     }
   };
 
@@ -138,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id, session.user).finally(() => setInitialized(true));
+        fetchProfile(session.user.id).finally(() => setInitialized(true));
       } else {
         setInitialized(true);
       }
@@ -149,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          fetchProfile(session.user.id, session.user);
+          fetchProfile(session.user.id);
         } else {
           setProfile(null);
         }
@@ -162,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, initialized, isGuest, signInAsGuest, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, profile, initialized, isGuest, signInAsGuest, signOut, refreshProfile, authNotice, clearAuthNotice }}>
       {children}
     </AuthContext.Provider>
   );

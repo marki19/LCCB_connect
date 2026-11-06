@@ -1,16 +1,19 @@
 import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Image, Pressable } from "react-native";
 import { useState } from "react";
-import { supabase } from "../../src/lib/supabase";
-import { Link } from "expo-router";
+import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { Eye, EyeOff, AlertCircle, Sun, Moon, Monitor } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
+import { signInWithIdentifier } from "../../src/lib/auth";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { focusRing } from "../../src/lib/tokens";
 
 export default function LoginScreen() {
-  const { signInAsGuest } = useAuth();
+  const { signInAsGuest, authNotice, clearAuthNotice } = useAuth();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ success?: string }>();
+  const successMessage = params.success || "";
   const { colors, isDark, preference, cycleTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("");
@@ -26,8 +29,16 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
 
-  const isValidEmailDomain = email.trim().toLowerCase().endsWith("@lccb.edu.ph");
-  const showEmailFormatError = email.length > 0 && !isValidEmailDomain;
+  // A session ended because the account no longer exists (deleted by an
+  // administrator). Shown until the user starts another attempt.
+  const errorMessage = generalError || authNotice || "";
+
+  const trimmedIdentifier = email.trim();
+  // A student ID has no "@"; everything else is treated as an email address.
+  const identifierIsEmail = trimmedIdentifier.includes("@");
+  const isValidEmailDomain = identifierIsEmail && trimmedIdentifier.toLowerCase().endsWith("@lccbonline.edu.ph");
+  const isValidStudentId = !identifierIsEmail && /^[A-Za-z0-9-]{4,20}$/.test(trimmedIdentifier);
+  const showEmailFormatError = trimmedIdentifier.length > 0 && !isValidEmailDomain && !isValidStudentId;
 
   const themeLabel = preference === "system" ? "System" : preference === "light" ? "Light" : "Dark";
   const nextTheme = preference === "light" ? "dark" : preference === "dark" ? "system" : "light";
@@ -41,21 +52,23 @@ export default function LoginScreen() {
     setEmail(value);
     if (value) setEmailError("");
     setGeneralError("");
+    clearAuthNotice();
   }
 
   function handlePasswordChange(value: string) {
     setPassword(value);
     if (value) setPasswordError("");
     setGeneralError("");
+    clearAuthNotice();
   }
 
   async function signInWithEmail() {
     let hasError = false;
     if (!email.trim()) {
-      setEmailError("Email is required");
+      setEmailError("Email or student ID is required");
       hasError = true;
-    } else if (!isValidEmailDomain) {
-      setEmailError("Must be an @lccb.edu.ph address");
+    } else if (!isValidEmailDomain && !isValidStudentId) {
+      setEmailError("Must be an @lccbonline.edu.ph address or a 4-20 char student ID");
       hasError = true;
     }
 
@@ -67,12 +80,22 @@ export default function LoginScreen() {
     if (hasError) return;
 
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    setGeneralError("");
+    clearAuthNotice();
 
-    if (error) {
-      setGeneralError(error.message);
+    try {
+      await signInWithIdentifier(trimmedIdentifier, password);
+    } catch (err: any) {
+      const message = err?.message || "Invalid email, student ID, or password";
+      // "Email not confirmed" is a distinct state — tell the user what to do.
+      if (/not confirmed|not_confirmed/i.test(message)) {
+        setGeneralError("Confirm your email first");
+        return;
+      }
+      setGeneralError(message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -190,16 +213,23 @@ export default function LoginScreen() {
                 </Text>
               </View>
 
-              {generalError ? (
-                <View style={{ backgroundColor: colors.destructiveSurface, borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: colors.destructiveSurfaceAlt }}>
-                  <AlertCircle color={colors.destructive} size={18} />
-                  <Text style={{ color: colors.destructiveText, fontWeight: "600", fontSize: 13, marginLeft: 10, flex: 1 }}>{generalError}</Text>
+              {successMessage ? (
+                <View style={{ backgroundColor: colors.successSurface, borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: colors.successSurfaceAlt }}>
+                  <AlertCircle color={colors.success} size={18} />
+                  <Text style={{ color: colors.successText, fontWeight: "600", fontSize: 13, marginLeft: 10 }}>{successMessage}</Text>
                 </View>
               ) : null}
 
-              {/* Email Input */}
+              {errorMessage ? (
+                <View style={{ backgroundColor: colors.destructiveSurface, borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: colors.destructiveSurfaceAlt }}>
+                  <AlertCircle color={colors.destructive} size={18} />
+                  <Text style={{ color: colors.destructiveText, fontWeight: "600", fontSize: 13, marginLeft: 10, flex: 1 }}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              {/* Email or Student ID Input */}
               <View style={{ marginBottom: 18 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>Institutional Email</Text>
+                <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>Email or Student ID</Text>
                 <View 
                   style={{ 
                     backgroundColor: colors.surfaceSunken, 
@@ -216,20 +246,20 @@ export default function LoginScreen() {
                 >
                   <TextInput
                     style={{ flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: "500", outlineStyle: "none" } as any}
-                    placeholder="student@lccb.edu.ph"
+                    placeholder="student@lccbonline.edu.ph or 2023-00123"
                     placeholderTextColor={colors.textTertiary}
                     value={email}
                     onChangeText={handleEmailChange}
                     onFocus={() => setFocusedField("email")}
                     onBlur={() => setFocusedField(null)}
                     autoCapitalize="none"
-                    keyboardType="email-address"
+                    keyboardType={identifierIsEmail ? "email-address" : "default"}
                   />
                 </View>
                 {(emailError || showEmailFormatError) ? (
                   <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, marginLeft: 4 }}>
                     <AlertCircle color={colors.warning} size={14} />
-                    <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{emailError || "Must be an @lccb.edu.ph institutional address"}</Text>
+                    <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{emailError || "Must be an @lccbonline.edu.ph address or a 4-20 char student ID"}</Text>
                   </View>
                 ) : null}
               </View>
@@ -294,7 +324,7 @@ export default function LoginScreen() {
                     <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{passwordError}</Text>
                   </View>
                 ) : null}
-                <TouchableOpacity style={{ alignSelf: "flex-end", marginTop: 10 }}>
+                <TouchableOpacity style={{ alignSelf: "flex-end", marginTop: 10 }} onPress={() => router.push("/(auth)/forgot-password")}>
                   <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>Forgot Password?</Text>
                 </TouchableOpacity>
               </View>

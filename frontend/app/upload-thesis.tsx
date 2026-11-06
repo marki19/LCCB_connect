@@ -8,9 +8,10 @@ import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
-import { uploadToStorage, MAX_UPLOAD_BYTES } from "../src/lib/upload";
-import { apiFetch, updateThesis } from "../src/lib/api";
+import { apiFetch, apiFetchMultipart, updateThesis } from "../src/lib/api";
 import { safeBack } from "../src/lib/navigation";
+import VisibilityPicker from "../src/components/VisibilityPicker";
+import type { ContentVisibility } from "../src/types";
 
 export default function UploadThesisScreen() {
   const { profile } = useAuth();
@@ -28,6 +29,12 @@ export default function UploadThesisScreen() {
   const [isLoading, setIsLoading] = useState(isEditing);
   const [loadError, setLoadError] = useState("");
 
+  const [visibility, setVisibility] = useState<ContentVisibility>("public");
+  const [audience, setAudience] = useState<string[]>([]);
+  // Editing must not silently reset the stored visibility, so the picker is only
+  // sent when the user actually changes it.
+  const [visibilityTouched, setVisibilityTouched] = useState(false);
+
   // In edit mode, prefill from the stored manuscript (fetch-on-mount avoids
   // passing a 10k-character abstract through router params).
   useEffect(() => {
@@ -42,6 +49,7 @@ export default function UploadThesisScreen() {
         setTitle(t.title || "");
         setAbstract(t.abstract || "");
         if (t.category) setCategory(t.category);
+        if (t.visibility) setVisibility(t.visibility as ContentVisibility);
       } catch (e: any) {
         if (active) setLoadError(e.message || "Could not load the manuscript.");
       } finally {
@@ -80,39 +88,79 @@ export default function UploadThesisScreen() {
       return;
     }
     if (!profile?.id) return;
+    if (visibility === "custom" && audience.length === 0) {
+      Alert.alert("Pick an audience", "Choose at least one friend who can see this.");
+      return;
+    }
 
     setIsUploading(true);
     try {
-      // Only upload when a file was picked; in edit mode an untouched picker
-      // means "keep the stored manuscript".
-      let pdfKey: string | null = null;
-      if (pdfFile) {
-        const ext = pdfFile.name.split('.').pop() || "pdf";
-        const filePath = `${profile.id}/${Date.now()}.${ext}`;
-        const uploaded = await uploadToStorage(pdfFile.uri, 'theses', filePath, pdfFile.mimeType || 'application/pdf', MAX_UPLOAD_BYTES.pdf);
-        if (!uploaded) throw new Error("Failed to upload the file to Supabase Storage.");
-        pdfKey = uploaded.key;
+      if (!profile?.id) return;
+      if (visibility === "custom" && audience.length === 0) {
+        Alert.alert("Pick an audience", "Choose at least one friend who can see this.");
+        return;
       }
 
+      const visibilityPayload = visibilityTouched
+        ? { visibility, ...(visibility === "custom" ? { audience } : {}) }
+        : {};
+
       if (isEditing) {
-        // Partial update — ownership is enforced server-side (404 otherwise).
-        await updateThesis(thesisId!, {
-          title,
-          abstract,
-          category,
-          ...(pdfKey ? { pdf_url: pdfKey } : {}),
-        });
-      } else {
-        const res = await apiFetch(`/theses`, {
-          method: "POST",
-          body: JSON.stringify({
+        if (pdfFile) {
+          // Multipart PUT: the new manuscript travels as a file, the rest as
+          // form fields. The server uploads to Storage itself and stores only
+          // the object key.
+          const formData = new FormData();
+          formData.append("pdf", {
+            uri: pdfFile.uri,
+            type: pdfFile.mimeType || "application/pdf",
+            name: pdfFile.name,
+          } as any);
+          for (const [key, value] of Object.entries({
             title,
             abstract,
             category,
-            pdf_url: pdfKey,
-          }),
-        });
+            ...visibilityPayload,
+          })) {
+            if (value !== undefined) formData.append(key, String(value));
+          }
 
+          const res = await apiFetchMultipart(`/theses/${thesisId}`, {
+            method: "PUT" as any,
+            body: formData,
+          } as any);
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || "Failed to update manuscript.");
+          }
+        } else {
+          // No new file: plain JSON partial update.
+          await updateThesis(thesisId!, {
+            title,
+            abstract,
+            category,
+            ...visibilityPayload,
+          });
+        }
+      } else {
+        // New deposit: the PDF is the first field, so the server can validate
+        // magic bytes before touching Storage.
+        const formData = new FormData();
+        formData.append("pdf", {
+          uri: pdfFile!.uri,
+          type: pdfFile!.mimeType || "application/pdf",
+          name: pdfFile!.name,
+        } as any);
+        for (const [key, value] of Object.entries({
+          title,
+          abstract,
+          category,
+          ...visibilityPayload,
+        })) {
+          if (value !== undefined) formData.append(key, String(value));
+        }
+
+        const res = await apiFetchMultipart(`/theses`, { body: formData } as any);
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error || "Failed to save manuscript to backend database");
@@ -230,6 +278,16 @@ export default function UploadThesisScreen() {
                   onChangeText={setAbstract}
                 />
               </View>
+
+              <VisibilityPicker
+                visibility={visibility}
+                audience={audience}
+                onChange={(nextVisibility, nextAudience) => {
+                  setVisibility(nextVisibility);
+                  setAudience(nextAudience);
+                  setVisibilityTouched(true);
+                }}
+              />
 
               <View style={{ marginBottom: 28 }}>
                 <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>PDF Document</Text>

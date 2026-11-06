@@ -1,46 +1,35 @@
 import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, Image, Pressable } from "react-native";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "../../src/lib/supabase";
 import { Link, useRouter } from "expo-router";
 import { Eye, EyeOff, AlertCircle, Sun, Moon, Monitor } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { apiFetch } from "../../src/lib/api";
-import SelectField from "../../src/components/SelectField";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { fetchDepartments, fetchCourses } from "../../src/lib/catalog";
 import { focusRing } from "../../src/lib/tokens";
-import type { Department, Course } from "../../src/types";
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { colors, isDark, preference, cycleTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [focusedField, setFocusedField] = useState<"name" | "email" | "password" | null>(null);
+  const [focusedField, setFocusedField] = useState<"email" | "fullName" | "password" | "confirm" | null>(null);
   const [hoveredControl, setHoveredControl] = useState<string | null>(null);
   const [focusedControl, setFocusedControl] = useState<string | null>(null);
 
   // Validation States
   const [emailError, setEmailError] = useState("");
+  const [fullNameError, setFullNameError] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [nameError, setNameError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
   const [generalError, setGeneralError] = useState("");
-  const [departmentError, setDepartmentError] = useState("");
-  const [courseError, setCourseError] = useState("");
 
-  // Admin-managed catalog (loaded live; never hardcoded).
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [departmentId, setDepartmentId] = useState<string | null>(null);
-  const [courseId, setCourseId] = useState<string | null>(null);
-  const [loadingCatalog, setLoadingCatalog] = useState(true);
-
-  const isValidEmailDomain = email.trim().toLowerCase().endsWith("@lccb.edu.ph");
+  const isValidEmailDomain = email.trim().toLowerCase().endsWith("@lccbonline.edu.ph");
   const showEmailFormatError = email.length > 0 && !isValidEmailDomain;
 
   const themeLabel = preference === "system" ? "System" : preference === "light" ? "Light" : "Dark";
@@ -57,109 +46,91 @@ export default function RegisterScreen() {
     setGeneralError("");
   }
 
+  function handleFullNameChange(value: string) {
+    setFullName(value);
+    if (value) setFullNameError("");
+    setGeneralError("");
+  }
+
   function handlePasswordChange(value: string) {
     setPassword(value);
     if (value) setPasswordError("");
     setGeneralError("");
   }
 
-  function handleNameChange(value: string) {
-    setFullName(value);
-    if (value) setNameError("");
+  function handleConfirmChange(value: string) {
+    setConfirmPassword(value);
+    if (value) setConfirmError("");
     setGeneralError("");
   }
 
-  useEffect(() => {
-    fetchDepartments()
-      .then(setDepartments)
-      .catch(() => setDepartments([]))
-      .finally(() => setLoadingCatalog(false));
-  }, []);
-
-  useEffect(() => {
-    if (!departmentId) return;
-    let active = true;
-    fetchCourses(departmentId)
-      .then((list) => {
-        if (active) setCourses(list);
-      })
-      .catch(() => {
-        if (active) setCourses([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [departmentId]);
-
   async function signUpWithEmail() {
     let hasError = false;
-
-    if (!fullName.trim()) {
-      setNameError("Full Name is required");
-      hasError = true;
-    }
 
     if (!email.trim()) {
       setEmailError("Email is required");
       hasError = true;
     } else if (!isValidEmailDomain) {
-      setEmailError("Must be an @lccb.edu.ph address");
-      hasError = true;
-    }
-    
-    if (!password) {
-      setPasswordError("Password is required");
-      hasError = true;
-    } else if (password.length < 6) {
-      setPasswordError("Password must be at least 6 characters");
+      setEmailError("Must be an @lccbonline.edu.ph address");
       hasError = true;
     }
 
-    if (!departmentId) {
-      setDepartmentError("Select your department");
+    const trimmedFullName = fullName.trim();
+    if (!trimmedFullName) {
+      setFullNameError("Full name is required");
+      hasError = true;
+    } else if (trimmedFullName.length < 2) {
+      setFullNameError("Full name must be at least 2 characters");
+      hasError = true;
+    } else if (trimmedFullName.length > 200) {
+      setFullNameError("Full name is too long");
       hasError = true;
     }
-    if (!courseId) {
-      setCourseError("Select your course");
+
+    if (!password) {
+      setPasswordError("Password is required");
+      hasError = true;
+    } else if (password.length < 8) {
+      setPasswordError("Password must be at least 8 characters");
+      hasError = true;
+    }
+
+    if (!confirmPassword) {
+      setConfirmError("Confirm your password");
+      hasError = true;
+    } else if (confirmPassword !== password) {
+      setConfirmError("Passwords do not match");
       hasError = true;
     }
 
     if (hasError) return;
 
     setLoading(true);
-    
-    const { error, data } = await supabase.auth.signUp({ 
-      email: email.trim().toLowerCase(), 
+    setGeneralError("");
+
+    const { error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
       password,
       options: {
         data: {
-          full_name: fullName.trim(),
-        }
-      }
+          full_name: trimmedFullName,
+        },
+      },
     });
-    
+
     if (error) {
       setGeneralError(error.message);
-    } else {
-      if (data?.user) {
-        try {
-          const username = email.trim().toLowerCase().split("@")[0] + "_" + Math.floor(Math.random() * 1000);
-          await apiFetch(`/users`, {
-            method: "POST",
-            body: JSON.stringify({
-              username,
-              full_name: fullName.trim(),
-              department_id: departmentId,
-              course_id: courseId,
-              course: courses.find((c) => c.id === courseId)?.name || null,
-            }),
-          });
-        } catch (backendErr) {
-          console.error("Failed to sync profile to SQL backend:", backendErr);
-        }
-      }
-      router.replace("/(auth)/login");
+      setLoading(false);
+      return;
     }
+
+    // Supabase signup confirmation is ON (plan D16), so the account is not
+    // usable until the 6-digit OTP is entered. Send the student to the OTP
+    // screen, not the login screen — the session only exists after verifyOtp.
+    router.replace({
+      pathname: "/(auth)/verify-email",
+      params: { email: email.trim().toLowerCase(), flow: "signup" },
+    });
     setLoading(false);
   }
 
@@ -285,88 +256,6 @@ export default function RegisterScreen() {
                 </View>
               ) : null}
 
-              {/* Name Input */}
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>Full Name</Text>
-                <View 
-                  style={{ 
-                    backgroundColor: colors.surfaceSunken, 
-                    borderRadius: 14, 
-                    paddingHorizontal: 16, 
-                    height: 52, 
-                    flexDirection: "row", 
-                    alignItems: "center", 
-                    borderWidth: 1.5, 
-                    borderColor: nameError 
-                      ? colors.destructive 
-                      : (focusedField === "name" ? colors.primary : colors.border) 
-                  }}
-                >
-                  <TextInput
-                    style={{ flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: "500", outlineStyle: "none" } as any}
-                    placeholder="Juan Dela Cruz"
-                    placeholderTextColor={colors.textTertiary}
-                    value={fullName}
-                    onChangeText={handleNameChange}
-                    onFocus={() => setFocusedField("name")}
-                    onBlur={() => setFocusedField(null)}
-                    autoCapitalize="words"
-                  />
-                </View>
-                {nameError ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, marginLeft: 4 }}>
-                    <AlertCircle color={colors.warning} size={14} />
-                    <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{nameError}</Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {/* Department & Course (admin-managed catalog) */}
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>Department</Text>
-                <SelectField
-                  placeholder={loadingCatalog ? "Loading…" : "Select your department"}
-                  value={departmentId}
-                  options={departments.map((d) => ({ label: d.name, value: d.id }))}
-                  onChange={(v) => {
-                    setDepartmentId(v);
-                    setCourseId(null);
-                    setCourses([]);
-                    setDepartmentError("");
-                    setCourseError("");
-                  }}
-                  loading={loadingCatalog}
-                  error={!!departmentError}
-                />
-                {departmentError ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, marginLeft: 4 }}>
-                    <AlertCircle color={colors.warning} size={14} />
-                    <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{departmentError}</Text>
-                  </View>
-                ) : null}
-              </View>
-
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>Course</Text>
-                <SelectField
-                  placeholder={departmentId ? "Select your course" : "Select a department first"}
-                  value={courseId}
-                  options={courses.map((c) => ({ label: c.name, value: c.id }))}
-                  onChange={(v) => {
-                    setCourseId(v);
-                    setCourseError("");
-                  }}
-                  disabled={!departmentId || courses.length === 0}
-                  error={!!courseError}
-                />
-                {courseError ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, marginLeft: 4 }}>
-                    <AlertCircle color={colors.warning} size={14} />
-                    <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{courseError}</Text>
-                  </View>
-                ) : null}
-              </View>
-
               {/* Email Input */}
               <View style={{ marginBottom: 16 }}>
                 <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>Institutional Email</Text>
@@ -386,7 +275,7 @@ export default function RegisterScreen() {
                 >
                   <TextInput
                     style={{ flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: "500", outlineStyle: "none" } as any}
-                    placeholder="student@lccb.edu.ph"
+                    placeholder="student@lccbonline.edu.ph"
                     placeholderTextColor={colors.textTertiary}
                     value={email}
                     onChangeText={handleEmailChange}
@@ -399,7 +288,43 @@ export default function RegisterScreen() {
                 {(emailError || showEmailFormatError) ? (
                   <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, marginLeft: 4 }}>
                     <AlertCircle color={colors.warning} size={14} />
-                    <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{emailError || "Must use an @lccb.edu.ph address"}</Text>
+                    <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{emailError || "Must use an @lccbonline.edu.ph address"}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {/* Full Name Input */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>Full Name</Text>
+                <View 
+                  style={{ 
+                    backgroundColor: colors.surfaceSunken, 
+                    borderRadius: 14, 
+                    paddingHorizontal: 16, 
+                    height: 52, 
+                    flexDirection: "row", 
+                    alignItems: "center", 
+                    borderWidth: 1.5, 
+                    borderColor: fullNameError 
+                      ? colors.destructive 
+                      : (focusedField === "fullName" ? colors.primary : colors.border) 
+                  }}
+                >
+                  <TextInput
+                    style={{ flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: "500", outlineStyle: "none" } as any}
+                    placeholder="Juan Dela Cruz"
+                    placeholderTextColor={colors.textTertiary}
+                    value={fullName}
+                    onChangeText={handleFullNameChange}
+                    onFocus={() => setFocusedField("fullName")}
+                    onBlur={() => setFocusedField(null)}
+                    autoCapitalize="words"
+                  />
+                </View>
+                {fullNameError ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, marginLeft: 4 }}>
+                    <AlertCircle color={colors.warning} size={14} />
+                    <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{fullNameError}</Text>
                   </View>
                 ) : null}
               </View>
@@ -462,6 +387,70 @@ export default function RegisterScreen() {
                   <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, marginLeft: 4 }}>
                     <AlertCircle color={colors.warning} size={14} />
                     <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{passwordError}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {/* Confirm Password Input */}
+              <View style={{ marginBottom: 28 }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>Confirm Password</Text>
+                <View
+                  style={{
+                    backgroundColor: colors.surfaceSunken,
+                    borderRadius: 14,
+                    paddingHorizontal: 16,
+                    height: 52,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderWidth: 1.5,
+                    borderColor: confirmError
+                      ? colors.destructive
+                      : (focusedField === "confirm" ? colors.primary : colors.border)
+                  }}
+                >
+                  <TextInput
+                    style={{ flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: "500", outlineStyle: "none" } as any}
+                    placeholder="••••••••••••"
+                    placeholderTextColor={colors.textTertiary}
+                    value={confirmPassword}
+                    onChangeText={handleConfirmChange}
+                    onFocus={() => setFocusedField("confirm")}
+                    onBlur={() => setFocusedField(null)}
+                    secureTextEntry={!showPassword}
+                    returnKeyType="done"
+                    onSubmitEditing={signUpWithEmail}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    onPress={() => setShowPassword(!showPassword)}
+                    onHoverIn={() => setHoveredControl("password")}
+                    onHoverOut={() => setHoveredControl(null)}
+                    onFocus={() => setFocusedControl("password")}
+                    onBlur={() => setFocusedControl(null)}
+                    style={({ pressed }) => [
+                      {
+                        width: 44,
+                        height: 44,
+                        marginRight: -9,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 22,
+                        backgroundColor: hoveredControl === "password" ? colors.hoverOverlay : "transparent",
+                        opacity: pressed ? 0.6 : 1,
+                      },
+                      focusRing(colors, focusedControl === "password"),
+                    ]}
+                  >
+                    {showPassword
+                      ? <EyeOff color={hoveredControl === "password" ? colors.primary : colors.textTertiary} size={18} />
+                      : <Eye color={hoveredControl === "password" ? colors.primary : colors.textTertiary} size={18} />}
+                  </Pressable>
+                </View>
+                {confirmError ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, marginLeft: 4 }}>
+                    <AlertCircle color={colors.warning} size={14} />
+                    <Text style={{ color: colors.warningText, fontSize: 12, marginLeft: 4, fontWeight: "600" }}>{confirmError}</Text>
                   </View>
                 ) : null}
               </View>

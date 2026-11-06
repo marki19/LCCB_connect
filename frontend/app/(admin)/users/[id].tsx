@@ -19,13 +19,11 @@ import {
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
-  Trash2,
   UserCog,
   UserRound,
 } from "lucide-react-native";
 import {
   changeUserRole,
-  deleteAdminUser,
   forceSignOut,
   getAdminUser,
   suspendUser,
@@ -204,11 +202,6 @@ export default function AdminUserDossierScreen() {
         () => forceSignOut(target.id, input.reason),
         "Sessions revoked. An already-issued access token may remain valid until it expires."
       );
-    } else if (dialog === "delete") {
-      void run(
-        () => deleteAdminUser(target.id, input.reason),
-        "Account and profile deleted."
-      );
     }
   };
 
@@ -258,13 +251,13 @@ export default function AdminUserDossierScreen() {
       };
     }
     return {
-      title: "Delete account",
+      title: "Suspend account",
       description:
-        "Deletes the Supabase Auth user and profile. The profile cascade removes posts, theses, comments, likes, messages, and memberships. This cannot be undone.",
-      confirmLabel: "Delete account",
+        "The user is signed out, banned in Supabase Auth, and blocked from every API route until restored.",
+      confirmLabel: "Suspend",
       destructive: true,
-      showUntil: false,
-      confirmationPhrase: target?.username || "delete",
+      showUntil: true,
+      confirmationPhrase: undefined,
     };
   })();
 
@@ -682,27 +675,6 @@ export default function AdminUserDossierScreen() {
                     <RefreshCw size={16} color={colors.textSecondary} />
                     <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "700", color: colors.textSecondary }}>
                       Force sign-out
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {canManageTarget && superadmin ? (
-                  <TouchableOpacity
-                    onPress={() => setDialog("delete")}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.destructive,
-                      backgroundColor: colors.destructiveSurface,
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                    }}
-                  >
-                    <Trash2 size={16} color={colors.destructiveText} />
-                    <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: "700", color: colors.destructiveText }}>
-                      Delete account
                     </Text>
                   </TouchableOpacity>
                 ) : null}
