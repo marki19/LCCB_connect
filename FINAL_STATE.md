@@ -26,7 +26,7 @@ type ProfileStatus = "idle" | "loading" | "ready" | "error";
 **File:** `frontend/app/(tabs)/_layout.tsx`
 
 **Components:**
-- `DesktopTab` — 4 main tabs (Home, Repository, Search, Messages), 40px icons, per-instance hover/focus state, tooltip, `focusRing`
+- `DesktopTab` — 4 main tabs (Home, Repository, Notifications, Profile), 40px icons, per-instance hover/focus state, tooltip, `focusRing`
 - `IconAction` — Create (primary), Admin (outline), Moderation (outline); each owns its hover/focus state, tooltip, `focusRing`
 - Theme toggle — hover/focus state, tooltip, `focusRing`, hover background
 
@@ -48,14 +48,21 @@ All four icon-only controls now behave identically.
 **File:** `frontend/src/components/PeerPicker.tsx`
 
 **Data source:** `GET /api/users/directory?limit=50&scope=network` (authenticated)
-- Returns: `id`, `username`, `full_name`, `avatar_url`, `year_level`, `department_id`, `department_name`, `friendship` (friend/pending_out/pending_in/none), `message_decision` (direct/request)
+- Returns: `id`, `username`, `full_name`, `avatar_url`, `year_level`, `department_id`, `department_name`, `friendship` (friend/pending_out/pending_in/none), `message_decision` (direct/request/blocked)
+
+**Modes:**
+- `mode="message"` (default): primary = message/request via `POST /conversations`; secondary = add friend via `POST /friends`
+  - `direct` → filled brand "Message" (includes non-friends when policy allows)
+  - `request` → outlined "Request" + MessageSquare → `POST /conversations` (creates `status=requested` thread in recipient's Requests tab)
+  - `none` → secondary UserPlus icon → `POST /friends`
+- `mode="friend"`: primary = add friend via `POST /friends`; existing friends get "Message"
+  - `friend` → filled brand "Message"
+  - `pending_in` → muted "Pending request"
+  - `none` → filled brand "Add friend" → `POST /friends`
+  - `pending_out` → green check + disabled "Add friend" (request already sent)
 
 **UI:**
 - `SectionList` grouped: Friends → Same department → Others
-- Button by `message_decision`:
-  - `direct` → filled brand "Message" (includes non-friends when policy allows)
-  - `request` → outlined "Request" + UserPlus
-  - (blocked pairs excluded by directory query — no `blocked` decision reaches client)
 - Touch targets: 40px + `hitSlop: 8px`
 - Sheet: `width: 100%`, `maxWidth: 520`, centered on desktop
 - Accessibility: all buttons + close + search input labeled
@@ -103,6 +110,8 @@ All four icon-only controls now behave identically.
 | **`d5479f3`** | **Fixes: redirect trap scoped to `inAuth` only + `IconAction` per-instance hover state + dead styles removed** | **The actual fix** for redirect trap & Create/Admin tooltips |
 | **`4b54f68`** | Fixes: `iconAction` centering + `focusRing` on IconAction/theme-toggle + shared state cleanup | |
 | **`990fab1`** | Fix profile fetch failure regression: `profileStatus` machine in AuthContext + fail-open on error | |
+| **`d607e6c`** | Fix PeerPicker `isBlocked`: trust only `message_decision === "blocked"` (not `friendship === "none"`) | Non-friend + `direct` now shows Message button; matches `directory.test.js:148-149` |
+| **`584502c`** | PeerPicker `mode` prop: message/friend — message mode uses `POST /conversations` for message requests; friend mode uses `POST /friends` | |
 
 **Skipped (deliberately):**
 - Phase 3 — Rail extraction (pure move, not needed)
@@ -145,6 +154,6 @@ cd backend; npm test                   # 356/356 pass
 ---
 
 ## Branch Status
-- **Branch:** `mark1e3` (14 commits ahead of `origin/mark1e3`)
-- **History:** Not clean — `a9517fd` sweeps pre-existing work. Fix commits (`f439912`, `d5479f3`, `4b54f68`, `990fab1`) are incremental.
-- **Ready to push:** Yes — all checks pass, no known functional regressions
+- **Branch:** `mark1e3` (16 commits ahead of `origin/mark1e3`)
+- **History:** Not clean — `a9517fd` sweeps pre-existing work. Fix commits (`f439912`, `d5479f3`, `4b54f68`, `990fab1`, `d607e6c`, `584502c`) are incremental.
+- **Ready to push:** Yes — all checks pass. Known edge case: hung `fetchProfile` keeps `profileStatus === "loading"` indefinitely (no fetch timeout in codebase).

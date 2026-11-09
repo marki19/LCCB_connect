@@ -17,10 +17,13 @@ import { usePresence } from "../contexts/PresenceContext";
 import Avatar from "./Avatar";
 
 /**
- * Peer directory with Message / Add-friend actions (Messaging_plan.md §4, §12).
+ * Peer directory with Message / Request / Add-friend actions.
  * Uses GET /api/users/directory for friendship state, department grouping, and message_decision.
  * SectionList sections: Friends, Same department, Others.
- * Button by decision: direct → filled "Message"; request → outlined "Request" + UserPlus; blocked → muted Lock, disabled.
+ *
+ * Modes:
+ * - "message": primary = message/request via POST /conversations; secondary = add friend via POST /friends
+ * - "friend": primary = add friend via POST /friends
  */
 
 type Peer = {
@@ -35,13 +38,27 @@ type Peer = {
   message_decision: "direct" | "request" | "blocked";
 };
 
+type Mode = "message" | "friend";
+
 type Props = {
   visible: boolean;
   onClose: () => void;
   onOpened?: (conversationId: string) => void;
+  mode?: Mode;
 };
 
-export default function PeerPicker({ visible, onClose, onOpened }: Props) {
+type Variant = "filled" | "outlined" | "muted";
+
+type Action = {
+  icon: any;
+  text: string;
+  variant: Variant;
+  disabled: boolean;
+  label: string;
+  onPress?: () => void;
+};
+
+export default function PeerPicker({ visible, onClose, onOpened, mode = "message" }: Props) {
   const { profile } = useAuth();
   const { colors, isDark } = useTheme();
   const { modeOf } = usePresence();
@@ -104,7 +121,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
     onClose();
   };
 
-  const handleMessage = async (peer: Peer) => {
+  const openThread = async (peer: Peer, label: string) => {
     setBusyId(peer.id);
     try {
       const res = await apiFetch("/conversations", {
@@ -113,13 +130,13 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || "Could not open conversation");
+        throw new Error(err.error || `Could not ${label.toLowerCase()}`);
       }
       const conversation = await res.json();
       handleClose();
       onOpened?.(conversation.id);
     } catch (err) {
-      Alert.alert("Can't message", err instanceof Error ? err.message : "Please try again.");
+      Alert.alert(`Can't ${label.toLowerCase()}`, err instanceof Error ? err.message : "Please try again.");
     } finally {
       setBusyId(null);
     }
@@ -157,53 +174,68 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
     const isBlocked = item.message_decision === "blocked";
     const isFriend = item.friendship === "friend";
     const isPendingOut = item.friendship === "pending_out";
+    const isPendingIn = item.friendship === "pending_in";
+    const isNone = item.friendship === "none";
     const isRequest = item.message_decision === "request" && !isFriend;
+    const isMessageMode = mode === "message";
+    const name = item.full_name || item.username || "Peer";
 
-    // Button variant based on decision
-    let buttonStyle: any = {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 18,
-      opacity: isBusy ? 0.6 : 1,
-    };
-    let buttonIcon: any = MessageSquare;
-    let buttonText = "Message";
-    let buttonDisabled = isBusy || isBlocked;
-    let accessibilityLabel = `Message ${item.full_name || item.username}`;
+    // Compute primary action (never null unless blocked with no fallback)
+    let primary: Action | null = null;
 
-    if (isFriend || (item.message_decision === "direct" && !isBlocked)) {
-      // Direct message - filled brand button
-      buttonStyle = { ...buttonStyle, backgroundColor: colors.action };
-      buttonIcon = MessageSquare;
-      buttonText = "Message";
-      accessibilityLabel = `Message ${item.full_name || item.username}`;
-    } else if (isRequest) {
-      // Request - outlined button with UserPlus
-      buttonStyle = {
-        ...buttonStyle,
-        backgroundColor: "transparent",
-        borderWidth: 2,
-        borderColor: colors.action,
+    if (isFriend || (isMessageMode && item.message_decision === "direct" && !isBlocked)) {
+      // Message existing friend, or message-mode + direct policy
+      primary = {
+        icon: MessageSquare,
+        text: "Message",
+        variant: "filled",
+        disabled: isBusy,
+        label: `Message ${name}`,
+        onPress: () => openThread(item, "message"),
       };
-      buttonIcon = UserPlus;
-      buttonText = "Request";
-      buttonDisabled = isBusy;
-      accessibilityLabel = `Request to message ${item.full_name || item.username}`;
-    } else {
-      // Blocked - muted lock, disabled
-      buttonStyle = {
-        ...buttonStyle,
-        backgroundColor: colors.surfaceSunken,
-        borderWidth: 1,
-        borderColor: colors.border,
+    } else if (isMessageMode && isRequest) {
+      // Message mode + request decision → message request
+      primary = {
+        icon: MessageSquare,
+        text: "Request",
+        variant: "outlined",
+        disabled: isBusy,
+        label: `Request to message ${name}`,
+        onPress: () => openThread(item, "request"),
       };
-      buttonIcon = Lock;
-      buttonText = "Blocked";
-      buttonDisabled = true;
-      accessibilityLabel = `Cannot message ${item.full_name || item.username}`;
+    } else if (isMessageMode && isBlocked) {
+      // Blocked in message mode
+      primary = {
+        icon: Lock,
+        text: "Blocked",
+        variant: "muted",
+        disabled: true,
+        label: `Cannot message ${name}`,
+      };
+    } else if (!isMessageMode && !isBlocked) {
+      // Friend mode: only add friend (never message non-friends)
+      if (isPendingIn) {
+        primary = {
+          icon: Check,
+          text: "Pending request",
+          variant: "muted",
+          disabled: true,
+          label: `Request pending from ${name}`,
+        };
+      } else {
+        primary = {
+          icon: UserPlus,
+          text: "Add friend",
+          variant: "filled",
+          disabled: isBusy || isPendingOut,
+          label: `Add ${name} as friend`,
+          onPress: () => handleAdd(item),
+        };
+      }
     }
+
+    // Secondary add-friend icon: message mode, non-friend, no block, friendship === "none" only
+    const showSecondaryAdd = isMessageMode && !isFriend && !isBlocked && isNone;
 
     return (
       <View
@@ -219,7 +251,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
         <Avatar name={item.full_name || item.username} size={44} showPresence mode={modeOf(item.id)} />
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}>
-            {item.full_name || item.username || "Peer"}
+            {name}
           </Text>
           <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>
             {item.department_name || "No department"}
@@ -227,11 +259,12 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
           </Text>
         </View>
 
-        {isPendingOut ? (
+        {/* Slot 1: pending_out check icon */}
+        {isPendingOut && (
           <TouchableOpacity
             disabled
             accessibilityRole="button"
-            accessibilityLabel={`Add ${item.full_name || item.username} as friend`}
+            accessibilityLabel={`Add ${name} as friend`}
             style={{
               width: 40,
               height: 40,
@@ -245,29 +278,82 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
           >
             <Check size={16} color="#16A34A" />
           </TouchableOpacity>
-        ) : (
+        )}
+
+        {/* Slot 2: primary action button */}
+        {primary && (
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel={accessibilityLabel}
-            disabled={buttonDisabled}
-            onPress={isFriend || (item.message_decision === "direct" && !isBlocked) ? () => handleMessage(item) : () => handleAdd(item)}
-            style={buttonStyle}
+            accessibilityLabel={primary.label}
+            disabled={primary.disabled}
+            onPress={primary.onPress}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 18,
+              opacity: primary.disabled ? 0.6 : 1,
+              backgroundColor:
+                primary.variant === "filled"
+                  ? colors.action
+                  : primary.variant === "outlined"
+                  ? "transparent"
+                  : colors.surfaceSunken,
+              borderWidth: primary.variant === "outlined" ? 2 : primary.variant === "muted" ? 1 : 0,
+              borderColor:
+                primary.variant === "outlined"
+                  ? colors.action
+                  : primary.variant === "muted"
+                  ? colors.border
+                  : undefined,
+            }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {React.createElement(buttonIcon, {
+            {React.createElement(primary.icon, {
               size: 14,
-              color: buttonDisabled ? colors.textTertiary : isRequest ? colors.action : "#FFFFFF",
+              color: primary.disabled
+                ? colors.textTertiary
+                : primary.variant === "outlined"
+                ? colors.action
+                : "#FFFFFF",
             })}
             <Text
               style={{
-                color: buttonDisabled ? colors.textTertiary : isRequest ? colors.action : "#FFFFFF",
+                color: primary.disabled
+                  ? colors.textTertiary
+                  : primary.variant === "outlined"
+                  ? colors.action
+                  : "#FFFFFF",
                 fontSize: 13,
                 fontWeight: "700",
                 marginLeft: 6,
               }}
             >
-              {buttonText}
+              {primary.text}
             </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Slot 3: secondary add-friend icon (message mode, none only) */}
+        {showSecondaryAdd && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Add ${name} as friend`}
+            disabled={isBusy}
+            onPress={() => handleAdd(item)}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: colors.actionSurface,
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 8,
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <UserPlus size={18} color={colors.action} />
           </TouchableOpacity>
         )}
       </View>
@@ -298,7 +384,9 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
               paddingBottom: 8,
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary }}>New message</Text>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary }}>
+              {mode === "message" ? "New message" : "Add friend"}
+            </Text>
             <TouchableOpacity
               onPress={handleClose}
               style={{ padding: 6 }}

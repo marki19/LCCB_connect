@@ -323,10 +323,11 @@ export default function MessagesInbox() {
       )}
 
       <PeerPicker
-        visible={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onOpened={(id) => openThread(id)}
-      />
+              visible={pickerOpen}
+              onClose={() => setPickerOpen(false)}
+              onOpened={(id) => openThread(id)}
+              mode="message"
+            />
     </SafeAreaView>
   );
 }
