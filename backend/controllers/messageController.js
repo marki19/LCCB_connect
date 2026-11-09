@@ -270,21 +270,6 @@ const reportMessage = async (req, res, next) => {
   }
 };
 
-/**
- * Batch permission check for the messaging picker.
- * Returns a map of recipient_id -> decision (direct | request | blocked).
- */
-const getPermissionMap = async (req, res, next) => {
-  try {
-    const decisions = await messageModel.canMessageBatch(req.user.id, req.body.peer_ids);
-    // Convert Map to plain object for JSON serialization
-    const result = Object.fromEntries(decisions);
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-};
-
 module.exports = {
   getConversations,
   getRequests,
@@ -297,5 +282,4 @@ module.exports = {
   muteConversation,
   markDelivered,
   reportMessage,
-  getPermissionMap,
 };

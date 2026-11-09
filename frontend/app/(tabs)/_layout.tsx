@@ -149,6 +149,10 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
 
+  // Shared hover/focus state for Create and Admin buttons
+  const [hovered, setHovered] = useState(false);
+  const [focusVisible, setFocusVisible] = useState(false);
+
   const navigate = (name: string, focused: boolean) => {
     const route = state.routes.find((r: any) => r.name === name);
     if (!route || focused) return;
@@ -197,9 +201,6 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
             <Text style={[styles.webBrandTitle, { color: colors.ink }]}>
               LCCB <Text style={{ color: colors.brand }}>Connect</Text>
             </Text>
-            <Text style={[styles.webBrandSub, { color: colors.inkFaint }]}>
-              Campus network
-            </Text>
           </View>
         </Pressable>
 
@@ -215,18 +216,22 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
                   accessibilityRole="button"
                   accessibilityLabel="Create a post"
                   onPress={() => router.push("/create")}
-                  style={({ pressed }) => [
+                  onHoverIn={() => setHovered(true)}
+                  onHoverOut={() => setHovered(false)}
+                  onFocus={() => setFocusVisible(true)}
+                  onBlur={() => setFocusVisible(false)}
+                  style={[
                     styles.webCreateButton,
-                    {
-                      backgroundColor: colors.brandSolid,
-                      opacity: pressed ? 0.88 : 1,
-                    },
+                    { backgroundColor: colors.brandSolid },
+                    { width: 40, paddingHorizontal: 0, justifyContent: "center" },
                   ]}
                 >
-                  <Plus size={16} color={colors.textOnPrimary} strokeWidth={2.5} />
-                  <Text style={[styles.webCreateText, { color: colors.textOnPrimary }]}>
-                    Create post
-                  </Text>
+                  <Plus size={17} color={colors.textOnPrimary} strokeWidth={2.5} />
+                  {(hovered || focusVisible) && (
+                    <Text pointerEvents="none" style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}>
+                      Create post
+                    </Text>
+                  )}
                 </Pressable>
               );
             }
@@ -269,18 +274,22 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
               }}
               accessibilityRole="button"
               accessibilityLabel="Open the admin console"
-              style={({ pressed }) => [
+              onHoverIn={() => setHovered(true)}
+              onHoverOut={() => setHovered(false)}
+              onFocus={() => setFocusVisible(true)}
+              onBlur={() => setFocusVisible(false)}
+              style={[
                 styles.webAdminButton,
-                {
-                  borderColor: colors.line,
-                  backgroundColor: pressed ? colors.panelInset : "transparent",
-                },
+                { borderColor: colors.line, backgroundColor: "transparent" },
+                { width: 40, paddingHorizontal: 0, justifyContent: "center" },
               ]}
             >
-              <Shield size={16} color={colors.brand} strokeWidth={2.2} />
-              <Text style={[styles.webAdminLabel, { color: colors.brand }]}>
-                Admin console
-              </Text>
+              <Shield size={17} color={colors.brand} strokeWidth={2.2} />
+              {(hovered || focusVisible) && (
+                <Text pointerEvents="none" style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}>
+                  Admin console
+                </Text>
+              )}
             </Pressable>
           ) : departmentAdmin ? (
             <Pressable
@@ -411,11 +420,6 @@ const styles = StyleSheet.create({
     ...TYPE.title,
     fontSize: 17,
     letterSpacing: -0.5,
-  },
-  webBrandSub: {
-    ...TYPE.micro,
-    fontSize: 7.5,
-    marginTop: 1,
   },
   webNavLinks: {
     flexDirection: "row",

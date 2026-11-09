@@ -364,12 +364,6 @@ const deviceTokenSchema = z
   })
   .strict();
 
-const messagePermissionsSchema = z
-  .object({
-    peer_ids: z.array(requiredUuid()).min(1).max(100),
-  })
-  .strict();
-
 const deleteDeviceTokenSchema = z
   .object({ token: z.string().trim().min(1).max(500) })
   .strict();
@@ -483,7 +477,6 @@ const validate = (schema) => (req, res, next) => {
   heartbeatSchema,
   deviceTokenSchema,
   deleteDeviceTokenSchema,
-  messagePermissionsSchema,
   friendRequestSchema,
   roleChangeSchema,
   suspendUserSchema,

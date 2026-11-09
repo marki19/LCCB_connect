@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   View,
@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import React from "react";
 import { Search, MessageSquare, UserPlus, Check, X, Lock } from "lucide-react-native";
 import { apiJson, apiFetch } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";

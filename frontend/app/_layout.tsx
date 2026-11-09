@@ -63,49 +63,51 @@ function RouteGuard() {
   }, [initialized, userId, isGuest, router]);
 
   useEffect(() => {
-      if (!initialized) return;
+        if (!initialized) return;
 
-      const inAuth = segments[0] === "(auth)";
-      const inAdmin = segments[0] === "(admin)";
-      const inModeration = segments[0] === "(moderation)";
-      const inTabs = segments[0] === "(tabs)";
-      const inSuspended = segments[0] === "suspended";
-      const adminUser = isAdminRole(profile?.role);
-      const moderatorUser = isModeratorRole(profile?.role);
-      const suspended = !!profile && isSuspendedProfile(profile);
-      const isAuthenticated = !!session || isGuest;
+        const inAuth = segments[0] === "(auth)";
+        const inAdmin = segments[0] === "(admin)";
+        const inModeration = segments[0] === "(moderation)";
+        const inTabs = segments[0] === "(tabs)";
+        const inSuspended = segments[0] === "suspended";
+        const inOnboarding = segments[0] === "onboarding";
+        const adminUser = isAdminRole(profile?.role);
+        const moderatorUser = isModeratorRole(profile?.role);
+        const suspended = !!profile && isSuspendedProfile(profile);
+        const isAuthenticated = !!session || isGuest;
 
-      // A fresh sign-in always starts panel-first for desktop admins.
-      if (inAuth) setAdminAppPreview(false);
+        // A fresh sign-in always starts panel-first for desktop admins.
+        if (inAuth) setAdminAppPreview(false);
 
-      if (!isAuthenticated && !inAuth) {
-        // Not logged in - send to login
-        router.replace("/(auth)/login");
-      } else if (isAuthenticated && suspended && !inSuspended) {
-        router.replace("/suspended");
-      } else if (isAuthenticated && !suspended && inSuspended) {
-        router.replace(adminUser && isDesktop ? "/(admin)/" : "/(tabs)/");
-      } else if (isAuthenticated && inAuth) {
-        // Panel-first on desktop for campus admins; everyone else (and admins on
-        // mobile) goes to the normal app.
-        if (adminUser && isDesktop) {
-          router.replace("/(admin)/");
-        } else {
-          router.replace("/(tabs)/");
-        }
-      } else if (
-        isAuthenticated &&
-        profile?.role === "student" &&
-        profile?.verification_status !== "verified" &&
-        !inAuth &&
-        !inAdmin &&
-        !inModeration &&
-        !inSuspended
-      ) {
-        // Unverified student lands on onboarding to complete identity.
-        // Scoped to avoid trapping "Back to App" from pending state.
-        router.replace("/onboarding");
-      } else if (
+        if (!isAuthenticated && !inAuth) {
+          // Not logged in - send to login
+          router.replace("/(auth)/login");
+        } else if (isAuthenticated && suspended && !inSuspended) {
+          router.replace("/suspended");
+        } else if (isAuthenticated && !suspended && inSuspended) {
+          router.replace(adminUser && isDesktop ? "/(admin)/" : "/(tabs)/");
+        } else if (isAuthenticated && inAuth) {
+          // Panel-first on desktop for campus admins; everyone else (and admins on
+          // mobile) goes to the normal app.
+          if (adminUser && isDesktop) {
+            router.replace("/(admin)/");
+          } else {
+            router.replace("/(tabs)/");
+          }
+        } else if (
+          isAuthenticated &&
+          profile?.role === "student" &&
+          profile?.verification_status !== "verified" &&
+          !inAuth &&
+          !inOnboarding &&
+          !inAdmin &&
+          !inModeration &&
+          !inSuspended
+        ) {
+          // Unverified student lands on onboarding to complete identity.
+          // Scoped to avoid trapping "Back to App" from pending state.
+          router.replace("/onboarding");
+        } else if (
         isAuthenticated &&
         adminUser &&
         isDesktop &&
