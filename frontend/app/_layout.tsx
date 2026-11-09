@@ -36,7 +36,7 @@ LogBox.ignoreLogs([
 ]);
 
 function RouteGuard() {
-  const { session, profile, initialized, isGuest } = useAuth();
+  const { session, profile, profileStatus, initialized, isGuest } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -63,48 +63,50 @@ function RouteGuard() {
   }, [initialized, userId, isGuest, router]);
 
   useEffect(() => {
-        if (!initialized) return;
+      if (!initialized) return;
 
-        const inAuth = segments[0] === "(auth)";
-        const inAdmin = segments[0] === "(admin)";
-        const inModeration = segments[0] === "(moderation)";
-        const inTabs = segments[0] === "(tabs)";
-        const inSuspended = segments[0] === "suspended";
-        const adminUser = isAdminRole(profile?.role);
-        const moderatorUser = isModeratorRole(profile?.role);
-        const suspended = !!profile && isSuspendedProfile(profile);
-        const isAuthenticated = !!session || isGuest;
+      const inAuth = segments[0] === "(auth)";
+      const inAdmin = segments[0] === "(admin)";
+      const inModeration = segments[0] === "(moderation)";
+      const inTabs = segments[0] === "(tabs)";
+      const inSuspended = segments[0] === "suspended";
+      const adminUser = isAdminRole(profile?.role);
+      const moderatorUser = isModeratorRole(profile?.role);
+      const suspended = !!profile && isSuspendedProfile(profile);
+      const isAuthenticated = !!session || isGuest;
 
-        // A fresh sign-in always starts panel-first for desktop admins.
-        if (inAuth) setAdminAppPreview(false);
+      // A fresh sign-in always starts panel-first for desktop admins.
+      if (inAuth) setAdminAppPreview(false);
 
-        if (!isAuthenticated && !inAuth) {
-          // Not logged in - send to login
-          router.replace("/(auth)/login");
-        } else if (isAuthenticated && suspended && !inSuspended) {
-          router.replace("/suspended");
-        } else if (isAuthenticated && !suspended && inSuspended) {
-          router.replace(adminUser && isDesktop ? "/(admin)/" : "/(tabs)/");
-        } else if (isAuthenticated && inAuth) {
-                  // Panel-first on desktop for campus admins; everyone else (and admins on
-                  // mobile) goes to the normal app.
-                  if (adminUser && isDesktop) {
-                    router.replace("/(admin)/");
-                  } else if (session?.user && !profile) {
-                    return; // profile still loading — decide on the next pass
-                  } else if (
-                    profile?.role === "student" &&
-                    profile.verification_status !== "verified"
-                  ) {
-                    // One-time post-login hop: unverified students complete identity
-                    // before they reach the feed. After that, IdentityBanner prompts
-                    // them inside the app instead — so "Back to App" from onboarding
-                    // lands on the feed and stays there.
-                    router.replace("/onboarding");
-                  } else {
-                    router.replace("/(tabs)/");
-                  }
+      if (!isAuthenticated && !inAuth) {
+        // Not logged in - send to login
+        router.replace("/(auth)/login");
+      } else if (isAuthenticated && suspended && !inSuspended) {
+        router.replace("/suspended");
+      } else if (isAuthenticated && !suspended && inSuspended) {
+        router.replace(adminUser && isDesktop ? "/(admin)/" : "/(tabs)/");
+      } else if (isAuthenticated && inAuth) {
+        // Panel-first on desktop for campus admins; everyone else (and admins on
+        // mobile) goes to the normal app.
+        if (adminUser && isDesktop) {
+          router.replace("/(admin)/");
+        } else if (profileStatus === "loading") {
+          return; // profile still loading — decide on the next pass
+        } else if (profileStatus === "error") {
+          router.replace("/(tabs)/"); // fail open; let the app render degraded
         } else if (
+          profile?.role === "student" &&
+          profile.verification_status !== "verified"
+        ) {
+          // One-time post-login hop: unverified students complete identity
+          // before they reach the feed. After that, IdentityBanner prompts
+          // them inside the app instead — so "Back to App" from onboarding
+          // lands on the feed and stays there.
+          router.replace("/onboarding");
+        } else {
+          router.replace("/(tabs)/");
+        }
+      } else if (
         isAuthenticated &&
         adminUser &&
         isDesktop &&
@@ -129,7 +131,7 @@ function RouteGuard() {
         // department admins and above.
         router.replace("/(tabs)/");
       }
-    }, [session, profile, initialized, segments, isGuest, isDesktop, router]);
+    }, [session, profile, profileStatus, initialized, segments, isGuest, isDesktop, router]);
 
   const { isDark, colors } = useTheme();
 
