@@ -177,6 +177,7 @@ function IconAction({
               borderColor: colors.line,
               backgroundColor: pressed ? colors.panelInset : "transparent",
             },
+        focusRing(colors, focusVisible),
       ]}
     >
       <Icon size={17} color={iconColor} strokeWidth={2.4} />
@@ -203,6 +204,10 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
   const visibleTabs = TAB_ITEMS.filter((item) => !isGuest || !item.isAction);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
+
+  // Shared hover/focus state for Create, Admin, and theme-toggle buttons
+  const [hovered, setHovered] = useState(false);
+  const [focusVisible, setFocusVisible] = useState(false);
 
   const navigate = (name: string, focused: boolean) => {
     const route = state.routes.find((r: any) => r.name === name);
@@ -290,17 +295,30 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
             onPress={() => void toggleTheme()}
             accessibilityRole="button"
             accessibilityLabel={isDark ? "Switch to light theme" : "Switch to dark theme"}
+            onHoverIn={() => setHovered(true)}
+            onHoverOut={() => setHovered(false)}
+            onFocus={() => setFocusVisible(true)}
+            onBlur={() => setFocusVisible(false)}
             style={({ pressed }) => [
               styles.webIconButton,
               {
-                backgroundColor: pressed ? colors.panelInset : "transparent",
+                backgroundColor: pressed ? colors.panelInset : hovered ? colors.panelInset : "transparent",
               },
+              focusRing(colors, focusVisible),
             ]}
           >
             {isDark ? (
               <Sun size={18} color={colors.accentText} strokeWidth={2.2} />
             ) : (
               <Moon size={18} color={colors.inkSoft} strokeWidth={2} />
+            )}
+            {(hovered || focusVisible) && (
+              <Text
+                pointerEvents="none"
+                style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}
+              >
+                {isDark ? "Switch to light theme" : "Switch to dark theme"}
+              </Text>
             )}
           </Pressable>
 
@@ -470,8 +488,10 @@ const styles = StyleSheet.create({
   },
   iconAction: {
     minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: RADIUS.pill,
-    marginLeft: SPACE.x1,
+    marginLeft: SPACE.x2,
   },
   mobileBar: {
     flexDirection: "row",

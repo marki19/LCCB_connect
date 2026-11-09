@@ -86,22 +86,24 @@ function RouteGuard() {
         } else if (isAuthenticated && !suspended && inSuspended) {
           router.replace(adminUser && isDesktop ? "/(admin)/" : "/(tabs)/");
         } else if (isAuthenticated && inAuth) {
-          // Panel-first on desktop for campus admins; everyone else (and admins on
-          // mobile) goes to the normal app.
-          if (adminUser && isDesktop) {
-            router.replace("/(admin)/");
-          } else if (
-            profile?.role === "student" &&
-            profile.verification_status !== "verified"
-          ) {
-            // One-time post-login hop: unverified students complete identity
-            // before they reach the feed. After that, IdentityBanner prompts
-            // them inside the app instead — so "Back to App" from onboarding
-            // lands on the feed and stays there.
-            router.replace("/onboarding");
-          } else {
-            router.replace("/(tabs)/");
-          }
+                  // Panel-first on desktop for campus admins; everyone else (and admins on
+                  // mobile) goes to the normal app.
+                  if (adminUser && isDesktop) {
+                    router.replace("/(admin)/");
+                  } else if (session?.user && !profile) {
+                    return; // profile still loading — decide on the next pass
+                  } else if (
+                    profile?.role === "student" &&
+                    profile.verification_status !== "verified"
+                  ) {
+                    // One-time post-login hop: unverified students complete identity
+                    // before they reach the feed. After that, IdentityBanner prompts
+                    // them inside the app instead — so "Back to App" from onboarding
+                    // lands on the feed and stays there.
+                    router.replace("/onboarding");
+                  } else {
+                    router.replace("/(tabs)/");
+                  }
         } else if (
         isAuthenticated &&
         adminUser &&
