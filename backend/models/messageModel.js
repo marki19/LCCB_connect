@@ -87,6 +87,40 @@ const canMessage = async (senderId, recipientId, runner = db) => {
 };
 
 /**
+ * Batch permission check for the messaging picker.
+ * Returns a Map<recipient_id, decision> for up to 100 recipients.
+ */
+const canMessageBatch = async (senderId, recipientIds) => {
+  if (!Array.isArray(recipientIds) || recipientIds.length === 0) return new Map();
+  const capped = recipientIds.slice(0, 100);
+
+  const sql = `
+    WITH s AS (SELECT department_id FROM public.profiles WHERE id = $1)
+    SELECT r.id AS recipient_id, r.message_policy,
+           (SELECT department_id FROM s) AS sender_department_id,
+           r.department_id AS recipient_department_id,
+           EXISTS (SELECT 1 FROM public.blocks b
+                   WHERE (b.blocker_id = $1 AND b.blocked_id = r.id)
+                      OR (b.blocker_id = r.id AND b.blocked_id = $1)) AS is_blocked,
+           EXISTS (SELECT 1 FROM public.friendships f
+                   WHERE f.status = 'accepted'
+                     AND ((f.requester_id = $1 AND f.addressee_id = r.id)
+                       OR (f.requester_id = r.id AND f.addressee_id = $1))) AS is_friend,
+           EXISTS (SELECT 1 FROM public.message_policy_departments p
+                   WHERE p.user_id = r.id
+                     AND p.department_id = (SELECT department_id FROM s)) AS sender_department_allowed
+    FROM public.profiles r
+    WHERE r.id = ANY($2::uuid[]);
+  `;
+  const { rows } = await db.query(sql, [senderId, capped]);
+  const map = new Map();
+  for (const row of rows) {
+    map.set(row.recipient_id, resolveDecision(row));
+  }
+  return map;
+};
+
+/**
  * The §4 decision table, isolated from I/O so it can be reasoned about and
  * tested on its own.
  *
@@ -266,7 +300,7 @@ const MESSAGE_COLUMNS =
   "id, conversation_id, sender_id, recipient_id, seq, body, delivered_at, read_at, created_at";
 
 /**
- * History (newest `limit`, ascending in the response) or catch-up (`seq >
+ * History (newest `limit`, ascending in the response) or catch-up (`seq >`
  * since_seq`, ascending). Ordering is always by `seq`, never `created_at`
  * (§7), so a delayed commit cannot reorder the thread.
  */
@@ -546,6 +580,7 @@ const resolveMessageReport = async (id, status) => {
 module.exports = {
   // permission engine
   canMessage,
+  canMessageBatch,
   resolveDecision,
   messageRequestCap,
   // conversations

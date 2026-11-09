@@ -9,6 +9,7 @@ const {
   sendMessageSchema,
   markReadSchema,
   muteConversationSchema,
+  messagePermissionsSchema,
 } = require("../validation");
 
 // Mounted at /api/conversations behind requireAuth + loadProfile.
@@ -17,6 +18,7 @@ const {
 router.get("/", messageController.getConversations);
 router.get("/requests", messageController.getRequests);
 router.get("/unread-count", messageController.getUnreadCount);
+router.post("/permissions", validate(messagePermissionsSchema), messageController.getPermissionMap);
 router.post("/", requireVerified, validate(createConversationSchema), messageController.createConversation);
 
 router.post("/:id/accept", messageController.acceptRequest);
