@@ -4,6 +4,22 @@ const { parseSearch, parseUuidFilter } = require("../utils/queryFilters");
 const moderationService = require("../services/moderationService");
 const notificationService = require("../services/notificationService");
 const previewService = require("../services/previewService");
+const { resolveAudience } = require("../services/visibilityService");
+const { signedStorageUrl } = require("../services/storageService");
+
+/**
+ * A custom-visibility write must name accepted friends. Returns the normalized
+ * audience, or a `{ error, invalid }` payload the controller returns as 400.
+ * Anything else (public/friends/private) carries no audience.
+ */
+const resolveRequestBodyAudience = async (authorId, body) => {
+  if (body.audience === undefined && body.visibility !== "custom") {
+    return { body };
+  }
+  const resolved = await resolveAudience(authorId, body.audience ?? []);
+  if (resolved.error) return { error: resolved.error, invalid: resolved.invalid };
+  return { body: { ...body, audience: resolved.audience } };
+};
 
 // Errors are forwarded to the centralized handler in index.js, which logs
 // server-side and returns a generic message (never the raw DB error).
@@ -46,8 +62,13 @@ const getPost = async (req, res, next) => {
 
 const createPost = async (req, res, next) => {
   try {
+    const resolved = await resolveRequestBodyAudience(req.user.id, req.body);
+    if (resolved.error) {
+      return res.status(400).json({ error: resolved.error, invalid: resolved.invalid });
+    }
+
     const newPost = await postModel.createPost({
-      ...req.body,
+      ...resolved.body,
       author_id: req.user.id,
     });
     res.status(201).json(newPost);
@@ -81,9 +102,13 @@ const createPost = async (req, res, next) => {
 const updatePost = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const resolved = await resolveRequestBodyAudience(req.user.id, req.body);
+    if (resolved.error) {
+      return res.status(400).json({ error: resolved.error, invalid: resolved.invalid });
+    }
     // Ownership is enforced in SQL (author_id = caller). An unauthorized caller
     // receives the same 404 as a missing post.
-    const updated = await postModel.updatePost(id, req.user.id, req.body);
+    const updated = await postModel.updatePost(id, req.user.id, resolved.body);
     if (!updated) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -120,12 +145,13 @@ const toggleLike = async (req, res, next) => {
 const getComments = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const post = await postModel.getPostById(id, { includeHidden: false });
+    const viewerId = req.user?.id || null;
+    const post = await postModel.getPostById(id, { includeHidden: false, userId: viewerId });
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    const comments = await postModel.getComments(id);
+    const comments = await postModel.getComments(id, { viewerId });
     res.json(comments);
   } catch (error) {
     next(error);
@@ -136,7 +162,10 @@ const addComment = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
-    const post = await postModel.getPostById(id, { includeHidden: false });
+    const post = await postModel.getPostById(id, {
+      includeHidden: false,
+      userId: req.user?.id || null,
+    });
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -245,6 +274,41 @@ const generatePreview = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/posts/:id/file — signed URL for the post image.
+ *
+ * Returns a signed URL that the front-end can use to display the image.
+ * The URL expires after 5 minutes. Only the owner, visible viewers, or
+ * a moderator can access this endpoint.
+ */
+const getPostFile = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const viewerId = req.user?.id || null;
+
+    // Visibility is enforced by the model's use of visible_posts().
+    const post = await postModel.getPostById(id, { userId: viewerId });
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (!post.image_url) {
+      return res.status(404).json({ message: "Post has no image" });
+    }
+
+    // Issue a signed URL for the private assets bucket.
+    const { url } = await signedStorageUrl("assets", post.image_url, { expiresIn: 300 });
+
+    if (!url) {
+      return res.status(404).json({ message: "Could not generate file URL" });
+    }
+
+    res.json({ url });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getPosts,
   getPost,
@@ -257,4 +321,5 @@ module.exports = {
   updateComment,
   deleteComment,
   generatePreview,
+  getPostFile,
 };

@@ -278,7 +278,7 @@ export default function FriendsScreen() {
         />
       )}
 
-      <PeerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onOpened={(id) => router.push(`/messages/${id}`)} />
+      <PeerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onOpened={(id) => router.push(`/messages/${id}`)} mode="friend" />
     </SafeAreaView>
   );
 }

@@ -62,6 +62,7 @@ export const LIGHT_TOKENS = {
   // Semantic: Success (jade)
   success: "#0B7C5C",
   successSurface: "#E2F4EC",
+  successSurfaceAlt: "#D1EAD9",
   successText: "#086349",
 
   // Semantic: Warning (saffron)
@@ -252,6 +253,7 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
   // Semantic: Success
   success: "#4FD3AC",
   successSurface: "rgba(79, 211, 172, 0.12)",
+  successSurfaceAlt: "rgba(79, 211, 172, 0.18)",
   successText: "#6FE3C0",
 
   // Semantic: Warning

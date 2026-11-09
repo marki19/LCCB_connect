@@ -38,60 +38,49 @@ function DesktopTab({
   focused,
   onPress,
   colors,
-  showLabel = true,
 }: {
   label: string;
   icon: any;
   focused: boolean;
   onPress: () => void;
   colors: ThemeTokens;
-  showLabel?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const [focusVisible, setFocusVisible] = useState(false);
 
   return (
     <Pressable
-      accessibilityRole="tab"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: focused }}
-      onPress={onPress}
-      onHoverIn={() => setHovered(true)}
-      onHoverOut={() => setHovered(false)}
-      onFocus={() => setFocusVisible(true)}
-      onBlur={() => setFocusVisible(false)}
-      style={[
-        styles.webTab,
-        !showLabel && styles.webTabCompact,
-        {
-          backgroundColor: focused
-            ? colors.brandWash
-            : hovered
-            ? colors.panelInset
-            : "transparent",
-        },
-        focusRing(colors, focusVisible),
-      ]}
-    >
-      <Icon
-        size={17}
-        color={focused ? colors.brand : colors.inkFaint}
-        strokeWidth={focused ? 2.4 : 2}
-      />
-      {showLabel ? (
-        <Text
+          accessibilityRole="tab"
+          accessibilityLabel={label}
+          accessibilityState={{ selected: focused }}
+          onPress={onPress}
+          onHoverIn={() => setHovered(true)}
+          onHoverOut={() => setHovered(false)}
+          onFocus={() => setFocusVisible(true)}
+          onBlur={() => setFocusVisible(false)}
           style={[
-            styles.webTabLabel,
+            styles.webTab,
             {
-              color: focused ? colors.brand : colors.inkSoft,
-              fontWeight: focused ? "700" : "600",
+              backgroundColor: focused
+                ? colors.brandWash
+                : hovered
+                ? colors.panelInset
+                : "transparent",
             },
+            focusRing(colors, focusVisible),
           ]}
         >
-          {label}
-        </Text>
-      ) : null}
-    </Pressable>
+          <Icon
+            size={17}
+            color={focused ? colors.brand : colors.inkFaint}
+            strokeWidth={focused ? 2.4 : 2}
+          />
+          {(hovered || focusVisible) && (
+            <Text pointerEvents="none" style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}>
+              {label}
+            </Text>
+          )}
+        </Pressable>
   );
 }
 
@@ -148,7 +137,63 @@ function MobileTab({
   );
 }
 
-function TabBar({ state, navigation }: any) {
+function IconAction({
+  label,
+  icon: Icon,
+  iconColor,
+  variant,
+  onPress,
+  colors,
+}: {
+  label: string;
+  icon: any;
+  iconColor: string;
+  variant: "primary" | "outline";
+  onPress: () => void;
+  colors: ThemeTokens;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [focusVisible, setFocusVisible] = useState(false);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      onFocus={() => setFocusVisible(true)}
+      onBlur={() => setFocusVisible(false)}
+      style={({ pressed }) => [
+        styles.iconAction,
+        { width: 40, paddingHorizontal: 0, justifyContent: "center" },
+        variant === "primary"
+          ? {
+              backgroundColor: colors.brandSolid,
+              opacity: pressed ? 0.88 : 1,
+            }
+          : {
+              borderWidth: 1,
+              borderColor: colors.line,
+              backgroundColor: pressed ? colors.panelInset : "transparent",
+            },
+        focusRing(colors, focusVisible),
+      ]}
+    >
+      <Icon size={17} color={iconColor} strokeWidth={2.4} />
+      {(hovered || focusVisible) && (
+        <Text
+          pointerEvents="none"
+          style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}
+        >
+          {label}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { profile } = useAuth();
@@ -159,19 +204,22 @@ function TabBar({ state, navigation }: any) {
   const visibleTabs = TAB_ITEMS.filter((item) => !isGuest || !item.isAction);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
-  const compactNav = width < 1120;
-  const compactActions = width < 1320;
+
+  // Shared hover/focus state for Create, Admin, and theme-toggle buttons
+  const [hovered, setHovered] = useState(false);
+  const [focusVisible, setFocusVisible] = useState(false);
 
   const navigate = (name: string, focused: boolean) => {
-    const routeIndex = state.routes.findIndex((route: any) => route.name === name);
-    const route = state.routes[routeIndex];
-    if (!route) return;
-    const event = navigation.emit({
+    const route = state.routes.find((r: any) => r.name === name);
+    if (!route || focused) return;
+    const event = emitter.emit({
       type: "tabPress",
       target: route.key,
       canPreventDefault: true,
     });
-    if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+    if (!event.defaultPrevented) {
+      navigateToTab(route.key);
+    }
   };
 
   // Desktop Web: editorial top bar
@@ -209,9 +257,6 @@ function TabBar({ state, navigation }: any) {
             <Text style={[styles.webBrandTitle, { color: colors.ink }]}>
               LCCB <Text style={{ color: colors.brand }}>Connect</Text>
             </Text>
-            <Text style={[styles.webBrandSub, { color: colors.inkFaint }]}>
-              {compactNav ? "Campus" : "Campus network"}
-            </Text>
           </View>
         </Pressable>
 
@@ -222,26 +267,15 @@ function TabBar({ state, navigation }: any) {
 
             if (isAction) {
               return (
-                <Pressable
+                <IconAction
                   key={name}
-                  accessibilityRole="button"
-                  accessibilityLabel="Create a post"
+                  label="Create a post"
+                  icon={Plus}
+                  iconColor={colors.textOnPrimary}
+                  variant="primary"
+                  colors={colors}
                   onPress={() => router.push("/create")}
-                  style={({ pressed }) => [
-                    styles.webCreateButton,
-                    {
-                      backgroundColor: colors.brandSolid,
-                      opacity: pressed ? 0.88 : 1,
-                    },
-                  ]}
-                >
-                  <Plus size={16} color={colors.textOnPrimary} strokeWidth={2.5} />
-                  {!compactActions ? (
-                    <Text style={[styles.webCreateText, { color: colors.textOnPrimary }]}>
-                      Create post
-                    </Text>
-                  ) : null}
-                </Pressable>
+                />
               );
             }
 
@@ -253,7 +287,6 @@ function TabBar({ state, navigation }: any) {
                 focused={focused}
                 onPress={() => navigate(name, focused)}
                 colors={colors}
-                showLabel={!compactNav}
               />
             );
           })}
@@ -262,11 +295,16 @@ function TabBar({ state, navigation }: any) {
             onPress={() => void toggleTheme()}
             accessibilityRole="button"
             accessibilityLabel={isDark ? "Switch to light theme" : "Switch to dark theme"}
+            onHoverIn={() => setHovered(true)}
+            onHoverOut={() => setHovered(false)}
+            onFocus={() => setFocusVisible(true)}
+            onBlur={() => setFocusVisible(false)}
             style={({ pressed }) => [
               styles.webIconButton,
               {
-                backgroundColor: pressed ? colors.panelInset : "transparent",
+                backgroundColor: pressed ? colors.panelInset : hovered ? colors.panelInset : "transparent",
               },
+              focusRing(colors, focusVisible),
             ]}
           >
             {isDark ? (
@@ -274,50 +312,37 @@ function TabBar({ state, navigation }: any) {
             ) : (
               <Moon size={18} color={colors.inkSoft} strokeWidth={2} />
             )}
+            {(hovered || focusVisible) && (
+              <Text
+                pointerEvents="none"
+                style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}
+              >
+                {isDark ? "Switch to light theme" : "Switch to dark theme"}
+              </Text>
+            )}
           </Pressable>
 
           {adminUser ? (
-            <Pressable
+            <IconAction
+              label="Open the admin console"
+              icon={Shield}
+              iconColor={colors.brand}
+              variant="outline"
+              colors={colors}
               onPress={() => {
                 setAdminAppPreview(false);
                 router.push("/(admin)");
               }}
-              accessibilityRole="button"
-              accessibilityLabel="Open the admin console"
-              style={({ pressed }) => [
-                styles.webAdminButton,
-                {
-                  borderColor: colors.line,
-                  backgroundColor: pressed ? colors.panelInset : "transparent",
-                },
-              ]}
-            >
-              <Shield size={16} color={colors.brand} strokeWidth={2.2} />
-              {!compactActions ? (
-                <Text style={[styles.webAdminLabel, { color: colors.brand }]}>
-                  Admin console
-                </Text>
-              ) : null}
-            </Pressable>
+            />
           ) : departmentAdmin ? (
-            <Pressable
+            <IconAction
+              label="Open the moderation console"
+              icon={Shield}
+              iconColor={colors.action}
+              variant="outline"
+              colors={colors}
               onPress={() => router.push("/(moderation)" as any)}
-              accessibilityRole="button"
-              accessibilityLabel="Open the moderation console"
-              style={[
-                styles.webTab,
-                {
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  marginLeft: 8,
-                },
-              ]}
-            >
-              <Shield size={18} color={colors.action} strokeWidth={2.2} />
-              <Text style={[styles.webTabLabel, { color: colors.action }]}>
-                Moderation
-              </Text>
-            </Pressable>
+            />
           ) : null}
         </View>
       </View>
@@ -429,11 +454,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     letterSpacing: -0.5,
   },
-  webBrandSub: {
-    ...TYPE.micro,
-    fontSize: 7.5,
-    marginTop: 1,
-  },
   webNavLinks: {
     flexDirection: "row",
     alignItems: "center",
@@ -447,13 +467,16 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.pill,
     gap: 6,
   },
-  webTabCompact: {
-    width: 40,
-    paddingHorizontal: 0,
-    justifyContent: "center",
-  },
-  webTabLabel: {
-    fontSize: 13,
+  webTooltip: {
+    position: "absolute",
+    top: 46,
+    alignSelf: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: "600",
+    zIndex: 200,
   },
   webIconButton: {
     width: 40,
@@ -463,32 +486,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: SPACE.x1,
   },
-  webAdminButton: {
+  iconAction: {
     minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: SPACE.x3,
-    marginLeft: SPACE.x1,
-  },
-  webAdminLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  webCreateButton: {
-    minHeight: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: SPACE.x4,
     borderRadius: RADIUS.pill,
     marginLeft: SPACE.x2,
-  },
-  webCreateText: {
-    fontSize: 12,
-    fontWeight: "700",
   },
   mobileBar: {
     flexDirection: "row",

@@ -6,6 +6,12 @@ const { escapeLike } = require("../utils/queryFilters");
 
 // Keyset pagination. Pass `cursor` = "<created_at>|<id>" of the last row you saw.
 // Optionally pass `userId` to include `is_liked` for the current user.
+//
+// `userId` doubles as the visibility viewer. When `includeHidden` is false the
+// read goes through `visible_posts()`, the single copy of the visibility rule
+// (public / friends / custom / private). Moderation callers pass
+// `includeHidden: true` and read the base table, because a moderator who cannot
+// see a hidden or private row cannot moderate it.
 const getAllPosts = async ({
   limit = DEFAULT_LIMIT,
   cursor = null,
@@ -17,10 +23,6 @@ const getAllPosts = async ({
   const params = [];
   const conditions = [];
 
-  if (!includeHidden) {
-    conditions.push("p.moderation_status != 'hidden'");
-  }
-
   if (q) {
     params.push(`%${escapeLike(q)}%`);
     conditions.push(`(
@@ -31,7 +33,7 @@ const getAllPosts = async ({
 
   if (authorId) {
     params.push(authorId);
-    conditions.push(`p.author_id = $${params.length}::uuid`);
+    conditions.push(`p.author_id = $${params.length}::text`);
   }
 
   if (cursor) {
@@ -43,6 +45,13 @@ const getAllPosts = async ({
         OR (p.created_at = $${params.length - 1}::timestamptz AND p.id < $${params.length}::uuid)
       )`);
     }
+  }
+
+  // The viewer is appended last so the filter indexes above stay stable.
+  let fromClause = "FROM posts p";
+  if (!includeHidden) {
+    params.push(userId);
+    fromClause = `FROM visible_posts($${params.length}::text) p`;
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -64,6 +73,7 @@ const getAllPosts = async ({
       p.github_url,
       p.image_url,
       p.preview_metadata,
+      p.visibility,
       p.moderation_status,
       p.moderation_reason,
       p.created_at,
@@ -80,7 +90,7 @@ const getAllPosts = async ({
         'department_name', d.name
       ) AS author
       ${isLikedSubquery}
-    FROM posts p
+    ${fromClause}
     LEFT JOIN profiles pr ON p.author_id = pr.id
     LEFT JOIN public.departments d ON d.id = pr.department_id
     ${whereClause}
@@ -93,16 +103,20 @@ const getAllPosts = async ({
   return result.rows;
 };
 
+// `viewerId` gates which posts exist at all; `includeHidden` is the moderation
+// escape hatch that reads the base table instead.
 const getPostById = async (id, { includeHidden = false, userId = null } = {}) => {
   const params = [id];
-  let hiddenFilter = "";
+
+  let fromClause = "FROM posts p";
   if (!includeHidden) {
-    hiddenFilter = "AND p.moderation_status != 'hidden'";
+    params.push(userId);
+    fromClause = `FROM visible_posts($${params.length}::text) p`;
   }
 
   // Build the is_liked subquery if userId is provided
   const isLikedSubquery = userId
-    ? `, (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $2)) AS is_liked`
+    ? `, (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $${params.length + 1})) AS is_liked`
     : "";
 
   const sql = `
@@ -116,6 +130,7 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
       p.github_url,
       p.image_url,
       p.preview_metadata,
+      p.visibility,
       p.moderation_status,
       p.moderation_reason,
       p.created_at,
@@ -132,13 +147,33 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
         'department_name', d.name
       ) AS author
       ${isLikedSubquery}
-    FROM posts p
+    ${fromClause}
     LEFT JOIN profiles pr ON p.author_id = pr.id
     LEFT JOIN public.departments d ON d.id = pr.department_id
-    WHERE p.id = $1 ${hiddenFilter};
+    WHERE p.id = $1;
   `;
-  const result = await db.query(sql, params);
+  const result = await db.query(sql, userId ? [...params, userId] : params);
   return result.rows[0];
+};
+
+
+// ---- visibility + audience -------------------------------------------------
+
+/**
+ * Replaces the custom audience list for a post. Takes the caller's transaction
+ * client so the post write and its audience list commit together.
+ */
+const setPostAudience = async (client, postId, userIds) => {
+  await client.query("DELETE FROM public.post_audience WHERE post_id = $1::uuid", [
+    postId,
+  ]);
+  if (!Array.isArray(userIds) || userIds.length === 0) return;
+  await client.query(
+    `INSERT INTO public.post_audience (post_id, user_id)
+     SELECT $1::uuid, unnest($2::text[])
+     ON CONFLICT DO NOTHING;`,
+    [postId, userIds]
+  );
 };
 
 const createPost = async (postData) => {
@@ -153,26 +188,37 @@ const createPost = async (postData) => {
     preview_metadata = null,
     moderation_status = 'approved',
     moderation_reason = null,
+    visibility = 'public',
+    audience = null,
   } = postData;
-  const sql = `
-    INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, preview_metadata, moderation_status, moderation_reason)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    RETURNING *;
-  `;
-  const values = [
-    author_id,
-    content,
-    type || 'text',
-    title || null,
-    technologies || null,
-    github_url || null,
-    image_url || null,
-    preview_metadata ? JSON.stringify(preview_metadata) : null,
-    moderation_status,
-    moderation_reason,
-  ];
-  const result = await db.query(sql, values);
-  return result.rows[0];
+
+  return db.withTransaction(async (client) => {
+    const sql = `
+      INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, preview_metadata, moderation_status, moderation_reason, visibility)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *;
+    `;
+    const values = [
+      author_id,
+      content,
+      type || 'text',
+      title || null,
+      technologies || null,
+      github_url || null,
+      image_url || null,
+      preview_metadata ? JSON.stringify(preview_metadata) : null,
+      moderation_status,
+      moderation_reason,
+      visibility,
+    ];
+    const result = await client.query(sql, values);
+    const post = result.rows[0];
+    // A non-custom post stores no audience; a custom one must.
+    if (post.visibility === 'custom') {
+      await setPostAudience(client, post.id, audience);
+    }
+    return post;
+  });
 };
 
 const POST_UPDATABLE_COLUMNS = [
@@ -183,14 +229,20 @@ const POST_UPDATABLE_COLUMNS = [
   "github_url",
   "image_url",
   "preview_metadata",
+  "visibility",
 ];
 
+// Partial update. Ownership is enforced in SQL, and the audience list is only
+// touched when the caller actually sent `visibility`/`audience` - otherwise an
+// unrelated edit (a title change) would silently wipe the custom list.
 const updatePost = async (id, authorId, postData) => {
   const fields = POST_UPDATABLE_COLUMNS.filter(
     (column) => postData[column] !== undefined
   );
+  const touchesAudience =
+    postData.audience !== undefined || postData.visibility !== undefined;
 
-  if (fields.length === 0) {
+  if (fields.length === 0 && !touchesAudience) {
     const current = await db.query(
       `SELECT * FROM posts WHERE id = $1 AND author_id = $2;`,
       [id, authorId]
@@ -198,19 +250,48 @@ const updatePost = async (id, authorId, postData) => {
     return current.rows[0];
   }
 
-  const setClause = fields.map((column, i) => `${column} = $${i + 1}`).join(", ");
-  const values = fields.map((column) => postData[column]);
-  values.push(id, authorId);
+  return db.withTransaction(async (client) => {
+    let post;
 
-  const sql = `
-    UPDATE posts
-    SET ${setClause}
-    WHERE id = $${fields.length + 1} AND author_id = $${fields.length + 2}
-    RETURNING *;
-  `;
-  const result = await db.query(sql, values);
-  return result.rows[0];
+    if (fields.length > 0) {
+      const setClause = fields.map((column, i) => `${column} = $${i + 1}`).join(", ");
+      const values = fields.map((column) => postData[column]);
+      values.push(id, authorId);
+
+      const result = await client.query(
+        `
+          UPDATE posts
+          SET ${setClause}
+          WHERE id = $${fields.length + 1} AND author_id = $${fields.length + 2}
+          RETURNING *;
+        `,
+        values
+      );
+      post = result.rows[0];
+    } else {
+      const current = await client.query(
+        `SELECT * FROM posts WHERE id = $1 AND author_id = $2;`,
+        [id, authorId]
+      );
+      post = current.rows[0];
+    }
+
+    // No row means the caller does not own the post (or it is gone) -> 404.
+    // Return before touching the audience list.
+    if (!post) return undefined;
+
+    if (post.visibility === 'custom') {
+      if (postData.audience !== undefined) {
+        await setPostAudience(client, post.id, postData.audience);
+      }
+    } else {
+      await setPostAudience(client, post.id, []);
+    }
+
+    return post;
+  });
 };
+
 
 const deletePost = async (id, authorId) => {
   const sql = `DELETE FROM posts WHERE id = $1 AND author_id = $2 RETURNING *;`;
@@ -238,8 +319,14 @@ const toggleLike = async (postId, userId) => {
   return { liked: false };
 };
 
-const getComments = async (postId, { includeHidden = false } = {}) => {
+// `viewerId` gates the comments on the parent post's visibility, so the rule
+// still holds if a caller ever reaches this without first loading the post.
+// Moderation passes `includeHidden: true` and skips the gate.
+const getComments = async (postId, { includeHidden = false, viewerId = null } = {}) => {
   const hiddenFilter = includeHidden ? "" : "AND c.moderation_status != 'hidden'";
+  const visibilityJoin = includeHidden
+    ? ""
+    : `AND EXISTS (SELECT 1 FROM visible_posts($2::text) vp WHERE vp.id = c.post_id)`;
   const sql = `
     SELECT 
       c.id,
@@ -261,10 +348,11 @@ const getComments = async (postId, { includeHidden = false } = {}) => {
     FROM comments c
     LEFT JOIN profiles pr ON c.user_id = pr.id
     LEFT JOIN public.departments d ON d.id = pr.department_id
-    WHERE c.post_id = $1 ${hiddenFilter}
+    WHERE c.post_id = $1 ${hiddenFilter} ${visibilityJoin}
     ORDER BY c.created_at ASC;
   `;
-  const result = await db.query(sql, [postId]);
+  const params = includeHidden ? [postId] : [postId, viewerId];
+  const result = await db.query(sql, params);
   return result.rows;
 };
 
@@ -329,6 +417,7 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
       p.technologies,
       p.github_url,
       p.image_url,
+      p.visibility,
       p.moderation_status,
       p.moderation_reason,
       p.created_at,

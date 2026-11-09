@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, FlatList, Linking, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, FlatList, Linking, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Search as SearchIcon, BookOpen, UploadCloud } from "lucide-react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { apiFetch } from "../../src/lib/api";
+import { apiFetch, getThesisFileUrl } from "../../src/lib/api";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -74,8 +74,19 @@ export default function SearchScreen() {
         {item.abstract}
       </Text>
       
-      <TouchableOpacity 
-        onPress={() => item.pdf_url && Linking.openURL(item.pdf_url)}
+      <TouchableOpacity
+        onPress={async () => {
+          if (!item.pdf_url) return;
+          try {
+            // Manuscripts are private (migration 015): the list response carries
+            // the raw object key, not a usable URL. Ask the backend for a
+            // short-lived signed URL before opening it.
+            const url = await getThesisFileUrl(item.id);
+            await Linking.openURL(url);
+          } catch (err: any) {
+            Alert.alert("Could not open manuscript", err.message || "The file is not available.");
+          }
+        }}
         style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.actionSurface, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
       >
         <BookOpen size={16} color={colors.action} style={{ marginRight: 6 }} />

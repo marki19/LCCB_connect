@@ -66,6 +66,27 @@ const previewMetadataSchema = z
   .nullable()
   .optional();
 
+// ---- content visibility (posts & theses) -----------------------------------
+// The enforcement lives in `visible_posts()` / `visible_theses()` in Postgres
+// (migration 014); these schemas only validate what a client may ask for.
+// `custom` must carry an explicit, non-empty audience.
+const Visibility = z.enum(["public", "friends", "custom", "private"]);
+const Audience = z.array(z.string().uuid()).max(500);
+
+const withCustomAudienceRule = (schema) =>
+  schema.superRefine((value, ctx) => {
+    if (
+      value.visibility === "custom" &&
+      !(Array.isArray(value.audience) && value.audience.length > 0)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["audience"],
+        message: "A custom-visibility item needs at least one friend in its audience",
+      });
+    }
+  });
+
 // ---- posts -----------------------------------------------------------------
 const postFields = {
   content: z.string().max(5000).nullable().optional(),
@@ -75,10 +96,12 @@ const postFields = {
   github_url: optionalUrl(),
   image_url: optionalStorageUrl(),
   preview_metadata: previewMetadataSchema,
+  visibility: Visibility.optional(),
+  audience: Audience.optional(),
 };
 
-const createPostSchema = z.object(postFields).strict();
-const updatePostSchema = z.object(postFields).strict();
+const createPostSchema = withCustomAudienceRule(z.object(postFields).strict());
+const updatePostSchema = withCustomAudienceRule(z.object(postFields).strict());
 
 // ---- comments --------------------------------------------------------------
 const createCommentSchema = z
@@ -100,10 +123,16 @@ const thesisFields = {
   abstract: z.string().trim().min(1).max(10000),
   category: z.string().trim().min(1).max(100),
   pdf_url: StorageKey,
+  visibility: Visibility.optional(),
+  audience: Audience.optional(),
 };
 
-const createThesisSchema = z.object(thesisFields).strict();
-const updateThesisSchema = z.object(thesisFields).partial().strict();
+const createThesisSchema = withCustomAudienceRule(
+  z.object(thesisFields).strict()
+);
+const updateThesisSchema = withCustomAudienceRule(
+  z.object(thesisFields).partial().strict()
+);
 
 // ---- catalog: departments & courses (admin-managed runtime data) -----------
 const departmentFields = {
@@ -129,6 +158,120 @@ const updateCourseSchema = z
     name: z.string().trim().min(1).max(200).optional(),
     code: optionalText(20),
     sort_order: z.number().int().min(0).max(100000).optional(),
+  })
+  .strict();
+
+// ---- identity verification (migration 016) ----------------------------------
+// Student ID: 4-20 chars of [A-Za-z0-9-], stored uppercased. No roster exists
+// to validate against, so the admin review *is* the identity check.
+const studentIdSchema = z
+  .string()
+  .trim()
+  .min(4, "Student ID must be at least 4 characters")
+  .max(20, "Student ID must be at most 20 characters")
+  .regex(/^[A-Za-z0-9-]+$/, "Student ID may only contain letters, numbers, and hyphens")
+  .transform((v) => v.toUpperCase());
+
+const verificationSubmitSchema = z
+  .object({
+    full_name: z.string().trim().min(2, "Full name must be at least 2 characters").max(200),
+    student_id: studentIdSchema,
+    department_id: requiredUuid(),
+    course_id: requiredUuid(),
+    year_level: z.string().trim().min(1).max(50),
+    birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Birthdate must be YYYY-MM-DD").refine((d) => {
+      const date = new Date(d);
+      const today = new Date();
+      return date < today && date > new Date("1900-01-01");
+    }, "Birthdate must be a valid past date"),
+  })
+  .strict();
+
+// Used by the decline endpoint only: the note is optional but, when present,
+// must explain why so the student can fix and resubmit.
+const verificationDecisionSchema = z
+  .object({
+    note: z.string().trim().min(3, "Give a reason of at least 3 characters").max(300),
+  })
+  .strict();
+
+// Login identifier: email or student ID. Branching on "@" happens in the
+// controller, so the schema accepts either shape. Bounds are deliberately loose:
+// a malformed password must fall through to the generic 401, not a validation
+// error that tells the caller their guess was the right shape.
+const loginIdentifierSchema = z
+  .object({
+    identifier: z.string().trim().min(1).max(254),
+    password: z.string().min(1).max(200),
+  })
+  .strict();
+
+// Signup OTP verification. The password is re-submitted here and compared
+// against the bcrypt hash captured at request time: nothing decryptable is ever
+// stored, and the hash cannot be replayed as the password.
+const verifySignupSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(
+        /^[^@\s]+@lccbonline\.edu\.ph$/,
+        "Must be an @lccbonline.edu.ph address"
+      ),
+    token: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
+    password: z.string().min(1).max(72),
+  })
+  .strict();
+
+// Resend signup OTP: same email validation as signup verification.
+const resendSignupSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(
+        /^[^@\s]+@lccbonline\.edu\.ph$/,
+        "Must be an @lccbonline.edu.ph address"
+      ),
+  })
+  .strict();
+
+/**
+ * Request signup: stores a pending row and sends the code.
+ * The password is bcrypt-hashed before it touches the database.
+ */
+const requestSignupSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(
+        /^[^@\s]+@lccbonline\.edu\.ph$/,
+        "Must be an @lccbonline.edu.ph address"
+      ),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(72, "Password too long"),
+    full_name: z
+      .string()
+      .trim()
+      .min(2, "Full name must be at least 2 characters")
+      .max(200, "Full name too long"),
+  })
+  .strict();
+
+/**
+ * MFA challenge: verifies a TOTP code during login.
+ * Uses a short-lived challenge token returned by the first-factor login.
+ */
+const mfaChallengeSchema = z
+  .object({
+    challenge_token: z.string().min(1),
+    code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
   })
   .strict();
 
@@ -251,7 +394,7 @@ const suspendUserSchema = z
 
 const reasonBodySchema = z.object({ reason: reasonField }).strict();
 
-const deleteUserSchema = reasonBodySchema;
+// Account deletion removed per policy. Manual DB query only.
 
 const announcementAudienceSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("all") }).strict(),
@@ -295,7 +438,22 @@ const validate = (schema) => (req, res, next) => {
   return next();
 };
 
-module.exports = {
+  /**
+   * Brevo webhook payload validation.
+   * POST /api/email/webhook/brevo
+   */
+  const brevoWebhookSchema = z
+    .object({
+      event: z.string(), // "bounce"
+      email: z.string().email(),
+      reason: z.string().optional(),
+      code: z.union([z.string(), z.number()]).optional(),
+      type: z.string().optional(), // "hard" | "soft"
+      timestamp: z.number().optional(),
+    })
+    .strict();
+
+  module.exports = {
   validate,
   createPostSchema,
   updatePostSchema,
@@ -323,6 +481,14 @@ module.exports = {
   roleChangeSchema,
   suspendUserSchema,
   reasonBodySchema,
-  deleteUserSchema,
   announcementSchema,
-};
+  studentIdSchema,
+  verificationSubmitSchema,
+  verificationDecisionSchema,
+  loginIdentifierSchema,
+  verifySignupSchema,
+  resendSignupSchema,
+  requestSignupSchema,
+    brevoWebhookSchema,
+    mfaChallengeSchema,
+  };

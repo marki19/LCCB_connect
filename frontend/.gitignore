@@ -3,6 +3,12 @@
 # dependencies
 node_modules/
 
+#idk
+.desloppify
+.kilo
+.opencode
+.thinkrail
+
 # Expo
 .expo/
 dist/

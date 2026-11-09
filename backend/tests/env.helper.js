@@ -9,6 +9,10 @@ process.env.SUPABASE_ANON_KEY = "test-anon-key";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key";
 process.env.DATABASE_URL = "postgresql://test:test@127.0.0.1:5432/test";
 
+// Signup codes are stored as HMAC(email:code, OTP_PEPPER). The suite needs a
+// fixed pepper so fixtures can compute the hash the endpoint will compare.
+process.env.OTP_PEPPER = "test-otp-pepper-value-0123456789";
+
 // Effectively disable rate limiting so the suite can exercise the routes.
 process.env.RATE_LIMIT_MAX = "1000000";
 process.env.RATE_LIMIT_WRITE_MAX = "1000000";

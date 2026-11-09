@@ -99,3 +99,45 @@ describe("avatar keys", () => {
     assert.equal(parsed.success, false);
   });
 });
+
+// The visibility rule itself lives in Postgres (visible_posts/visible_theses).
+// These cover the request contract: only the four levels are accepted, and
+// `custom` must name at least one friend.
+describe("visibility contract", () => {
+  const post = (extra) => createPostSchema.safeParse({ content: "x", ...extra });
+  const thesis = (extra) =>
+    createThesisSchema.safeParse({ title: "t", abstract: "a", category: "c", pdf_url: "1/2.pdf", ...extra });
+
+  it("accepts each of the four levels", () => {
+    for (const visibility of ["public", "friends", "private"]) {
+      assert.equal(post({ visibility }).success, true, visibility);
+      assert.equal(thesis({ visibility }).success, true, visibility);
+    }
+    assert.equal(
+      post({ visibility: "custom", audience: ["11111111-1111-4111-8111-111111111111"] }).success,
+      true
+    );
+  });
+
+  it("defaults to no visibility field, so the column default applies", () => {
+    const parsed = post({});
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.data.visibility, undefined);
+  });
+
+  it("rejects an unknown level", () => {
+    assert.equal(post({ visibility: "squad" }).success, false);
+    assert.equal(thesis({ visibility: "squad" }).success, false);
+  });
+
+  it("rejects custom without an audience", () => {
+    assert.equal(post({ visibility: "custom" }).success, false);
+    assert.equal(post({ visibility: "custom", audience: [] }).success, false);
+    assert.equal(thesis({ visibility: "custom", audience: [] }).success, false);
+  });
+
+  it("rejects a non-uuid audience member", () => {
+    assert.equal(post({ visibility: "custom", audience: ["not-a-uuid"] }).success, false);
+    assert.equal(thesis({ visibility: "custom", audience: ["not-a-uuid"] }).success, false);
+  });
+});

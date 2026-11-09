@@ -266,7 +266,7 @@ const MESSAGE_COLUMNS =
   "id, conversation_id, sender_id, recipient_id, seq, body, delivered_at, read_at, created_at";
 
 /**
- * History (newest `limit`, ascending in the response) or catch-up (`seq >
+ * History (newest `limit`, ascending in the response) or catch-up (`seq >`
  * since_seq`, ascending). Ordering is always by `seq`, never `created_at`
  * (§7), so a delayed commit cannot reorder the thread.
  */

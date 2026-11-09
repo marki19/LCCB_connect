@@ -7,6 +7,7 @@ import { supabase } from './supabase';
  * listed types) is refused before the file ever reaches Storage.
  */
 const BUCKET_MIME_TYPES: Record<string, string[]> = {
+  avatars: ['image/png', 'image/jpeg', 'image/webp'],
   assets: ['image/png', 'image/jpeg', 'image/webp'],
   theses: ['application/pdf'],
 };
@@ -32,66 +33,6 @@ function isAllowedMime(bucketName: string, contentType: string): boolean {
 }
 
 /**
- * Uploads a file (by its local URI) to Supabase Storage.
- * @param uri The local file URI (from image picker or document picker)
- * @param bucketName The name of the Supabase bucket (e.g. 'assets')
- * @param path The target path inside the bucket (e.g. 'avatars/user-id.jpg' or 'thesis/doc-id.pdf')
- * @param contentType The MIME type of the file
- * @param maxBytes The size ceiling for this purpose (see MAX_UPLOAD_BYTES)
- * @returns The stored object key and public URL, or null if it failed.
- */
-export async function uploadToStorage(
-  uri: string,
-  bucketName: string,
-  path: string,
-  contentType: string = 'application/octet-stream',
-  maxBytes: number
-): Promise<{ key: string; url: string } | null> {
-  try {
-    // 0. Reject disallowed file types for this bucket.
-    if (!isAllowedMime(bucketName, contentType)) {
-      console.error(`Upload rejected: "${contentType}" is not allowed in "${bucketName}"`);
-      return null;
-    }
-
-    // 1. Convert local URI to a Blob
-    const response = await fetch(uri);
-    const blob = await response.blob();
-
-    // 2. Reject oversized files before uploading.
-    if (blob.size > maxBytes) {
-      console.error(`Upload rejected: file is ${blob.size} bytes (max ${maxBytes})`);
-      return null;
-    }
-
-    // 3. Upload to Supabase Storage.
-    //    `upsert: false` — never silently overwrite an existing object.
-    const { error } = await supabase.storage
-      .from(bucketName)
-      .upload(path, blob, {
-        contentType,
-        upsert: false,
-      });
-
-    if (error) {
-      console.error('Upload Error:', error);
-      throw error;
-    }
-
-    // 4. The API stores the *key*; the URL is only needed as a preview if the
-    //    UI wants to render the file again after a response round-trip.
-    const { data: publicData } = supabase.storage
-      .from(bucketName)
-      .getPublicUrl(path);
-
-    return { key: path, url: publicData.publicUrl };
-  } catch (err) {
-    console.error('Failed to upload file to storage', err);
-    return null;
-  }
-}
-
-/**
  * Prompts the user to pick an image from their device gallery.
  * @returns An object with the local uri and mimetype, or null if cancelled.
  */
@@ -101,7 +42,6 @@ export async function pickImage() {
     allowsEditing: true, // Let users crop avatars
     quality: 0.8,
   });
-
   if (!result.canceled && result.assets && result.assets.length > 0) {
     const asset = result.assets[0];
     return {
@@ -123,7 +63,6 @@ export async function pickDocument() {
     type: ['application/pdf'],
     copyToCacheDirectory: true,
   });
-
   if (!result.canceled && result.assets && result.assets.length > 0) {
     const asset = result.assets[0];
     return {
@@ -133,4 +72,68 @@ export async function pickDocument() {
     };
   }
   return null;
+}
+
+/**
+ * Validates a file before it is handed to the upload endpoint.
+ *
+ * The app no longer talks to Supabase Storage directly for manuscripts: every
+ * thesis upload is a multipart POST to the Express API, which enforces the
+ * same rules server-side (magic-byte check, size cap, bucket policy) and
+ * stores only the object key.
+ *
+ * @returns An error string, or null when the file is acceptable.
+ */
+export function validateUpload(
+  bucketName: string,
+  contentType: string,
+  sizeBytes: number,
+  maxBytes: number
+): string | null {
+  if (!isAllowedMime(bucketName, contentType)) {
+    return `"${contentType}" is not allowed in "${bucketName}"`;
+  }
+  if (!Number.isFinite(sizeBytes) || sizeBytes < 0) {
+    return "Could not read the file size";
+  }
+  if (sizeBytes > maxBytes) {
+    return `File is ${sizeBytes} bytes (max ${maxBytes})`;
+  }
+  return null;
+}
+
+/**
+ * Direct Supabase upload for public buckets.
+ *
+ * Manuscripts (theses) are NOT uploaded through this path — they go through
+ * the backend so the bytes never touch the client's Supabase key. Avatars
+ * stay here because `avatars` is a public bucket and the client's anon key is
+ * sufficient; the server only needs the object key to render the profile.
+ *
+ * @returns The object key on success, or null on failure.
+ */
+export async function uploadToStorage(
+  uri: string,
+  bucket: string,
+  path: string,
+  contentType: string,
+  maxBytes: number,
+  sizeBytes: number | null = null
+): Promise<{ key: string } | null> {
+  const error = validateUpload(bucket, contentType, sizeBytes ?? 0, maxBytes);
+  if (error) {
+    console.error("[upload] validation failed:", error);
+    return null;
+  }
+
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(path, uri, { contentType, upsert: true });
+
+  if (uploadError) {
+    console.error("[upload] Supabase upload failed:", uploadError.message);
+    return null;
+  }
+
+  return { key: path };
 }

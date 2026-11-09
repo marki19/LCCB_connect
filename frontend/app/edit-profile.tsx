@@ -12,7 +12,6 @@ export default function EditProfileScreen() {
   const { profile, session } = useAuth();
   const { colors } = useTheme();
   
-  const [fullName, setFullName] = useState(profile?.full_name || "");
   const [bio, setBio] = useState(profile?.bio || "");
   const [yearLevel, setYearLevel] = useState(profile?.year_level || "");
   const [skills, setSkills] = useState<string[]>(profile?.skills || []);
@@ -39,7 +38,7 @@ export default function EditProfileScreen() {
       if (avatarUri && !avatarUri.startsWith('http')) {
         setUploadingImage(true);
         const path = `avatars/${session.user.id}-${Date.now()}.jpg`;
-        const uploaded = await uploadToStorage(avatarUri, 'assets', path, 'image/jpeg', MAX_UPLOAD_BYTES.avatar);
+        const uploaded = await uploadToStorage(avatarUri, 'avatars', path, 'image/jpeg', MAX_UPLOAD_BYTES.avatar);
         if (uploaded) finalAvatarKey = uploaded.key;
         setUploadingImage(false);
       }
@@ -47,7 +46,6 @@ export default function EditProfileScreen() {
       const res = await apiFetch(`/users/${session.user.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          full_name: fullName.trim(),
           bio: bio.trim(),
           year_level: yearLevel.trim(),
           skills: skills,
@@ -108,13 +106,12 @@ export default function EditProfileScreen() {
           <View>
             <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Full Name</Text>
             <View style={{ backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: colors.border }}>
-              <TextInput
-                style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "500" }}
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="Juan Dela Cruz"
-                placeholderTextColor={colors.textTertiary}
-              />
+              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "600" }}>
+                {profile?.full_name || "—"}
+              </Text>
+              <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 4 }}>
+                Full name is set during signup and can only be changed by an administrator.
+              </Text>
             </View>
           </View>
 
@@ -143,7 +140,7 @@ export default function EditProfileScreen() {
                 {profile?.course_name || "—"}
               </Text>
               <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 8 }}>
-                Assigned at registration. Contact an administrator to change it.
+                Department is assigned by administrators. Contact an administrator to update it.
               </Text>
             </View>
           </View>
