@@ -111,7 +111,7 @@ All four icon-only controls now behave identically.
 | **`4b54f68`** | Fixes: `iconAction` centering + `focusRing` on IconAction/theme-toggle + shared state cleanup | |
 | **`990fab1`** | Fix profile fetch failure regression: `profileStatus` machine in AuthContext + fail-open on error | |
 | **`d607e6c`** | Fix PeerPicker `isBlocked`: trust only `message_decision === "blocked"` (not `friendship === "none"`) | Non-friend + `direct` now shows Message button; matches `directory.test.js:148-149` |
-| **`584502c`** | PeerPicker `mode` prop: message/friend — message mode uses `POST /conversations` for message requests; friend mode uses `POST /friends` | |
+| **`37a514b`** | PeerPicker `mode` prop: message/friend — message mode uses `POST /conversations` for message requests; friend mode uses `POST /friends` | |
 
 **Skipped (deliberately):**
 - Phase 3 — Rail extraction (pure move, not needed)
@@ -154,6 +154,6 @@ cd backend; npm test                   # 356/356 pass
 ---
 
 ## Branch Status
-- **Branch:** `mark1e3` (16 commits ahead of `origin/mark1e3`)
-- **History:** Not clean — `a9517fd` sweeps pre-existing work. Fix commits (`f439912`, `d5479f3`, `4b54f68`, `990fab1`, `d607e6c`, `584502c`) are incremental.
+- **Branch:** `mark1e3` (17 commits ahead of `origin/mark1e3`)
+- **History:** Not clean — `a9517fd` sweeps pre-existing work. Fix commits (`f439912`, `d5479f3`, `4b54f68`, `990fab1`, `d607e6c`, `37a514b`) are incremental.
 - **Ready to push:** Yes — all checks pass. Known edge case: hung `fetchProfile` keeps `profileStatus === "loading"` indefinitely (no fetch timeout in codebase).
