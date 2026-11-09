@@ -38,60 +38,49 @@ function DesktopTab({
   focused,
   onPress,
   colors,
-  showLabel = true,
 }: {
   label: string;
   icon: any;
   focused: boolean;
   onPress: () => void;
   colors: ThemeTokens;
-  showLabel?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const [focusVisible, setFocusVisible] = useState(false);
 
   return (
     <Pressable
-      accessibilityRole="tab"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: focused }}
-      onPress={onPress}
-      onHoverIn={() => setHovered(true)}
-      onHoverOut={() => setHovered(false)}
-      onFocus={() => setFocusVisible(true)}
-      onBlur={() => setFocusVisible(false)}
-      style={[
-        styles.webTab,
-        !showLabel && styles.webTabCompact,
-        {
-          backgroundColor: focused
-            ? colors.brandWash
-            : hovered
-            ? colors.panelInset
-            : "transparent",
-        },
-        focusRing(colors, focusVisible),
-      ]}
-    >
-      <Icon
-        size={17}
-        color={focused ? colors.brand : colors.inkFaint}
-        strokeWidth={focused ? 2.4 : 2}
-      />
-      {showLabel ? (
-        <Text
+          accessibilityRole="tab"
+          accessibilityLabel={label}
+          accessibilityState={{ selected: focused }}
+          onPress={onPress}
+          onHoverIn={() => setHovered(true)}
+          onHoverOut={() => setHovered(false)}
+          onFocus={() => setFocusVisible(true)}
+          onBlur={() => setFocusVisible(false)}
           style={[
-            styles.webTabLabel,
+            styles.webTab,
             {
-              color: focused ? colors.brand : colors.inkSoft,
-              fontWeight: focused ? "700" : "600",
+              backgroundColor: focused
+                ? colors.brandWash
+                : hovered
+                ? colors.panelInset
+                : "transparent",
             },
+            focusRing(colors, focusVisible),
           ]}
         >
-          {label}
-        </Text>
-      ) : null}
-    </Pressable>
+          <Icon
+            size={17}
+            color={focused ? colors.brand : colors.inkFaint}
+            strokeWidth={focused ? 2.4 : 2}
+          />
+          {(hovered || focusVisible) && (
+            <Text pointerEvents="none" style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}>
+              {label}
+            </Text>
+          )}
+        </Pressable>
   );
 }
 
@@ -159,8 +148,6 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
   const visibleTabs = TAB_ITEMS.filter((item) => !isGuest || !item.isAction);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
-  const compactNav = width < 1120;
-  const compactActions = width < 1320;
 
   const navigate = (name: string, focused: boolean) => {
     const route = state.routes.find((r: any) => r.name === name);
@@ -211,7 +198,7 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
               LCCB <Text style={{ color: colors.brand }}>Connect</Text>
             </Text>
             <Text style={[styles.webBrandSub, { color: colors.inkFaint }]}>
-              {compactNav ? "Campus" : "Campus network"}
+              Campus network
             </Text>
           </View>
         </Pressable>
@@ -237,11 +224,9 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
                   ]}
                 >
                   <Plus size={16} color={colors.textOnPrimary} strokeWidth={2.5} />
-                  {!compactActions ? (
-                    <Text style={[styles.webCreateText, { color: colors.textOnPrimary }]}>
-                      Create post
-                    </Text>
-                  ) : null}
+                  <Text style={[styles.webCreateText, { color: colors.textOnPrimary }]}>
+                    Create post
+                  </Text>
                 </Pressable>
               );
             }
@@ -254,7 +239,6 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
                 focused={focused}
                 onPress={() => navigate(name, focused)}
                 colors={colors}
-                showLabel={!compactNav}
               />
             );
           })}
@@ -294,11 +278,9 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
               ]}
             >
               <Shield size={16} color={colors.brand} strokeWidth={2.2} />
-              {!compactActions ? (
-                <Text style={[styles.webAdminLabel, { color: colors.brand }]}>
-                  Admin console
-                </Text>
-              ) : null}
+              <Text style={[styles.webAdminLabel, { color: colors.brand }]}>
+                Admin console
+              </Text>
             </Pressable>
           ) : departmentAdmin ? (
             <Pressable
@@ -448,10 +430,16 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.pill,
     gap: 6,
   },
-  webTabCompact: {
-    width: 40,
-    paddingHorizontal: 0,
-    justifyContent: "center",
+  webTooltip: {
+    position: "absolute",
+    top: 46,
+    alignSelf: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: "600",
+    zIndex: 200,
   },
   webTabLabel: {
     fontSize: 13,
