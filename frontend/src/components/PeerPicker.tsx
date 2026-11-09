@@ -230,15 +230,18 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
         {isPendingOut ? (
           <TouchableOpacity
             disabled
+            accessibilityRole="button"
+            accessibilityLabel={`Add ${item.full_name || item.username} as friend`}
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: 17,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
               backgroundColor: isDark ? "hsl(150, 30%, 15%)" : "#DCFCE7",
               alignItems: "center",
               justifyContent: "center",
               marginRight: 8,
             }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Check size={16} color="#16A34A" />
           </TouchableOpacity>
@@ -273,10 +276,11 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end" }}>
+      <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end", alignItems: "center" }}>
         <View
           style={{
-            flex: 1,
+            width: "100%",
+            maxWidth: 520,
             backgroundColor: colors.surface,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
