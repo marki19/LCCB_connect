@@ -9,10 +9,8 @@ import {
   Platform,
   useWindowDimensions,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import {
   BookOpen,
-  Calendar,
   FileText,
   FolderGit2,
   Globe,
@@ -43,7 +41,6 @@ import {
 } from "../../src/lib/tokens";
 import StatusBadge from "../../src/components/admin/StatusBadge";
 import EmptyState from "../../src/components/admin/EmptyState";
-import Reveal from "../../src/components/ui/Reveal";
 import { Skeleton } from "../../src/components/ui/Skeleton";
 
 type FilterValue = "all" | "theses" | "websites" | "projects" | "discussions" | "images";
@@ -98,13 +95,6 @@ function getInitials(name?: string | null) {
     .join("")
     .substring(0, 2)
     .toUpperCase();
-}
-
-function greetingForNow() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
 }
 
 function SideLink({
@@ -187,36 +177,6 @@ function SideLink({
   );
 }
 
-function HeroStat({
-  value,
-  label,
-  colors,
-  loading,
-}: {
-  value: number;
-  label: string;
-  colors: ThemeTokens;
-  loading: boolean;
-}) {
-  return (
-    <View style={{ minWidth: 92 }}>
-      <Text
-        style={{
-          ...TYPE.title,
-          fontSize: 22,
-          color: colors.heroText,
-          fontVariant: ["tabular-nums"],
-        }}
-      >
-        {loading ? "—" : value.toLocaleString("en-US")}
-      </Text>
-      <Text style={{ ...TYPE.caption, fontSize: 11, color: colors.heroTextMuted }}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 export default function HomeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
@@ -224,11 +184,8 @@ export default function HomeScreen() {
   const { isOnline } = usePresence();
   const isGuest = profile?.role === "guest";
   const { width } = useWindowDimensions();
-  // The rails only earn their space once the feed can stay at a readable
-  // width. Below that, the feed takes the full content area.
   const isDesktopWeb = Platform.OS === "web" && width >= 1200;
   const isWideWeb = Platform.OS === "web" && width >= 1600;
-  const compact = width < 480;
 
   const [posts, setPosts] = useState<any[]>([]);
   const [activePeers, setActivePeers] = useState<any[]>([]);
@@ -240,23 +197,21 @@ export default function HomeScreen() {
   const [filter, setFilter] = useState<FilterValue>("all");
   const loadedRef = useRef(false);
 
-  // Drop a deleted card immediately; the next feed refresh reconciles with the server.
   const handlePostDeleted = useCallback((id: string | number) => {
     setPosts((prev) => prev.filter((p) => String(p.id) !== String(id)));
   }, []);
 
-  // Fetch real users from backend / database
-    const fetchActivePeers = useCallback(async () => {
-      try {
-        const rows = isGuest
-          ? await apiJson<any[]>("/public/peers?limit=20")
-          : await apiJson<{ peer: any }[]>("/friends?limit=20");
-        const list = rows.map((r: any) => r.peer ?? r).filter(Boolean);
-        setActivePeers(list.filter((p: any) => p.id !== profile?.id));
-      } catch (e) {
-        console.error("Failed to load peers:", e);
-      }
-    }, [isGuest, profile?.id]);
+  const fetchActivePeers = useCallback(async () => {
+    try {
+      const rows = isGuest
+        ? await apiJson<any[]>("/public/peers?limit=20")
+        : await apiJson<{ peer: any }[]>("/friends?limit=20");
+      const list = rows.map((r: any) => r.peer ?? r).filter(Boolean);
+      setActivePeers(list.filter((p: any) => p.id !== profile?.id));
+    } catch (e) {
+      console.error("Failed to load peers:", e);
+    }
+  }, [isGuest, profile?.id]);
 
   const fetchUnreadCount = useCallback(async () => {
     if (isGuest || !profile?.id) {
@@ -279,18 +234,16 @@ export default function HomeScreen() {
     }
   }, [isGuest, profile?.id]);
 
-  // Current active user: only the authenticated profile or the local guest
-    // profile. Never substitute another campus member's identity.
-    const activeUser = profile;
-    const activeName = activeUser?.full_name || (isGuest ? "Guest Visitor" : "You");
+  const activeUser = profile;
+  const activeName = activeUser?.full_name || (isGuest ? "Guest Visitor" : "You");
 
-    const onlineCount = activePeers.filter((p) => isOnline(p.id)).length;
-    const sortedPeers = useMemo(
-      () => [...activePeers].sort((a, b) => Number(isOnline(b.id)) - Number(isOnline(a.id))),
-      [activePeers, isOnline]
-    );
+  const onlineCount = activePeers.filter((p) => isOnline(p.id)).length;
+  const sortedPeers = useMemo(
+    () => [...activePeers].sort((a, b) => Number(isOnline(b.id)) - Number(isOnline(a.id))),
+    [activePeers, isOnline]
+  );
 
-    const fetchUnifiedFeed = useCallback(async () => {
+  const fetchUnifiedFeed = useCallback(async () => {
     if (!loadedRef.current) setLoading(true);
     setError("");
     let postItems: any[] = [];
@@ -298,7 +251,6 @@ export default function HomeScreen() {
     let postFailed = false;
     let thesisFailed = false;
 
-    // 1. Fetch Posts from raw SQL backend API
     try {
       const res = await apiFetch(`/posts`);
       if (res.ok) {
@@ -338,7 +290,6 @@ export default function HomeScreen() {
       console.error("Failed to load posts from SQL backend:", err);
     }
 
-    // 2. Fetch Theses from raw SQL backend API
     try {
       const res = await apiFetch(`/theses`);
       if (res.ok) {
@@ -380,7 +331,6 @@ export default function HomeScreen() {
       setError("We couldn't reach the campus feed. Check your connection and try again.");
     }
 
-    // 3. Merge & Filter
     let unified = [...postItems, ...thesisItems].sort((a, b) => b.rawDate - a.rawDate);
 
     if (filter === "theses") {
@@ -409,7 +359,6 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
-    // A failed fetch should not leave the skeleton shimmering forever.
     const timer = setTimeout(() => setLoading(false), 12000);
     return () => clearTimeout(timer);
   }, []);
@@ -420,7 +369,6 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount]);
 
-  const firstName = profile?.full_name?.split(" ")[0] || "there";
   const emptyCopy = FILTER_COPY[filter];
 
   const goCreate = () => router.push("/create");
@@ -564,346 +512,106 @@ export default function HomeScreen() {
                 paddingTop: SPACE.x2,
                 paddingBottom: SPACE.x8,
               }}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={
-              <View style={{ marginBottom: SPACE.x3 }}>
-                <Reveal>
-                  <LinearGradient
-                    colors={[colors.heroFrom, colors.heroTo]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={{
-                      marginHorizontal: SPACE.x4,
-                      marginTop: SPACE.x2,
-                      marginBottom: SPACE.x3,
-                      borderRadius: RADIUS.xxl,
-                      padding: compact ? SPACE.x4 : SPACE.x5,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        position: "absolute",
-                        top: -70,
-                        right: -50,
-                        width: 180,
-                        height: 180,
-                        borderRadius: 90,
-                        backgroundColor: colors.heroGlow,
-                        opacity: 0.22,
-                      }}
-                    />
-                    <Text style={{ ...TYPE.micro, fontSize: 8.5, color: colors.heroTextMuted }}>
-                      {greetingForNow()} ·{" "}
-                      {new Date().toLocaleDateString(undefined, {
-                        weekday: "long",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </Text>
-                    <Text
-                      style={{
-                        ...TYPE.h1,
-                        fontSize: compact ? 26 : 30,
-                        lineHeight: compact ? 32 : 36,
-                        color: colors.heroText,
-                        marginTop: SPACE.x2,
-                      }}
-                    >
-                      {firstName === "there" ? "Welcome to campus" : `Hello, ${firstName}`}
-                    </Text>
-                    <Text
-                      style={{
-                        ...TYPE.body,
-                        fontSize: 13,
-                        color: colors.heroTextMuted,
-                        marginTop: SPACE.x1,
-                        maxWidth: 380,
-                      }}
-                    >
-                      {isGuest
-                        ? "Browse the latest work from LCCB. Sign in to join the conversation."
-                        : "Here is what your campus is building, writing, and talking about."}
-                    </Text>
-
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "flex-end",
-                        gap: SPACE.x6,
-                        marginTop: SPACE.x4,
-                      }}
-                    >
-                      <HeroStat
-                        value={activePeers.length}
-                        label="People in your network"
-                        colors={colors}
-                        loading={loading}
-                      />
-                      <HeroStat
-                        value={posts.length}
-                        label="Posts in this view"
-                        colors={colors}
-                        loading={loading}
-                      />
-                      {!isGuest ? (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Share something with campus"
-                          onPress={goCreate}
-                          style={({ pressed }) => ({
-                            marginLeft: "auto",
-                            minHeight: 40,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 6,
-                            borderRadius: RADIUS.pill,
-                            backgroundColor: "rgba(247, 244, 236, 0.12)",
-                            borderWidth: 1,
-                            borderColor: colors.heroLine,
-                            paddingHorizontal: SPACE.x3,
-                            paddingVertical: SPACE.x2,
-                            opacity: pressed ? 0.85 : 1,
-                          })}
-                        >
-                          <PenLine size={13} color={colors.heroText} />
-                          <Text
-                            style={{
-                              ...TYPE.caption,
-                              fontWeight: "700",
-                              color: colors.heroText,
-                            }}
-                          >
-                            Share
-                          </Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  </LinearGradient>
-                </Reveal>
-
-                {error ? (
+              showsVerticalScrollIndicator={false}
+              ListHeaderComponent={
+                <View style={{ marginBottom: SPACE.x3 }}>
                   <View
                     style={{
-                      marginHorizontal: SPACE.x4,
-                      marginBottom: SPACE.x3,
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: SPACE.x3,
-                      borderRadius: RADIUS.lg,
-                      borderWidth: 1,
-                      borderColor: colors.coral,
-                      backgroundColor: colors.coralWash,
-                      padding: SPACE.x3,
+                      justifyContent: "space-between",
+                      marginHorizontal: SPACE.x4,
+                      marginVertical: SPACE.x2,
+                      minHeight: 48,
                     }}
                   >
-                    <WifiOff size={17} color={colors.coralText} />
-                    <Text
-                      style={{ ...TYPE.caption, fontWeight: "600", color: colors.coralText, flex: 1 }}
-                    >
-                      {error}
+                    <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
+                      {onlineCount} online · {posts.length} posts
                     </Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Retry loading the feed"
-                      onPress={() => void onRefresh()}
-                      style={({ pressed }) => ({
-                        minHeight: 32,
-                        justifyContent: "center",
-                        borderRadius: RADIUS.pill,
-                        borderWidth: 1,
-                        borderColor: colors.coral,
-                        paddingHorizontal: SPACE.x3,
-                        opacity: pressed ? 0.8 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{ ...TYPE.caption, fontWeight: "700", color: colors.coralText }}
-                      >
-                        Retry
-                      </Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-
-                {!isGuest && (
-                  <Pressable
-                    onPress={goCreate}
-                    accessibilityRole="button"
-                    accessibilityLabel="Create a post or deposit a thesis"
-                    style={({ pressed }) => ({
-                      marginHorizontal: SPACE.x4,
-                      marginBottom: SPACE.x3,
-                      minHeight: 64,
-                      padding: SPACE.x3,
-                      backgroundColor: colors.panel,
-                      borderRadius: RADIUS.xl,
-                      borderWidth: 1,
-                      borderColor: colors.line,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      opacity: pressed ? 0.92 : 1,
-                      ...elevation("sm", colors),
-                    })}
-                  >
-                    <View
-                      style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 19,
-                        backgroundColor: colors.brandWash,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginRight: SPACE.x3,
-                      }}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: "800", color: colors.brand }}>
-                        {getInitials(activeName)}
-                      </Text>
-                    </View>
-                    <View
-                      style={{
-                        flex: 1,
-                        minHeight: 40,
-                        backgroundColor: colors.surfaceSunken,
-                        borderRadius: RADIUS.pill,
-                        borderWidth: 1,
-                        borderColor: colors.line,
-                        justifyContent: "center",
-                        paddingHorizontal: SPACE.x4,
-                      }}
-                    >
-                      <Text style={{ color: colors.inkFaint, fontSize: 13 }} numberOfLines={1}>
-                        Share your project or deposit a thesis…
-                      </Text>
-                    </View>
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: colors.brandSolid,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginLeft: SPACE.x2,
-                      }}
-                    >
-                      <PenLine size={16} color={colors.textOnPrimary} />
-                    </View>
-                  </Pressable>
-                )}
-
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: SPACE.x4, gap: SPACE.x2 }}
-                >
-                  {FILTERS.map((item) => {
-                    const active = filter === item.value;
-                    const Icon = item.icon;
-                    return (
+                    {!isGuest && (
                       <Pressable
-                        key={item.value}
-                        accessibilityRole="tab"
-                        accessibilityLabel={`Show ${item.label}`}
-                        accessibilityState={{ selected: active }}
-                        onPress={() => setFilter(item.value)}
-                        style={({ pressed }) => ({
-                          minHeight: 44,
+                        accessibilityRole="button"
+                        accessibilityLabel="Create a post"
+                        onPress={goCreate}
+                        style={{
                           flexDirection: "row",
                           alignItems: "center",
                           gap: 6,
+                          backgroundColor: colors.brandSolid,
                           borderRadius: RADIUS.pill,
-                          borderWidth: 1,
-                          borderColor: active ? colors.brandSolid : colors.line,
-                          backgroundColor: active
-                            ? colors.brandSolid
-                            : pressed
-                            ? colors.panelInset
-                            : colors.panel,
-                          paddingHorizontal: SPACE.x4,
-                          opacity: pressed ? 0.9 : 1,
-                        })}
+                          paddingHorizontal: SPACE.x3,
+                          minHeight: 36,
+                        }}
                       >
-                        <Icon
-                          size={14}
-                          color={active ? colors.textOnPrimary : colors.inkSoft}
-                          strokeWidth={2.1}
-                        />
+                        <PenLine size={14} color={colors.textOnPrimary} />
                         <Text
-                          style={{
-                            ...TYPE.caption,
-                            fontWeight: "700",
-                            color: active ? colors.textOnPrimary : colors.inkSoft,
-                          }}
+                          style={{ ...TYPE.caption, fontWeight: "700", color: colors.textOnPrimary }}
                         >
-                          {item.label}
+                          Create
                         </Text>
                       </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            }
-            ListEmptyComponent={
-              loading ? (
-                <View style={{ paddingHorizontal: SPACE.x4, gap: SPACE.x3 }}>
-                  {[0, 1, 2].map((index) => (
-                    <View
-                      key={index}
-                      style={{
-                        borderRadius: RADIUS.xl,
-                        borderWidth: 1,
-                        borderColor: colors.line,
-                        backgroundColor: colors.panel,
-                        padding: SPACE.x4,
-                        gap: SPACE.x3,
-                        ...elevation("sm", colors),
-                      }}
-                    >
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3 }}>
-                        <Skeleton width={38} height={38} radius={19} />
-                        <View style={{ flex: 1, gap: 6 }}>
-                          <Skeleton width="45%" height={10} radius={5} />
-                          <Skeleton width="28%" height={9} radius={5} />
+                    )}
+                  </View>
+                </View>
+              }
+              ListEmptyComponent={
+                loading ? (
+                  <View style={{ paddingHorizontal: SPACE.x4, gap: SPACE.x3 }}>
+                    {[0, 1, 2].map((index) => (
+                      <View
+                        key={index}
+                        style={{
+                          borderRadius: RADIUS.xl,
+                          borderWidth: 1,
+                          borderColor: colors.line,
+                          backgroundColor: colors.panel,
+                          padding: SPACE.x4,
+                          gap: SPACE.x3,
+                          ...elevation("sm", colors),
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3 }}>
+                          <Skeleton width={38} height={38} radius={19} />
+                          <View style={{ flex: 1, gap: 6 }}>
+                            <Skeleton width="45%" height={10} radius={5} />
+                            <Skeleton width="28%" height={9} radius={5} />
+                          </View>
                         </View>
+                        <Skeleton width="88%" height={13} radius={6} />
+                        <Skeleton width="70%" height={11} radius={6} />
+                        <Skeleton height={120} radius={RADIUS.lg} />
                       </View>
-                      <Skeleton width="88%" height={13} radius={6} />
-                      <Skeleton width="70%" height={11} radius={6} />
-                      <Skeleton height={120} radius={RADIUS.lg} />
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <View
-                  style={{
-                    flexGrow: 1,
-                    justifyContent: "center",
-                    marginHorizontal: SPACE.x4,
-                    borderRadius: RADIUS.xxl,
-                    borderWidth: 1,
-                    borderColor: colors.line,
-                    backgroundColor: colors.panel,
-                  }}
-                >
-                  <EmptyState
-                    icon={error ? WifiOff : emptyCopy.icon}
-                    tone={error ? "danger" : "brand"}
-                    title={error ? "Nothing to show yet" : emptyCopy.title}
-                    body={
-                      error
-                        ? "The feed could not load. Pull down to try again, or check your connection."
-                        : emptyCopy.body
-                    }
-                    actionLabel={isGuest ? "Explore the repository" : "Share the first one"}
-                    onAction={
-                      isGuest ? () => router.push("/(tabs)/search") : goCreate
-                    }
-                  />
-                </View>
-              )
-            }
+                    ))}
+                  </View>
+                ) : (
+                  <View
+                    style={{
+                      flexGrow: 1,
+                      justifyContent: "center",
+                      marginHorizontal: SPACE.x4,
+                      borderRadius: RADIUS.xxl,
+                      borderWidth: 1,
+                      borderColor: colors.line,
+                      backgroundColor: colors.panel,
+                    }}
+                  >
+                    <EmptyState
+                      icon={error ? WifiOff : emptyCopy.icon}
+                      tone={error ? "danger" : "brand"}
+                      title={error ? "Nothing to show yet" : emptyCopy.title}
+                      body={
+                        error
+                          ? "The feed could not load. Pull down to try again, or check your connection."
+                          : emptyCopy.body
+                      }
+                      actionLabel={isGuest ? "Explore the repository" : "Share the first one"}
+                      onAction={
+                        isGuest ? () => router.push("/(tabs)/search") : goCreate
+                      }
+                    />
+                  </View>
+                )
+              }
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
@@ -914,6 +622,165 @@ export default function HomeScreen() {
                 />
               }
             />
+            {error ? (
+              <View
+                style={{
+                  marginHorizontal: SPACE.x4,
+                  marginBottom: SPACE.x3,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: SPACE.x3,
+                  borderRadius: RADIUS.lg,
+                  borderWidth: 1,
+                  borderColor: colors.coral,
+                  backgroundColor: colors.coralWash,
+                  padding: SPACE.x3,
+                }}
+              >
+                <WifiOff size={17} color={colors.coralText} />
+                <Text
+                  style={{ ...TYPE.caption, fontWeight: "600", color: colors.coralText, flex: 1 }}
+                >
+                  {error}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading the feed"
+                  onPress={() => void onRefresh()}
+                  style={({ pressed }) => ({
+                    minHeight: 32,
+                    justifyContent: "center",
+                    borderRadius: RADIUS.pill,
+                    borderWidth: 1,
+                    borderColor: colors.coral,
+                    paddingHorizontal: SPACE.x3,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <Text
+                    style={{ ...TYPE.caption, fontWeight: "700", color: colors.coralText }}
+                  >
+                    Retry
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+            {!isGuest && (
+              <Pressable
+                onPress={goCreate}
+                accessibilityRole="button"
+                accessibilityLabel="Create a post or deposit a thesis"
+                style={({ pressed }) => ({
+                  marginHorizontal: SPACE.x4,
+                  marginBottom: SPACE.x3,
+                  minHeight: 64,
+                  padding: SPACE.x3,
+                  backgroundColor: colors.panel,
+                  borderRadius: RADIUS.xl,
+                  borderWidth: 1,
+                  borderColor: colors.line,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  opacity: pressed ? 0.92 : 1,
+                  ...elevation("sm", colors),
+                })}
+              >
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: colors.brandWash,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: SPACE.x3,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: colors.brand }}>
+                    {getInitials(activeName)}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flex: 1,
+                    minHeight: 40,
+                    backgroundColor: colors.surfaceSunken,
+                    borderRadius: RADIUS.pill,
+                    borderWidth: 1,
+                    borderColor: colors.line,
+                    justifyContent: "center",
+                    paddingHorizontal: SPACE.x4,
+                  }}
+                >
+                  <Text style={{ color: colors.inkFaint, fontSize: 13 }} numberOfLines={1}>
+                    Share your project or deposit a thesis…
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: colors.brandSolid,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginLeft: SPACE.x2,
+                  }}
+                >
+                  <PenLine size={16} color={colors.textOnPrimary} />
+                </View>
+              </Pressable>
+            )}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: SPACE.x4, gap: SPACE.x2 }}
+            >
+              {FILTERS.map((item) => {
+                const active = filter === item.value;
+                const Icon = item.icon;
+                return (
+                  <Pressable
+                    key={item.value}
+                    accessibilityRole="tab"
+                    accessibilityLabel={`Show ${item.label}`}
+                    accessibilityState={{ selected: active }}
+                    onPress={() => setFilter(item.value)}
+                    style={({ pressed }) => ({
+                      minHeight: 44,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      borderRadius: RADIUS.pill,
+                      borderWidth: 1,
+                      borderColor: active ? colors.brandSolid : colors.line,
+                      backgroundColor: active
+                        ? colors.brandSolid
+                        : pressed
+                        ? colors.panelInset
+                        : colors.panel,
+                      paddingHorizontal: SPACE.x4,
+                      opacity: pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Icon
+                      size={14}
+                      color={active ? colors.textOnPrimary : colors.inkSoft}
+                      strokeWidth={2.1}
+                    />
+                    <Text
+                      style={{
+                        ...TYPE.caption,
+                        fontWeight: "700",
+                        color: active ? colors.textOnPrimary : colors.inkSoft,
+                      }}
+                    >
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
         </View>
 
@@ -930,57 +797,26 @@ export default function HomeScreen() {
             }}
           >
             {!isGuest && (
-              <LinearGradient
-                colors={[colors.heroFrom, colors.heroTo]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  borderRadius: RADIUS.xl,
-                  padding: SPACE.x4,
-                  marginBottom: SPACE.x5,
-                  overflow: "hidden",
-                }}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Upload a thesis"
+                onPress={() => router.push("/upload-thesis")}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: SPACE.x2,
+                  paddingVertical: SPACE.x2,
+                  paddingHorizontal: SPACE.x3,
+                  borderRadius: RADIUS.md,
+                  backgroundColor: colors.panel,
+                  opacity: pressed ? 0.9 : 1,
+                })}
               >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: SPACE.x2,
-                    marginBottom: 6,
-                  }}
-                >
-                  <UploadCloud size={18} color={colors.navAccent} />
-                  <Text style={{ color: colors.heroText, fontWeight: "800", fontSize: 14 }}>
-                    Deposit a manuscript
-                  </Text>
-                </View>
-                <Text
-                  style={{
-                    color: colors.heroTextMuted,
-                    fontSize: 12,
-                    lineHeight: 17,
-                    marginBottom: SPACE.x3,
-                  }}
-                >
-                  Archive your capstone or dissertation in the LCCB Digital Repository.
+                <UploadCloud size={16} color={colors.brand} />
+                <Text style={{ color: colors.brand, fontWeight: "700", fontSize: 12 }}>
+                  Upload thesis
                 </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/upload-thesis")}
-                  style={({ pressed }) => ({
-                    minHeight: 40,
-                    borderRadius: RADIUS.md,
-                    backgroundColor: colors.panel,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: pressed ? 0.9 : 1,
-                  })}
-                >
-                  <Text style={{ color: colors.brand, fontWeight: "700", fontSize: 12 }}>
-                    Upload PDF
-                  </Text>
-                </Pressable>
-              </LinearGradient>
+              </Pressable>
             )}
 
             <Text
@@ -991,116 +827,89 @@ export default function HomeScreen() {
                 marginBottom: SPACE.x2,
               }}
             >
-              Academic deadlines
+              {isGuest ? "Campus directory" : "Campus peers"}
             </Text>
+
             <View
               style={{
-                backgroundColor: colors.panel,
-                borderRadius: RADIUS.lg,
-                padding: SPACE.x3,
-                borderWidth: 1,
-                borderColor: colors.line,
-                marginBottom: SPACE.x5,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: SPACE.x2,
               }}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: SPACE.x2,
-                  marginBottom: 5,
-                }}
-              >
-                <Calendar size={15} color={colors.accentText} />
-                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.ink }}>
-                  Capstone Title Defense
-                </Text>
-              </View>
-              <Text style={{ fontSize: 11, color: colors.inkFaint }}>
-                College of Computer Studies · Term 1
+              <Text style={{ ...TYPE.micro, fontSize: 8.5, color: colors.inkFaint }}>
+                {isGuest ? "Campus directory" : "Campus peers"}
               </Text>
+              {onlineCount > 0 ? (
+                <StatusBadge label={`${onlineCount} online`} tone="success" />
+              ) : null}
             </View>
 
-            <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            marginBottom: SPACE.x2,
-                          }}
-                        >
-                          <Text style={{ ...TYPE.micro, fontSize: 8.5, color: colors.inkFaint }}>
-                            {isGuest ? "Campus directory" : "Campus peers"}
-                          </Text>
-                          {onlineCount > 0 ? (
-                            <StatusBadge label={`${onlineCount} online`} tone="success" />
-                          ) : null}
-                        </View>
-
-                        {sortedPeers.length === 0 ? (
-                          <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
-                            {isGuest ? "No one in the directory yet." : "No friends online yet. Add some classmates!"}
-                          </Text>
-                        ) : (
-                          sortedPeers.map((peer) => (
-                            <Pressable
-                              key={peer.id}
-                              accessibilityRole="button"
-                              accessibilityLabel={`Message ${peer.full_name}`}
-                              onPress={() => router.push("/messages")}
-                              style={({ pressed }) => ({
-                                flexDirection: "row",
-                                alignItems: "center",
-                                paddingVertical: SPACE.x2,
-                                gap: SPACE.x3,
-                                borderRadius: RADIUS.md,
-                                opacity: pressed ? 0.75 : 1,
-                              })}
-                            >
-                              <View style={{ position: "relative" }}>
-                                <View
-                                  style={{
-                                    width: 34,
-                                    height: 34,
-                                    borderRadius: 17,
-                                    backgroundColor: colors.brandWash,
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                  }}
-                                >
-                                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.brand }}>
-                                    {getInitials(peer.full_name)}
-                                  </Text>
-                                </View>
-                                <View
-                                  style={{
-                                    position: "absolute",
-                                    bottom: 0,
-                                    right: 0,
-                                    width: 10,
-                                    height: 10,
-                                    borderRadius: 5,
-                                    backgroundColor: isOnline(peer.id) ? colors.jade : colors.inkFaint,
-                                    borderWidth: 2,
-                                    borderColor: colors.surfacePage,
-                                  }}
-                                />
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text
-                                  style={{ fontSize: 13, fontWeight: "600", color: colors.ink }}
-                                  numberOfLines={1}
-                                >
-                                  {peer.full_name}
-                                </Text>
-                                <Text style={{ fontSize: 10, color: colors.inkFaint }} numberOfLines={1}>
-                                  {peer.department_name || "No department"}
-                                  {peer.year_level ? ` · ${peer.year_level}` : ""}
-                                </Text>
-                              </View>
-                            </Pressable>
-                          ))
-                        )}
+            {sortedPeers.length === 0 ? (
+              <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
+                {isGuest ? "No one in the directory yet." : "No friends online yet. Add some classmates!"}
+              </Text>
+            ) : (
+              sortedPeers.map((peer) => (
+                <Pressable
+                  key={peer.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Message ${peer.full_name}`}
+                  onPress={() => router.push("/messages")}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: SPACE.x2,
+                    gap: SPACE.x3,
+                    borderRadius: RADIUS.md,
+                    opacity: pressed ? 0.75 : 1,
+                  })}
+                >
+                  <View style={{ position: "relative" }}>
+                    <View
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 17,
+                        backgroundColor: colors.brandWash,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.brand }}>
+                        {getInitials(peer.full_name)}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        position: "absolute",
+                        bottom: 0,
+                        right: 0,
+                        width: 10,
+                        height: 10,
+                        borderRadius: 5,
+                        backgroundColor: isOnline(peer.id) ? colors.jade : colors.inkFaint,
+                        borderWidth: 2,
+                        borderColor: colors.surfacePage,
+                      }}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{ fontSize: 13, fontWeight: "600", color: colors.ink }}
+                      numberOfLines={1}
+                    >
+                      {peer.full_name}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: colors.inkFaint }} numberOfLines={1}>
+                      {peer.department_name || "No department"}
+                      {peer.year_level ? ` · ${peer.year_level}` : ""}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))
+            )}
           </View>
         )}
       </View>
