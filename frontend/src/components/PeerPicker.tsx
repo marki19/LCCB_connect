@@ -299,7 +299,12 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
             }}
           >
             <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary }}>New message</Text>
-            <TouchableOpacity onPress={handleClose} style={{ padding: 6 }}>
+            <TouchableOpacity
+              onPress={handleClose}
+              style={{ padding: 6 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close peer picker"
+            >
               <X size={20} color={colors.textTertiary} />
             </TouchableOpacity>
           </View>
@@ -322,6 +327,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
               placeholder="Search by name, username, or department"
               placeholderTextColor={colors.textTertiary}
               style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: colors.textPrimary }}
+              accessibilityLabel="Search peers by name, username, or department"
             />
           </View>
 
