@@ -137,6 +137,61 @@ function MobileTab({
   );
 }
 
+function IconAction({
+  label,
+  icon: Icon,
+  iconColor,
+  variant,
+  onPress,
+  colors,
+}: {
+  label: string;
+  icon: any;
+  iconColor: string;
+  variant: "primary" | "outline";
+  onPress: () => void;
+  colors: ThemeTokens;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [focusVisible, setFocusVisible] = useState(false);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      onFocus={() => setFocusVisible(true)}
+      onBlur={() => setFocusVisible(false)}
+      style={({ pressed }) => [
+        styles.iconAction,
+        { width: 40, paddingHorizontal: 0, justifyContent: "center" },
+        variant === "primary"
+          ? {
+              backgroundColor: colors.brandSolid,
+              opacity: pressed ? 0.88 : 1,
+            }
+          : {
+              borderWidth: 1,
+              borderColor: colors.line,
+              backgroundColor: pressed ? colors.panelInset : "transparent",
+            },
+      ]}
+    >
+      <Icon size={17} color={iconColor} strokeWidth={2.4} />
+      {(hovered || focusVisible) && (
+        <Text
+          pointerEvents="none"
+          style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}
+        >
+          {label}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
 function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -148,10 +203,6 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
   const visibleTabs = TAB_ITEMS.filter((item) => !isGuest || !item.isAction);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
-
-  // Shared hover/focus state for Create and Admin buttons
-  const [hovered, setHovered] = useState(false);
-  const [focusVisible, setFocusVisible] = useState(false);
 
   const navigate = (name: string, focused: boolean) => {
     const route = state.routes.find((r: any) => r.name === name);
@@ -211,28 +262,15 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
 
             if (isAction) {
               return (
-                <Pressable
+                <IconAction
                   key={name}
-                  accessibilityRole="button"
-                  accessibilityLabel="Create a post"
+                  label="Create a post"
+                  icon={Plus}
+                  iconColor={colors.textOnPrimary}
+                  variant="primary"
+                  colors={colors}
                   onPress={() => router.push("/create")}
-                  onHoverIn={() => setHovered(true)}
-                  onHoverOut={() => setHovered(false)}
-                  onFocus={() => setFocusVisible(true)}
-                  onBlur={() => setFocusVisible(false)}
-                  style={[
-                    styles.webCreateButton,
-                    { backgroundColor: colors.brandSolid },
-                    { width: 40, paddingHorizontal: 0, justifyContent: "center" },
-                  ]}
-                >
-                  <Plus size={17} color={colors.textOnPrimary} strokeWidth={2.5} />
-                  {(hovered || focusVisible) && (
-                    <Text pointerEvents="none" style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}>
-                      Create post
-                    </Text>
-                  )}
-                </Pressable>
+                />
               );
             }
 
@@ -267,49 +305,26 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
           </Pressable>
 
           {adminUser ? (
-            <Pressable
+            <IconAction
+              label="Open the admin console"
+              icon={Shield}
+              iconColor={colors.brand}
+              variant="outline"
+              colors={colors}
               onPress={() => {
                 setAdminAppPreview(false);
                 router.push("/(admin)");
               }}
-              accessibilityRole="button"
-              accessibilityLabel="Open the admin console"
-              onHoverIn={() => setHovered(true)}
-              onHoverOut={() => setHovered(false)}
-              onFocus={() => setFocusVisible(true)}
-              onBlur={() => setFocusVisible(false)}
-              style={[
-                styles.webAdminButton,
-                { borderColor: colors.line, backgroundColor: "transparent" },
-                { width: 40, paddingHorizontal: 0, justifyContent: "center" },
-              ]}
-            >
-              <Shield size={17} color={colors.brand} strokeWidth={2.2} />
-              {(hovered || focusVisible) && (
-                <Text pointerEvents="none" style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}>
-                  Admin console
-                </Text>
-              )}
-            </Pressable>
+            />
           ) : departmentAdmin ? (
-            <Pressable
+            <IconAction
+              label="Open the moderation console"
+              icon={Shield}
+              iconColor={colors.action}
+              variant="outline"
+              colors={colors}
               onPress={() => router.push("/(moderation)" as any)}
-              accessibilityRole="button"
-              accessibilityLabel="Open the moderation console"
-              style={[
-                styles.webTab,
-                {
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  marginLeft: 8,
-                },
-              ]}
-            >
-              <Shield size={18} color={colors.action} strokeWidth={2.2} />
-              <Text style={[styles.webTabLabel, { color: colors.action }]}>
-                Moderation
-              </Text>
-            </Pressable>
+            />
           ) : null}
         </View>
       </View>
@@ -445,9 +460,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     zIndex: 200,
   },
-  webTabLabel: {
-    fontSize: 13,
-  },
   webIconButton: {
     width: 40,
     height: 40,
@@ -456,32 +468,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: SPACE.x1,
   },
-  webAdminButton: {
+  iconAction: {
     minHeight: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
     borderRadius: RADIUS.pill,
-    paddingHorizontal: SPACE.x3,
     marginLeft: SPACE.x1,
-  },
-  webAdminLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  webCreateButton: {
-    minHeight: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: SPACE.x4,
-    borderRadius: RADIUS.pill,
-    marginLeft: SPACE.x2,
-  },
-  webCreateText: {
-    fontSize: 12,
-    fontWeight: "700",
   },
   mobileBar: {
     flexDirection: "row",

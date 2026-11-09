@@ -70,7 +70,6 @@ function RouteGuard() {
         const inModeration = segments[0] === "(moderation)";
         const inTabs = segments[0] === "(tabs)";
         const inSuspended = segments[0] === "suspended";
-        const inOnboarding = segments[0] === "onboarding";
         const adminUser = isAdminRole(profile?.role);
         const moderatorUser = isModeratorRole(profile?.role);
         const suspended = !!profile && isSuspendedProfile(profile);
@@ -91,22 +90,18 @@ function RouteGuard() {
           // mobile) goes to the normal app.
           if (adminUser && isDesktop) {
             router.replace("/(admin)/");
+          } else if (
+            profile?.role === "student" &&
+            profile.verification_status !== "verified"
+          ) {
+            // One-time post-login hop: unverified students complete identity
+            // before they reach the feed. After that, IdentityBanner prompts
+            // them inside the app instead — so "Back to App" from onboarding
+            // lands on the feed and stays there.
+            router.replace("/onboarding");
           } else {
             router.replace("/(tabs)/");
           }
-        } else if (
-          isAuthenticated &&
-          profile?.role === "student" &&
-          profile?.verification_status !== "verified" &&
-          !inAuth &&
-          !inOnboarding &&
-          !inAdmin &&
-          !inModeration &&
-          !inSuspended
-        ) {
-          // Unverified student lands on onboarding to complete identity.
-          // Scoped to avoid trapping "Back to App" from pending state.
-          router.replace("/onboarding");
         } else if (
         isAuthenticated &&
         adminUser &&
