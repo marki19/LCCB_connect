@@ -153,7 +153,8 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
 
   const renderItem = ({ item }: { item: Peer }) => {
     const isBusy = busyId === item.id;
-    const isBlocked = item.message_decision === "blocked" || item.friendship === "none";
+    // Blocked pairs are excluded by the directory query; trust message_decision.
+    const isBlocked = item.message_decision === "blocked";
     const isFriend = item.friendship === "friend";
     const isPendingOut = item.friendship === "pending_out";
     const isRequest = item.message_decision === "request" && !isFriend;
