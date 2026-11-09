@@ -1,6 +1,6 @@
 # Security Enhancement Plan — LCCB Connect
 
-**Status:** Phases 0–5, 7–8 and 10–11 implemented (6 partial — no buckets yet; 7 source done, deploy pending; 9 partial)
+**Status:** Phases 0–11 implemented (Phase 6 storage buckets exist; Phase 7 edge function deployed and auth-required; Phase 9 admin impersonation + audit log viewer done); **Phase 4 (MFA, sessions, audit) done; Phase 5 (Google OAuth) done**
 **Scope:** `backend/` (Express API + Postgres/Supabase), `frontend/` (Expo/React Native), Supabase project config
 **Related:** `Feature_plan.md`
 
@@ -17,7 +17,7 @@
 > | 6 (partial) | Uploads validated by bucket policy (images-only for `assets`, PDF-only for `theses`), 10 MB cap, `upsert: false`; file columns (`image_url`/`avatar_url`/`pdf_url`) must point **inside this project's Storage**, so a caller cannot park an arbitrary external URL there | `frontend/src/lib/upload.ts`, `backend/validation/index.js` |
 > | 7 | `link-preview` edge function: requires a verified Supabase token; http(s)-only; blocks loopback/private/link-local/multicast/metadata (IP literals **and** resolved DNS, re-checked on every redirect hop); timeout + 512 KB cap; origin-restricted CORS; returns extracted metadata only | `frontend/supabase/functions/link-preview/index.ts` |
 > | 8 | Partial updates touch only the fields supplied (a fixed column whitelist, so editing a post no longer nulls `image_url`) while ownership is still enforced in SQL; `updated_at` is set by DB triggers (forgery-proof) — **applied to the live database**; keyset pagination (`?limit=`/`?cursor=`) capped at 100 on every list endpoint; seed script is idempotent | `backend/models/*.js`, `backend/controllers/*.js`, `backend/migrations/002_updated_at_triggers.sql`, `backend/scripts/seed-data.js` |
-> | 9 (partial) | Central `apiFetch` client attaches `Bearer <token>`; all frontend call sites go through it; fabricated guest session replaced with real anonymous sign-in | `frontend/src/lib/api.ts`, `frontend/app/**`, `frontend/src/contexts/AuthContext.tsx` |
+> | 9 | Central `apiFetch` client attaches `Bearer <token>`; all frontend call sites go through it; fabricated guest session replaced with real anonymous sign-in; **admin impersonation (superadmin-only) + audit log viewer** | `frontend/src/lib/api.ts`, `frontend/app/**`, `frontend/src/contexts/AuthContext.tsx`, `backend/services/accountService.js`, `backend/controllers/adminController.js`, `backend/routes/adminRouter.js`, `backend/services/auditService.js` |
 > | 10 | `node:test` + `supertest` suite (**48 tests**: 401 on every `/api` mount, token-derived identity, SQL ownership → 404, role-escalation blocked, storage-URL rules, no DB-error leakage, pagination caps). Backend split into a testable `app.js` + boot-only `index.js`. Unused `expo` backend dependency removed → **`npm audit` 22 → 0 vulnerabilities**. GitHub Actions CI (backend tests + blocking audit; frontend typecheck/lint/audit; gitleaks), Dependabot, `.gitleaks.toml`, and a `.githooks/pre-commit` gitleaks guard | `backend/tests/*`, `backend/app.js`, `backend/package.json`, `.github/workflows/ci.yml`, `.github/dependabot.yml`, `.githooks/pre-commit`, `.gitleaks.toml` |
 > | 11 | **RBAC audit fixes.** A privilege ranking (`ROLE_RANK`, `rankOf`, `getRank`, `canManage`) now backs account management: the caller must *outrank* the target, so an `admin` can no longer edit/delete a peer `admin` or a `superadmin`, and only a `superadmin` can grant `superadmin` (closing an `admin → superadmin` self-promotion). Non-admins are refused before any target lookup, so the endpoint can't be used to probe which account ids exist. Moderation is department-scoped **fail-closed** — new `getCommentById` gives comments the same scope check posts had, and a missing department on either side is a refusal, not a pass | `backend/middleware/auth.js`, `backend/controllers/userController.js`, `backend/controllers/moderationController.js`, `backend/models/postModel.js` |
 >
@@ -35,12 +35,8 @@
 > `git filter-repo`, then all three branches force-pushed. Old credentials now fail (`28P01` / `401`); the new
 > publishable + secret keys and the new DB password are verified working, and `backend/.env` + `frontend/.env`
 > are `404` on GitHub.
-> **Still manual for Phase 7:** the hardened source is committed, but the live function answers `404`
-> (`NOT_FOUND`) — it has never been deployed. Run `supabase functions deploy link-preview` (from `frontend/`)
-> and set the `ALLOWED_ORIGINS` secret for production web origins.
-> **Phase 6 — re-scoped:** the project currently has **no Storage buckets** (the `theses` bucket returns
-> `NoSuchBucket` and `GET /storage/v1/bucket` is empty), so there is no world-readable manuscript bucket to
-> lock down today; create `theses` **private** + Storage RLS + signed URLs when uploads ship.
+> **Still manual for Phase 7:** the hardened source is committed, and the live function answers `401` (`UNAUTHORIZED_NO_AUTH_HEADER`) — it is deployed and requires auth. Run `supabase functions deploy link-preview` (from `frontend/`) if you update the source, and set the `ALLOWED_ORIGINS` secret for production web origins.
+> **Phase 6 — buckets exist:** `assets` (public) and `theses` (private) buckets created via migration `011_storage_buckets.sql` with Storage RLS policies. Signed URLs used for thesis access; images use public `assets` bucket.
 > **Also manual for Phase 10:** install `gitleaks` locally to activate the pre-commit scan (the hook is
 > already wired via `git config core.hooksPath .githooks`); clear the ~27 pre-existing lint errors so the lint
 > step can block. The gitleaks CI job is now **blocking** (`continue-on-error` removed).
@@ -58,6 +54,17 @@
 
 ---
 
+> **Phase 4 — MFA, sessions, audit (in progress)**
+> - TOTP enrollment/verification/unenroll endpoints (`/api/auth/mfa/enroll`, `/enroll/verify`, `/unenroll`, `/list`)
+> - Logout endpoint with audit (`/api/auth/logout`)
+> - AAL2 enforcement for admin/superadmin via `requireAal2` middleware
+> - Session age limits: 7 days all roles, 8 hours admin/superadmin via `checkSessionAge` middleware
+> - Audit logging for login, logout, MFA enroll/unenroll/challenge, role changes, suspension, deletion
+> - New tables: `mfa_factors` (user TOTP factors), `session_events` (login/logout tracking)
+> - New migration: `019_mfa.sql`
+>
+> ---
+>
 ## 0. Why this plan exists (current posture)
 
 The app is structurally clean (routes → controllers → models, parameterized SQL, no ORM), but it has

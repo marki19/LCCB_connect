@@ -1,7 +1,7 @@
 # Superadmin Console Tasks
 
 Spec: `SPEC-superadmin-console.md`
-Plan: `tasks/plan.md`
+Plan: `implementation_plans/superadmin-console-plan.md`
 
 ## Phase 1: Foundation
 

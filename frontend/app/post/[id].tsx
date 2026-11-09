@@ -7,7 +7,7 @@ import { ArrowLeft, Heart, MessageCircle, Share2, ExternalLink, Send, Tag, Calen
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { ThemeTokens } from "../../src/lib/tokens";
-import { apiFetch, deletePost, updateComment, deleteComment } from "../../src/lib/api";
+import { apiFetch, deletePost, updateComment, deleteComment, getPostImageUrl } from "../../src/lib/api";
 import { safeBack } from "../../src/lib/navigation";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
@@ -30,9 +30,10 @@ export default function PostDetailScreen() {
   const isGuest = profile?.role === "guest";
 
   const [post, setPost] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true);
+    const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
 
-  const [liked, setLiked] = useState(false);
+    const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<any[]>([]);
@@ -44,40 +45,45 @@ export default function PostDetailScreen() {
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   useEffect(() => {
-    const fetchDetails = async () => {
-      try {
-        const res = await apiFetch(`/posts/${id}`);
-        if (res.ok) {
-          const postData = await res.json();
-          if (postData) {
-            const authorName = postData.author?.full_name || "Unknown User";
-            setPost({
-              id: postData.id,
-              author: {
-                id: postData.author_id,
-                name: authorName,
-                initials: authorName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase(),
-                avatarColor: "#BFDBFE",
-                course: postData.author?.department_name || "—",
-                yearLevel: postData.author?.year_level || "—",
-              },
-              title: postData.title,
-              description: postData.content || postData.description || "",
-              type: postData.type || "text",
-              tags: postData.technologies || postData.tags || [],
-              previewUrl: postData.github_url || postData.preview_url,
-              imageUrl: postData.image_url,
-              preview_metadata: postData.preview_metadata || null,
-              likes: postData.likes || 0,
-              comments: postData.comments || 0,
-              createdAt: new Date(postData.created_at).toLocaleDateString(),
-              isLiked: Boolean(postData.is_liked),
-              visibility: postData.visibility,
-            });
-            setLikeCount(postData.likes || 0);
-            setLiked(Boolean(postData.is_liked));
+      const fetchDetails = async () => {
+        try {
+          const res = await apiFetch(`/posts/${id}`);
+          if (res.ok) {
+            const postData = await res.json();
+            if (postData) {
+              const authorName = postData.author?.full_name || "Unknown User";
+              setPost({
+                id: postData.id,
+                author: {
+                  id: postData.author_id,
+                  name: authorName,
+                  initials: authorName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase(),
+                  avatarColor: "#BFDBFE",
+                  course: postData.author?.department_name || "—",
+                  yearLevel: postData.author?.year_level || "—",
+                },
+                title: postData.title,
+                description: postData.content || postData.description || "",
+                type: postData.type || "text",
+                tags: postData.technologies || postData.tags || [],
+                previewUrl: postData.github_url || postData.preview_url,
+                imageUrl: postData.image_url,
+                preview_metadata: postData.preview_metadata || null,
+                likes: postData.likes || 0,
+                comments: postData.comments || 0,
+                createdAt: new Date(postData.created_at).toLocaleDateString(),
+                isLiked: Boolean(postData.is_liked),
+                visibility: postData.visibility,
+              });
+              setLikeCount(postData.likes || 0);
+              setLiked(Boolean(postData.is_liked));
+
+              // Fetch signed URL for private post images
+              if (postData.image_url) {
+                getPostImageUrl(postData.id).then(setImageUrl).catch(() => setImageUrl(undefined));
+              }
+            }
           }
-        }
 
         // Fetch comments from raw SQL backend
         const resComments = await apiFetch(`/posts/${id}/comments`);
@@ -312,15 +318,15 @@ export default function PostDetailScreen() {
           <Text style={{ fontSize: 20, fontWeight: "800", color: colors.textPrimary, paddingHorizontal: 16, marginBottom: 10, lineHeight: 28 }}>{post.title}</Text>
           <Text style={{ fontSize: 14, color: colors.textSecondary, paddingHorizontal: 16, marginBottom: 16, lineHeight: 22 }}>{post.description}</Text>
 
-          {post.imageUrl ? (
-            <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
-              <Image 
-                source={{ uri: post.imageUrl }} 
-                style={{ width: "100%", height: 250, borderRadius: 14, backgroundColor: colors.surfaceSunken }}
-                resizeMode="cover"
-              />
-            </View>
-          ) : null}
+          {imageUrl ? (
+                      <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+                        <Image
+                          source={{ uri: imageUrl }}
+                          style={{ width: "100%", height: 250, borderRadius: 14, backgroundColor: colors.surfaceSunken }}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    ) : null}
 
           <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, marginBottom: 16, gap: 6, alignItems: "center" }}>
             <Tag size={14} color={colors.textTertiary} />

@@ -206,9 +206,9 @@ const loginIdentifierSchema = z
   })
   .strict();
 
-// Signup OTP verification. The profile's `full_name` is read from the Supabase
-// auth user's metadata (set at signUp), never from this body, so a caller
-// cannot claim a name they did not register with.
+// Signup OTP verification. The password is re-submitted here and compared
+// against the bcrypt hash captured at request time: nothing decryptable is ever
+// stored, and the hash cannot be replayed as the password.
 const verifySignupSchema = z
   .object({
     email: z
@@ -220,6 +220,7 @@ const verifySignupSchema = z
         "Must be an @lccbonline.edu.ph address"
       ),
     token: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
+    password: z.string().min(1).max(72),
   })
   .strict();
 
@@ -238,8 +239,8 @@ const resendSignupSchema = z
   .strict();
 
 /**
- * Request signup: creates the Auth user and sends OTP.
- * Password is validated but never stored in plain text — Supabase handles hashing.
+ * Request signup: stores a pending row and sends the code.
+ * The password is bcrypt-hashed before it touches the database.
  */
 const requestSignupSchema = z
   .object({
@@ -254,12 +255,23 @@ const requestSignupSchema = z
     password: z
       .string()
       .min(8, "Password must be at least 8 characters")
-      .max(128, "Password too long"),
+      .max(72, "Password too long"),
     full_name: z
       .string()
       .trim()
       .min(2, "Full name must be at least 2 characters")
       .max(200, "Full name too long"),
+  })
+  .strict();
+
+/**
+ * MFA challenge: verifies a TOTP code during login.
+ * Uses a short-lived challenge token returned by the first-factor login.
+ */
+const mfaChallengeSchema = z
+  .object({
+    challenge_token: z.string().min(1),
+    code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
   })
   .strict();
 
@@ -426,7 +438,22 @@ const validate = (schema) => (req, res, next) => {
   return next();
 };
 
-module.exports = {
+  /**
+   * Brevo webhook payload validation.
+   * POST /api/email/webhook/brevo
+   */
+  const brevoWebhookSchema = z
+    .object({
+      event: z.string(), // "bounce"
+      email: z.string().email(),
+      reason: z.string().optional(),
+      code: z.union([z.string(), z.number()]).optional(),
+      type: z.string().optional(), // "hard" | "soft"
+      timestamp: z.number().optional(),
+    })
+    .strict();
+
+  module.exports = {
   validate,
   createPostSchema,
   updatePostSchema,
@@ -462,4 +489,6 @@ module.exports = {
   verifySignupSchema,
   resendSignupSchema,
   requestSignupSchema,
-};
+    brevoWebhookSchema,
+    mfaChallengeSchema,
+  };

@@ -1,9 +1,9 @@
 # Spec: Superadmin Console
 
-**Status:** Implemented and verified on 2026-10-20. `tasks/todo.md` records the completed build and QA checks.
+**Status:** Implemented and verified on 2026-10-20. `implementation_plans/superadmin-console-todo.md` records the completed build and QA checks.
 **Date:** 2026-10-20
 **Scope owner:** LCCB Connect
-**Supersedes:** the S1/S2/S3 sequence in `Feature_plan.md` for admin work.
+**Supersedes:** the S1/S2/S3 sequence in `implementation_plans/Feature_plan.md` for admin work.
 
 ---
 

@@ -1,4 +1,4 @@
-import axios from "axios";
+import { create, isAxiosError } from "axios";
 import { supabase } from "./supabase";
 import type { ContentVisibility } from "../types";
 
@@ -8,7 +8,7 @@ const API_URL = (
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
 // One shared instance so the interceptor is registered once.
-const client = axios.create({ baseURL: API_URL });
+const client = create({ baseURL: API_URL });
 
 // Attach the Supabase Bearer token before every request and rewrite
 // guest GET paths to the public read-only endpoints.
@@ -105,15 +105,19 @@ export async function apiJson<T = any>(
   init: RequestInit = {}
 ): Promise<T> {
   try {
+    const headers = { ...(init.headers || {}) as Record<string, string> };
+    if (typeof init.body === "string") {
+      headers["Content-Type"] = "application/json";
+    }
     const res = await client.request<T>({
       url: path,
       method: (init.method as any) || "GET",
       data: init.body,
-      headers: init.headers as any,
+      headers,
     });
     return res.data;
   } catch (err) {
-    if (axios.isAxiosError(err) && err.response) {
+      if (isAxiosError(err) && err.response) {
       const body = err.response.data as any;
       throw new ApiError(
         body?.error || body?.message || `Request failed (${err.response.status})`,
@@ -215,6 +219,21 @@ export async function getThesisFileUrl(id: string | number): Promise<string> {
   const data = await apiJson<{ url?: string }>(`/theses/${id}/file`);
   if (!data?.url) {
     throw new ApiError("Could not generate file URL", 404);
+  }
+  return data.url;
+}
+
+/**
+ * Fetches a short-lived signed URL for a post's image.
+ *
+ * Post images live in the private `assets` bucket (migration 015), so the
+ * client asks the backend, which checks visibility first, and gets back a
+ * URL that expires after 5 minutes.
+ */
+export async function getPostImageUrl(id: string | number): Promise<string> {
+  const data = await apiJson<{ url?: string }>(`/posts/${id}/file`);
+  if (!data?.url) {
+    throw new ApiError("Could not generate image URL", 404);
   }
   return data.url;
 }

@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "../src/contexts/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
-import Animated, { FadeIn, FadeOut, Easing, withTiming } from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut, Easing } from "react-native-reanimated";
 
 const { width } = Dimensions.get("window");
 

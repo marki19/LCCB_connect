@@ -1,5 +1,14 @@
 const rateLimit = require("express-rate-limit");
 
+const isTest = process.env.NODE_ENV === "test";
+
+function createLimiter(options) {
+  if (isTest) {
+    return (req, res, next) => next();
+  }
+  return rateLimit(options);
+}
+
 /**
  * Rate limits for login (plan §5 Phase 3.2).
  * - IP-based: 10 requests per 15 min per IP
@@ -9,7 +18,7 @@ const rateLimit = require("express-rate-limit");
  * while IP limits mitigate generic brute force.
  */
 
-const loginIpLimiter = rateLimit({
+const loginIpLimiter = createLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // 10 requests per window per IP
   message: { error: "Too many requests. Try again later." },
@@ -17,7 +26,7 @@ const loginIpLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const loginIdentifierLimiter = rateLimit({
+const loginIdentifierLimiter = createLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 requests per window per identifier
   message: { error: "Too many attempts. Try again later." },
@@ -39,7 +48,7 @@ const loginIdentifierLimiter = rateLimit({
  * Resend signup OTP limiter: 3 requests per 10 minutes per email.
  * Stricter than login to prevent email flooding.
  */
-const resendSignupLimiter = rateLimit({
+const resendSignupLimiter = createLimiter({
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 3, // 3 resends per window per email
   message: { error: "Too many resend requests. Try again later." },
@@ -56,12 +65,25 @@ const resendSignupLimiter = rateLimit({
 });
 
 /**
- * Request signup limiter: 3 requests per 10 minutes per email.
- * Prevents spam account creation.
+ * Initial signup request limiter: 5 requests per 15 minutes per IP.
+ * Prevents unauthenticated OTP email flooding.
  */
-const requestSignupLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 3, // 3 signup attempts per window per email
+const requestSignupLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 signup requests per window per IP
+  message: { error: "Too many signup attempts. Try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Per-address signup limiter: 3 requests per hour per email.
+ * The IP limiter alone lets a distributed caller mail-bomb one mailbox, and
+ * lets a single IP rotate through many addresses.
+ */
+const requestSignupEmailLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
   message: { error: "Too many signup attempts. Try again later." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -72,7 +94,19 @@ const requestSignupLimiter = rateLimit({
     }
     return "unknown";
   },
-  skipSuccessfulRequests: false,
+});
+
+/**
+ * Google token exchange limiter: 10 requests per minute per IP.
+ * Each call costs a network round trip to Supabase and can mint a session, so
+ * it should not be free.
+ */
+const googleAuthLimiter = createLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  message: { error: "Too many sign-in attempts. Try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 module.exports = {
@@ -80,4 +114,6 @@ module.exports = {
   loginIdentifierLimiter,
   resendSignupLimiter,
   requestSignupLimiter,
+  requestSignupEmailLimiter,
+  googleAuthLimiter,
 };

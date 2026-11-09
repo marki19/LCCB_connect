@@ -5,6 +5,7 @@ const moderationService = require("../services/moderationService");
 const notificationService = require("../services/notificationService");
 const previewService = require("../services/previewService");
 const { resolveAudience } = require("../services/visibilityService");
+const { signedStorageUrl } = require("../services/storageService");
 
 /**
  * A custom-visibility write must name accepted friends. Returns the normalized
@@ -273,6 +274,41 @@ const generatePreview = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/posts/:id/file — signed URL for the post image.
+ *
+ * Returns a signed URL that the front-end can use to display the image.
+ * The URL expires after 5 minutes. Only the owner, visible viewers, or
+ * a moderator can access this endpoint.
+ */
+const getPostFile = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const viewerId = req.user?.id || null;
+
+    // Visibility is enforced by the model's use of visible_posts().
+    const post = await postModel.getPostById(id, { userId: viewerId });
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (!post.image_url) {
+      return res.status(404).json({ message: "Post has no image" });
+    }
+
+    // Issue a signed URL for the private assets bucket.
+    const { url } = await signedStorageUrl("assets", post.image_url, { expiresIn: 300 });
+
+    if (!url) {
+      return res.status(404).json({ message: "Could not generate file URL" });
+    }
+
+    res.json({ url });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getPosts,
   getPost,
@@ -285,4 +321,5 @@ module.exports = {
   updateComment,
   deleteComment,
   generatePreview,
+  getPostFile,
 };

@@ -1,0 +1,220 @@
+/**
+ * Account Lockout Tests
+ * Tests the 5-failed-attempts -> 15-min lockout mechanism
+ * Uses Node's native test runner (node --test)
+ * Uses real database with stubbed Supabase Auth (like login.test.js)
+ * NODE_ENV=test is set BEFORE app load to disable rate limits
+ */
+const { describe, it, before, after, beforeEach } = require("node:test");
+const assert = require("node:assert/strict");
+const request = require("supertest");
+const path = require("path");
+
+// Set NODE_ENV=test BEFORE any app modules load (disables rate limits)
+process.env.NODE_ENV = "test";
+
+// Load real .env for database connection
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
+const { stub } = require("./stub.helper");
+const userModel = require("../models/userModel");
+const adminModel = require("../models/adminModel");
+const supabaseAdmin = require("../services/supabaseAdmin");
+const authMiddleware = require("../middleware/auth");
+
+// Behavior is swapped per test through these bindings.
+let signInImpl;
+let testUserId;
+let testStudentId;
+const TEST_EMAIL = `lockout-test-${Date.now()}@lccbonline.edu.ph`;
+const TEST_PASSWORD = "TestPass123!";
+const GENERIC_LOGIN_ERROR = "Invalid email, student ID, or password";
+const SUPERADMIN_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+const MOCK_SESSION = {
+  access_token: "mock-access-token",
+  refresh_token: "mock-refresh-token",
+  expires_at: 123,
+};
+
+stub(supabaseAdmin, "getSupabaseAdmin", () => ({
+  auth: {
+    signInWithPassword: async (args) => signInImpl(args),
+  },
+}));
+
+// Stub requireAuth to attach a superadmin user for admin routes
+const requireAuthStub = stub(authMiddleware, "requireAuth", (req, res, next) => {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : null;
+  if (token === "superadmin-token") {
+    req.user = { id: SUPERADMIN_ID, email: "superadmin@lccbonline.edu.ph", role: "superadmin" };
+    req.accessToken = token;
+    return next();
+  }
+  if (token === "admin-token") {
+    req.user = { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", email: "admin@lccbonline.edu.ph", role: "admin" };
+    req.accessToken = token;
+    return next();
+  }
+  return res.status(401).json({ error: "Authentication required" });
+});
+
+// Stub loadProfile to set req.profile with superadmin role for superadmin token
+const loadProfileStub = stub(authMiddleware, "loadProfile", (req, res, next) => {
+  if (req.user?.id === SUPERADMIN_ID) {
+    req.profile = { id: SUPERADMIN_ID, role: "superadmin", email: "superadmin@lccbonline.edu.ph" };
+  } else if (req.user?.id === "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb") {
+    req.profile = { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", role: "admin", email: "admin@lccbonline.edu.ph" };
+  }
+  return next();
+});
+
+// Import app AFTER stubs are installed
+const app = require("../app");
+
+const okSignIn = (email) => ({
+  data: {
+    user: { id: testUserId, email },
+    session: MOCK_SESSION,
+  },
+  error: null,
+});
+
+const badSignIn = () => ({
+  data: { user: null, session: null },
+  error: { message: "Invalid login credentials" },
+});
+
+describe("Account Lockout", () => {
+  before(async () => {
+    // Create a test user directly in the database
+    const bcrypt = require("bcrypt");
+    const { randomUUID } = require("crypto");
+    const passwordHash = await bcrypt.hash(TEST_PASSWORD, 12);
+    testStudentId = `2023-${String(Date.now()).slice(-5)}`; // YYYY-NNNNN format
+    const result = await userModel.createUser({
+      id: randomUUID(),
+      email: TEST_EMAIL,
+      passwordHash,
+      fullName: "Lockout Test User",
+      role: "student",
+      student_id: testStudentId,
+      verification_status: "verified",  // snake_case to match model
+    });
+    testUserId = result.id;
+  });
+
+  after(async () => {
+    if (testUserId) {
+      await userModel.deleteUser(testUserId);
+    }
+  });
+
+  beforeEach(async () => {
+    // Reset failed attempts before each test
+    await userModel.resetFailedLogins(testUserId);
+    signInImpl = badSignIn;
+  });
+
+  it("should lock account after 5 failed login attempts (student ID)", async () => {
+    signInImpl = badSignIn;
+
+    // Make 5 failed login attempts using student ID
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app)
+        .post("/api/auth/login")
+        .send({ identifier: testStudentId, password: "WrongPassword" });
+      assert.equal(res.status, 401);
+    }
+
+    // 6th attempt should be locked
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ identifier: testStudentId, password: "WrongPassword" });
+
+    // Anti-enumeration: locked accounts return same 401 as unknown accounts
+    assert.equal(res.status, 401);
+    assert.equal(res.body.error, GENERIC_LOGIN_ERROR);
+
+    const profile = await userModel.getUserById(testUserId);
+    assert.ok(profile.locked_until !== null, "the fifth failure sets a lock");
+  });
+
+  it("should reset failed attempts on successful login", async () => {
+    signInImpl = badSignIn;
+
+    // First, make 3 failed attempts using email
+    for (let i = 0; i < 3; i++) {
+      await request(app)
+        .post("/api/auth/login")
+        .send({ identifier: TEST_EMAIL, password: "WrongPassword" });
+    }
+
+    // Check failed attempts count
+    const profileBefore = await userModel.getUserById(testUserId);
+    assert.equal(profileBefore.failed_login_attempts, 3);
+
+    // Now successful login
+    signInImpl = okSignIn;
+
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ identifier: TEST_EMAIL, password: TEST_PASSWORD });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.access_token, MOCK_SESSION.access_token);
+
+    // Failed attempts should be reset
+    const profileAfter = await userModel.getUserById(testUserId);
+    assert.equal(profileAfter.failed_login_attempts, 0);
+    assert.equal(profileAfter.locked_until, null);
+  });
+
+  it("should allow superadmin to unlock account", async () => {
+    // Locking only sets locked_until. The attempt counter drives progressive
+    // backoff, so rewriting it here would pin every future lock to the
+    // shortest interval.
+    await userModel.lockAccount(testUserId, "15 minutes");
+
+    const profileLocked = await userModel.getUserById(testUserId);
+    assert.ok(profileLocked.locked_until !== null);
+    assert.equal(profileLocked.failed_login_attempts, 0);
+
+    // Stub adminModel.getUserById to return the test user
+    const getUserByIdStub = stub(adminModel, "getUserById", async () => ({
+      id: testUserId,
+      email: TEST_EMAIL,
+      role: "student",
+      failed_login_attempts: 0,
+      locked_until: null,
+    }));
+
+    // Unlock the account using stubbed superadmin token
+    const res = await request(app)
+      .post(`/api/admin/users/${testUserId}/unlock`)
+      .set("Authorization", "Bearer superadmin-token")
+      .send({ reason: "Test unlock" });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.message, "Account unlocked");
+
+    const profileUnlocked = await userModel.getUserById(testUserId);
+    assert.equal(profileUnlocked.locked_until, null);
+    assert.equal(profileUnlocked.failed_login_attempts, 0);
+
+    getUserByIdStub.restore();
+  });
+
+  it("should deny unlock for non-superadmin", async () => {
+    // Lock the account
+    await userModel.lockAccount(testUserId, "15 minutes");
+
+    const res = await request(app)
+      .post(`/api/admin/users/${testUserId}/unlock`)
+      .set("Authorization", "Bearer admin-token")
+      .send({ reason: "Test unlock" });
+
+    assert.equal(res.status, 403);
+  });
+});

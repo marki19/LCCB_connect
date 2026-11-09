@@ -48,9 +48,12 @@ function datePart(val) {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
-async function cleanupTestData(studentId) {
+async function cleanupTestData(studentId, adminId) {
   await db.query(`DELETE FROM public.profile_verification_requests WHERE user_id = $1`, [studentId]);
   await db.query(`DELETE FROM public.profiles WHERE id = $1`, [studentId]);
+  if (adminId) {
+    await db.query(`DELETE FROM public.profiles WHERE id = $1`, [adminId]);
+  }
 }
 
 test("verification: submit creates pending request and mirrors identity to profile", async () => {
@@ -260,7 +263,7 @@ test("verification: decline resets profile to unverified", async () => {
   const profile = await userModel.getUserById(studentId);
   assert.strictEqual(profile.verification_status, "unverified");
 
-  await cleanupTestData(studentId);
+  await cleanupTestData(studentId, adminId);
   auditStub.mock.restore();
   notifyStub.mock.restore();
 });

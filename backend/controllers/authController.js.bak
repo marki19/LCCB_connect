@@ -1,0 +1,407 @@
+const bcrypt = require("bcrypt");
+const userModel = require("../models/userModel");
+const accountService = require("../services/accountService");
+const { getSupabaseAdmin } = require("../services/supabaseAdmin");
+const { sendOtpEmail } = require("../services/emailService");
+const { encryptPassword, decryptPassword } = require("../utils/passwordEncryption");
+const { isSuspendedProfile } = require("../middleware/auth");
+const mfaService = require("../services/mfaService");
+const { record, ACTIONS } = require("../services/auditService");
+
+const GENERIC_LOGIN_ERROR = "Invalid email, student ID, or password";
+const BCRYPT_COST = 12;
+const OTP_EXPIRY_MINUTES = 10;
+const OTP_LENGTH = 6;
+
+/**
+ * The service-role client is required for every sign-in path now that login is
+ * backend-owned. When it is not configured the endpoint is unavailable rather
+ * than silently falling back to the client.
+ */
+function adminClientOr503(res) {
+  try {
+    return getSupabaseAdmin();
+  } catch {
+    res.status(503).json({
+      error: "Sign-in is temporarily unavailable. Try again later.",
+      code: "auth_unavailable",
+    });
+    return null;
+  }
+}
+
+function sendTokens(res, session, status = 200) {
+  return res.status(status).json({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at: session.expires_at,
+  });
+}
+
+function generateOtp() {
+  return String(Math.floor(100000 + Math.random() * 900000)).padStart(OTP_LENGTH, "0");
+}
+
+/**
+ * Signs in with an email address or a student ID.
+ *
+ * Every identifier goes through here. Identity is still Supabase's decision --
+ * this only adds the account check the client cannot do: an Auth user with no
+ * `profiles` row is a deleted account and must not receive tokens.
+ *
+ * The student ID lookup happens server-side so the client never sees which
+ * email owns which ID. Unknown IDs, wrong passwords, and a missing profile all
+ * answer with the same 401 shape, so the endpoint cannot enumerate accounts.
+ */
+async function login(req, res, next) {
+  try {
+    const { identifier, password } = req.body;
+
+    const isEmail = identifier.includes("@");
+    let email = isEmail ? identifier.toLowerCase() : null;
+
+    if (!email) {
+      const resolved = await userModel.getLoginEmailByStudentId(
+        identifier.toUpperCase()
+      );
+      if (!resolved?.email) {
+        return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+      }
+      email = resolved.email;
+    }
+
+    const supabase = adminClientOr503(res);
+    if (!supabase) return;
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      if (/not confirmed|not_confirmed/i.test(error.message)) {
+        return res.status(403).json({
+          error: "Confirm your email first",
+          code: "email_not_confirmed",
+        });
+      }
+      return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+    }
+
+    const profile = await userModel.getUserById(data.user.id);
+    if (!profile) {
+      // The Auth user outlived its profile: this account was deleted. Drop the
+      // session we just minted so it cannot be used elsewhere.
+      await accountService.revokeSessions(data.user.id).catch(() => undefined);
+      return res.status(403).json({
+        error: "This account has been deleted. Contact the administrator if you think this is a mistake.",
+        code: "account_deleted",
+      });
+    }
+
+    if (isSuspendedProfile(profile)) {
+          return res.status(403).json({
+            error: "Account suspended",
+            code: "account_suspended",
+            suspended_until: profile.suspended_until || null,
+            reason: profile.suspension_reason || null,
+          });
+        }
+
+        // Check if user has verified MFA - Supabase will enforce AAL2 on next request
+        const aal = mfaService.getAalFromToken(data.session.access_token);
+        const hasMfa = await mfaService.hasVerifiedTotp(data.user.id);
+    
+        // Record successful login
+        await mfaService.recordLogin({
+          userId: data.user.id,
+          req,
+          aal: hasMfa ? "aal2" : "aal1",
+          mfaChallenged: hasMfa,
+        });
+
+        return sendTokens(res, data.session);
+      } catch (err) {
+        next(err);
+      }
+    }
+
+/**
+ * Verifies a signup OTP and creates the Auth user + profile.
+ *
+ * Reverse signup flow:
+ * 1. Find pending signup by email
+ * 2. Check not already verified, not expired
+ * 3. Verify OTP matches
+ * 4. Decrypt password from pending record
+ * 5. Create Auth user with the decrypted password
+ * 6. Create profile with full_name from pending record
+ * 7. Delete pending record
+ * 8. Return session
+ */
+async function verifySignup(req, res, next) {
+  try {
+    const { email, token } = req.body;
+
+    const supabase = adminClientOr503(res);
+    if (!supabase) return;
+
+    const normalizedEmail = email.toLowerCase();
+
+    // Find pending signup
+    const pending = await userModel.getPendingSignupByEmail(normalizedEmail);
+    if (!pending) {
+      return res.status(401).json({
+        error: "No pending signup found for this email. Start signup again.",
+        code: "no_pending_signup",
+      });
+    }
+
+    // Check if already verified
+    if (pending.verified_at) {
+      return res.status(409).json({
+        error: "This signup was already verified.",
+        code: "already_verified",
+      });
+    }
+
+    // Check expiry
+    if (new Date(pending.otp_expires_at) < new Date()) {
+      await userModel.deletePendingSignup(normalizedEmail);
+      return res.status(401).json({
+        error: "The code has expired. Request a new one.",
+        code: "code_expired",
+      });
+    }
+
+    // Verify OTP
+    if (pending.otp_code !== token) {
+      return res.status(401).json({
+        error: "That code is incorrect.",
+        code: "code_invalid",
+      });
+    }
+
+    // Decrypt password
+    let password;
+    try {
+      password = decryptPassword(pending.password_hash);
+    } catch (e) {
+      console.error("[auth] Failed to decrypt password:", e.message);
+      return res.status(500).json({
+        error: "Could not complete signup. Try again in a moment.",
+        code: "decrypt_failed",
+      });
+    }
+
+    // Create Auth user with the real password
+    const { data, error } = await supabase.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: true, // OTP verified, so confirm immediately
+      user_metadata: {
+        full_name: pending.full_name,
+      },
+    });
+
+    if (error || !data?.user) {
+      console.error("[auth] Create user after OTP failed:", error?.message);
+      return res.status(500).json({
+        error: "Could not complete signup. Try again in a moment.",
+        code: "creation_failed",
+      });
+    }
+
+    const user = data.user;
+
+    // Create profile
+    await userModel.createUser({
+      id: user.id,
+      email: user.email,
+      full_name: pending.full_name,
+      role: "student",
+    });
+
+    // Delete pending record
+    await userModel.deletePendingSignup(normalizedEmail);
+
+    // Create session for the new user
+    const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+
+    if (sessionError || !sessionData?.session) {
+      console.error("[auth] Session creation after signup failed:", sessionError?.message);
+      // User is created, they can log in manually
+      return res.status(201).json({
+        message: "Account created successfully. Please log in.",
+        code: "signup_complete_manual_login",
+      });
+    }
+
+    return sendTokens(res, sessionData.session, 201);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Resends the signup OTP to the provided email.
+ * Rate limited: 3 requests per 10 minutes per email (handled by middleware).
+ * Finds pending signup, generates new OTP, updates record, sends email.
+ */
+async function resendSignup(req, res, next) {
+  try {
+    const { email } = req.body;
+    const normalizedEmail = email.toLowerCase();
+
+    const supabase = adminClientOr503(res);
+    if (!supabase) return;
+
+    // Find pending signup
+    const pending = await userModel.getPendingSignupByEmail(normalizedEmail);
+    if (!pending) {
+      // Don't reveal whether email has a pending signup
+      return res.status(202).json({
+        message: "If an account exists, a code has been sent.",
+        retry_after: 60,
+      });
+    }
+
+    // Check if already verified
+    if (pending.verified_at) {
+      return res.status(409).json({
+        error: "This signup was already verified.",
+        code: "already_verified",
+      });
+    }
+
+    // Generate new OTP
+    const newOtp = generateOtp();
+    const otpExpiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    // Update pending record (keep encrypted password)
+    await userModel.createPendingSignup({
+      email: normalizedEmail,
+      passwordHash: pending.password_hash,
+      fullName: pending.full_name,
+      otpCode: newOtp,
+      otpExpiresAt,
+    });
+
+    // Send OTP email
+    await sendOtpEmail({
+      to: normalizedEmail,
+      otpCode: newOtp,
+      fullName: pending.full_name,
+      expiresMinutes: OTP_EXPIRY_MINUTES,
+    });
+
+    return res.status(202).json({
+      message: "Code sent",
+      retry_after: 60,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Requests signup: stores pending record with encrypted password + OTP, sends email.
+ *
+ * Reverse signup flow (Phase 1):
+ * 1. Encrypt password with AES-256-GCM
+ * 2. Generate 6-digit OTP
+ * 3. Insert into pending_signups (email, password_hash, full_name, otp_code, otp_expires_at = NOW() + 10 min)
+ * 4. Send OTP email via custom email service
+ * 5. Return 202 Accepted
+ *
+ * Rate limited: 3 requests per 10 minutes per email (handled by middleware).
+ * Auth user and profile are created ONLY after successful OTP verification.
+ */
+async function requestSignup(req, res, next) {
+  try {
+    const { email, password, full_name } = req.body;
+    const normalizedEmail = email.toLowerCase();
+
+    const supabase = adminClientOr503(res);
+    if (!supabase) return;
+
+    // Check if user already exists in Auth
+    const { data: existingUser, error: listError } = await supabase.auth.admin.listUsers();
+
+    if (listError) {
+      console.error("[auth] List users failed:", listError.message);
+      return res.status(503).json({
+        error: "Signup service temporarily unavailable.",
+        code: "service_unavailable",
+      });
+    }
+
+    const userAlreadyExists = existingUser.users?.some(
+      (u) => u.email?.toLowerCase() === normalizedEmail
+    );
+
+    if (userAlreadyExists) {
+      return res.status(409).json({
+        error: "An account with this email already exists.",
+        code: "account_exists",
+      });
+    }
+
+    // Check for pending signup (allow overwrite if expired)
+    const pending = await userModel.getPendingSignupByEmail(normalizedEmail);
+    if (pending && !pending.verified_at && new Date(pending.otp_expires_at) > new Date()) {
+      return res.status(409).json({
+        error: "A verification code was already sent. Check your email or wait for it to expire.",
+        code: "pending_signup_active",
+      });
+    }
+
+    // Encrypt password for storage
+    const encryptedPassword = encryptPassword(password);
+
+    // Generate OTP
+    const otpCode = generateOtp();
+    const otpExpiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    // Store pending signup
+    await userModel.createPendingSignup({
+      email: normalizedEmail,
+      passwordHash: encryptedPassword,
+      fullName: full_name,
+      otpCode,
+      otpExpiresAt,
+    });
+
+    // Send OTP email
+    await sendOtpEmail({
+      to: normalizedEmail,
+      otpCode,
+      fullName: full_name,
+      expiresMinutes: OTP_EXPIRY_MINUTES,
+    });
+
+    return res.status(202).json({
+      message: "Account created. Check your email for the verification code.",
+      retry_after: 60,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  login,
+  verifySignup,
+  resendSignup,
+  requestSignup,
+  // MFA endpoints
+  mfaEnroll,
+  mfaEnrollVerify,
+  mfaUnenroll,
+  mfaList,
+  // Session endpoints
+  logout,
+};

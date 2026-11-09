@@ -102,7 +102,7 @@ export async function registerForPush(): Promise<string | null> {
     await registerDeviceToken(token, Platform.OS as "ios" | "android");
     await AsyncStorage.setItem(TOKEN_KEY, token);
     return token;
-  } catch (err) {
+  } catch {
     // Expected in Expo Go on Android and whenever Expo can't reach its servers.
     return null;
   }

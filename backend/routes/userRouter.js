@@ -12,6 +12,7 @@ const {
 
 // CRUD routes (global requireAuth is applied when this router is mounted in app.js)
 router.get("/", userController.getUsers);
+router.get("/directory", userController.getDirectory);   // <-- before /:id
 router.get("/:id", userController.getUser);
 router.post("/", validate(createProfileSchema), userController.createUser);
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, Linking, Image, Alert } from "react-native";
 import Animated, {
   useSharedValue,
@@ -12,7 +12,7 @@ import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { ThemeTokens, elevation, RADIUS } from "../lib/tokens";
-import { apiJson, deletePost, deleteThesis, getThesisFileUrl } from "../lib/api";
+import { apiJson, deletePost, deleteThesis, getThesisFileUrl, getPostImageUrl } from "../lib/api";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
   const configs: Record<string, { label: string; bg: string; text: string }> = {
@@ -31,6 +31,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | undefined>(post.imageUrl);
 
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
@@ -40,6 +41,13 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const { profile } = useAuth();
   const { colors } = useTheme();
   const isOwner = !!profile?.id && profile.id === post.author.id;
+
+  // Fetch signed URL for private post images (assets bucket is private per migration 015)
+  useEffect(() => {
+    if (post.imageUrl) {
+      getPostImageUrl(post.id).then(setImageUrl).catch(() => setImageUrl(undefined));
+    }
+  }, [post.id, post.imageUrl]);
 
   const handleEdit = () => {
     setMenuOpen(false);
@@ -224,10 +232,10 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         <Text numberOfLines={2} style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>{post.description}</Text>
       </View>
 
-      {post.imageUrl ? (
+      {imageUrl ? (
         <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
-          <Image 
-            source={{ uri: post.imageUrl }} 
+          <Image
+                      source={{ uri: imageUrl }}
             style={{ width: "100%", height: 200, borderRadius: 12, backgroundColor: colors.surfaceSunken }}
             resizeMode="cover"
           />

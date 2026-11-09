@@ -30,6 +30,6 @@ Started 2026-10-20 after the read-only security audit.
 ## Remaining
 
 - [ ] Rotate or delete the five Supabase test accounts. The old password exists in commit `c46cb26` history even though it is removed from the current tree.
-- [ ] Upgrade frontend dependencies. `npm audit --omit=dev` reports 37 vulnerabilities (1 critical, 22 high), mostly Expo/Metro/build-time packages.
-- [ ] Implement the admin Settings screen or remove its nav link; it is still a placeholder.
-- [ ] Add Storage cleanup when a thesis is deleted; PDFs currently remain.
+- [ ] Upgrade frontend dependencies. `npm audit --omit=dev` reports 14 vulnerabilities (1 critical, 4 high), mostly Expo/Metro/build-time packages.
+- [x] Admin Settings screen was a placeholder (`app/(admin)/settings.tsx`). **Deleted in Phase B** — the route no longer exists.
+- [x] Add Storage cleanup when a thesis is deleted; implemented in `backend/controllers/thesisController.js:234` (PDF removed on thesis delete). Post image cleanup: post images are served via signed URLs (`GET /posts/:id/file`), so deletion is handled by the visibility check returning 404.

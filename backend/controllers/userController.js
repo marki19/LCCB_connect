@@ -26,6 +26,48 @@ const getUsers = async (req, res, next) => {
   }
 };
 
+const messageModel = require("../models/messageModel");
+const { parseSearch } = require("../utils/queryFilters");
+const MAX_DIRECTORY = 50;
+
+const getDirectory = async (req, res, next) => {
+  try {
+    const scope = req.query.scope === "all" ? "all" : "network";
+    const rows = await userModel.getDirectory(req.user.id, {
+      limit: Math.min(clampLimit(req.query.limit), MAX_DIRECTORY),
+      q: parseSearch(req.query.q),
+      scope,
+    });
+
+    const peers = rows.map((row) => ({
+      id: row.id,
+      username: row.username,
+      full_name: row.full_name,
+      avatar_url: row.avatar_url,
+      year_level: row.year_level,
+      department_id: row.department_id,
+      department_name: row.department_name,
+      friendship: row.friendship_status === "accepted"
+        ? "friend"
+        : row.friendship_status === "pending"
+        ? (row.friendship_outgoing ? "pending_out" : "pending_in")
+        : "none",
+      message_decision: messageModel.resolveDecision({
+        is_blocked: false, // blocked pairs never reach this point
+        is_friend: row.friendship_status === "accepted",
+        recipient_policy: row.message_policy,
+        sender_department_id: row.sender_department_id,
+        recipient_department_id: row.department_id,
+        sender_department_allowed: row.sender_department_allowed,
+      }),
+    }));
+
+    res.json(peers);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getUser = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -37,7 +79,12 @@ const getUser = async (req, res, next) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.json(user);
+    // Same rule as verificationController's `identityComplete` - surfaced so the
+    // client does not re-implement it (and cannot drift from it).
+    const identity_complete = Boolean(
+      user.full_name && user.student_id && user.department_id && user.course_id
+    );
+    res.json({ ...user, identity_complete });
   } catch (error) {
     next(error);
   }
@@ -235,6 +282,7 @@ const disableUser = async (req, res, next) => {
 module.exports = {
   getUsers,
   getUser,
+  getDirectory,
   createUser,
   updateUser,
   disableUser,

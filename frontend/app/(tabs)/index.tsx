@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
   FlatList,
@@ -30,8 +30,9 @@ import PostCard from "../../src/components/PostCard";
 import SettingsSidebar from "../../src/components/SettingsSidebar";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
+import { usePresence } from "../../src/contexts/PresenceContext";
 import { useFocusEffect, useRouter } from "expo-router";
-import { apiFetch } from "../../src/lib/api";
+import { apiFetch, apiJson } from "../../src/lib/api";
 import {
   elevation,
   focusRing,
@@ -220,6 +221,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
   const { colors } = useTheme();
+  const { isOnline } = usePresence();
   const isGuest = profile?.role === "guest";
   const { width } = useWindowDimensions();
   // The rails only earn their space once the feed can stay at a readable
@@ -244,19 +246,17 @@ export default function HomeScreen() {
   }, []);
 
   // Fetch real users from backend / database
-  const fetchActivePeers = useCallback(async () => {
-    try {
-      const res = await apiFetch(`/public/peers`);
-      if (res.ok) {
-        const users = await res.json();
-        if (users && users.length > 0) {
-          setActivePeers(users);
-        }
+    const fetchActivePeers = useCallback(async () => {
+      try {
+        const rows = isGuest
+          ? await apiJson<any[]>("/public/peers?limit=20")
+          : await apiJson<{ peer: any }[]>("/friends?limit=20");
+        const list = rows.map((r: any) => r.peer ?? r).filter(Boolean);
+        setActivePeers(list.filter((p: any) => p.id !== profile?.id));
+      } catch (e) {
+        console.error("Failed to load peers:", e);
       }
-    } catch (e) {
-      console.error("Failed to load peers from SQL backend:", e);
-    }
-  }, []);
+    }, [isGuest, profile?.id]);
 
   const fetchUnreadCount = useCallback(async () => {
     if (isGuest || !profile?.id) {
@@ -280,11 +280,17 @@ export default function HomeScreen() {
   }, [isGuest, profile?.id]);
 
   // Current active user: only the authenticated profile or the local guest
-  // profile. Never substitute another campus member's identity.
-  const activeUser = profile;
-  const activeName = activeUser?.full_name || (isGuest ? "Guest Visitor" : "You");
+    // profile. Never substitute another campus member's identity.
+    const activeUser = profile;
+    const activeName = activeUser?.full_name || (isGuest ? "Guest Visitor" : "You");
 
-  const fetchUnifiedFeed = useCallback(async () => {
+    const onlineCount = activePeers.filter((p) => isOnline(p.id)).length;
+    const sortedPeers = useMemo(
+      () => [...activePeers].sort((a, b) => Number(isOnline(b.id)) - Number(isOnline(a.id))),
+      [activePeers, isOnline]
+    );
+
+    const fetchUnifiedFeed = useCallback(async () => {
     if (!loadedRef.current) setLoading(true);
     setError("");
     let postItems: any[] = [];
@@ -1016,83 +1022,85 @@ export default function HomeScreen() {
             </View>
 
             <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: SPACE.x2,
-              }}
-            >
-              <Text style={{ ...TYPE.micro, fontSize: 8.5, color: colors.inkFaint }}>
-                Campus peers
-              </Text>
-              <StatusBadge label={`${activePeers.length} active`} tone="success" />
-            </View>
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: SPACE.x2,
+                          }}
+                        >
+                          <Text style={{ ...TYPE.micro, fontSize: 8.5, color: colors.inkFaint }}>
+                            {isGuest ? "Campus directory" : "Campus peers"}
+                          </Text>
+                          {onlineCount > 0 ? (
+                            <StatusBadge label={`${onlineCount} online`} tone="success" />
+                          ) : null}
+                        </View>
 
-            {activePeers.length === 0 ? (
-              <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
-                No peers loaded yet.
-              </Text>
-            ) : (
-              activePeers.map((peer) => (
-                <Pressable
-                  key={peer.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Message ${peer.full_name}`}
-                  onPress={() => router.push("/messages")}
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingVertical: SPACE.x2,
-                    gap: SPACE.x3,
-                    borderRadius: RADIUS.md,
-                    opacity: pressed ? 0.75 : 1,
-                  })}
-                >
-                  <View style={{ position: "relative" }}>
-                    <View
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 17,
-                        backgroundColor: colors.brandWash,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.brand }}>
-                        {getInitials(peer.full_name)}
-                      </Text>
-                    </View>
-                    <View
-                      style={{
-                        position: "absolute",
-                        bottom: 0,
-                        right: 0,
-                        width: 10,
-                        height: 10,
-                        borderRadius: 5,
-                        backgroundColor: colors.jade,
-                        borderWidth: 2,
-                        borderColor: colors.surfacePage,
-                      }}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{ fontSize: 13, fontWeight: "600", color: colors.ink }}
-                      numberOfLines={1}
-                    >
-                      {peer.full_name}
-                    </Text>
-                    <Text style={{ fontSize: 10, color: colors.inkFaint }} numberOfLines={1}>
-                      {peer.department_name || "No department"}
-                      {peer.year_level ? ` · ${peer.year_level}` : ""}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))
-            )}
+                        {sortedPeers.length === 0 ? (
+                          <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
+                            {isGuest ? "No one in the directory yet." : "No friends online yet. Add some classmates!"}
+                          </Text>
+                        ) : (
+                          sortedPeers.map((peer) => (
+                            <Pressable
+                              key={peer.id}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Message ${peer.full_name}`}
+                              onPress={() => router.push("/messages")}
+                              style={({ pressed }) => ({
+                                flexDirection: "row",
+                                alignItems: "center",
+                                paddingVertical: SPACE.x2,
+                                gap: SPACE.x3,
+                                borderRadius: RADIUS.md,
+                                opacity: pressed ? 0.75 : 1,
+                              })}
+                            >
+                              <View style={{ position: "relative" }}>
+                                <View
+                                  style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 17,
+                                    backgroundColor: colors.brandWash,
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.brand }}>
+                                    {getInitials(peer.full_name)}
+                                  </Text>
+                                </View>
+                                <View
+                                  style={{
+                                    position: "absolute",
+                                    bottom: 0,
+                                    right: 0,
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: 5,
+                                    backgroundColor: isOnline(peer.id) ? colors.jade : colors.inkFaint,
+                                    borderWidth: 2,
+                                    borderColor: colors.surfacePage,
+                                  }}
+                                />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={{ fontSize: 13, fontWeight: "600", color: colors.ink }}
+                                  numberOfLines={1}
+                                >
+                                  {peer.full_name}
+                                </Text>
+                                <Text style={{ fontSize: 10, color: colors.inkFaint }} numberOfLines={1}>
+                                  {peer.department_name || "No department"}
+                                  {peer.year_level ? ` · ${peer.year_level}` : ""}
+                                </Text>
+                              </View>
+                            </Pressable>
+                          ))
+                        )}
           </View>
         )}
       </View>

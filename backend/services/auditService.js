@@ -1,5 +1,5 @@
 const db = require("../db");
-const { normalizeRole } = require("../middleware/auth");
+const { normalizeRole } = require("../utils/roles");
 
 /**
  * Canonical action names. Keep this list in sync with SPEC-superadmin-console.md
@@ -25,6 +25,16 @@ const ACTIONS = Object.freeze({
   VERIFICATION_SUBMIT: "verification.submit",
   VERIFICATION_APPROVE: "verification.approve",
   VERIFICATION_DECLINE: "verification.decline",
+  ADMIN_IMPERSONATE: "admin.impersonate",
+  // MFA & Auth audit actions
+  MFA_ENROLL: "mfa.enroll",
+  MFA_UNENROLL: "mfa.unenroll",
+  MFA_CHALLENGE: "mfa.challenge",
+  LOGIN_SUCCESS: "auth.login_success",
+  LOGIN_FAILED_LOCKOUT: "auth.login_failed_lockout",
+  LOGOUT: "auth.logout",
+  // Email bounce tracking
+  EMAIL_BOUNCE_HARD: "email.bounce_hard",
 });
 
 function actorSnapshot(actor) {

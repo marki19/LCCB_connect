@@ -24,42 +24,20 @@ async function installSession(tokens: SessionTokens): Promise<void> {
 }
 
 /**
- * Signs in with either an email address or a student ID (plan §5 Phase 3).
- *
- * The student ID is resolved server-side so the ID→email mapping never reaches
- * the client. Wrong password, unknown ID, and a deleted account all produce the
- * same generic 401, except deletion which is explicitly reported.
- */
-export async function signInWithIdentifier(
-  identifier: string,
-  password: string
-): Promise<void> {
-  const trimmed = identifier.trim();
-  const normalized = trimmed.includes("@")
-    ? trimmed.toLowerCase()
-    : trimmed.toUpperCase();
-
-  const tokens = await apiJson<SessionTokens>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ identifier: normalized, password }),
-  });
-
-  await installSession(tokens);
-}
-
-/**
  * Exchanges the 6-digit signup code for a session.
  *
  * The backend verifies the OTP and creates the profile in the same call, so a
- * user can never hold a session without a profile row.
+ * user can never hold a session without a profile row. The password is sent
+ * again because only its bcrypt hash was kept while the code was pending.
  */
 export async function verifySignupCode(
   email: string,
-  token: string
+  token: string,
+  password: string
 ): Promise<void> {
   const tokens = await apiJson<SessionTokens>("/auth/verify-signup", {
     method: "POST",
-    body: JSON.stringify({ email: email.trim().toLowerCase(), token }),
+    body: JSON.stringify({ email: email.trim().toLowerCase(), token, password }),
   });
 
   await installSession(tokens);
@@ -89,4 +67,72 @@ export async function requestSignup(email: string, password: string, fullName: s
       full_name: fullName.trim(),
     }),
   });
+}
+
+/**
+ * Signs in with Google using an ID token.
+ * Requires @react-native-google-signin/google-signin (dev build only).
+ */
+export async function signInWithGoogle(idToken: string): Promise<void> {
+  const tokens = await apiJson<SessionTokens>("/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ id_token: idToken }),
+  });
+
+  await installSession(tokens);
+}
+
+/**
+ * Response from signInWithIdentifier when MFA is required.
+ */
+export type MfaChallengeResponse = {
+  mfa_required: true;
+  challenge_token: string;
+  message: string;
+};
+
+/**
+ * Signs in with either an email address or a student ID.
+ * Returns MfaChallengeResponse if MFA is required, otherwise installs session and returns void.
+ */
+export async function signInWithIdentifier(
+  identifier: string,
+  password: string
+): Promise<void | MfaChallengeResponse> {
+  const trimmed = identifier.trim();
+  const normalized = trimmed.includes("@")
+    ? trimmed.toLowerCase()
+    : trimmed;
+
+  const response = await apiJson<SessionTokens | MfaChallengeResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ identifier: normalized, password }),
+  });
+
+  // Type guard to check if response is MfaChallengeResponse
+  const isMfaChallenge = (res: SessionTokens | MfaChallengeResponse): res is MfaChallengeResponse => {
+    return "mfa_required" in res && res.mfa_required === true;
+  };
+
+  if (isMfaChallenge(response)) {
+    return response;
+  }
+
+  await installSession(response);
+}
+
+/**
+ * Completes MFA challenge during login.
+ * Returns void on success (session installed), throws on failure.
+ */
+export async function completeMfaChallenge(
+  challengeToken: string,
+  code: string
+): Promise<void> {
+  const tokens = await apiJson<SessionTokens>("/auth/mfa/challenge", {
+    method: "POST",
+    body: JSON.stringify({ challenge_token: challengeToken, code }),
+  });
+
+  await installSession(tokens);
 }

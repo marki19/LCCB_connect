@@ -25,6 +25,9 @@ router.post("/:id/comments", loadProfile, requireVerified, validate(createCommen
 router.put("/:id/comments/:commentId", loadProfile, requireVerified, validate(updateCommentSchema), postController.updateComment);
 router.delete("/:id/comments/:commentId", requireVerified, postController.deleteComment);
 
+// Post image signed URL (private assets bucket)
+router.get("/:id/file", postController.getPostFile);
+
 // Link preview generation
 router.post("/preview", requireVerified, postController.generatePreview);
 

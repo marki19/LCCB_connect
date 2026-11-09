@@ -14,6 +14,7 @@ import { apiJson } from "../lib/api";
 import { openConversation, sendFriendRequest } from "../lib/messages";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { usePresence } from "../contexts/PresenceContext";
 import Avatar from "./Avatar";
 
 /**
@@ -41,6 +42,7 @@ type Props = {
 export default function PeerPicker({ visible, onClose, onOpened }: Props) {
   const { profile } = useAuth();
   const { colors, isDark } = useTheme();
+  const { modeOf } = usePresence();
   const [peers, setPeers] = useState<Peer[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -185,7 +187,7 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
                       borderBottomColor: colors.border,
                     }}
                   >
-                    <Avatar name={item.full_name || item.username} size={44} />
+                    <Avatar name={item.full_name || item.username} size={44} showPresence mode={modeOf(item.id)} />
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}>
                         {item.full_name || item.username || "Peer"}

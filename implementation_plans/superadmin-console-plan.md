@@ -17,34 +17,34 @@ Implement `SPEC-superadmin-console.md` in vertical slices. The backend foundatio
 
 ### Phase 1: Foundation
 
-- [ ] Task 1: Add migration 010 and sync `schema.sql`
-- [ ] Task 2: Add `supabaseAdmin`, `accountService`, and `auditService`
-- [ ] Task 3: Add `requireActiveAccount`, idempotent `loadProfile`, and shared admin validation
-- [ ] Checkpoint: migration applied, schema audit passes, backend tests still pass
+- [x] Task 1: Add migration 010 and sync `schema.sql`
+- [x] Task 2: Add `supabaseAdmin`, `accountService`, and `auditService`
+- [x] Task 3: Add `requireActiveAccount`, idempotent `loadProfile`, and shared admin validation
+- [x] Checkpoint: migration applied, schema audit passes, backend tests still pass
 
 ### Phase 2: Admin API
 
-- [ ] Task 4: Add `adminModel` read queries and `adminController`/`adminRouter`
-- [ ] Task 5: Add user governance actions (role, suspend, unsuspend, force sign-out, delete)
-- [ ] Task 6: Add content explorer, thesis moderation, reason enforcement, and audit hooks
-- [ ] Task 7: Add announcements, audience count, history, and notification fan-out
-- [ ] Checkpoint: `npm test` passes with new admin tests
+- [x] Task 4: Add `adminModel` read queries and `adminController`/`adminRouter`
+- [x] Task 5: Add user governance actions (role, suspend, unsuspend, force sign-out, delete)
+- [x] Task 6: Add content explorer, thesis moderation, reason enforcement, and audit hooks
+- [x] Task 7: Add announcements, audience count, history, and notification fan-out
+- [x] Checkpoint: `npm test` passes with new admin tests
 
 ### Phase 3: Panel
 
-- [ ] Task 8: Rebuild the panel shell, role guard, Back to App, and app return link
-- [ ] Task 9: Build the overview screen
-- [ ] Task 10: Build the users table and dossier
-- [ ] Task 11: Build Reports & Content
-- [ ] Task 12: Build Announcements and Audit
-- [ ] Task 13: Add the suspended-account screen and AuthContext handling
-- [ ] Checkpoint: `tsc --noEmit` and `expo lint` show no new errors
+- [x] Task 8: Rebuild the panel shell, role guard, Back to App, and app return link
+- [x] Task 9: Build the overview screen
+- [x] Task 10: Build the users table and dossier
+- [x] Task 11: Build Reports & Content
+- [x] Task 12: Build Announcements and Audit
+- [x] Task 13: Add the suspended-account screen and AuthContext handling
+- [x] Checkpoint: `tsc --noEmit` and `expo lint` show no new errors
 
 ### Phase 4: Release
 
-- [ ] Task 14: Harden legacy user routes and migrate directory consumers
-- [ ] Task 15: Add backend tests and run role-by-role QA
-- [ ] Task 16: Update `DATABASE.md` and mark the spec implemented
+- [x] Task 14: Harden legacy user routes and migrate directory consumers
+- [x] Task 15: Add backend tests and run role-by-role QA
+- [x] Task 16: Update `DATABASE.md` and mark the spec implemented
 
 ## Risks and Mitigations
 

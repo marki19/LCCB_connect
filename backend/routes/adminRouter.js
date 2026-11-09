@@ -38,6 +38,20 @@ router.post(
   adminController.forceSignOut
 );
 
+router.post(
+  "/users/:id/impersonate",
+  auth.requireRole("superadmin"),
+  validate(reasonBodySchema),
+  adminController.generateImpersonation
+);
+
+router.post(
+  "/users/:id/unlock",
+  auth.requireRole("superadmin"),
+  validate(reasonBodySchema),
+  adminController.unlockUser
+);
+
 // Account deletion removed per policy. Use POST /users/:id/suspend for disable.
 // Manual DB query only for permanent deletion.
 

@@ -1,4 +1,4 @@
-import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, Image, Pressable } from "react-native";
+import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, Image, Pressable, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { Link, useRouter } from "expo-router";
 import { Eye, EyeOff, AlertCircle, Sun, Moon, Monitor } from "lucide-react-native";
@@ -7,11 +7,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { focusRing } from "../../src/lib/tokens";
 import { requestSignup } from "../../src/lib/auth";
+import { rememberPendingSignup } from "../../src/lib/pendingSignup";
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { colors, isDark, preference, cycleTheme } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
@@ -36,7 +39,7 @@ export default function RegisterScreen() {
   const nextTheme = preference === "light" ? "dark" : preference === "dark" ? "system" : "light";
   const nextThemeLabel = nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1);
   const ThemeIcon = preference === "system" ? Monitor : preference === "light" ? Sun : Moon;
-  const signUpDisabled = loading || showEmailFormatError;
+  const signUpDisabled = loading || showEmailFormatError || !!emailError;
   const signUpHovered = hoveredControl === "signUp" && !signUpDisabled;
   const signInHovered = hoveredControl === "signIn";
 
@@ -110,9 +113,14 @@ export default function RegisterScreen() {
 
     try {
       await requestSignup(email.trim().toLowerCase(), password, trimmedFullName);
-      
-      // Backend created the Auth user and sent OTP. Send the student to the OTP
-      // screen — the session only exists after verifyOtp.
+
+      // Only a bcrypt hash is kept server-side, so the verify screen needs the
+      // password again. Keep it in memory, never in route params.
+      rememberPendingSignup(email, password);
+
+      // The backend answers 202 whether or not the address is already
+      // registered, so the next screen is always the code entry step. An
+      // existing account gets an explanatory email instead of a code.
       router.replace({
         pathname: "/(auth)/verify-email",
         params: { email: email.trim().toLowerCase(), flow: "signup" },
@@ -177,23 +185,24 @@ export default function RegisterScreen() {
             flexGrow: 1,
             justifyContent: "center",
             alignItems: "center",
-            paddingTop: insets.top + 76,
+            paddingTop: isLandscape ? insets.top + 32 : insets.top + 76,
             paddingBottom: insets.bottom + 24,
+            paddingHorizontal: isLandscape ? 32 : 0,
           }}
           showsVerticalScrollIndicator={false}
         >
           
-          <View style={{ width: "100%", maxWidth: 470, padding: 24 }}>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 28, padding: 32, borderWidth: 1, borderColor: colors.border, shadowColor: colors.shadow, shadowOffset: { width: 0, height: 12 }, shadowOpacity: isDark ? 0.45 : 0.08, shadowRadius: 24, elevation: 8 }}>
+          <View style={{ width: "100%", maxWidth: isLandscape ? 640 : 470, padding: isLandscape ? 16 : 24 }}>
+            <View style={{ backgroundColor: colors.surface, borderRadius: 28, padding: isLandscape ? 24 : 32, borderWidth: 1, borderColor: colors.border, shadowColor: colors.shadow, shadowOffset: { width: 0, height: 12 }, shadowOpacity: isDark ? 0.45 : 0.08, shadowRadius: 24, elevation: 8 }}>
               
               {/* Header Official Seal */}
-              <View style={{ alignItems: "center", marginBottom: 28 }}>
+              <View style={{ alignItems: "center", marginBottom: isLandscape ? 16 : 28 }}>
                 <View 
                   style={{ 
-                    width: 76, 
-                    height: 76, 
+                    width: isLandscape ? 60 : 76, 
+                    height: isLandscape ? 60 : 76, 
                     backgroundColor: isDark ? "rgba(76, 132, 255, 0.12)" : "#EBF1FF", 
-                    borderRadius: 38, 
+                    borderRadius: isLandscape ? 30 : 38, 
                     alignItems: "center", 
                     justifyContent: "center", 
                     borderWidth: 1.5,
@@ -203,13 +212,13 @@ export default function RegisterScreen() {
                     shadowOpacity: 0.2, 
                     shadowRadius: 10, 
                     elevation: 3, 
-                    marginBottom: 12,
-                    padding: 6,
+                    marginBottom: isLandscape ? 8 : 12,
+                    padding: isLandscape ? 4 : 6,
                   }}
                 >
                   <Image 
                     source={require("../../assets/images/logo-seal.png")} 
-                    style={{ width: 56, height: 56 }} 
+                    style={{ width: isLandscape ? 44 : 56, height: isLandscape ? 44 : 56 }} 
                     resizeMode="contain" 
                   />
                 </View>
@@ -231,7 +240,7 @@ export default function RegisterScreen() {
                   </Text>
                 </View>
 
-                <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: "800", textAlign: "center", letterSpacing: -0.5 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: isLandscape ? 20 : 24, fontWeight: "800", textAlign: "center", letterSpacing: -0.5 }}>
                   Create Account
                 </Text>
                 <Text style={{ color: colors.textTertiary, fontSize: 13, marginTop: 4, textAlign: "center" }}>

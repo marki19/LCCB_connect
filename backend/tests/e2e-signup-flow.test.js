@@ -1,8 +1,12 @@
-// E2E test for signup flow: OTP verification creates profile, returns session,
-// and sets up proper state for onboarding and subsequent login.
+// Signup contract: request -> verify -> session.
 //
-// Covers: verify-signup endpoint, resend-signup endpoint, request-signup endpoint,
-// profile creation, and error mapping for expired/used/invalid OTPs.
+// The signup flow stores a pending row (password + code hash), emails a code,
+// and only creates the Auth user and profile once that code is verified. Every
+// signup endpoint answers identically whether or not the address is already
+// registered, so none of them can be used to enumerate accounts.
+//
+// Supabase Auth, the models, and the email service are stubbed, so this asserts
+// the HTTP contract without a database or network.
 require("./env.helper");
 
 const { describe, it, beforeEach } = require("node:test");
@@ -11,340 +15,313 @@ const request = require("supertest");
 
 const { stub } = require("./stub.helper");
 const userModel = require("../models/userModel");
-const accountService = require("../services/accountService");
+const emailService = require("../services/emailService");
 const supabaseAdmin = require("../services/supabaseAdmin");
+const { hashOtp } = require("../utils/otp");
+const bcrypt = require("bcrypt");
 
 const USER_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const SESSION = { access_token: "at-e2e", refresh_token: "rt-e2e", expires_at: 456 };
 
-// Valid email without @ in the local part (regex: ^[^\s@]+@lccbonline\.edu\.ph$)
-const TEST_EMAIL = "e2e-user@lccbonline.edu.ph";
-const EXPIRED_EMAIL = "expired_user@lccbonline.edu.ph";
-const USED_EMAIL = "used_user@lccbonline.edu.ph";
-const INVALID_EMAIL = "invalid_user@lccbonline.edu.ph";
+const NEW_EMAIL = "new.student@lccbonline.edu.ph";
+const EXISTING_EMAIL = "existing.student@lccbonline.edu.ph";
 const NON_LCCB_EMAIL = "notlccb@gmail.com";
-const RESEND_EMAIL = "resend_user@lccbonline.edu.ph";
+const CODE = "123456";
+const PENDING_PASSWORD = "SecurePass123";
+// Cost 4 keeps the fixture fast; the endpoint is what hashes at cost 12.
+const PENDING_PASSWORD_HASH = bcrypt.hashSync(PENDING_PASSWORD, 4);
 
-// Behavior is swapped per test through these bindings.
-let signInImpl;
-let verifyOtpImpl;
-let resendImpl;
-let listUsersImpl;
 let createUserAuthImpl;
-let currentUserMetadata;
+let emailImpl;
 
-const getSupabaseAdminStub = stub(supabaseAdmin, "getSupabaseAdmin", () => ({
+stub(supabaseAdmin, "getSupabaseAdmin", () => ({
   auth: {
-    signInWithPassword: async (args) => {
-      return signInImpl(args);
-    },
-    verifyOtp: async (args) => verifyOtpImpl(args),
-    resend: async (args) => resendImpl(args),
+    signInWithPassword: async () => ({ data: { session: SESSION }, error: null }),
     admin: {
-      listUsers: async () => listUsersImpl(),
       createUser: async (args) => createUserAuthImpl(args),
     },
   },
 }));
 
+const findProfileIdByEmail = stub(userModel, "findProfileIdByEmail", async () => null);
+const getPendingSignupByEmail = stub(userModel, "getPendingSignupByEmail", async () => null);
+const createPendingSignup = stub(userModel, "createPendingSignup", async (row) => row);
+const deletePendingSignup = stub(userModel, "deletePendingSignup", async () => ({ email: NEW_EMAIL }));
+const incrementOtpAttempts = stub(userModel, "incrementOtpAttempts", async () => 1);
 const createUser = stub(userModel, "createUser", async (data) => ({
   id: data.id,
   role: "student",
   ...data,
 }));
-const revokeSessions = stub(accountService, "revokeSessions", async () => ({
-  sessions: 0,
-  refresh_tokens: 0,
-}));
+
+const sendOtpEmail = stub(emailService, "sendOtpEmail", async (args) => {
+  emailImpl(args);
+  return { dev: true };
+});
+const sendAccountExistsEmail = stub(emailService, "sendAccountExistsEmail", async () => ({ dev: true }));
 
 // Imported only after the stubs are installed.
 const app = require("../app");
 
-const okVerifyOtp = (email) => ({
-  data: {
-    user: {
-      id: USER_ID,
-      email,
-      user_metadata: currentUserMetadata || { full_name: "E2E Test User" },
-    },
-    session: SESSION,
-  },
-  error: null,
-});
-
-const okResend = () => ({
-  data: { user: { id: USER_ID } },
-  error: null,
-});
+/** A fresh pending row carrying the hash the endpoint will verify. */
+function pendingRow(email, code = CODE, overrides = {}) {
+  return {
+    email,
+    password_hash: PENDING_PASSWORD_HASH,
+    full_name: "Ana Cruz",
+    otp_hash: hashOtp(email, code),
+    otp_attempts: 0,
+    otp_expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    verified_at: null,
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
-  signInImpl = async () => ({ data: { user: null, session: null } });
-  verifyOtpImpl = async () => okVerifyOtp(TEST_EMAIL);
-  resendImpl = async () => okResend();
-  listUsersImpl = async () => ({ data: { users: [] }, error: null });
   createUserAuthImpl = async (args) => ({
     data: { user: { id: USER_ID, email: args.email } },
     error: null,
   });
-  currentUserMetadata = { full_name: "E2E Test User" };
-  createUser.calls.length = 0;
-  revokeSessions.calls.length = 0;
+  emailImpl = () => {};
+  findProfileIdByEmail.setImpl(async () => null);
+  getPendingSignupByEmail.setImpl(async () => null);
+  incrementOtpAttempts.setImpl(async () => 1);
+
+  for (const fn of [
+    createUser,
+    deletePendingSignup,
+    createPendingSignup,
+    incrementOtpAttempts,
+    sendOtpEmail,
+    sendAccountExistsEmail,
+  ]) {
+    fn.calls.length = 0;
+  }
 });
 
-describe("POST /api/auth/verify-signup (E2E)", () => {
-  it("creates a student profile on successful OTP verification", async () => {
+describe("POST /api/auth/request-signup", () => {
+  it("stores a pending row with only a hash of the code and returns 202", async () => {
     const res = await request(app)
-      .post("/api/auth/verify-signup")
-      .send({ email: TEST_EMAIL, token: "123456" });
+      .post("/api/auth/request-signup")
+      .send({ email: NEW_EMAIL, password: "SecurePass123", full_name: "Ana Cruz" });
 
-    assert.equal(res.status, 201, "Should return 201 for successful verification");
-    assert.equal(res.body.access_token, SESSION.access_token);
-    assert.equal(res.body.refresh_token, SESSION.refresh_token);
+    assert.equal(res.status, 202);
+    assert.match(res.body.message, /if that address can be registered/i);
+    assert.ok(res.body.retry_after > 0);
 
-    assert.equal(createUser.calls.length, 1, "Profile must be created exactly once");
-    const created = createUser.calls[0][0];
-    assert.equal(created.id, USER_ID);
-    assert.equal(created.email, TEST_EMAIL);
-    assert.equal(created.role, "student", "Role must be student, never from request");
-    assert.equal(created.full_name, "E2E Test User", "Name comes from user_metadata");
+    assert.equal(createPendingSignup.calls.length, 1);
+    const stored = createPendingSignup.calls[0][0];
+    assert.equal(stored.email, NEW_EMAIL);
+    assert.equal(stored.fullName, "Ana Cruz");
+    assert.notEqual(stored.otpHash, CODE, "the code itself is never stored");
+    assert.match(stored.otpHash, /^[a-f0-9]{64}$/, "stored value is an HMAC");
+
+    assert.equal(sendOtpEmail.calls.length, 1);
+    const mailed = sendOtpEmail.calls[0][0];
+    assert.match(mailed.otpCode, /^\d{6}$/);
+    assert.equal(stored.otpHash, hashOtp(NEW_EMAIL, mailed.otpCode), "hash matches the mailed code");
   });
 
-  it("returns code_expired for expired OTP", async () => {
-    verifyOtpImpl = async () => ({
-      data: { user: null, session: null },
-      error: { message: "Token has expired" },
-    });
+  it("answers 202 for an existing account and sends no code", async () => {
+    findProfileIdByEmail.setImpl(async () => ({ id: USER_ID, role: "student" }));
 
     const res = await request(app)
-      .post("/api/auth/verify-signup")
-      .send({ email: EXPIRED_EMAIL, token: "999999" });
+      .post("/api/auth/request-signup")
+      .send({ email: EXISTING_EMAIL, password: "SecurePass123", full_name: "Ana Cruz" });
 
-    assert.equal(res.status, 401);
-    assert.equal(res.body.code, "code_expired");
-    assert.match(res.body.error, /expired|invalid/i);
-    assert.equal(createUser.calls.length, 0, "No profile created for failed verification");
+    assert.equal(res.status, 202);
+    assert.equal(createPendingSignup.calls.length, 0, "no pending row for an existing account");
+    assert.equal(sendOtpEmail.calls.length, 0);
+    assert.equal(sendAccountExistsEmail.calls.length, 1);
+    assert.equal(sendAccountExistsEmail.calls[0][0].to, EXISTING_EMAIL);
   });
 
-  it("returns code_used for already-used OTP", async () => {
-    verifyOtpImpl = async () => ({
-      data: { user: null, session: null },
-      error: { message: "OTP already used" },
-    });
+  it("returns the same body for a new and an existing address", async () => {
+    const fresh = await request(app)
+      .post("/api/auth/request-signup")
+      .send({ email: NEW_EMAIL, password: "SecurePass123", full_name: "Ana Cruz" });
 
-    const res = await request(app)
-      .post("/api/auth/verify-signup")
-      .send({ email: USED_EMAIL, token: "111111" });
+    findProfileIdByEmail.setImpl(async () => ({ id: USER_ID, role: "student" }));
+    const existing = await request(app)
+      .post("/api/auth/request-signup")
+      .send({ email: EXISTING_EMAIL, password: "SecurePass123", full_name: "Ana Cruz" });
 
-    assert.equal(res.status, 401);
-    assert.equal(res.body.code, "code_used");
-    assert.equal(createUser.calls.length, 0);
+    assert.equal(fresh.status, existing.status);
+    assert.deepEqual(fresh.body, existing.body);
   });
 
-  it("returns code_invalid for incorrect OTP", async () => {
-    verifyOtpImpl = async () => ({
-      data: { user: null, session: null },
-      error: { message: "Invalid OTP" },
-    });
-
+  it("rejects a non-LCCB email with 400", async () => {
     const res = await request(app)
-      .post("/api/auth/verify-signup")
-      .send({ email: INVALID_EMAIL, token: "000000" });
-
-    assert.equal(res.status, 401);
-    assert.equal(res.body.code, "code_invalid");
-    assert.equal(createUser.calls.length, 0);
-  });
-
-  it("rejects non-LCCB email with 400 validation error", async () => {
-    const res = await request(app)
-      .post("/api/auth/verify-signup")
-      .send({ email: NON_LCCB_EMAIL, token: "123456" });
+      .post("/api/auth/request-signup")
+      .send({ email: NON_LCCB_EMAIL, password: "SecurePass123", full_name: "Ana Cruz" });
 
     assert.equal(res.status, 400);
     assert.equal(res.body.fields?.[0]?.path, "email");
-    assert.equal(createUser.calls.length, 0);
+    assert.equal(createPendingSignup.calls.length, 0);
   });
 
-  it("rejects token that is not 6 digits", async () => {
-    const res = await request(app)
-      .post("/api/auth/verify-signup")
-      .send({ email: TEST_EMAIL, token: "12345" });
-
-    assert.equal(res.status, 400);
-  });
-
-  it("returns 401 with generic error for unknown OTP error", async () => {
-    verifyOtpImpl = async () => ({
-      data: { user: null, session: null },
-      error: { message: "Some other error" },
-    });
-
-    const res = await request(app)
-      .post("/api/auth/verify-signup")
-      .send({ email: INVALID_EMAIL, token: "123456" });
-
-    assert.equal(res.status, 401);
-    assert.equal(res.body.code, "invalid_code");
-    assert.equal(createUser.calls.length, 0);
-  });
-});
-
-describe("POST /api/auth/resend-signup (E2E)", () => {
-  it("triggers OTP resend and returns 202 with retry_after", async () => {
-    const res = await request(app)
-      .post("/api/auth/resend-signup")
-      .send({ email: RESEND_EMAIL });
-
-    assert.equal(res.status, 202);
-    assert.equal(res.body.message, "Code sent");
-    assert.ok(res.body.retry_after > 0, "Should include retry_after seconds");
-  });
-
-  it("rejects non-LCCB email with 400", async () => {
-    const res = await request(app)
-      .post("/api/auth/resend-signup")
-      .send({ email: NON_LCCB_EMAIL });
-
-    assert.equal(res.status, 400);
-  });
-
-  it("handles Supabase resend failure gracefully", async () => {
-    resendImpl = async () => ({
-      data: {},
-      error: { message: "User not found" },
-    });
-
-    const res = await request(app)
-      .post("/api/auth/resend-signup")
-      .send({ email: "noseresend@lccbonline.edu.ph" });
-
-    assert.equal(res.status, 400);
-    assert.equal(res.body.code, "resend_failed");
-  });
-});
-
-describe("POST /api/auth/request-signup (E2E)", () => {
-  const REQUEST_SIGNUP_EMAIL = "request_user@lccbonline.edu.ph";
-  const REQUEST_EXISTS_EMAIL = "exists_user@lccbonline.edu.ph";
-  const REQUEST_SIGNUP_EMAIL_2 = "request_user2@lccbonline.edu.ph";
-  const REQUEST_SIGNUP_EMAIL_3 = "request_user3@lccbonline.edu.ph";
-  const REQUEST_SIGNUP_EMAIL_4 = "request_user4@lccbonline.edu.ph";
-  const REQUEST_SIGNUP_EMAIL_5 = "request_user5@lccbonline.edu.ph";
-  const REQUEST_SIGNUP_EMAIL_6 = "request_user6@lccbonline.edu.ph";
-  const REQUEST_SIGNUP_EMAIL_7 = "request_user7@lccbonline.edu.ph";
-
-  beforeEach(() => {
-    listUsersImpl = async () => ({ data: { users: [] }, error: null });
-    createUserAuthImpl = async (args) => ({
-      data: { user: { id: USER_ID, email: args.email } },
-      error: null,
-    });
-  });
-
-  it("creates Auth user and sends OTP, returns 202", async () => {
+  it("rejects a password shorter than 8 characters", async () => {
     const res = await request(app)
       .post("/api/auth/request-signup")
-      .send({
-        email: REQUEST_SIGNUP_EMAIL,
-        password: "SecurePass123",
-        full_name: "Test User",
-      });
-
-    assert.equal(res.status, 202);
-    assert.equal(res.body.message, "Account created. Check your email for the verification code.");
-    assert.ok(res.body.retry_after > 0, "Should include retry_after seconds");
-  });
-
-  it("rejects non-LCCB email with 400 validation error", async () => {
-    const res = await request(app)
-      .post("/api/auth/request-signup")
-      .send({
-        email: NON_LCCB_EMAIL,
-        password: "SecurePass123",
-        full_name: "Test User",
-      });
-
-    assert.equal(res.status, 400);
-    assert.equal(res.body.fields?.[0]?.path, "email");
-  });
-
-  it("rejects password shorter than 8 chars with 400", async () => {
-    const res = await request(app)
-      .post("/api/auth/request-signup")
-      .send({
-        email: REQUEST_SIGNUP_EMAIL_2,
-        password: "short",
-        full_name: "Test User",
-      });
+      .send({ email: NEW_EMAIL, password: "short", full_name: "Ana Cruz" });
 
     assert.equal(res.status, 400);
     assert.equal(res.body.fields?.[0]?.path, "password");
   });
 
-  it("rejects full_name shorter than 2 chars with 400", async () => {
+  it("rejects a full name shorter than 2 characters", async () => {
     const res = await request(app)
       .post("/api/auth/request-signup")
-      .send({
-        email: REQUEST_SIGNUP_EMAIL_3,
-        password: "SecurePass123",
-        full_name: "A",
-      });
+      .send({ email: NEW_EMAIL, password: "SecurePass123", full_name: "A" });
 
     assert.equal(res.status, 400);
     assert.equal(res.body.fields?.[0]?.path, "full_name");
   });
+});
 
-  it("returns account_exists (409) when email already registered", async () => {
-    listUsersImpl = async () => ({
-      data: { users: [{ email: REQUEST_EXISTS_EMAIL }] },
-      error: null,
-    });
+describe("POST /api/auth/verify-signup", () => {
+  it("creates the profile and returns a session for a valid code", async () => {
+    getPendingSignupByEmail.setImpl(async () => pendingRow(NEW_EMAIL));
 
     const res = await request(app)
-      .post("/api/auth/request-signup")
-      .send({
-        email: REQUEST_EXISTS_EMAIL,
-        password: "SecurePass123",
-        full_name: "Test User",
-      });
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: CODE, password: PENDING_PASSWORD });
 
-    assert.equal(res.status, 409);
-    assert.equal(res.body.code, "account_exists");
+    assert.equal(res.status, 201);
+    assert.equal(res.body.access_token, SESSION.access_token);
+    assert.equal(res.body.refresh_token, SESSION.refresh_token);
+
+    assert.equal(createUser.calls.length, 1);
+    const created = createUser.calls[0][0];
+    assert.equal(created.id, USER_ID);
+    assert.equal(created.email, NEW_EMAIL);
+    assert.equal(created.role, "student", "role never comes from the request");
+    assert.equal(created.full_name, "Ana Cruz", "name comes from the pending row");
+
+    assert.equal(deletePendingSignup.calls.length, 1, "pending row is cleaned up");
   });
 
-  it("handles Supabase createUser failure gracefully", async () => {
-    createUserAuthImpl = async () => ({
-      data: { user: null },
-      error: { message: "Weak password" },
-    });
+  it("answers every failure identically", async () => {
+    const wrongCode = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: "999999", password: PENDING_PASSWORD });
 
+    getPendingSignupByEmail.setImpl(async () => pendingRow(NEW_EMAIL));
+    const wrongCodeWithRow = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: "999999", password: PENDING_PASSWORD });
+
+    getPendingSignupByEmail.setImpl(async () => pendingRow(NEW_EMAIL, CODE, { verified_at: new Date().toISOString() }));
+    const alreadyUsed = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: CODE, password: PENDING_PASSWORD });
+
+    getPendingSignupByEmail.setImpl(async () =>
+      pendingRow(NEW_EMAIL, CODE, { otp_expires_at: new Date(Date.now() - 1000).toISOString() })
+    );
+    const expired = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: CODE, password: PENDING_PASSWORD });
+
+    for (const res of [wrongCode, wrongCodeWithRow, alreadyUsed, expired]) {
+      assert.equal(res.status, 401);
+      assert.equal(res.body.code, "code_invalid");
+      assert.match(res.body.error, /incorrect or has expired/i);
+    }
+    assert.equal(createUser.calls.length, 0, "no profile for any failure");
+  });
+
+  it("counts a wrong guess and burns the row at the cap", async () => {
+    getPendingSignupByEmail.setImpl(async () => pendingRow(NEW_EMAIL));
+
+    await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: "999999", password: PENDING_PASSWORD });
+
+    assert.equal(incrementOtpAttempts.calls.length, 1);
+    assert.equal(deletePendingSignup.calls.length, 0, "record survives a single miss");
+
+    incrementOtpAttempts.setImpl(async () => 5);
+    await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: "999999", password: PENDING_PASSWORD });
+
+    assert.equal(deletePendingSignup.calls.length, 1, "record is burned at the cap");
+  });
+
+  it("rejects a non-6-digit token with 400", async () => {
     const res = await request(app)
-      .post("/api/auth/request-signup")
-      .send({
-        email: REQUEST_SIGNUP_EMAIL_4,
-        password: "WeakPass123", // valid length but Supabase rejects it
-        full_name: "Test User",
-      });
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: "12345", password: PENDING_PASSWORD });
 
     assert.equal(res.status, 400);
-    assert.equal(res.body.code, "creation_failed");
+    assert.equal(createUser.calls.length, 0);
   });
 
-  it("handles listUsers failure with service_unavailable", async () => {
-    listUsersImpl = async () => ({
-      data: { users: [] },
-      error: { message: "DB error" },
-    });
+  it("rejects a password that does not match the pending record", async () => {
+    getPendingSignupByEmail.setImpl(async () => pendingRow(NEW_EMAIL));
 
     const res = await request(app)
-      .post("/api/auth/request-signup")
-      .send({
-        email: REQUEST_SIGNUP_EMAIL_5,
-        password: "SecurePass123",
-        full_name: "Test User",
-      });
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: CODE, password: "SomeOtherPass123" });
 
-    assert.equal(res.status, 503);
-    assert.equal(res.body.code, "service_unavailable");
+    assert.equal(res.status, 401);
+    assert.equal(res.body.code, "code_invalid", "same body as a bad code");
+    assert.equal(createUser.calls.length, 0);
+  });
+
+  it("stores a bcrypt hash rather than the password", async () => {
+    await request(app)
+      .post("/api/auth/request-signup")
+      .send({ email: NEW_EMAIL, password: PENDING_PASSWORD, full_name: "Ana Cruz" });
+
+    const stored = createPendingSignup.calls[0][0].passwordHash;
+    assert.match(stored, /^\$2[aby]\$/, "stored value is a bcrypt hash");
+    assert.notEqual(stored, PENDING_PASSWORD);
+  });
+
+  it("rejects a non-LCCB email with 400", async () => {
+    const res = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: NON_LCCB_EMAIL, token: CODE, password: PENDING_PASSWORD });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.fields?.[0]?.path, "email");
+  });
+});
+
+describe("POST /api/auth/resend-signup", () => {
+  it("rotates the code hash and returns 202", async () => {
+    getPendingSignupByEmail.setImpl(async () => pendingRow(NEW_EMAIL));
+
+    const res = await request(app).post("/api/auth/resend-signup").send({ email: NEW_EMAIL });
+
+    assert.equal(res.status, 202);
+    assert.equal(createPendingSignup.calls.length, 1);
+
+    const stored = createPendingSignup.calls[0][0];
+    assert.equal(stored.passwordHash, PENDING_PASSWORD_HASH, "password is carried over");
+    assert.match(stored.otpHash, /^[a-f0-9]{64}$/);
+
+    const mailed = sendOtpEmail.calls[0][0].otpCode;
+    assert.equal(stored.otpHash, hashOtp(NEW_EMAIL, mailed), "new hash matches the new code");
+  });
+
+  it("answers 202 when no pending signup exists", async () => {
+    const res = await request(app)
+      .post("/api/auth/resend-signup")
+      .send({ email: "nobody@lccbonline.edu.ph" });
+
+    assert.equal(res.status, 202);
+    assert.equal(createPendingSignup.calls.length, 0);
+    assert.equal(sendOtpEmail.calls.length, 0);
+  });
+});
+
+describe("GET /api/auth/check-email", () => {
+  it("no longer exists", async () => {
+    const res = await request(app).get("/api/auth/check-email?email=someone@lccbonline.edu.ph");
+
+    assert.equal(res.status, 404, "the enumeration endpoint was removed");
   });
 });

@@ -14,7 +14,6 @@
 //
 // Every TTL is env-tunable; run it from cron / a scheduled job.
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const db = require("../db");
 
 const ttl = (raw, fallback) => {
@@ -48,16 +47,15 @@ const jobs = [
   },
 ];
 
-async function main() {
-  const dryRun = process.argv.includes("--dry-run");
-  console.log(`[prune] ${dryRun ? "DRY RUN — " : ""}retention sweep starting`);
+async function prune() {
+  console.log("[prune] retention sweep starting");
 
   for (const job of jobs) {
     const countSql = `SELECT COUNT(*)::int AS count FROM ${job.table} WHERE ${job.where};`;
     const { rows } = await db.query(countSql, [job.ttlDays]);
     const count = rows[0]?.count ?? 0;
 
-    if (dryRun || count === 0) {
+    if (count === 0) {
       console.log(`[prune] ${job.name}: ${count} row(s) past ${job.ttlDays}d`);
       continue;
     }
@@ -72,9 +70,32 @@ async function main() {
   console.log("[prune] done");
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("[prune] FAILED:", err.message);
-    process.exit(1);
-  });
+// Allow running directly: node scripts/prune.js [--dry-run]
+async function runPruneCli() {
+  require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+  const dryRun = process.argv.includes("--dry-run");
+  if (dryRun) {
+    console.log("[prune] DRY RUN — retention sweep starting");
+    // For dry run, we just count
+    for (const job of jobs) {
+      const countSql = `SELECT COUNT(*)::int AS count FROM ${job.table} WHERE ${job.where};`;
+      const { rows } = await db.query(countSql, [job.ttlDays]);
+      const count = rows[0]?.count ?? 0;
+      console.log(`[prune] ${job.name}: ${count} row(s) past ${job.ttlDays}d`);
+    }
+    console.log("[prune] DRY RUN done");
+    process.exit(0);
+  }
+  await prune()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error("[prune] FAILED:", err.message);
+      process.exit(1);
+    });
+}
+
+if (require.main === module) {
+  runPruneCli();
+}
+
+module.exports = { prune };

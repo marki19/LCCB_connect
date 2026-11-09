@@ -13,14 +13,15 @@ const request = require("supertest");
 const { stub } = require("./stub.helper");
 const userModel = require("../models/userModel");
 const accountService = require("../services/accountService");
+const mfaService = require("../services/mfaService");
 const supabaseAdmin = require("../services/supabaseAdmin");
-
+const bcrypt = require("bcrypt");
+const { hashOtp } = require("../utils/otp");
 const USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const SESSION = { access_token: "at-123", refresh_token: "rt-123", expires_at: 123 };
 
 // Behaviour is swapped per test through these bindings.
 let signInImpl;
-let verifyOtpImpl;
 let lastSignInEmail;
 
 stub(supabaseAdmin, "getSupabaseAdmin", () => ({
@@ -29,7 +30,14 @@ stub(supabaseAdmin, "getSupabaseAdmin", () => ({
       lastSignInEmail = args.email;
       return signInImpl(args);
     },
-    verifyOtp: async (args) => verifyOtpImpl(args),
+    admin: {
+      createUser: async (args) => ({
+        data: {
+          user: { id: USER_ID, email: args.email },
+        },
+        error: null,
+      }),
+    },
   },
 }));
 
@@ -44,10 +52,33 @@ const createUser = stub(userModel, "createUser", async (data) => ({
   role: "student",
   ...data,
 }));
+const getPendingSignupByEmail = stub(
+  userModel,
+  "getPendingSignupByEmail",
+  async () => null
+);
+const deletePendingSignup = stub(
+  userModel,
+  "deletePendingSignup",
+  async () => ({ email: "test@lccbonline.edu.ph" })
+);
+const incrementOtpAttempts = stub(
+  userModel,
+  "incrementOtpAttempts",
+  async () => 1
+);
 const revokeSessions = stub(accountService, "revokeSessions", async () => ({
   sessions: 0,
   refresh_tokens: 0,
 }));
+const hasVerifiedTotp = stub(mfaService, "hasVerifiedTotp", async () => false);
+const getUserByEmailForLockout = stub(
+  userModel,
+  "getUserByEmailForLockout",
+  async () => null
+);
+const isLocked = stub(userModel, "isLocked", async () => false);
+const resetFailedLogins = stub(userModel, "resetFailedLogins", async () => {});
 
 // Imported only after the stubs are installed.
 const app = require("../app");
@@ -60,24 +91,36 @@ const okSignIn = (email) => ({
   error: null,
 });
 
+// Hash for the pending-signup fixture. Cost 4 keeps tests fast; the endpoint
+// hashes at BCRYPT_COST.
+const TEST_PASSWORD = "TestPass123";
+const ENCRYPTED_PASSWORD = bcrypt.hashSync(TEST_PASSWORD, 4);
+
+// Default pending signup record for successful verification. Only the HMAC of
+// the code is stored, so the fixture holds the hash the endpoint will compare.
+const PENDING_EMAIL = "new.student@lccbonline.edu.ph";
+const defaultPendingSignup = {
+  email: PENDING_EMAIL,
+  password_hash: ENCRYPTED_PASSWORD,
+  full_name: "Ana Cruz",
+  otp_hash: hashOtp(PENDING_EMAIL, "123456"),
+  otp_attempts: 0,
+  otp_expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+  verified_at: null,
+};
+
 beforeEach(() => {
   signInImpl = async (args) => okSignIn(args.email);
-  verifyOtpImpl = async () => ({
-    data: {
-      user: {
-        id: USER_ID,
-        email: "new.student@lccbonline.edu.ph",
-        user_metadata: { full_name: "Ana Cruz" },
-      },
-      session: SESSION,
-    },
-    error: null,
-  });
   getLoginEmailByStudentId.setImpl(async () => null);
   getUserById.setImpl(async () => ({ id: USER_ID, role: "student" }));
   createUser.setImpl(async (data) => ({ id: data.id, role: "student", ...data }));
+  getPendingSignupByEmail.setImpl(async () => defaultPendingSignup);
+  deletePendingSignup.setImpl(async () => ({ email: defaultPendingSignup.email }));
   createUser.calls.length = 0;
   revokeSessions.calls.length = 0;
+  deletePendingSignup.calls.length = 0;
+  incrementOtpAttempts.calls.length = 0;
+  hasVerifiedTotp.calls.length = 0;
   lastSignInEmail = null;
 });
 
@@ -161,7 +204,7 @@ describe("POST /api/auth/verify-signup", () => {
   it("creates the profile during verification and returns a session", async () => {
     const res = await request(app)
       .post("/api/auth/verify-signup")
-      .send({ email: "new.student@lccbonline.edu.ph", token: "123456" });
+      .send({ email: "new.student@lccbonline.edu.ph", token: "123456", password: TEST_PASSWORD });
 
     assert.equal(res.status, 201);
     assert.equal(res.body.access_token, SESSION.access_token);
@@ -170,31 +213,92 @@ describe("POST /api/auth/verify-signup", () => {
     const created = createUser.calls[0][0];
     assert.equal(created.id, USER_ID);
     assert.equal(created.role, "student", "role must never come from the caller");
-    assert.equal(created.full_name, "Ana Cruz", "name comes from auth metadata");
+    assert.equal(created.full_name, "Ana Cruz", "name comes from pending signup");
     assert.equal(created.email, "new.student@lccbonline.edu.ph");
+
+    assert.equal(deletePendingSignup.calls.length, 1);
   });
 
-  it("rejects a wrong or expired code without creating a profile", async () => {
-    verifyOtpImpl = async () => ({
-      data: { user: null, session: null },
-      error: { message: "Token has expired or is invalid" },
-    });
+  it("rejects a wrong code without creating a profile", async () => {
+    getPendingSignupByEmail.setImpl(async () => ({
+      ...defaultPendingSignup,
+      otp_hash: hashOtp(defaultPendingSignup.email, "654321"),
+    }));
 
     const res = await request(app)
       .post("/api/auth/verify-signup")
-      .send({ email: "expired@lccbonline.edu.ph", token: "999999" });
+      .send({ email: "expired@lccbonline.edu.ph", token: "999999", password: TEST_PASSWORD });
 
     assert.equal(res.status, 401);
-    assert.equal(res.body.code, "code_expired");
+    assert.equal(res.body.code, "code_invalid");
+    assert.equal(createUser.calls.length, 0);
+    assert.equal(incrementOtpAttempts.calls.length, 1, "an attempt is counted");
+  });
+
+  it("drops the pending record once the attempt cap is reached", async () => {
+    getPendingSignupByEmail.setImpl(async () => ({
+      ...defaultPendingSignup,
+      otp_hash: hashOtp(defaultPendingSignup.email, "654321"),
+    }));
+    incrementOtpAttempts.setImpl(async () => 5);
+
+    const res = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: "expired@lccbonline.edu.ph", token: "999999", password: TEST_PASSWORD });
+
+    assert.equal(res.status, 401);
+    assert.equal(res.body.code, "code_invalid");
+    assert.equal(deletePendingSignup.calls.length, 1, "record is burned");
+  });
+
+  it("rejects an expired code with the same generic body", async () => {
+    getPendingSignupByEmail.setImpl(async () => ({
+      ...defaultPendingSignup,
+      otp_expires_at: new Date(Date.now() - 1000).toISOString(), // Expired
+    }));
+
+    const res = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: "expired@lccbonline.edu.ph", token: "123456", password: TEST_PASSWORD });
+
+    assert.equal(res.status, 401);
+    assert.equal(res.body.code, "code_invalid");
     assert.equal(createUser.calls.length, 0);
   });
 
   it("rejects a non-LCCB email address", async () => {
     const res = await request(app)
       .post("/api/auth/verify-signup")
-      .send({ email: "someone@gmail.com", token: "123456" });
+      .send({ email: "someone@gmail.com", token: "123456", password: TEST_PASSWORD });
 
     assert.equal(res.status, 400);
+    assert.equal(createUser.calls.length, 0);
+  });
+
+  it("rejects when no pending signup exists", async () => {
+    getPendingSignupByEmail.setImpl(async () => null);
+
+    const res = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: "none@lccbonline.edu.ph", token: "123456", password: TEST_PASSWORD });
+
+    assert.equal(res.status, 401);
+    assert.equal(res.body.code, "code_invalid");
+    assert.equal(createUser.calls.length, 0);
+  });
+
+  it("rejects when pending signup already verified", async () => {
+    getPendingSignupByEmail.setImpl(async () => ({
+      ...defaultPendingSignup,
+      verified_at: new Date().toISOString(),
+    }));
+
+    const res = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: "verified@lccbonline.edu.ph", token: "123456", password: TEST_PASSWORD });
+
+    assert.equal(res.status, 401);
+    assert.equal(res.body.code, "code_invalid");
     assert.equal(createUser.calls.length, 0);
   });
 });

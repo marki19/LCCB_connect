@@ -83,6 +83,11 @@ const isWrite = (req) => ["POST", "PUT", "PATCH", "DELETE"].includes(req.method)
 app.disable("x-powered-by");
 app.use(helmet());
 app.use(cors(corsOptions));
+
+// Capture raw body for Brevo webhook BEFORE express.json() parses it.
+// Brevo signs the raw request body, so we need the bytes for HMAC verification.
+app.use("/api/email/webhook/brevo", express.raw({ type: "application/json" }));
+
 app.use(express.json({ limit: "1mb" })); // bound request body size
 
 // File columns are stored as bucket-relative keys; expand them to public URLs
@@ -114,6 +119,10 @@ app.use("/api/public", publicRouter);
 // Authentication routes (no requireAuth! Must come before authenticated routes)
 const authRouter = require("./routes/authRouter");
 app.use("/api/auth", authRouter);
+
+// Email webhook routes (public, no auth - Brevo webhooks)
+const emailRouter = require("./routes/emailRouter");
+app.use("/api/email", emailRouter);
 
 // Verification routes (requireAuth + loadProfile + requireActiveAccount, NOT requireVerified)
 // An unverified student is exactly who calls these.

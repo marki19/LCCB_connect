@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS public.profile_verification_requests (
   department_id UUID NOT NULL REFERENCES public.departments(id),
   course_id UUID NOT NULL REFERENCES public.courses(id),
   year_level TEXT NOT NULL,
+  birthdate DATE,
   submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   reviewed_by TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
   reviewed_at TIMESTAMPTZ,
