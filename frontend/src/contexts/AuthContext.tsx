@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { apiJson, ApiError } from '../lib/api';
 import { unregisterForPush } from '../lib/push';
 
-export type Profile = {
+type Profile = {
   id: string;
   username: string | null;
   full_name: string | null;
@@ -19,6 +19,8 @@ export type Profile = {
   student_id?: string | null;
   verification_status?: 'unverified' | 'pending' | 'verified' | null;
   verified_at?: string | null;
+  // Identity completeness (BE-2): derived server-side from full_name + student_id + department_id + course_id.
+  identity_complete?: boolean;
   // Catalog assignment (Messaging_plan.md §3). Null until the user completes
   // their profile; the ids are the authorization source of truth.
   department_id?: string | null;
@@ -32,17 +34,17 @@ export type Profile = {
   last_seen_at?: string | null;
   last_seen_visible?: boolean | null;
   // Account sanctions (superadmin console). The API treats an expired
-    // `suspended_until` as active, so the screen must check the date.
-    suspended_at?: string | null;
-    suspended_until?: string | null;
-    suspension_reason?: string | null;
-    suspended_by?: string | null;
-    // Email bounce tracking (migration 021). True when Brevo reports a hard bounce (550).
-    email_bounced?: boolean | null;
-    bounce_reason?: string | null;
-    bounced_at?: string | null;
-    created_at?: string | null;
-  };
+  // `suspended_until` as active, so the screen must check the date.
+  suspended_at?: string | null;
+  suspended_until?: string | null;
+  suspension_reason?: string | null;
+  suspended_by?: string | null;
+  // Email bounce tracking (migration 021). True when Brevo reports a hard bounce (550).
+  email_bounced?: boolean | null;
+  bounce_reason?: string | null;
+  bounced_at?: string | null;
+  created_at?: string | null;
+};
 
 type AuthContextType = { 
   signInAsGuest: () => Promise<void>;

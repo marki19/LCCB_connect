@@ -63,62 +63,74 @@ function RouteGuard() {
   }, [initialized, userId, isGuest, router]);
 
   useEffect(() => {
-    if (!initialized) return;
+      if (!initialized) return;
 
-    const inAuth = segments[0] === "(auth)";
-    const inAdmin = segments[0] === "(admin)";
-    const inModeration = segments[0] === "(moderation)";
-    const inTabs = segments[0] === "(tabs)";
-    const inSuspended = segments[0] === "suspended";
-    const adminUser = isAdminRole(profile?.role);
-    const moderatorUser = isModeratorRole(profile?.role);
-    const suspended = !!profile && isSuspendedProfile(profile);
-    const isAuthenticated = !!session || isGuest;
+      const inAuth = segments[0] === "(auth)";
+      const inAdmin = segments[0] === "(admin)";
+      const inModeration = segments[0] === "(moderation)";
+      const inTabs = segments[0] === "(tabs)";
+      const inSuspended = segments[0] === "suspended";
+      const adminUser = isAdminRole(profile?.role);
+      const moderatorUser = isModeratorRole(profile?.role);
+      const suspended = !!profile && isSuspendedProfile(profile);
+      const isAuthenticated = !!session || isGuest;
 
-    // A fresh sign-in always starts panel-first for desktop admins.
-    if (inAuth) setAdminAppPreview(false);
+      // A fresh sign-in always starts panel-first for desktop admins.
+      if (inAuth) setAdminAppPreview(false);
 
-    if (!isAuthenticated && !inAuth) {
-      // Not logged in - send to login
-      router.replace("/(auth)/login");
-    } else if (isAuthenticated && suspended && !inSuspended) {
-      router.replace("/suspended");
-    } else if (isAuthenticated && !suspended && inSuspended) {
-      router.replace(adminUser && isDesktop ? "/(admin)/" : "/(tabs)/");
-    } else if (isAuthenticated && inAuth) {
-      // Panel-first on desktop for campus admins; everyone else (and admins on
-      // mobile) goes to the normal app.
-      if (adminUser && isDesktop) {
+      if (!isAuthenticated && !inAuth) {
+        // Not logged in - send to login
+        router.replace("/(auth)/login");
+      } else if (isAuthenticated && suspended && !inSuspended) {
+        router.replace("/suspended");
+      } else if (isAuthenticated && !suspended && inSuspended) {
+        router.replace(adminUser && isDesktop ? "/(admin)/" : "/(tabs)/");
+      } else if (isAuthenticated && inAuth) {
+        // Panel-first on desktop for campus admins; everyone else (and admins on
+        // mobile) goes to the normal app.
+        if (adminUser && isDesktop) {
+          router.replace("/(admin)/");
+        } else {
+          router.replace("/(tabs)/");
+        }
+      } else if (
+        isAuthenticated &&
+        profile?.role === "student" &&
+        profile?.verification_status !== "verified" &&
+        !inAuth &&
+        !inAdmin &&
+        !inModeration &&
+        !inSuspended
+      ) {
+        // Unverified student lands on onboarding to complete identity.
+        // Scoped to avoid trapping "Back to App" from pending state.
+        router.replace("/onboarding");
+      } else if (
+        isAuthenticated &&
+        adminUser &&
+        isDesktop &&
+        inTabs &&
+        !isAdminAppPreview()
+      ) {
+        // The profile can arrive one render after the session, so the auth-screen
+        // branch above may already have sent the admin to the feed. Catch that
+        // case unless they explicitly chose "Back to App".
         router.replace("/(admin)/");
-      } else {
+      } else if (isAuthenticated && inAdmin && (!adminUser || !isDesktop)) {
+        // The panel is a desktop console. Never strand a mobile or non-admin
+        // session on a screen it cannot use.
+        router.replace("/(tabs)/");
+      } else if (
+        isAuthenticated &&
+        inModeration &&
+        profile &&
+        (!moderatorUser || !isDesktop)
+      ) {
+        // The moderation console is also desktop-only and limited to
+        // department admins and above.
         router.replace("/(tabs)/");
       }
-    } else if (
-      isAuthenticated &&
-      adminUser &&
-      isDesktop &&
-      inTabs &&
-      !isAdminAppPreview()
-    ) {
-      // The profile can arrive one render after the session, so the auth-screen
-      // branch above may already have sent the admin to the feed. Catch that
-      // case unless they explicitly chose "Back to App".
-      router.replace("/(admin)/");
-    } else if (isAuthenticated && inAdmin && (!adminUser || !isDesktop)) {
-      // The panel is a desktop console. Never strand a mobile or non-admin
-      // session on a screen it cannot use.
-      router.replace("/(tabs)/");
-    } else if (
-      isAuthenticated &&
-      inModeration &&
-      profile &&
-      (!moderatorUser || !isDesktop)
-    ) {
-      // The moderation console is also desktop-only and limited to
-      // department admins and above.
-      router.replace("/(tabs)/");
-    }
-  }, [session, profile, initialized, segments, isGuest, isDesktop, router]);
+    }, [session, profile, initialized, segments, isGuest, isDesktop, router]);
 
   const { isDark, colors } = useTheme();
 

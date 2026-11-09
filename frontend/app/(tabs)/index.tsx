@@ -42,6 +42,7 @@ import {
 import StatusBadge from "../../src/components/admin/StatusBadge";
 import EmptyState from "../../src/components/admin/EmptyState";
 import { Skeleton } from "../../src/components/ui/Skeleton";
+import IdentityBanner from "../../src/components/IdentityBanner";
 
 type FilterValue = "all" | "theses" | "websites" | "projects" | "discussions" | "images";
 
@@ -503,6 +504,7 @@ export default function HomeScreen() {
               maxWidth: isWideWeb ? 860 : 760,
             }}
           >
+            <IdentityBanner />
             <FlatList
               data={posts}
               keyExtractor={(item) => String(item.id)}
