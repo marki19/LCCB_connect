@@ -79,8 +79,8 @@ const createRepostNotification = async (originalAuthorId, reposterId, repostId) 
   }
   
   const result = await db.query(
-    `INSERT INTO notifications (user_id, actor_id, type, target_id, message, department_id)
-     VALUES ($1, $2, 'repost', $3, $4, $5)
+    `INSERT INTO notifications (user_id, actor_id, type, target_id, repost_id, message, department_id)
+     VALUES ($1, $2, 'repost', $3, $3, $4, $5)
      RETURNING *`,
     [
       originalAuthorId,

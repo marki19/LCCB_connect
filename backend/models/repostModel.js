@@ -100,22 +100,9 @@ const createRepost = async (originalPostId, reposterId, caption = null) => {
       [targetOriginalPostId]
     );
     
-    // ---- 8. Create notification for original author (skip if same) ----
-    if (original.author_id !== reposterId) {
-      await client.query(
-        `INSERT INTO notifications (user_id, actor_id, type, target_id, message, department_id)
-         VALUES ($1, $2, 'repost', $3, $4, $5)`,
-        [
-          original.author_id,
-          reposterId,
-          repost.id,
-          `${reposterId} reposted your post`,
-          original.author_department_id
-        ]
-      );
-    }
-    
-    // Return repost with original post data
+    // ---- 8. Return repost with original post data ----
+    // The author notification is fired by the controller, outside this
+    // transaction: a notification failure must not roll back a valid repost.
     return {
       ...repost,
       original_post: {

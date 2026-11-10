@@ -346,7 +346,7 @@ const notificationModel = require("../models/notificationModel");
 const createRepost = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { caption } = req.body;
+    const { caption } = req.body ?? {};
     const reposterId = req.user.id;
 
     const repost = await repostModel.createRepost(id, reposterId, caption);
@@ -354,18 +354,12 @@ const createRepost = async (req, res, next) => {
       return res.status(404).json({ message: "Original post not found or not visible" });
     }
 
-    // Create notification for original author
-    const originalPost = await postModel.visiblePostsFor(reposterId, {
-      postId: id,
-      includeHidden: false,
-    });
-    if (originalPost.posts[0]) {
-      await notificationModel.createRepostNotification(
-        originalPost.posts[0].author_id,
-        reposterId,
-        repost.id
-      );
-    }
+    // Notify the original author (the model skips self-reposts).
+    await notificationModel.createRepostNotification(
+      repost.original_post?.author_id,
+      reposterId,
+      repost.id
+    );
 
     res.status(201).json(repost);
   } catch (error) {

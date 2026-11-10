@@ -15,6 +15,8 @@ const notificationService = require("../services/notificationService");
 const moderationService = require("../services/moderationService");
 const auditService = require("../services/auditService");
 const accountService = require("../services/accountService");
+const repostModel = require("../models/repostModel");
+const notificationModel = require("../models/notificationModel");
 
 // The controllers fire off background notification/moderation work after
 // responding. Stub it so the suite stays hermetic (and quiet).
@@ -103,6 +105,10 @@ const m = {
   createUser: stub(userModel, "createUser"),
   updateUser: stub(userModel, "updateUser"),
   deleteUser: stub(userModel, "deleteUser"),
+  createRepost: stub(repostModel, "createRepost"),
+  undoRepost: stub(repostModel, "undoRepost"),
+  getVisibleRepostsForPost: stub(repostModel, "getVisibleRepostsForPost"),
+  createRepostNotification: stub(notificationModel, "createRepostNotification"),
 };
 
 // Imported only after the stubs are installed.
@@ -821,5 +827,25 @@ describe("thesis list filters", () => {
     assert.equal(res.status, 400);
     assert.deepEqual(res.body, { error: "Invalid uploader_id" });
     assert.equal(m.getAllTheses.calls.length, 0);
+  });
+});
+
+describe("reposts", () => {
+  it("creates exactly one notification, for the original author", async () => {
+    m.createRepost.setImpl(async () => ({
+      id: "r1",
+      original_post: { id: "p1", author_id: "author-1" },
+    }));
+    m.createRepostNotification.setImpl(async () => ({ id: "n1" }));
+
+    const res = await request(app).post("/api/posts/p1/repost").set(AUTH);
+
+    assert.equal(res.status, 201);
+    assert.equal(
+      m.createRepostNotification.calls.length,
+      1,
+      "a repost must produce exactly one notification"
+    );
+    assert.deepEqual(m.createRepostNotification.calls[0], ["author-1", "u1", "r1"]);
   });
 });
