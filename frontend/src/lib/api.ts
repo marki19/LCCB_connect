@@ -431,3 +431,47 @@ export interface UserProfileData {
 export async function getUserProfile(userId: string): Promise<UserProfileData> {
   return apiJson<UserProfileData>(`/users/${userId}/profile`);
 }
+
+// ============================================================================
+// Saved Collections endpoints
+// ============================================================================
+
+export interface SavedCollection {
+  id: string;
+  name: string;
+  is_private: boolean;
+  item_count: number;
+  cover_image?: string | null;
+  created_at: string;
+}
+
+export async function getSavedCollections(): Promise<SavedCollection[]> {
+  const data = await apiJson<SavedCollection[]>("/posts/saved/collections");
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createSavedCollection(name: string, isPrivate = true): Promise<SavedCollection> {
+  return apiJson<SavedCollection>("/posts/saved/collections", {
+    method: "POST",
+    body: JSON.stringify({ name, is_private: isPrivate }),
+  });
+}
+
+export async function addItemToCollection(collectionId: string, postId: string): Promise<any> {
+  return apiJson(`/posts/saved/collections/${collectionId}/items`, {
+    method: "POST",
+    body: JSON.stringify({ postId }),
+  });
+}
+
+export async function removeItemFromCollection(collectionId: string, postId: string): Promise<any> {
+  return apiJson(`/posts/saved/collections/${collectionId}/items/${postId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteSavedCollection(collectionId: string): Promise<any> {
+  return apiJson(`/posts/saved/collections/${collectionId}`, {
+    method: "DELETE",
+  });
+}

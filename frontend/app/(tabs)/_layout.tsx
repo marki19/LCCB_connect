@@ -40,6 +40,8 @@ export default function TabsLayout() {
       >
         <Tabs.Screen name="index" />
         <Tabs.Screen name="search" />
+        <Tabs.Screen name="capstones" options={{ href: null }} />
+        <Tabs.Screen name="discussions" options={{ href: null }} />
         <Tabs.Screen name="notifications" />
         <Tabs.Screen name="profile" />
       </Tabs>

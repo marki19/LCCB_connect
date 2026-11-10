@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const postController = require("../controllers/postController");
 const savedPostController = require("../controllers/savedPostController");
+const savedCollectionController = require("../controllers/savedCollectionController");
 const { loadProfile, requireVerified } = require("../middleware/auth");
 const {
   validate,
@@ -11,8 +12,13 @@ const {
   updateCommentSchema,
 } = require("../validation");
 
-// Saved posts feed (MUST be declared before /:id)
+// Saved posts feed & collections (MUST be declared before /:id)
 router.get("/saved", savedPostController.list);
+router.get("/saved/collections", savedCollectionController.list);
+router.post("/saved/collections", requireVerified, savedCollectionController.create);
+router.post("/saved/collections/:id/items", requireVerified, savedCollectionController.addItem);
+router.delete("/saved/collections/:id/items/:postId", requireVerified, savedCollectionController.removeItem);
+router.delete("/saved/collections/:id", requireVerified, savedCollectionController.remove);
 
 // Routes (global requireAuth is applied when this router is mounted in app.js)
 router.get("/", postController.getPosts);

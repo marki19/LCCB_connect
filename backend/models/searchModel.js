@@ -44,7 +44,7 @@ const searchPeople = async (query, viewerId = null, { limit = DEFAULT_LIMIT, off
       pr.course,
       pr.year_level,
       pr.role,
-      pr.verified_status,
+      pr.verification_status,
       pr.department_id,
       d.name AS department_name,
       GREATEST(
@@ -70,7 +70,7 @@ const searchPeople = async (query, viewerId = null, { limit = DEFAULT_LIMIT, off
     ORDER BY (
       GREATEST(similarity(COALESCE(pr.full_name, ''), $1), similarity(COALESCE(pr.username, ''), $1)) * 3.0 +
       ts_rank_cd(to_tsvector('english', COALESCE(pr.full_name, '') || ' ' || COALESCE(pr.username, '') || ' ' || COALESCE(pr.bio, '') || ' ' || COALESCE(d.name, '')), plainto_tsquery('english', $1)) * 2.0
-    ) DESC, pr.verified_status DESC, pr.created_at DESC
+    ) DESC, pr.verification_status DESC, pr.created_at DESC
     LIMIT $3 OFFSET $4
   `;
 
@@ -102,9 +102,11 @@ const searchPosts = async (query, viewerId = null, { limit = DEFAULT_LIMIT, offs
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
-      p.like_count,
-      p.repost_count,
-      p.comment_count,
+      COALESCE((SELECT COUNT(*)::int FROM likes l WHERE l.post_id = p.id), 0) AS likes,
+      COALESCE((SELECT COUNT(*)::int FROM likes l WHERE l.post_id = p.id), 0) AS like_count,
+      COALESCE((SELECT COUNT(*)::int FROM reposts r WHERE r.original_post_id = p.id), 0) AS repost_count,
+      COALESCE((SELECT COUNT(*)::int FROM comments c WHERE c.post_id = p.id AND c.moderation_status != 'hidden'), 0) AS comments,
+      COALESCE((SELECT COUNT(*)::int FROM comments c WHERE c.post_id = p.id AND c.moderation_status != 'hidden'), 0) AS comment_count,
       p.created_at,
       p.updated_at,
       (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $1)) AS is_liked,
@@ -116,7 +118,7 @@ const searchPosts = async (query, viewerId = null, { limit = DEFAULT_LIMIT, offs
         'avatar_url', pr.avatar_url,
         'department_name', d.name,
         'role', pr.role,
-        'verified_status', pr.verified_status
+        'verification_status', pr.verification_status
       ) AS author,
       similarity(COALESCE(p.title, ''), $2) AS sim_title,
       ts_rank_cd(
@@ -163,7 +165,6 @@ const searchTheses = async (query, viewerId = null, { limit = DEFAULT_LIMIT, off
       t.title,
       t.abstract,
       t.category,
-      t.keywords,
       t.pdf_url,
       t.visibility,
       t.created_at,
