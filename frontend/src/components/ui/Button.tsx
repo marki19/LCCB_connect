@@ -167,6 +167,7 @@ export function IconButton({
   variant = "ghost",
   size = 40,
   badgeCount = 0,
+  style,
 }: {
   icon: any;
   label: string;
@@ -174,6 +175,7 @@ export function IconButton({
   variant?: "ghost" | "secondary" | "subtle";
   size?: number;
   badgeCount?: number;
+  style?: any;
 }) {
   const { colors } = useTheme();
   const [hovered, setHovered] = useState(false);
@@ -201,6 +203,7 @@ export function IconButton({
           justifyContent: "center",
         },
         focusRing(colors, focused),
+        style,
       ]}
     >
       <Icon size={18} color={p.icon} strokeWidth={2.1} />

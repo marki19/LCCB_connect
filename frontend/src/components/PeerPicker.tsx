@@ -5,6 +5,7 @@ import {
   TextInput,
   SectionList,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Search, MessageSquare, UserPlus, Check, X, Lock, Users } from "lucide-react-native";
 import { apiJson, apiFetch } from "../lib/api";

@@ -39,7 +39,7 @@ import {
 } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { focusRing, RADIUS, SPACE, TYPE, type ThemeTokens } from "../../src/lib/tokens";
+import { elevation, focusRing, RADIUS, SPACE, TYPE, type ThemeTokens } from "../../src/lib/tokens";
 import {
   apiFetch,
   deletePost,
@@ -111,7 +111,7 @@ export default function PostDetailScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
 
-  const inputRef = useRef<TextInput | null>(null);
+  const inputRef = useRef<any>(null);
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
