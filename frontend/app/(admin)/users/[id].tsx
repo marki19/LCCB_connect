@@ -342,7 +342,7 @@ export default function AdminUserDossierScreen() {
 
       {loading && !target ? (
         <View style={{ minHeight: 320, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator accessibilityLabel="Loading" size="large" color={colors.primary} />
         </View>
       ) : !target ? (
         <View
@@ -776,7 +776,7 @@ export default function AdminUserDossierScreen() {
                       {entry.actor_username || "system"} · {formatDate(entry.created_at, true)}
                     </Text>
                     {entry.reason ? (
-                      <Text style={{ marginTop: 4, fontSize: 12, fontStyle: "italic", color: colors.textMuted }}>
+                      <Text style={{ marginTop: 4, fontSize: 12, fontStyle: "italic", color: colors.textTertiary }}>
                         {entry.reason}
                       </Text>
                     ) : null}

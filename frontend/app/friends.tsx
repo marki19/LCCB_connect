@@ -3,8 +3,7 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
+  Pressable,
   RefreshControl,
   Alert,
   Platform,
@@ -41,6 +40,11 @@ import {
 } from "../src/lib/messages";
 import type { ConversationPeer, Friend, FriendRequests } from "../src/types";
 import { safeBack } from "../src/lib/navigation";
+import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
+import Button, { IconButton } from "../src/components/ui/Button";
+import Card from "../src/components/ui/Card";
+import Modal from "../src/components/ui/Modal";
+import EmptyState from "../src/components/admin/EmptyState";
 
 export default function FriendsScreen() {
   const router = useRouter();
@@ -109,7 +113,7 @@ export default function FriendsScreen() {
         router.push(`/messages/${conversation.id}`);
       }
     } catch (err) {
-      Alert.alert("Can't message", err instanceof Error ? err.message : "Please try again.");
+      setNotice(err instanceof Error ? err.message : "Please try again.");
     }
   };
 
@@ -480,6 +484,7 @@ export default function FriendsScreen() {
   // ── MOBILE: Responsive Segmented Layout ────────────────────────────────────
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      {/* Header */}
       <View
         style={[
           styles.mobileHeader,
@@ -495,12 +500,13 @@ export default function FriendsScreen() {
           </TouchableOpacity>
           <Text style={[styles.mobileTitle, { color: colors.textPrimary }]}>Friends</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => setPickerOpen(true)}
-          style={[styles.findFriendsBtn, { backgroundColor: colors.actionSurface }]}
-        >
-          <UserPlus size={19} color={colors.action} />
-        </TouchableOpacity>
+        <IconButton
+                  icon={UserPlus}
+                  label="Add a friend"
+                  variant="subtle"
+                  onPress={() => setPickerOpen(true)}
+                  style={[styles.findFriendsBtn, { backgroundColor: colors.actionSurface }]}
+                />
       </View>
 
       {/* Tabs */}

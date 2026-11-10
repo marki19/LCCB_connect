@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   Animated,
   Platform,
   ScrollView,
@@ -15,7 +15,11 @@ import {
   X,
   UserCircle,
   Shield,
+  Lock,
   Palette,
+  BellRing,
+  School,
+  Flag,
   LogOut,
   ChevronRight,
   Users,
@@ -29,50 +33,64 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useSettingsSidebar } from "../contexts/SettingsSidebarContext";
 import { supabase } from "../lib/supabase";
+import { elevation, focusRing, RADIUS, SPACE, TYPE } from "../lib/tokens";
 
 const DESKTOP_SIDEBAR_WIDTH = 360;
 const MOBILE_SIDEBAR_RATIO = 0.82;
 const MOBILE_SIDEBAR_MAX_WIDTH = 380;
 
-interface SettingsSidebarProps {
+type SettingsSidebarProps = {
   visible?: boolean;
   onClose?: () => void;
-}
+};
 
-interface MenuItemProps {
+type MenuItemProps = {
   icon: React.ReactNode;
   label: string;
   danger?: boolean;
   onPress?: () => void;
-}
+};
 
 function MenuItem({ icon, label, danger, onPress }: MenuItemProps) {
   const { colors } = useTheme();
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.65}
+    <Pressable
       onPress={onPress}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        paddingVertical: 13,
-        paddingHorizontal: 18,
-      }}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={[
+        {
+          flexDirection: "row",
+          alignItems: "center",
+          minHeight: 46,
+          paddingVertical: SPACE.x2,
+          paddingHorizontal: SPACE.x4,
+          gap: SPACE.x3,
+          backgroundColor: hovered || focused ? colors.panelInset : "transparent",
+        },
+        focusRing(colors, focused),
+      ]}
     >
       {icon}
       <Text
         style={{
           flex: 1,
-          fontSize: 14,
+          ...TYPE.bodyStrong,
           fontWeight: "500",
-          color: danger ? colors.destructive : colors.textPrimary,
-          marginLeft: 14,
+          color: danger ? colors.destructive : colors.ink,
         }}
       >
         {label}
       </Text>
-      {!danger && <ChevronRight size={16} color={colors.textTertiary} />}
-    </TouchableOpacity>
+      {!danger && <ChevronRight size={16} color={colors.inkFaint} />}
+    </Pressable>
   );
 }
 
@@ -81,13 +99,11 @@ function SectionLabel({ label }: { label: string }) {
   return (
     <Text
       style={{
-        fontSize: 11,
-        fontWeight: "700",
-        color: colors.textTertiary,
-        letterSpacing: 0.8,
-        paddingHorizontal: 18,
-        paddingTop: 20,
-        paddingBottom: 6,
+        ...TYPE.micro,
+        color: colors.inkFaint,
+        paddingHorizontal: SPACE.x4,
+        paddingTop: SPACE.x5,
+        paddingBottom: SPACE.x2,
         textTransform: "uppercase",
       }}
     >
@@ -165,7 +181,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
         zIndex: 1500,
       }}
     >
-      <TouchableWithoutFeedback onPress={onClose}>
+      <TouchableWithoutFeedback onPress={onClose} accessibilityLabel="Close menu">
         <Animated.View
           style={{
             position: "absolute",
@@ -173,7 +189,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(15,23,42,0.45)",
+            backgroundColor: colors.scrim,
             opacity: backdrop,
           }}
         />
@@ -186,58 +202,71 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
           bottom: 0,
           left: 0,
           width: sidebarWidth,
-          backgroundColor: colors.surface,
+          backgroundColor: colors.panel,
           transform: [{ translateX }],
-          shadowColor: "#000",
-          shadowOffset: { width: 4, height: 0 },
-          shadowOpacity: 0.15,
-          shadowRadius: 20,
-          elevation: 25,
+          borderRightWidth: 1,
+          borderRightColor: colors.line,
+          ...elevation("lg", colors),
         }}
       >
-        {/* Header Profile Section */}
+        {/* Brand header */}
         <View
           style={{
-            paddingTop: insets.top + 14,
-            paddingHorizontal: 18,
-            paddingBottom: 20,
-            backgroundColor: isDark ? "hsl(215, 35%, 15%)" : "#1A56DB",
-            borderBottomWidth: isDark ? 1 : 0,
-            borderBottomColor: colors.border,
+            paddingTop: insets.top + SPACE.x3,
+            paddingHorizontal: SPACE.x4,
+            paddingBottom: SPACE.x5,
+            backgroundColor: colors.brandSolid,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.heroLine,
           }}
         >
-          <TouchableOpacity
+          <Pressable
             onPress={onClose}
-            activeOpacity={0.7}
-            style={{ alignSelf: "flex-end", marginBottom: 14 }}
-            accessibilityLabel="Close settings sidebar"
+            accessibilityRole="button"
+            accessibilityLabel="Close menu"
+            style={({ pressed }) => ({
+              alignSelf: "flex-end",
+              width: 36,
+              height: 36,
+              borderRadius: RADIUS.md,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.heroLine,
+              marginBottom: SPACE.x4,
+              opacity: pressed ? 0.75 : 1,
+            })}
           >
-            <X size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <X size={20} color={colors.heroText} />
+          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3 }}>
             <View
               style={{
-                width: 50,
-                height: 50,
-                borderRadius: 25,
-                backgroundColor: colors.actionSurfaceAlt,
+                width: 54,
+                height: 54,
+                borderRadius: 27,
+                backgroundColor: colors.heroLine,
                 alignItems: "center",
                 justifyContent: "center",
-                marginRight: 12,
                 borderWidth: 2,
-                borderColor: "rgba(255,255,255,0.4)",
+                borderColor: colors.heroText,
               }}
             >
-              <Text style={{ fontSize: 17, fontWeight: "800", color: colors.textPrimary }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.heroText }}>
                 {getInitials(displayName)}
               </Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#FFFFFF" }} numberOfLines={1}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                numberOfLines={1}
+                style={{ ...TYPE.title, color: colors.heroText, fontWeight: "700" }}
+              >
                 {displayName}
               </Text>
-              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 2 }} numberOfLines={1}>
-                {profile?.department_name || "LCCB Campus"} · {profile?.year_level || "Student"}
+              <Text
+                numberOfLines={1}
+                style={{ ...TYPE.caption, color: colors.heroTextMuted, marginTop: 2 }}
+              >
+                {profile?.department_name || "No department"} · {profile?.year_level || "—"}
               </Text>
             </View>
           </View>
@@ -245,32 +274,41 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + SPACE.x5 }}
         >
-          {/* Account */}
           <SectionLabel label="Account & Saved" />
           <MenuItem
-            icon={<UserCircle size={20} color={colors.action} />}
-            label="Edit Profile"
+            icon={<UserCircle size={20} color={colors.brand} />}
+            label="Edit profile"
             onPress={() => go("/edit-profile")}
           />
           <MenuItem
-            icon={<Bookmark size={20} color="#8B5CF6" />}
-            label="Saved Posts"
+            icon={<Bookmark size={20} color={colors.brand} />}
+            label="Saved posts"
             onPress={() => go("/saved")}
           />
-
-          {/* Social */}
-          <SectionLabel label="Social & Messaging" />
           <MenuItem
-            icon={<Users size={20} color={colors.action} />}
-            label="Friends & Requests"
+            icon={<Shield size={20} color={colors.brand} />}
+            label="Privacy"
+            onPress={() => go("/settings")}
+          />
+          <MenuItem icon={<Lock size={20} color={colors.brand} />} label="Security" />
+
+          <SectionLabel label="Messages" />
+          <MenuItem
+            icon={<MessageSquare size={20} color={colors.brand} />}
+            label="Messages"
+            onPress={() => go("/messages")}
+          />
+          <MenuItem
+            icon={<Users size={20} color={colors.brand} />}
+            label="Friends & requests"
             onPress={() => go("/friends")}
           />
           <MenuItem
-            icon={<MessageSquare size={20} color={colors.action} />}
-            label="Messages"
-            onPress={() => go("/messages")}
+            icon={<Shield size={20} color={colors.brand} />}
+            label="Messaging & presence"
+            onPress={() => go("/settings")}
           />
 
           {/* App Preferences */}
@@ -280,34 +318,54 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
-              paddingVertical: 10,
-              paddingHorizontal: 18,
+              paddingVertical: SPACE.x2,
+              paddingHorizontal: SPACE.x4,
+              minHeight: 46,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              {isDark ? <Moon size={20} color={colors.action} /> : <Sun size={20} color={colors.action} />}
-              <Text style={{ fontSize: 14, fontWeight: "500", color: colors.textPrimary, marginLeft: 14 }}>
-                Dark Mode
+            <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3 }}>
+              {isDark ? (
+                <Moon size={20} color={colors.brand} />
+              ) : (
+                <Sun size={20} color={colors.brand} />
+              )}
+              <Text style={{ ...TYPE.bodyStrong, fontWeight: "500", color: colors.ink }}>
+                Dark mode
               </Text>
             </View>
             <Switch
               value={isDark}
               onValueChange={() => void toggleTheme()}
-              trackColor={{ false: colors.borderStrong, true: colors.action }}
-              thumbColor="#FFFFFF"
+              accessibilityLabel="Dark mode"
+              trackColor={{ false: colors.borderStrong, true: colors.brand }}
+              thumbColor={colors.textOnBrandSolid}
             />
           </View>
+          <MenuItem
+            icon={<Palette size={20} color={colors.brand} />}
+            label="Appearance"
+            onPress={() => go("/settings")}
+          />
+          <MenuItem icon={<BellRing size={20} color={colors.brand} />} label="Notifications" />
 
-          {/* Divider & Sign out */}
-          <View style={{ height: 1, backgroundColor: colors.border, marginTop: 24, marginHorizontal: 18 }} />
-          {!isGuest && (
-            <MenuItem
-              icon={<LogOut size={20} color={colors.destructive} />}
-              label="Sign Out"
-              danger
-              onPress={handleSignOut}
-            />
-          )}
+          <SectionLabel label="Institution" />
+          <MenuItem icon={<School size={20} color={colors.brand} />} label="About LCCB" />
+          <MenuItem icon={<Flag size={20} color={colors.brand} />} label="Report an issue" />
+
+          <View
+            style={{
+              height: 1,
+              backgroundColor: colors.divider,
+              marginTop: SPACE.x5,
+              marginHorizontal: SPACE.x4,
+            }}
+          />
+          <MenuItem
+            icon={<LogOut size={20} color={colors.destructive} />}
+            label="Sign out"
+            danger
+            onPress={handleSignOut}
+          />
         </ScrollView>
       </Animated.View>
     </View>

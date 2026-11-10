@@ -1,6 +1,7 @@
 import { Tabs, useRouter } from "expo-router";
 import DesktopLayout from "../../src/components/DesktopLayout";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useTheme } from "../../src/contexts/ThemeContext";
 import {
   View,
   Text,
@@ -8,8 +9,12 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Plus, Sun, Moon, Shield } from "lucide-react-native";
+import { elevation, focusRing } from "../../src/lib/tokens";
+import { useState } from "react";
 
 type TabItem = {
   name: string;
@@ -35,7 +40,7 @@ export default function TabsLayout() {
   return (
     <DesktopLayout showRightSidebar={false}>
       <Tabs
-        tabBar={isDesktopWeb ? () => null : (props) => <MobileTabBar {...props} visibleTabs={visibleTabs} />}
+        tabBar={isDesktopWeb ? () => null : (props) => <MobileTabBar {...props} visibleTabs={visibleTabs} isDesktopWeb={isDesktopWeb} />}
         screenOptions={{ headerShown: false, tabBarPosition: "bottom" }}
       >
         <Tabs.Screen name="index" />
@@ -55,9 +60,16 @@ function MobileTabBar({
   descriptors,
   emitter,
   navigateToTab,
+  isDesktopWeb,
 }: any) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { colors, isDark, toggleTheme } = useTheme();
+  const [hovered, setHovered] = useState(false);
+  const [focusVisible, setFocusVisible] = useState(false);
+
+  const adminUser = profile?.role === "admin" || profile?.role === "superadmin";
+  const departmentAdmin = profile?.role === "moderator" || profile?.role === "department_admin";
 
   const navigate = (name: string, focused: boolean) => {
     const route = state.routes.find((r: any) => r.name === name);
@@ -72,14 +84,15 @@ function MobileTabBar({
     }
   };
 
+  // Mobile: thumb-friendly bottom bar
   return (
     <View
       style={[
         styles.mobileBar,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          backgroundColor: "var(--tab-bar-bg)",
-          borderTopColor: "var(--border)",
+          backgroundColor: colors.tabBarBg,
+          borderTopColor: colors.line,
         },
       ]}
     >
@@ -96,10 +109,15 @@ function MobileTabBar({
               accessibilityLabel="Create a post"
               style={({ pressed }) => [styles.mobileTab, { opacity: pressed ? 0.78 : 1 }]}
             >
-              <View style={[{ ...styles.actionBubble, backgroundColor: "var(--brand-solid)" }]}>
-                <Text style={{ color: "var(--text-on-primary)", fontWeight: "700" }}>+</Text>
+              <View
+                style={[
+                  styles.actionBubble,
+                  { backgroundColor: colors.brandSolid, ...elevation("sm", colors) },
+                ]}
+              >
+                <Plus size={22} color={colors.textOnPrimary} strokeWidth={2.6} />
               </View>
-              <Text style={[{ ...styles.mobileLabel, color: "var(--brand)", fontWeight: "700" }]}>
+              <Text style={[{ ...styles.mobileLabel, color: colors.brand, fontWeight: "700" }]}>
                 {label}
               </Text>
             </Pressable>
@@ -113,22 +131,22 @@ function MobileTabBar({
             style={styles.mobileTab}
           >
             {focused && (
-              <View style={[{ ...styles.mobileActiveIndicator, backgroundColor: "var(--brand)" }]} />
+              <View style={[{ ...styles.mobileActiveIndicator, backgroundColor: colors.brand }]} />
             )}
             <View
               style={[
                 styles.iconBubble,
-                { backgroundColor: focused ? "var(--brand-wash)" : "transparent" },
+                { backgroundColor: focused ? colors.brandWash : "transparent" },
               ]}
             >
-              <Text style={{ fontSize: 21, color: focused ? "var(--brand)" : "var(--ink-faint)" }}>
+              <Text style={{ fontSize: 21, color: focused ? colors.brand : colors.inkFaint }}>
                 {label[0]}
               </Text>
             </View>
             <Text
               style={[
                 styles.mobileLabel,
-                { color: focused ? "var(--brand)" : "var(--ink-faint)" },
+                { color: focused ? colors.brand : colors.inkFaint },
                 focused && { fontWeight: "700" },
               ]}
               numberOfLines={1}

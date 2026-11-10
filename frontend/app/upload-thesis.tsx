@@ -1,21 +1,53 @@
-import { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
-import { ArrowLeft, UploadCloud, FileText, CheckCircle2, BookOpen, AlertCircle } from "lucide-react-native";
+import {
+  ArrowLeft,
+  UploadCloud,
+  FileText,
+  CheckCircle2,
+  BookOpen,
+  AlertTriangle,
+} from "lucide-react-native";
 import * as DocumentPicker from "expo-document-picker";
-import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { apiFetch, apiFetchMultipart, updateThesis } from "../src/lib/api";
 import { safeBack } from "../src/lib/navigation";
+import { focusRing, RADIUS, SPACE, TYPE } from "../src/lib/tokens";
 import VisibilityPicker from "../src/components/VisibilityPicker";
 import type { ContentVisibility } from "../src/types";
+import Button, { IconButton } from "../src/components/ui/Button";
+import Card from "../src/components/ui/Card";
+import Modal from "../src/components/ui/Modal";
+import Reveal from "../src/components/ui/Reveal";
+import TextField from "../src/components/ui/TextField";
+import EmptyState from "../src/components/admin/EmptyState";
+
+type Notice = {
+  title: string;
+  message: string;
+  tone?: "success" | "error";
+  after?: () => void;
+};
+
+const CATEGORIES = [
+  { value: "Undergraduate Capstone", label: "Undergraduate", hint: "Capstone" },
+  { value: "Graduate Dissertation", label: "Graduate", hint: "Dissertation" },
+];
 
 export default function UploadThesisScreen() {
   const { profile } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   // Edit mode: set when the uploader opens "Edit" on their own thesis card.
   const { thesisId } = useLocalSearchParams<{ thesisId?: string }>();
@@ -28,6 +60,7 @@ export default function UploadThesisScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(isEditing);
   const [loadError, setLoadError] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const [visibility, setVisibility] = useState<ContentVisibility>("public");
   const [audience, setAudience] = useState<string[]>([]);
@@ -73,23 +106,32 @@ export default function UploadThesisScreen() {
       }
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "Could not select the document.");
+      setNotice({
+        title: "Could not select the document",
+        message: "The file picker ran into a problem. Try selecting the PDF again.",
+        tone: "error",
+      });
     }
   };
 
   const handleUpload = async () => {
     if (!title || !abstract || (!isEditing && !pdfFile)) {
-      Alert.alert(
-        "Missing Fields",
-        isEditing
+      setNotice({
+        title: "Missing fields",
+        message: isEditing
           ? "Please fill out the manuscript title and abstract."
-          : "Please fill out all fields and select a PDF manuscript."
-      );
+          : "Please fill out all fields and select a PDF manuscript.",
+        tone: "error",
+      });
       return;
     }
     if (!profile?.id) return;
     if (visibility === "custom" && audience.length === 0) {
-      Alert.alert("Pick an audience", "Choose at least one friend who can see this.");
+      setNotice({
+        title: "Pick an audience",
+        message: "Choose at least one friend who can see this.",
+        tone: "error",
+      });
       return;
     }
 
@@ -97,7 +139,11 @@ export default function UploadThesisScreen() {
     try {
       if (!profile?.id) return;
       if (visibility === "custom" && audience.length === 0) {
-        Alert.alert("Pick an audience", "Choose at least one friend who can see this.");
+        setNotice({
+          title: "Pick an audience",
+          message: "Choose at least one friend who can see this.",
+          tone: "error",
+        });
         return;
       }
 
@@ -167,173 +213,431 @@ export default function UploadThesisScreen() {
         }
       }
 
-      Alert.alert(
-        "Success",
-        isEditing
-          ? "Changes saved to the repository!"
-          : "Manuscript successfully uploaded to the repository!"
-      );
-      safeBack("/(tabs)/search");
+      setNotice({
+        title: isEditing ? "Changes saved" : "Manuscript deposited",
+        message: isEditing
+          ? "Your changes are now live in the repository."
+          : "Your manuscript has been added to the LCCB Digital Thesis Repository.",
+        tone: "success",
+        after: () => safeBack("/(tabs)/search"),
+      });
     } catch (error: any) {
       console.error("Upload error:", error);
-      Alert.alert("Upload Failed", error.message || "An unknown error occurred.");
+      setNotice({
+        title: "Upload failed",
+        message: error.message || "An unknown error occurred.",
+        tone: "error",
+      });
     } finally {
       setIsUploading(false);
     }
   };
 
+  const closeNotice = () => {
+    const after = notice?.after;
+    setNotice(null);
+    after?.();
+  };
+
   if (isLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator size="large" color={colors.action} />
+      <SafeAreaView
+        style={{
+          flex: 1,
+          backgroundColor: colors.surfacePage,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.brand} />
       </SafeAreaView>
     );
   }
 
   if (loadError) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage, alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <AlertCircle size={44} color={colors.destructive} />
-        <Text style={{ color: colors.textPrimary, fontWeight: "700", fontSize: 18, marginTop: 16, textAlign: "center" }}>{loadError}</Text>
-        <TouchableOpacity onPress={() => safeBack("/(tabs)/search")} style={{ marginTop: 24 }}>
-          <Text style={{ color: colors.action, fontWeight: "600" }}>Go back</Text>
-        </TouchableOpacity>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }} edges={["top"]}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: SPACE.x6 }}>
+          <Card style={{ width: "100%", maxWidth: 440 }}>
+            <EmptyState
+              icon={AlertTriangle}
+              tone="danger"
+              title="Could not open the manuscript"
+              body={loadError}
+              actionLabel="Go back"
+              onAction={() => safeBack("/(tabs)/search")}
+            />
+          </Card>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.surfacePage }}>
-      <LinearGradient colors={[colors.surfacePage, isDark ? "hsl(215, 30%, 14%)" : "#EEF2FF"]} style={{ flex: 1 }}>
-        <SafeAreaView style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-            <TouchableOpacity onPress={() => safeBack("/(tabs)/search")} style={{ padding: 6, marginLeft: -6 }}>
-              <ArrowLeft color={colors.textPrimary} size={24} />
-            </TouchableOpacity>
-            <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 18, letterSpacing: -0.3 }}>{isEditing ? "Edit Manuscript" : "Deposit Manuscript"}</Text>
-            <View style={{ width: 32 }} />
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }} edges={["top"]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: SPACE.x3,
+            paddingHorizontal: SPACE.x4,
+            minHeight: 64,
+            backgroundColor: colors.panel,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.line,
+          }}
+        >
+          <IconButton
+            icon={ArrowLeft}
+            label="Back"
+            onPress={() => safeBack("/(tabs)/search")}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Thesis repository</Text>
+            <Text style={{ ...TYPE.h2, color: colors.ink }} numberOfLines={1}>
+              {isEditing ? "Edit manuscript" : "Deposit manuscript"}
+            </Text>
           </View>
+        </View>
 
-          <ScrollView contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
-            
-            <Animated.View entering={FadeInDown.duration(400).springify()} style={{ marginBottom: 28, alignItems: "center" }}>
-              <View style={{ width: 60, height: 60, backgroundColor: colors.actionSurface, borderRadius: 30, alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-                <BookOpen color={colors.action} size={28} />
+        <ScrollView
+          contentContainerStyle={{ padding: SPACE.x4, paddingBottom: SPACE.x10 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={{ width: "100%", maxWidth: 680, alignSelf: "center" }}>
+            <Reveal>
+              <View style={{ alignItems: "center", marginBottom: SPACE.x6, marginTop: SPACE.x2 }}>
+                <View
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: RADIUS.lg,
+                    backgroundColor: colors.brandWash,
+                    borderWidth: 1,
+                    borderColor: colors.line,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: SPACE.x4,
+                  }}
+                >
+                  <BookOpen size={26} color={colors.brand} />
+                </View>
+                <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>
+                  {isEditing ? "Update your manuscript" : "Contribute to the repository"}
+                </Text>
+                <Text
+                  style={{
+                    ...TYPE.body,
+                    color: colors.inkSoft,
+                    textAlign: "center",
+                    marginTop: SPACE.x2,
+                    maxWidth: 420,
+                  }}
+                >
+                  {isEditing
+                    ? "Apply changes to your deposited capstone or dissertation."
+                    : "Upload your capstone or dissertation to the LCCB Digital Thesis Repository."}
+                </Text>
               </View>
-              <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 22, textAlign: "center" }}>{isEditing ? "Update Your Manuscript" : "Contribute to the Repository"}</Text>
-              <Text style={{ color: colors.textTertiary, textAlign: "center", marginTop: 8, paddingHorizontal: 16, lineHeight: 20, fontSize: 14 }}>{isEditing ? "Apply changes to your deposited capstone or dissertation." : "Upload your capstone or dissertation to the LCCB Digital Thesis Repository."}</Text>
-            </Animated.View>
+            </Reveal>
 
-            <Animated.View entering={FadeInRight.delay(100).duration(400).springify()}>
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>Manuscript Title</Text>
-                <TextInput
-                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, fontWeight: "600", color: colors.textPrimary }}
-                  placeholder="e.g. AI-Powered Farming Assistance..."
-                  placeholderTextColor={colors.textTertiary}
-                  value={title}
-                  onChangeText={setTitle}
-                />
-              </View>
+            <Card style={{ padding: SPACE.x5 }}>
+              <TextField
+                label="Manuscript title"
+                value={title}
+                onChangeText={setTitle}
+                placeholder="e.g. AI-Powered Farming Assistance for Smallholders"
+                maxLength={300}
+              />
 
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>Department / Program</Text>
-                <View style={{ backgroundColor: colors.surfaceSunken, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14 }}>
-                  <Text style={{ fontSize: 16, color: colors.textPrimary }}>
+              <View style={{ marginBottom: SPACE.x4 }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 18,
+                    fontWeight: "600",
+                    color: colors.textSecondary,
+                    marginBottom: SPACE.x2,
+                  }}
+                >
+                  Department / program
+                </Text>
+                <View
+                  style={{
+                    minHeight: 50,
+                    justifyContent: "center",
+                    borderRadius: RADIUS.md,
+                    borderWidth: 1,
+                    borderColor: colors.line,
+                    backgroundColor: colors.surfaceSunken,
+                    paddingHorizontal: SPACE.x3,
+                  }}
+                >
+                  <Text style={{ fontSize: 15, color: colors.ink }} numberOfLines={1}>
                     {profile?.department_name || "No department on file"}
                   </Text>
                 </View>
-                <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 8 }}>
+                <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: SPACE.x2 }}>
                   Your manuscript is filed under your department of record.
                 </Text>
               </View>
 
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>Category</Text>
-                <View style={{ flexDirection: "row", gap: 12 }}>
-                  <TouchableOpacity 
-                    onPress={() => setCategory("Undergraduate Capstone")}
-                    style={{ flex: 1, padding: 14, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: category === "Undergraduate Capstone" ? colors.actionSurface : colors.surface, borderColor: category === "Undergraduate Capstone" ? colors.action : colors.border }}
-                  >
-                    <Text style={{ fontWeight: "700", color: category === "Undergraduate Capstone" ? colors.action : colors.textTertiary }}>Undergraduate</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    onPress={() => setCategory("Graduate Dissertation")}
-                    style={{ flex: 1, padding: 14, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: category === "Graduate Dissertation" ? colors.actionSurface : colors.surface, borderColor: category === "Graduate Dissertation" ? colors.action : colors.border }}
-                  >
-                    <Text style={{ fontWeight: "700", color: category === "Graduate Dissertation" ? colors.action : colors.textTertiary }}>Graduate</Text>
-                  </TouchableOpacity>
+              <View style={{ marginBottom: SPACE.x4 }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 18,
+                    fontWeight: "600",
+                    color: colors.textSecondary,
+                    marginBottom: SPACE.x2,
+                  }}
+                >
+                  Category
+                </Text>
+                <View style={{ flexDirection: "row", gap: SPACE.x3 }}>
+                  {CATEGORIES.map((option) => (
+                    <CategoryOption
+                      key={option.value}
+                      label={option.label}
+                      hint={option.hint}
+                      active={category === option.value}
+                      onPress={() => setCategory(option.value)}
+                    />
+                  ))}
                 </View>
               </View>
 
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>Abstract</Text>
-                <TextInput
-                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: colors.textPrimary, minHeight: 140 }}
-                  placeholder="Provide a brief summary of the research..."
-                  placeholderTextColor={colors.textTertiary}
-                  multiline
-                  textAlignVertical="top"
-                  value={abstract}
-                  onChangeText={setAbstract}
+              <TextField
+                label="Abstract"
+                value={abstract}
+                onChangeText={setAbstract}
+                placeholder="Provide a brief summary of the research…"
+                multiline
+                minHeight={150}
+                maxLength={12000}
+                hint={`${abstract.trim().length.toLocaleString()} characters`}
+                inputStyle={{ lineHeight: 22 }}
+              />
+
+              <View style={{ marginBottom: SPACE.x5 }}>
+                <VisibilityPicker
+                  visibility={visibility}
+                  audience={audience}
+                  onChange={(nextVisibility, nextAudience) => {
+                    setVisibility(nextVisibility);
+                    setAudience(nextAudience);
+                    setVisibilityTouched(true);
+                  }}
                 />
               </View>
 
-              <VisibilityPicker
-                visibility={visibility}
-                audience={audience}
-                onChange={(nextVisibility, nextAudience) => {
-                  setVisibility(nextVisibility);
-                  setAudience(nextAudience);
-                  setVisibilityTouched(true);
-                }}
-              />
-
-              <View style={{ marginBottom: 28 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6, fontSize: 12 }}>PDF Document</Text>
-                <TouchableOpacity 
-                  onPress={pickDocument}
-                  style={{ borderWidth: 2, borderStyle: "dashed", borderRadius: 16, padding: 28, alignItems: "center", justifyContent: "center", backgroundColor: pdfFile ? (isDark ? "hsl(150, 30%, 15%)" : "#ECFDF5") : colors.surface, borderColor: pdfFile ? "#10B981" : colors.border }}
+              <View>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 18,
+                    fontWeight: "600",
+                    color: colors.textSecondary,
+                    marginBottom: SPACE.x2,
+                  }}
                 >
-                  {pdfFile ? (
-                    <>
-                      <CheckCircle2 color="#10B981" size={38} />
-                      <Text style={{ color: isDark ? "#6EE7B7" : "#047857", fontWeight: "700", marginTop: 8, textAlign: "center" }}>{pdfFile.name}</Text>
-                      <Text style={{ color: isDark ? "#34D399" : "#059669", fontWeight: "600", marginTop: 4, fontSize: 12 }}>Tap to change file</Text>
-                    </>
-                  ) : (
-                    <>
-                      <FileText color={colors.textTertiary} size={38} />
-                      <Text style={{ color: colors.textPrimary, fontWeight: "600", marginTop: 8 }}>{isEditing ? "Keep current PDF — tap to replace" : "Upload PDF Manuscript"}</Text>
-                      <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 4 }}>Maximum size: 25MB</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                  PDF document
+                </Text>
+                <PdfDropzone
+                  fileName={pdfFile?.name}
+                  isEditing={isEditing}
+                  onPress={() => void pickDocument()}
+                />
               </View>
-
-            </Animated.View>
-            <View style={{ height: 20 }} />
-          </ScrollView>
-
-          <View style={{ padding: 18, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border }}>
-            <TouchableOpacity 
-              onPress={handleUpload}
-              disabled={isUploading}
-              style={{ width: "100%", paddingVertical: 14, borderRadius: 14, flexDirection: "row", justifyContent: "center", alignItems: "center", backgroundColor: isUploading ? colors.surfaceSunken : colors.action }}
-            >
-              {isUploading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <UploadCloud color="#FFFFFF" size={20} style={{ marginRight: 8 }} />
-                  <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 16 }}>{isEditing ? "Save Changes" : "Deposit to Repository"}</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            </Card>
           </View>
+        </ScrollView>
 
-        </SafeAreaView>
-      </LinearGradient>
-    </KeyboardAvoidingView>
+        {/* Sticky action bar */}
+        <View
+          style={{
+            padding: SPACE.x4,
+            backgroundColor: colors.panel,
+            borderTopWidth: 1,
+            borderTopColor: colors.line,
+          }}
+        >
+          <View style={{ width: "100%", maxWidth: 680, alignSelf: "center" }}>
+            <Button
+              label={isEditing ? "Save changes" : "Deposit to repository"}
+              icon={UploadCloud}
+              size="lg"
+              fullWidth
+              loading={isUploading}
+              disabled={isUploading}
+              onPress={() => void handleUpload()}
+            />
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+
+      <Modal
+        visible={!!notice}
+        onClose={closeNotice}
+        maxWidth={440}
+        accessibilityLabel={notice?.title ?? "Notice"}
+      >
+        <View style={{ padding: SPACE.x6 }}>
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: RADIUS.md,
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: SPACE.x4,
+              backgroundColor:
+                notice?.tone === "error" ? colors.coralWash : colors.jadeWash,
+            }}
+          >
+            {notice?.tone === "error" ? (
+              <AlertTriangle size={22} color={colors.coralText} />
+            ) : (
+              <CheckCircle2 size={22} color={colors.jadeText} />
+            )}
+          </View>
+          <Text style={{ ...TYPE.h2, color: colors.ink }}>{notice?.title}</Text>
+          <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
+            {notice?.message}
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: SPACE.x5 }}>
+            <Button label={notice?.tone === "error" ? "Got it" : "Done"} onPress={closeNotice} />
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+function CategoryOption({
+  label,
+  hint,
+  active,
+  onPress,
+}: {
+  label: string;
+  hint: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      aria-checked={active}
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          flex: 1,
+          minHeight: 60,
+          justifyContent: "center",
+          alignItems: "center",
+          borderRadius: RADIUS.md,
+          borderWidth: 1,
+          borderColor: active ? colors.brand : colors.inputBorder,
+          backgroundColor: active
+            ? colors.brandWash
+            : pressed
+            ? colors.surfaceSunken
+            : colors.inputBg,
+          paddingHorizontal: SPACE.x3,
+        },
+        focusRing(colors, false),
+      ]}
+    >
+      <Text
+        style={{
+          ...TYPE.bodyStrong,
+          fontWeight: "700",
+          color: active ? colors.brand : colors.inkSoft,
+        }}
+      >
+        {label}
+      </Text>
+      <Text style={{ ...TYPE.caption, color: active ? colors.brand : colors.inkFaint }}>
+        {hint}
+      </Text>
+    </Pressable>
+  );
+}
+
+function PdfDropzone({
+  fileName,
+  isEditing,
+  onPress,
+}: {
+  fileName?: string;
+  isEditing: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  const hasFile = !!fileName;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={hasFile ? `Selected PDF: ${fileName}` : "Select a PDF manuscript"}
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          borderRadius: RADIUS.lg,
+          borderWidth: 2,
+          borderStyle: "dashed",
+          borderColor: hasFile ? colors.jade : colors.lineStrong,
+          backgroundColor: hasFile
+            ? colors.jadeWash
+            : pressed
+            ? colors.surfaceSunken
+            : colors.inputBg,
+          paddingVertical: SPACE.x6,
+          paddingHorizontal: SPACE.x4,
+          alignItems: "center",
+          justifyContent: "center",
+          gap: SPACE.x2,
+        },
+        focusRing(colors, false),
+      ]}
+    >
+      {hasFile ? (
+        <>
+          <CheckCircle2 size={34} color={colors.jadeText} />
+          <Text
+            style={{
+              ...TYPE.bodyStrong,
+              fontWeight: "700",
+              color: colors.jadeText,
+              textAlign: "center",
+            }}
+            numberOfLines={2}
+          >
+            {fileName}
+          </Text>
+          <Text style={{ ...TYPE.caption, fontWeight: "600", color: colors.jadeText }}>
+            Tap to change file
+          </Text>
+        </>
+      ) : (
+        <>
+          <FileText size={34} color={colors.inkFaint} />
+          <Text style={{ ...TYPE.bodyStrong, fontWeight: "600", color: colors.ink }}>
+            {isEditing ? "Keep current PDF — tap to replace" : "Upload PDF manuscript"}
+          </Text>
+          <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
+            PDF only · maximum size 25MB
+          </Text>
+        </>
+      )}
+    </Pressable>
   );
 }

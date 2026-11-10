@@ -486,7 +486,7 @@ export default function AdminUsersScreen() {
           }}
         >
           {loadingMore ? (
-            <ActivityIndicator size="small" color={colors.primary} />
+            <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.primary} />
           ) : (
             <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textSecondary }}>Load more</Text>
           )}

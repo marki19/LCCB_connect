@@ -1,25 +1,83 @@
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator, Alert } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Image,
+  Pressable,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 /* router unused - back navigation happens via safeBack() */
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { pickImage, uploadToStorage, MAX_UPLOAD_BYTES } from "../src/lib/upload";
-import { Camera, X, Check } from "lucide-react-native";
+import { ArrowLeft, Camera, X, Check } from "lucide-react-native";
 import { apiFetch } from "../src/lib/api";
 import { safeBack } from "../src/lib/navigation";
+import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
+import Button, { IconButton } from "../src/components/ui/Button";
+import Card from "../src/components/ui/Card";
+import Modal from "../src/components/ui/Modal";
+import TextField from "../src/components/ui/TextField";
+
+function ReadOnlyField({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ marginBottom: SPACE.x4 }}>
+      <Text
+        style={{
+          fontSize: 13,
+          lineHeight: 18,
+          fontWeight: "600",
+          color: colors.textSecondary,
+          marginBottom: SPACE.x2,
+        }}
+      >
+        {label}
+      </Text>
+      <View
+        style={{
+          backgroundColor: colors.surfaceSunken,
+          borderRadius: RADIUS.md,
+          borderWidth: 1,
+          borderColor: colors.line,
+          paddingHorizontal: SPACE.x3,
+          paddingVertical: SPACE.x3,
+        }}
+      >
+        <Text style={{ ...TYPE.body, fontWeight: "600", color: colors.ink }}>{value}</Text>
+        {hint ? (
+          <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: 4 }}>{hint}</Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
 
 export default function EditProfileScreen() {
   const { profile, session } = useAuth();
   const { colors } = useTheme();
-  
+
   const [bio, setBio] = useState(profile?.bio || "");
   const [yearLevel, setYearLevel] = useState(profile?.year_level || "");
   const [skills, setSkills] = useState<string[]>(profile?.skills || []);
   const [newSkill, setNewSkill] = useState("");
-  
+
   const [avatarUri, setAvatarUri] = useState<string | null>(profile?.avatar_url || null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const handlePickImage = async () => {
     const file = await pickImage();
@@ -30,15 +88,21 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!session?.user) return;
-    
+
     setSaving(true);
     try {
       // If the user picked a new image (and it's a local file URI, not a remote http URL)
       let finalAvatarKey: string | null = null;
-      if (avatarUri && !avatarUri.startsWith('http')) {
+      if (avatarUri && !avatarUri.startsWith("http")) {
         setUploadingImage(true);
         const path = `avatars/${session.user.id}-${Date.now()}.jpg`;
-        const uploaded = await uploadToStorage(avatarUri, 'avatars', path, 'image/jpeg', MAX_UPLOAD_BYTES.avatar);
+        const uploaded = await uploadToStorage(
+          avatarUri,
+          "avatars",
+          path,
+          "image/jpeg",
+          MAX_UPLOAD_BYTES.avatar
+        );
         if (uploaded) finalAvatarKey = uploaded.key;
         setUploadingImage(false);
       }
@@ -59,139 +123,256 @@ export default function EditProfileScreen() {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || "Failed to update profile via backend");
       }
-      
+
       // Force context to re-fetch would be ideal, but for now we just dismiss modal
       safeBack("/(tabs)/profile");
     } catch (error: any) {
-      Alert.alert("Error saving profile", error.message);
+      setNotice(error.message || "Something went wrong while saving your profile.");
       setSaving(false);
       setUploadingImage(false);
     }
   };
 
-  return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: colors.surfacePage }}>
-      {/* Header */}
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <TouchableOpacity onPress={() => safeBack("/(tabs)/profile")} style={{ padding: 6 }}>
-          <X color={colors.textSecondary} size={22} />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>Edit Profile</Text>
-        <TouchableOpacity onPress={handleSave} disabled={saving || uploadingImage} style={{ padding: 6 }}>
-          {saving ? <ActivityIndicator size="small" color={colors.action} /> : <Check color={colors.action} size={22} />}
-        </TouchableOpacity>
-      </View>
+  const addSkill = () => {
+    const trimmed = newSkill.trim();
+    if (trimmed && !skills.includes(trimmed)) {
+      setSkills([...skills, trimmed]);
+      setNewSkill("");
+    }
+  };
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
-        
-        {/* Avatar Picker */}
-        <View style={{ alignItems: "center", marginBottom: 28 }}>
-          <TouchableOpacity 
-            onPress={handlePickImage} 
-            style={{ width: 104, height: 104, borderRadius: 52, backgroundColor: colors.surfaceSunken, alignItems: "center", justifyContent: "center", overflow: "hidden", borderWidth: 4, borderColor: colors.surface }}
-          >
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-            ) : (
-              <Camera color={colors.textTertiary} size={32} />
-            )}
-            <View style={{ position: "absolute", bottom: 0, width: "100%", backgroundColor: "rgba(0,0,0,0.45)", paddingVertical: 4, alignItems: "center" }}>
-              <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 }}>Edit</Text>
-            </View>
-          </TouchableOpacity>
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1, backgroundColor: colors.surfacePage }}
+    >
+      <SafeAreaView style={{ flex: 1 }}>
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: SPACE.x3,
+            paddingHorizontal: SPACE.x4,
+            minHeight: 64,
+            backgroundColor: colors.panel,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.line,
+          }}
+        >
+          <IconButton icon={ArrowLeft} label="Back to profile" onPress={() => safeBack("/(tabs)/profile")} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Account</Text>
+            <Text style={{ ...TYPE.h2, color: colors.ink }}>Edit profile</Text>
+          </View>
+          <Button
+            label="Save"
+            size="sm"
+            icon={Check}
+            onPress={() => void handleSave()}
+            loading={saving || uploadingImage}
+            disabled={saving || uploadingImage}
+          />
         </View>
 
-        {/* Form Fields */}
-        <View style={{ gap: 20, marginBottom: 40 }}>
-          <View>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Full Name</Text>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: colors.border }}>
-              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "600" }}>
-                {profile?.full_name || "—"}
-              </Text>
-              <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 4 }}>
-                Full name is set during signup and can only be changed by an administrator.
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 640,
+              alignSelf: "center",
+              padding: SPACE.x4,
+              paddingBottom: SPACE.x10,
+            }}
+          >
+            {/* Avatar picker */}
+            <View style={{ alignItems: "center", marginBottom: SPACE.x6 }}>
+              <Pressable
+                onPress={() => void handlePickImage()}
+                accessibilityRole="button"
+                accessibilityLabel="Change profile photo"
+                onFocus={() => {}}
+                style={({ pressed }) => ({
+                  width: 112,
+                  height: 112,
+                  borderRadius: 56,
+                  backgroundColor: colors.surfaceSunken,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  borderWidth: 4,
+                  borderColor: colors.surface,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                {avatarUri ? (
+                  <Image source={{ uri: avatarUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                ) : (
+                  <Camera color={colors.inkFaint} size={32} />
+                )}
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    width: "100%",
+                    backgroundColor: colors.surfaceOverlay,
+                    paddingVertical: 5,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.textOnBrandSolid,
+                      fontSize: 10,
+                      fontWeight: "700",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.8,
+                    }}
+                  >
+                    Edit
+                  </Text>
+                </View>
+              </Pressable>
+              <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: SPACE.x2 }}>
+                Tap to change your profile photo
               </Text>
             </View>
-          </View>
 
-          <View>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Bio</Text>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: colors.border, minHeight: 100 }}>
-              <TextInput
-                style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "500" }}
+            <Card>
+              <ReadOnlyField
+                label="Full name"
+                value={profile?.full_name || "—"}
+                hint="Set during signup; contact an administrator to change it."
+              />
+
+              <TextField
+                label="Bio"
                 value={bio}
                 onChangeText={setBio}
-                placeholder="Tell us about yourself..."
-                placeholderTextColor={colors.textTertiary}
+                placeholder="Tell us about yourself…"
                 multiline
-                textAlignVertical="top"
+                minHeight={110}
+                autoCapitalize="sentences"
               />
-            </View>
-          </View>
 
-          <View>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Department & Course</Text>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: colors.border }}>
-              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "600" }}>
-                {profile?.department_name || "—"}
-              </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 4 }}>
-                {profile?.course_name || "—"}
-              </Text>
-              <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 8 }}>
-                Department is assigned by administrators. Contact an administrator to update it.
-              </Text>
-            </View>
-          </View>
+              <ReadOnlyField
+                label="Department & course"
+                value={profile?.department_name || "—"}
+                hint={profile?.course_name || "Assigned by administrators."}
+              />
 
-          <View>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Year Level</Text>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: colors.border }}>
-              <TextInput
-                style={{ color: colors.textPrimary, fontSize: 16, fontWeight: "500" }}
+              <TextField
+                label="Year level"
                 value={yearLevel}
                 onChangeText={setYearLevel}
                 placeholder="e.g. 3rd Year"
-                placeholderTextColor={colors.textTertiary}
+                autoCapitalize="words"
               />
-            </View>
-          </View>
 
-          <View>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Skills</Text>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-                {skills.map((skill, index) => (
-                  <View key={index} style={{ backgroundColor: colors.actionSurface, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, flexDirection: "row", alignItems: "center" }}>
-                    <Text style={{ color: colors.action, fontWeight: "600", fontSize: 13 }}>{skill}</Text>
-                    <TouchableOpacity 
-                      onPress={() => setSkills(skills.filter((_, i) => i !== index))}
-                      style={{ marginLeft: 8, backgroundColor: colors.actionSurfaceAlt, borderRadius: 10, padding: 2 }}
+              <View>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 18,
+                    fontWeight: "600",
+                    color: colors.textSecondary,
+                    marginBottom: SPACE.x2,
+                  }}
+                >
+                  Skills
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: colors.inputBg,
+                    borderRadius: RADIUS.md,
+                    borderWidth: 1,
+                    borderColor: colors.inputBorder,
+                    padding: SPACE.x3,
+                  }}
+                >
+                  {skills.length > 0 ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        gap: SPACE.x2,
+                        marginBottom: SPACE.x3,
+                      }}
                     >
-                      <X color={colors.action} size={12} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
+                      {skills.map((skill, index) => (
+                        <View
+                          key={`${skill}-${index}`}
+                          style={{
+                            backgroundColor: colors.brandWash,
+                            paddingHorizontal: SPACE.x3,
+                            paddingVertical: 6,
+                            borderRadius: RADIUS.pill,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: SPACE.x2,
+                          }}
+                        >
+                          <Text style={{ ...TYPE.caption, fontWeight: "600", color: colors.brand }}>
+                            {skill}
+                          </Text>
+                          <Pressable
+                            onPress={() => setSkills(skills.filter((_, i) => i !== index))}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${skill}`}
+                            hitSlop={6}
+                            style={({ pressed }) => ({
+                              borderRadius: 9,
+                              padding: 2,
+                              backgroundColor: colors.panel,
+                              opacity: pressed ? 0.6 : 1,
+                            })}
+                          >
+                            <X color={colors.brand} size={12} />
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  <TextInput
+                    style={{
+                      color: colors.ink,
+                      fontSize: 15,
+                      fontWeight: "500",
+                      paddingVertical: SPACE.x1,
+                      outlineStyle: "none",
+                    } as any}
+                    value={newSkill}
+                    onChangeText={setNewSkill}
+                    placeholder="e.g. React Native (press enter to add)"
+                    placeholderTextColor={colors.textTertiary}
+                    accessibilityLabel="Add a skill"
+                    onSubmitEditing={addSkill}
+                    returnKeyType="done"
+                  />
+                </View>
+                <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: SPACE.x2 }}>
+                  Press enter after each skill to add it.
+                </Text>
               </View>
-              <TextInput
-                style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "500" }}
-                value={newSkill}
-                onChangeText={setNewSkill}
-                placeholder="e.g. React Native (press enter to add)"
-                placeholderTextColor={colors.textTertiary}
-                onSubmitEditing={() => {
-                  if (newSkill.trim() && !skills.includes(newSkill.trim())) {
-                    setSkills([...skills, newSkill.trim()]);
-                    setNewSkill("");
-                  }
-                }}
-              />
-            </View>
+            </Card>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+
+      <Modal
+        visible={!!notice}
+        onClose={() => setNotice(null)}
+        maxWidth={440}
+        accessibilityLabel="Could not save profile"
+      >
+        <View style={{ padding: SPACE.x6 }}>
+          <Text style={{ ...TYPE.h2, color: colors.ink }}>Could not save profile</Text>
+          <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>{notice}</Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: SPACE.x5 }}>
+            <Button label="Got it" onPress={() => setNotice(null)} />
           </View>
         </View>
-
-      </ScrollView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

@@ -1,119 +1,93 @@
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
-import { CapturedError, getCapturedErrors, subscribeToErrors, clearCapturedErrors } from '../lib/errorCapture';
-import { useState, useEffect } from 'react';
+import { View, Text, FlatList, Pressable } from "react-native";
+import { CapturedError, getCapturedErrors, subscribeToErrors, clearCapturedErrors } from "../lib/errorCapture";
+import { useState, useEffect } from "react";
+import { useTheme } from "../contexts/ThemeContext";
+import { RADIUS, SPACE, TYPE, monoFamily } from "../lib/tokens";
 
+/**
+ * Developer-only overlay that lists errors captured by `lib/errorCapture`.
+ * Not mounted in production screens; kept for local debugging.
+ */
 export function ErrorDisplay({ limit = 20 }: { limit?: number }) {
+  const { colors } = useTheme();
   const [errors, setErrors] = useState<CapturedError[]>(() => getCapturedErrors().slice(0, limit));
-  
+
   useEffect(() => {
     const unsub = subscribeToErrors((error) => {
-      setErrors(prev => [error, ...prev].slice(0, limit));
+      setErrors((prev) => [error, ...prev].slice(0, limit));
     });
     return unsub;
   }, [limit]);
-  
+
   const renderError = ({ item }: { item: CapturedError }) => (
-    <View style={styles.errorItem}>
-      <View style={styles.errorHeader}>
-        <Text style={styles.errorType}>{item.errorType.toUpperCase()}</Text>
-        <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleTimeString()}</Text>
+    <View
+      style={{
+        backgroundColor: colors.panel,
+        padding: SPACE.x3,
+        marginHorizontal: SPACE.x2,
+        marginVertical: SPACE.x1,
+        borderRadius: RADIUS.sm,
+        borderLeftWidth: 4,
+        borderLeftColor: colors.coral,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginBottom: SPACE.x1,
+        }}
+      >
+        <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.coralText }}>
+          {item.errorType.toUpperCase()}
+        </Text>
+        <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
+          {new Date(item.timestamp).toLocaleTimeString()}
+        </Text>
       </View>
-      <Text style={styles.route}>Route: {item.route}</Text>
-      <Text style={styles.message}>{item.message}</Text>
-      {item.stack && (
-        <Text style={styles.stack} numberOfLines={3}>
+      <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginBottom: SPACE.x1 }}>
+        Route: {item.route}
+      </Text>
+      <Text style={{ ...TYPE.body, color: colors.ink, marginBottom: SPACE.x1 }}>{item.message}</Text>
+      {item.stack ? (
+        <Text
+          numberOfLines={3}
+          style={{ fontSize: 10, lineHeight: 14, fontFamily: monoFamily, color: colors.inkFaint }}
+        >
           {item.stack}
         </Text>
-      )}
+      ) : null}
     </View>
   );
-  
-  if (errors.length === 0) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>No errors captured</Text>
-        <TouchableOpacity onPress={() => clearCapturedErrors()}>
-          <Text style={styles.clearButton}>Clear All</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-  
+
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Captured Errors ({errors.length})</Text>
-        <TouchableOpacity onPress={clearCapturedErrors}>
-          <Text style={styles.clearButton}>Clear</Text>
-        </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: SPACE.x4,
+          backgroundColor: colors.panel,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.line,
+        }}
+      >
+        <Text style={{ ...TYPE.title, color: colors.ink }}>
+          {errors.length === 0 ? "No errors captured" : `Captured errors (${errors.length})`}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Clear captured errors"
+          onPress={() => clearCapturedErrors()}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, padding: SPACE.x1 })}
+        >
+          <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.coralText }}>
+            {errors.length === 0 ? "Clear all" : "Clear"}
+          </Text>
+        </Pressable>
       </View>
-      <FlatList
-        data={errors}
-        renderItem={renderError}
-        keyExtractor={item => item.id}
-        inverted
-      />
+      <FlatList data={errors} renderItem={renderError} keyExtractor={(item) => item.id} inverted />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'black',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#333',
-  },
-  title: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  clearButton: {
-    color: '#ff6b6b',
-    fontSize: 14,
-  },
-  errorItem: {
-    backgroundColor: '#1a1a1a',
-    padding: 12,
-    marginHorizontal: 8,
-    marginVertical: 4,
-    borderRadius: 6,
-    borderLeftWidth: 4,
-    borderLeftColor: '#ff6b6b',
-  },
-  errorHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  errorType: {
-    color: '#ff6b6b',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  timestamp: {
-    color: '#888',
-    fontSize: 12,
-  },
-  route: {
-    color: '#888',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  message: {
-    color: 'white',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  stack: {
-    color: '#666',
-    fontSize: 10,
-    fontFamily: 'monospace',
-  },
-});

@@ -1,12 +1,14 @@
-import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, Image, Pressable } from "react-native";
 import { useState } from "react";
-import { supabase } from "../../src/lib/supabase";
+import { Pressable, Text, View } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
-import { Eye, EyeOff, AlertCircle, Sun, Moon, Monitor } from "lucide-react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Eye, EyeOff, KeyRound, Lock } from "lucide-react-native";
+import { supabase } from "../../src/lib/supabase";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { focusRing } from "../../src/lib/tokens";
+import AuthScaffold from "../../src/components/auth/AuthScaffold";
+import Alert from "../../src/components/ui/Alert";
+import Button from "../../src/components/ui/Button";
+import TextField from "../../src/components/ui/TextField";
+import { SPACE } from "../../src/lib/tokens";
 
 /**
  * Plan §5 Phase 2.4: fields are code, new password, confirm.
@@ -18,8 +20,7 @@ export default function ResetPasswordScreen() {
   const params = useLocalSearchParams<{ email?: string; notice?: string }>();
   const email = (params.email || "").trim().toLowerCase();
   const notice = params.notice || "";
-  const { colors, isDark, preference, cycleTheme } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -27,14 +28,6 @@ export default function ResetPasswordScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [focusedField, setFocusedField] = useState<"code" | "password" | "confirm" | null>(null);
-  const [hoveredControl, setHoveredControl] = useState<string | null>(null);
-  const [focusedControl, setFocusedControl] = useState<string | null>(null);
-
-  const themeLabel = preference === "system" ? "System" : preference === "light" ? "Light" : "Dark";
-  const nextTheme = preference === "light" ? "dark" : preference === "dark" ? "system" : "light";
-  const nextThemeLabel = nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1);
-  const ThemeIcon = preference === "system" ? Monitor : preference === "light" ? Sun : Moon;
 
   async function submit() {
     let hasError = false;
@@ -73,7 +66,6 @@ export default function ResetPasswordScreen() {
         return;
       }
 
-      // Drop the recovery session; the student signs in with the new password.
       await supabase.auth.signOut();
       router.replace({
         pathname: "/(auth)/login",
@@ -92,293 +84,100 @@ export default function ResetPasswordScreen() {
     if (digits.length > 0) setError("");
   };
 
-  return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-      <LinearGradient
-        colors={isDark ? ["#0B1220", "#0E182A", "#080E18"] : ["#F0F5FF", "#E8EFFF", "#F8FAFF"]}
-        style={{ flex: 1 }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Theme: ${themeLabel}. Switch to ${nextThemeLabel}.`}
-          accessibilityHint="Cycles between system, light, and dark themes"
-          onPress={() => void cycleTheme()}
-          onFocus={() => setFocusedControl("theme")}
-          onBlur={() => setFocusedControl(null)}
-          onHoverIn={() => setHoveredControl("theme")}
-          onHoverOut={() => setHoveredControl(null)}
-          style={({ pressed }) => [
-            {
-              position: "absolute",
-              top: insets.top + 16,
-              right: insets.right + 16,
-              zIndex: 10,
-              minWidth: 44,
-              minHeight: 44,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              paddingHorizontal: 14,
-              borderRadius: 22,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: hoveredControl === "theme" ? colors.surfaceSunken : colors.surface,
-              shadowColor: colors.shadow,
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: isDark ? 0.35 : 0.08,
-              shadowRadius: 6,
-              elevation: 3,
-              opacity: pressed ? 0.75 : 1,
-            },
-            focusRing(colors, focusedControl === "theme"),
-          ]}
-        >
-          <ThemeIcon size={16} color={colors.primary} />
-          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary, marginLeft: 6 }}>
-            {themeLabel}
-          </Text>
+  const eyeToggle = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+      onPress={() => setShowPassword((v) => !v)}
+      hitSlop={8}
+      style={({ pressed }) => ({ padding: SPACE.x1, opacity: pressed ? 0.6 : 1 })}
+    >
+      {showPassword ? (
+        <EyeOff size={18} color={colors.textTertiary} strokeWidth={2.1} />
+      ) : (
+        <Eye size={18} color={colors.textTertiary} strokeWidth={2.1} />
+      )}
+    </Pressable>
+  );
+
+  const footer = (
+    <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+      <Text style={{ color: colors.textTertiary, fontWeight: "500", fontSize: 13 }}>
+        {"Remembered it? "}
+      </Text>
+      <Link href="/(auth)/login" asChild>
+        <Pressable accessibilityRole="link" accessibilityLabel="Back to sign in">
+          {({ pressed }) => (
+            <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 13, opacity: pressed ? 0.7 : 1 }}>
+              Sign in
+            </Text>
+          )}
         </Pressable>
+      </Link>
+    </View>
+  );
 
-        <ScrollView
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingTop: insets.top + 76,
-            paddingBottom: insets.bottom + 24,
-          }}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={{ width: "100%", maxWidth: 470, padding: 24 }}>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 28, padding: 32, borderWidth: 1, borderColor: colors.border, shadowColor: colors.shadow, shadowOffset: { width: 0, height: 12 }, shadowOpacity: isDark ? 0.45 : 0.08, shadowRadius: 24, elevation: 8 }}>
-              <View style={{ alignItems: "center", marginBottom: 28 }}>
-                <View
-                  style={{
-                    width: 76,
-                    height: 76,
-                    backgroundColor: isDark ? "rgba(76, 132, 255, 0.12)" : "#EBF1FF",
-                    borderRadius: 38,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: 1.5,
-                    borderColor: isDark ? "rgba(76, 132, 255, 0.3)" : "#DBEAFE",
-                    marginBottom: 12,
-                    padding: 6,
-                  }}
-                >
-                  <Image
-                    source={require("../../assets/images/logo-seal.png")}
-                    style={{ width: 56, height: 56 }}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: "800", textAlign: "center", letterSpacing: -0.5 }}>
-                  New password
-                </Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 13, marginTop: 4, textAlign: "center" }}>
-                  {notice}
-                </Text>
-              </View>
+  return (
+    <AuthScaffold
+      title="Set a new password"
+      subtitle={notice || "Enter the code we emailed you and choose a new password."}
+      footer={footer}
+      backHref="/(auth)/login"
+      backLabel="Back to sign in"
+    >
+      {error ? <Alert tone="error" message={error} /> : null}
 
-              {error ? (
-                <View style={{ backgroundColor: colors.destructiveSurface, borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: colors.destructiveSurfaceAlt }}>
-                  <AlertCircle color={colors.destructive} size={18} />
-                  <Text style={{ color: colors.destructiveText, fontWeight: "600", fontSize: 13, marginLeft: 10, flex: 1 }}>{error}</Text>
-                </View>
-              ) : null}
+      <TextField
+        label="Verification code"
+        value={code}
+        onChangeText={handleCodeChange}
+        placeholder="000000"
+        keyboardType="number-pad"
+        maxLength={6}
+        autoFocus
+        leadingIcon={({ size, color }) => <KeyRound size={size} color={color} strokeWidth={2.1} />}
+        inputStyle={{ letterSpacing: 8, textAlign: "center", fontWeight: "700", fontSize: 18 }}
+      />
 
-              {/* Code Input */}
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>Code</Text>
-                <View
-                  style={{
-                    backgroundColor: colors.surfaceSunken,
-                    borderRadius: 14,
-                    paddingHorizontal: 16,
-                    height: 52,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    borderWidth: 1.5,
-                    borderColor: focusedField === "code" ? colors.primary : colors.border,
-                  }}
-                >
-                  <TextInput
-                    style={{ flex: 1, color: colors.textPrimary, fontSize: 18, fontWeight: "700", letterSpacing: 6, outlineStyle: "none" } as any}
-                    placeholder="000000"
-                    placeholderTextColor={colors.textTertiary}
-                    value={code}
-                    onChangeText={handleCodeChange}
-                    onFocus={() => setFocusedField("code")}
-                    onBlur={() => setFocusedField(null)}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    autoFocus
-                  />
-                </View>
-              </View>
+      <TextField
+        label="New password"
+        value={password}
+        onChangeText={(v) => {
+          setPassword(v);
+          if (v) setError("");
+        }}
+        placeholder="At least 8 characters"
+        secureTextEntry={!showPassword}
+        autoComplete="new-password"
+        leadingIcon={({ size, color }) => <Lock size={size} color={color} strokeWidth={2.1} />}
+        hint="Use at least 8 characters"
+        right={eyeToggle}
+      />
 
-              {/* New Password Input */}
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>New Password</Text>
-                <View
-                  style={{
-                    backgroundColor: colors.surfaceSunken,
-                    borderRadius: 14,
-                    paddingHorizontal: 16,
-                    height: 52,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    borderWidth: 1.5,
-                    borderColor: focusedField === "password" ? colors.primary : colors.border,
-                  }}
-                >
-                  <TextInput
-                    style={{ flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: "500", outlineStyle: "none" } as any}
-                    placeholder="At least 8 characters"
-                    placeholderTextColor={colors.textTertiary}
-                    value={password}
-                    onChangeText={(v) => {
-                      setPassword(v);
-                      if (v) setError("");
-                    }}
-                    onFocus={() => setFocusedField("password")}
-                    onBlur={() => setFocusedField(null)}
-                    secureTextEntry={!showPassword}
-                  />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-                    onPress={() => setShowPassword(!showPassword)}
-                    onHoverIn={() => setHoveredControl("password")}
-                    onHoverOut={() => setHoveredControl(null)}
-                    onFocus={() => setFocusedControl("password")}
-                    onBlur={() => setFocusedControl(null)}
-                    style={({ pressed }) => [
-                      {
-                        width: 44,
-                        height: 44,
-                        marginRight: -9,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderRadius: 22,
-                        backgroundColor: hoveredControl === "password" ? colors.hoverOverlay : "transparent",
-                        opacity: pressed ? 0.6 : 1,
-                      },
-                      focusRing(colors, focusedControl === "password"),
-                    ]}
-                  >
-                    {showPassword
-                      ? <EyeOff color={hoveredControl === "password" ? colors.primary : colors.textTertiary} size={18} />
-                      : <Eye color={hoveredControl === "password" ? colors.primary : colors.textTertiary} size={18} />}
-                  </Pressable>
-                </View>
-              </View>
+      <TextField
+        label="Confirm new password"
+        value={confirm}
+        onChangeText={(v) => {
+          setConfirm(v);
+          if (v) setError("");
+        }}
+        placeholder="Re-enter your new password"
+        secureTextEntry={!showPassword}
+        autoComplete="new-password"
+        returnKeyType="done"
+        onSubmitEditing={() => void submit()}
+        leadingIcon={({ size, color }) => <Lock size={size} color={color} strokeWidth={2.1} />}
+        right={eyeToggle}
+      />
 
-              {/* Confirm Password Input */}
-              <View style={{ marginBottom: 28 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, marginLeft: 4 }}>Confirm Password</Text>
-                <View
-                  style={{
-                    backgroundColor: colors.surfaceSunken,
-                    borderRadius: 14,
-                    paddingHorizontal: 16,
-                    height: 52,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    borderWidth: 1.5,
-                    borderColor: focusedField === "confirm" ? colors.primary : colors.border,
-                  }}
-                >
-                  <TextInput
-                    style={{ flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: "500", outlineStyle: "none" } as any}
-                    placeholder="••••••••••••"
-                    placeholderTextColor={colors.textTertiary}
-                    value={confirm}
-                    onChangeText={(v) => {
-                      setConfirm(v);
-                      if (v) setError("");
-                    }}
-                    onFocus={() => setFocusedField("confirm")}
-                    onBlur={() => setFocusedField(null)}
-                    secureTextEntry={!showPassword}
-                    returnKeyType="done"
-                    onSubmitEditing={() => void submit()}
-                  />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-                    onPress={() => setShowPassword(!showPassword)}
-                    onHoverIn={() => setHoveredControl("password")}
-                    onHoverOut={() => setHoveredControl(null)}
-                    onFocus={() => setFocusedControl("password")}
-                    onBlur={() => setFocusedControl(null)}
-                    style={({ pressed }) => [
-                      {
-                        width: 44,
-                        height: 44,
-                        marginRight: -9,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderRadius: 22,
-                        backgroundColor: hoveredControl === "password" ? colors.hoverOverlay : "transparent",
-                        opacity: pressed ? 0.6 : 1,
-                      },
-                      focusRing(colors, focusedControl === "password"),
-                    ]}
-                  >
-                    {showPassword
-                      ? <EyeOff color={hoveredControl === "password" ? colors.primary : colors.textTertiary} size={18} />
-                      : <Eye color={hoveredControl === "password" ? colors.primary : colors.textTertiary} size={18} />}
-                  </Pressable>
-                </View>
-              </View>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={loading ? "Updating password" : "Update password"}
-                accessibilityState={{ disabled: loading, busy: loading }}
-                style={({ pressed }) => [
-                  {
-                    backgroundColor: loading ? colors.surfaceSunken : colors.primary,
-                    height: 52,
-                    borderRadius: 14,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    opacity: pressed && !loading ? 0.88 : 1,
-                  },
-                  focusRing(colors, focusedControl === "submit"),
-                ]}
-                onPress={() => void submit()}
-                onFocus={() => setFocusedControl("submit")}
-                onBlur={() => setFocusedControl(null)}
-                onHoverIn={() => setHoveredControl("submit")}
-                onHoverOut={() => setHoveredControl(null)}
-                disabled={loading}
-              >
-                <Text style={{ color: loading ? colors.textSecondary : colors.textOnPrimary, fontWeight: "700", fontSize: 15 }}>
-                  {loading ? "Updating..." : "Update password"}
-                </Text>
-              </Pressable>
-
-              <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 22 }}>
-                <Link href="/(auth)/login" asChild>
-                  <Pressable
-                    accessibilityRole="link"
-                    accessibilityLabel="Back to sign in"
-                    style={({ pressed }) => [{ borderRadius: 4, opacity: pressed ? 0.7 : 1 }]}
-                    onFocus={() => setFocusedControl("login")}
-                    onBlur={() => setFocusedControl(null)}
-                  >
-                    <Text style={{ color: colors.textTertiary, fontWeight: "600", fontSize: 13 }}>
-                      Back to sign in
-                    </Text>
-                  </Pressable>
-                </Link>
-              </View>
-            </View>
-          </View>
-        </ScrollView>
-      </LinearGradient>
-    </KeyboardAvoidingView>
+      <Button
+        label={loading ? "Updating..." : "Update password"}
+        onPress={() => void submit()}
+        loading={loading}
+        disabled={loading}
+        fullWidth
+        size="lg"
+      />
+    </AuthScaffold>
   );
 }

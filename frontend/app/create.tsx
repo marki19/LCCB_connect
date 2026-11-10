@@ -42,6 +42,13 @@ import { safeBack } from "../src/lib/navigation";
 import VisibilityPicker from "../src/components/VisibilityPicker";
 import Avatar from "../src/components/Avatar";
 import type { ContentVisibility } from "../src/types";
+import { focusRing, RADIUS, SPACE, TYPE } from "../src/lib/tokens";
+import { badgeTone, type BadgeTone } from "../src/components/admin/StatusBadge";
+import Button, { IconButton } from "../src/components/ui/Button";
+import Card from "../src/components/ui/Card";
+import Reveal from "../src/components/ui/Reveal";
+import Modal from "../src/components/ui/Modal";
+import TextField from "../src/components/ui/TextField";
 
 type PostType = "text" | "image" | "project" | "capstone" | "website";
 
@@ -91,9 +98,11 @@ export default function CreatePostModal() {
   const [allowReposts, setAllowReposts] = useState(true);
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [urlFocused, setUrlFocused] = useState(false);
 
   const [previewData, setPreviewData] = useState<LinkPreviewData | null>(null);
   const [fetchingPreview, setFetchingPreview] = useState(false);
+  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
 
   // Close modal on Escape key (web desktop)
   useEffect(() => {
@@ -266,7 +275,10 @@ export default function CreatePostModal() {
 
       safeBack("/(tabs)");
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to publish post");
+      setNotice({
+        title: "Could not publish",
+        message: err.message || "Failed to publish post",
+      });
     } finally {
       setIsPublishing(false);
     }
@@ -993,6 +1005,23 @@ export default function CreatePostModal() {
 
         {renderComposerContent()}
       </SafeAreaView>
+
+      <Modal
+        visible={!!notice}
+        onClose={() => setNotice(null)}
+        maxWidth={440}
+        accessibilityLabel={notice?.title ?? "Notice"}
+      >
+        <View style={{ padding: SPACE.x6 }}>
+          <Text style={{ ...TYPE.h2, color: colors.ink }}>{notice?.title}</Text>
+          <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
+            {notice?.message}
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: SPACE.x5 }}>
+            <Button label="Got it" onPress={() => setNotice(null)} />
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

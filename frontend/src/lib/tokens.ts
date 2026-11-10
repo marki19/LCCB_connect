@@ -34,11 +34,12 @@ export const LIGHT_TOKENS = {
   // Text
   textPrimary: "#0B1B33",         // headings, body (ink)
   textSecondary: "#44516A",       // secondary info
-  textTertiary: "#6A7789",        // labels, captions, timestamps
+  textTertiary: "#5A6577",        // labels, captions, timestamps
   textDisabled: "#9AA3B2",        // disabled controls
   textMuted: "#8A94A4",           // placeholder-style text
   textOnPrimary: "#FFFFFF",       // text on primary-colored backgrounds
   textOnDanger: "#FFFFFF",        // text on destructive backgrounds
+  textOnBrandSolid: "#FFFFFF",    // text on the deep brandSolid blue (active chips, CTA pills)
 
   // Brand primary (institutional cobalt)
   primary: "#0E3C9C",             // primary buttons, active nav, links
@@ -161,7 +162,7 @@ export const LIGHT_TOKENS = {
   lineStrong: "#C9BFAD",
   ink: "#0B1B33",
   inkSoft: "#44516A",
-  inkFaint: "#6A7789",
+  inkFaint: "#5A6577",
   inkOnDark: "#F6F2E8",
 
   // ── Editorial layer: cobalt ──────────────────────────────────────────────
@@ -199,6 +200,9 @@ export const LIGHT_TOKENS = {
   navActiveBg: "rgba(76, 123, 255, 0.20)",
   navHoverBg: "rgba(255, 255, 255, 0.06)",
   navAccent: "#F2B21B",
+  // Destructive text that sits on an always-dark surface (console sidebars).
+  // The regular `destructiveText` is a deep red that only works on light cards.
+  dangerOnDark: "#FF9F94",
 
   // ── Hero / pulse ────────────────────────────────────────────────────────
   heroFrom: "#0B2F78",
@@ -240,8 +244,13 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
   textTertiary: "#8595AD",
   textDisabled: "#4A5B75",
   textMuted: "#62748F",
-  textOnPrimary: "#FFFFFF",
-  textOnDanger: "#FFFFFF",
+  // The dark palette's `primary` and `destructive` are intentionally bright so
+  // they read as accents on a dark canvas. Bright fills need dark content, not
+  // white: #FFFFFF on #6E9BFF is only 2.69:1. `textOnBrandSolid` stays white
+  // because `brandSolid` is the deep blue used for active chips and CTA pills.
+  textOnPrimary: "#0B1B33",
+  textOnDanger: "#2A0E0A",
+  textOnBrandSolid: "#FFFFFF",
 
   // Brand primary (lighter cobalt for dark backgrounds)
   primary: "#6E9BFF",
@@ -402,6 +411,7 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
   navActiveBg: "rgba(110, 155, 255, 0.16)",
   navHoverBg: "rgba(255, 255, 255, 0.05)",
   navAccent: "#F2B21B",
+  dangerOnDark: "#FF9F94",
 
   // ── Hero / pulse ────────────────────────────────────────────────────────
   heroFrom: "#0A255C",

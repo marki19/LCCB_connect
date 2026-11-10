@@ -1,13 +1,10 @@
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Modal,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Text, View } from "react-native";
 import { useTheme } from "../../contexts/ThemeContext";
+import Button from "../ui/Button";
+import Modal from "../ui/Modal";
+import TextField from "../ui/TextField";
+import { SPACE } from "../../lib/tokens";
 
 type ActionDialogProps = {
   visible: boolean;
@@ -56,217 +53,75 @@ export default function ActionDialog({
   const canSubmit = reasonOk && phraseOk && !busy;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: colors.surfaceOverlay,
-          padding: 24,
-        }}
-      >
-        <View
-          style={{
-            width: "100%",
-            maxWidth: 520,
-            borderRadius: 16,
-            backgroundColor: colors.surfaceElevated,
-            padding: 24,
-            borderWidth: 1,
-            borderColor: colors.border,
-            shadowColor: colors.shadowStrong,
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.15,
-            shadowRadius: 24,
-            elevation: 10,
-          }}
-        >
-          <Text style={{ fontSize: 20, fontWeight: "800", color: colors.textPrimary }}>
-            {title}
+    <Modal visible={visible} onClose={onCancel} maxWidth={520} accessibilityLabel={title}>
+      <View style={{ padding: SPACE.x6 }}>
+        <Text style={{ fontSize: 20, fontWeight: "700", letterSpacing: -0.3, color: colors.textPrimary }}>
+          {title}
+        </Text>
+        {description ? (
+          <Text style={{ marginTop: SPACE.x2, fontSize: 14, lineHeight: 21, color: colors.textSecondary }}>
+            {description}
           </Text>
-          {description ? (
-            <Text
-              style={{
-                marginTop: 8,
-                fontSize: 14,
-                lineHeight: 20,
-                color: colors.textSecondary,
-              }}
-            >
-              {description}
-            </Text>
-          ) : null}
+        ) : null}
 
+        <View style={{ marginTop: SPACE.x5 }}>
           {showUntil ? (
-            <View style={{ marginTop: 20 }}>
-              <Text
-                style={{
-                  marginBottom: 6,
-                  fontSize: 11,
-                  fontWeight: "700",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.8,
-                  color: colors.textTertiary,
-                }}
-              >
-                Suspended until (optional)
-              </Text>
-              <TextInput
-                value={until}
-                onChangeText={setUntil}
-                placeholder="YYYY-MM-DD — blank means indefinite"
-                placeholderTextColor={colors.textMuted}
-                style={{
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: colors.inputBorder,
-                  backgroundColor: colors.inputBg,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  fontSize: 14,
-                  color: colors.textPrimary,
-                }}
-              />
-            </View>
+            <TextField
+              label="Suspended until (optional)"
+              value={until}
+              onChangeText={setUntil}
+              placeholder="YYYY-MM-DD — blank means indefinite"
+              hint="Leave blank to suspend indefinitely."
+            />
           ) : null}
 
           {showReason ? (
-            <View style={{ marginTop: 20 }}>
-              <Text
-                style={{
-                  marginBottom: 6,
-                  fontSize: 11,
-                  fontWeight: "700",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.8,
-                  color: colors.textTertiary,
-                }}
-              >
-                Reason
-              </Text>
-              <TextInput
-                value={reason}
-                onChangeText={setReason}
-                multiline
-                numberOfLines={3}
-                maxLength={500}
-                placeholder="Explain the decision. This is written to the audit log."
-                placeholderTextColor={colors.textMuted}
-                textAlignVertical="top"
-                style={{
-                  minHeight: 84,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: colors.inputBorder,
-                  backgroundColor: colors.inputBg,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  fontSize: 14,
-                  color: colors.textPrimary,
-                }}
-              />
-              <Text style={{ marginTop: 4, fontSize: 12, color: colors.textTertiary }}>
-                {reason.trim().length}/500 · at least 3 characters
-              </Text>
-            </View>
+            <TextField
+              label="Reason"
+              value={reason}
+              onChangeText={setReason}
+              placeholder="Explain the decision. This is written to the audit log."
+              multiline
+              maxLength={500}
+              minHeight={96}
+              hint={`${reason.trim().length}/500 · at least 3 characters`}
+            />
           ) : null}
 
           {confirmationPhrase ? (
-            <View style={{ marginTop: 16 }}>
-              <Text
-                style={{
-                  marginBottom: 6,
-                  fontSize: 11,
-                  fontWeight: "700",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.8,
-                  color: colors.textTertiary,
-                }}
-              >
-                Type{" "}
-                <Text style={{ color: colors.primary, fontWeight: "800" }}>
-                  {confirmationPhrase}
-                </Text>{" "}
-                to confirm
-              </Text>
-              <TextInput
-                value={confirmation}
-                onChangeText={setConfirmation}
-                autoCapitalize="none"
-                placeholderTextColor={colors.textMuted}
-                style={{
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: colors.inputBorder,
-                  backgroundColor: colors.inputBg,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  fontSize: 14,
-                  color: colors.textPrimary,
-                }}
-              />
-            </View>
+            <TextField
+              label={`Type "${confirmationPhrase}" to confirm`}
+              value={confirmation}
+              onChangeText={setConfirmation}
+              placeholder={confirmationPhrase}
+            />
           ) : null}
+        </View>
 
-          <View style={{ marginTop: 24, flexDirection: "row", justifyContent: "flex-end", gap: 12 }}>
-            <TouchableOpacity
-              onPress={onCancel}
-              disabled={busy}
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.borderStrong,
-                paddingHorizontal: 16,
-                paddingVertical: 10,
-                opacity: busy ? 0.5 : 1,
-              }}
-            >
-              <Text style={{ fontWeight: "700", fontSize: 14, color: colors.textSecondary }}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() =>
-                onConfirm({
-                  reason: reason.trim(),
-                  until: until.trim(),
-                  confirmation: confirmation.trim(),
-                })
-              }
-              disabled={!canSubmit}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                borderRadius: 12,
-                paddingHorizontal: 18,
-                paddingVertical: 10,
-                backgroundColor: destructive ? colors.destructive : colors.primary,
-                opacity: !canSubmit ? 0.45 : 1,
-              }}
-            >
-              {busy ? (
-                <ActivityIndicator
-                  size="small"
-                  color={destructive ? colors.textOnDanger : colors.textOnPrimary}
-                  style={{ marginRight: 8 }}
-                />
-              ) : null}
-              <Text
-                style={{
-                  fontWeight: "700",
-                  fontSize: 14,
-                  color: destructive ? colors.textOnDanger : colors.textOnPrimary,
-                }}
-              >
-                {confirmLabel}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <View
+          style={{
+            marginTop: SPACE.x2,
+            flexDirection: "row",
+            justifyContent: "flex-end",
+            gap: SPACE.x3,
+          }}
+        >
+          <Button label="Cancel" variant="secondary" onPress={onCancel} disabled={busy} />
+          <Button
+            label={confirmLabel}
+            variant={destructive ? "danger" : "primary"}
+            onPress={() =>
+              onConfirm({
+                reason: reason.trim(),
+                until: until.trim(),
+                confirmation: confirmation.trim(),
+              })
+            }
+            loading={busy}
+            disabled={!canSubmit}
+          />
         </View>
       </View>
     </Modal>
   );
 }
-
-

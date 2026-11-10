@@ -98,7 +98,7 @@ export default function VisibilityPicker({ visibility, audience, onChange }: Pro
         <View style={{ marginTop: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface, overflow: "hidden" }}>
           {loading ? (
             <View style={{ paddingVertical: 24, alignItems: "center" }}>
-              <ActivityIndicator size="small" color={colors.action} />
+              <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.action} />
             </View>
           ) : (friends?.length ?? 0) === 0 ? (
             <Text style={{ padding: 16, color: colors.textTertiary, fontSize: 13 }}>
@@ -133,7 +133,7 @@ export default function VisibilityPicker({ visibility, audience, onChange }: Pro
                       marginRight: 10,
                     }}
                   >
-                    {selected && <Check size={13} color="#FFFFFF" />}
+                    {selected && <Check size={13} color={colors.textOnPrimary} />}
                   </View>
                   <Text numberOfLines={1} style={{ flex: 1, color: colors.textPrimary, fontSize: 14, fontWeight: "600" }}>
                     {peer.full_name || peer.username || "Friend"}

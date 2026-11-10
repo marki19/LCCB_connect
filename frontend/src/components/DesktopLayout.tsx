@@ -94,8 +94,10 @@ export default function DesktopLayout({
         const rows = await apiJson<any[]>(isGuest ? "/public/peers?limit=20" : "/friends?limit=20");
         const list = rows.map((r: any) => r.peer ?? r).filter(Boolean);
         setActivePeers(list.filter((p: any) => p.id !== profile?.id));
-      } catch (e) {
-        console.error("Failed to load peers:", e);
+      } catch (e: any) {
+        if (e?.status !== 401) {
+          console.error("Failed to load peers:", e);
+        }
       }
     };
     load();
@@ -115,8 +117,10 @@ export default function DesktopLayout({
         if (!cancelled && typeof data?.unread === "number") {
           setUnreadCount(data.unread);
         }
-      } catch (e) {
-        console.error("Failed to load unread count:", e);
+      } catch (e: any) {
+        if (e?.status !== 401) {
+          console.error("Failed to load unread count:", e);
+        }
       }
     };
     load();
@@ -336,8 +340,10 @@ function MessagesSidebar({ unreadCount, activePeers, modeOf, colors, onOpenChat 
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setConversations(newConversations);
       }
-    } catch (e) {
-      console.error("Failed to load conversations:", e);
+    } catch (e: any) {
+      if (e?.status !== 401) {
+        console.error("Failed to load conversations:", e);
+      }
     } finally {
       setTimeout(() => {
         if (!cancelled) {

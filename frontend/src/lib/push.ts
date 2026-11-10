@@ -4,6 +4,7 @@ import * as Notifications from "expo-notifications";
 import { IosAuthorizationStatus } from "expo-notifications/build/NotificationPermissions.types";
 import { AndroidImportance } from "expo-notifications/build/NotificationChannelManager.types";
 import { Platform } from "react-native";
+import { LIGHT_TOKENS } from "./tokens";
 import { registerDeviceToken, unregisterDeviceToken } from "./messages";
 
 /**
@@ -80,7 +81,7 @@ export async function registerForPush(): Promise<string | null> {
         name: "Messages",
         importance: AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#1D4ED8",
+        lightColor: LIGHT_TOKENS.primary,
       });
     }
 

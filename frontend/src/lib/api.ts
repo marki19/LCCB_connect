@@ -13,9 +13,21 @@ const client = create({ baseURL: API_URL });
 // Attach the Supabase Bearer token before every request and rewrite
 // guest GET paths to the public read-only endpoints.
 client.interceptors.request.use(async (config) => {
-  const {
+  let {
     data: { session },
   } = await supabase.auth.getSession();
+
+  // If token is expired or within 60s of expiring, proactively refresh it
+  if (session?.expires_at && session.expires_at * 1000 <= Date.now() + 60000) {
+    try {
+      const { data: refreshed, error } = await supabase.auth.refreshSession();
+      if (!error && refreshed?.session) {
+        session = refreshed.session;
+      }
+    } catch {
+      // Continue with current session or fallback
+    }
+  }
 
   const method = (config.method || "get").toUpperCase();
 
@@ -39,6 +51,35 @@ client.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+// Auto-refresh token and retry on 401 token errors
+client.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry
+    ) {
+      const errMsg = error.response?.data?.error || "";
+      if (/token|jwt/i.test(errMsg)) {
+        originalRequest._retry = true;
+        try {
+          const { data, error: refreshErr } = await supabase.auth.refreshSession();
+          if (!refreshErr && data?.session?.access_token) {
+            originalRequest.headers = originalRequest.headers || {};
+            originalRequest.headers["Authorization"] = `Bearer ${data.session.access_token}`;
+            return client(originalRequest);
+          }
+        } catch {
+          // Refresh failed
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 /**
  * Axios-backed drop-in for the old `fetch` wrapper. Returns a Fetch-Response-
