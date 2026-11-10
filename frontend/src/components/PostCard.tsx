@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Linking, Image, Alert } from "react-native";
+import { View, Text, TouchableOpacity, Pressable, Linking, Image, Alert } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock } from "lucide-react-native";
+import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
@@ -80,6 +80,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const [imageUrl, setImageUrl] = useState<string | undefined>(post.imageUrl);
 
   // Dialog states
+  const [menuOpen, setMenuOpen] = useState(false);
   const [repostDialogOpen, setRepostDialogOpen] = useState(false);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
@@ -248,15 +249,15 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
             <VisibilityBadge visibility={post.visibility} />
           ) : null}
           <Text style={{ fontSize: 11, color: colors.textTertiary }}>{post.createdAt}</Text>
-          {isOwner && (
-            <PostMenu
-              post={post}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onRepost={handleRepost}
-              onClose={() => {}}
-            />
-          )}
+          <Pressable
+            onPress={() => setMenuOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Post actions"
+            hitSlop={8}
+            style={{ paddingHorizontal: 6, paddingVertical: 4, marginLeft: 2 }}
+          >
+            <MoreVertical size={18} color={colors.textTertiary} />
+          </Pressable>
         </View>
       </View>
 
@@ -403,6 +404,17 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
       </View>
 
       {/* Dialogs */}
+      {menuOpen ? (
+        <PostMenu
+          post={post}
+          onClose={() => setMenuOpen(false)}
+          onEdit={isOwner ? handleEdit : undefined}
+          onDelete={isOwner ? handleDelete : undefined}
+          onRepost={handleRepost}
+          onReport={() => setReportDialogOpen(true)}
+          onBlock={() => setBlockDialogOpen(true)}
+        />
+      ) : null}
       <RepostDialog
         postId={post.id}
         isOpen={repostDialogOpen}

@@ -5,7 +5,6 @@ import { useAuth } from "../contexts/AuthContext";
 import { RADIUS, SPACE, elevation } from "../lib/tokens";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
-import { blockUser, createReport } from "../lib/api";
 
 interface PostMenuProps {
   post: Post;
@@ -13,6 +12,8 @@ interface PostMenuProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onRepost?: (caption?: string) => void;
+  onReport: () => void;
+  onBlock: () => void;
 }
 
 const createStyles = (colors: any) => StyleSheet.create({
@@ -71,7 +72,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
 });
 
-export default function PostMenu({ post, onClose, onEdit, onDelete, onRepost }: PostMenuProps) {
+export default function PostMenu({ post, onClose, onEdit, onDelete, onRepost, onReport, onBlock }: PostMenuProps) {
   const { colors } = useTheme();
   const { profile } = useAuth();
   const router = useRouter();
@@ -84,51 +85,6 @@ export default function PostMenu({ post, onClose, onEdit, onDelete, onRepost }: 
     if (onRepost) {
       onRepost(caption);
     }
-  };
-
-  const handleReport = async () => {
-    onClose();
-    // In a real app, this would open ReportDialog
-    // For now, show simple alert with reason options
-    const reasons = ["spam", "harassment", "inappropriate", "misinformation", "copyright", "other"];
-    Alert.alert(
-      "Report Post",
-      "Select a reason:",
-      reasons.map((reason) => ({
-        text: reason.charAt(0).toUpperCase() + reason.slice(1),
-        onPress: async () => {
-          try {
-            await createReport("post", post.id, reason);
-            Alert.alert("Reported", "Thank you for reporting. Our team will review this content.");
-          } catch (e: any) {
-            Alert.alert("Error", e.message || "Failed to submit report");
-          }
-        },
-      }))
-    );
-  };
-
-  const handleBlock = async () => {
-    onClose();
-    Alert.alert(
-      "Block User",
-      `Are you sure you want to block @${post.author.username || post.author.name}? They won't be able to see your posts or message you.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Block",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await blockUser(post.author.id);
-              Alert.alert("Blocked", "User has been blocked. You can undo this in Settings > Blocked Users.");
-            } catch (e: any) {
-              Alert.alert("Error", e.message || "Failed to block user");
-            }
-          },
-        },
-      ]
-    );
   };
 
   const handlePostSettings = async () => {
@@ -196,11 +152,11 @@ export default function PostMenu({ post, onClose, onEdit, onDelete, onRepost }: 
                   <Text style={styles.itemText}>Share</Text>
                 </TouchableOpacity>
                 <View style={styles.divider} />
-                <TouchableOpacity style={styles.item} onPress={handleReport}>
+                <TouchableOpacity style={styles.item} onPress={() => { onClose(); onReport(); }}>
                   <Flag size={16} color={colors.warning} />
                   <Text style={styles.itemText}>Report</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.item} onPress={handleBlock}>
+                <TouchableOpacity style={styles.item} onPress={() => { onClose(); onBlock(); }}>
                   <UserX size={16} color={colors.destructive} />
                   <Text style={[styles.itemText, styles.destructiveText]}>Block @{post.author.username || post.author.name}</Text>
                 </TouchableOpacity>
