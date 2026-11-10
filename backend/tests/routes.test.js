@@ -929,8 +929,7 @@ describe("reports and blocks", () => {
   });
 });
 
-describe("profile banner", () => {
-  it("PATCH /api/users/me/banner-dismissed hides the banner", async () => {
+describe("profile banner", () => {  it("PATCH /api/users/me/banner-dismissed hides the banner", async () => {
     m.dismissProfileBanner.setImpl(async () => true);
 
     const res = await request(app)
@@ -940,5 +939,29 @@ describe("profile banner", () => {
     assert.equal(res.status, 200);
     assert.deepEqual(res.body, { profile_banner_dismissed: true });
     assert.deepEqual(m.dismissProfileBanner.calls[0], ["u1"]);
+  });
+});
+
+describe("allow_reposts", () => {
+  it("accepts allow_reposts on create", async () => {
+    m.createPost.setImpl(async (data) => ({ id: "p1", ...data }));
+
+    const res = await request(app)
+      .post("/api/posts")
+      .set(AUTH)
+      .send({ content: "hi", type: "text", allow_reposts: false });
+
+    assert.equal(res.status, 201);
+    assert.equal(m.createPost.calls[0][0].allow_reposts, false);
+  });
+
+  it("still rejects fields the schema does not know", async () => {
+    const res = await request(app)
+      .post("/api/posts")
+      .set(AUTH)
+      .send({ content: "hi", type: "text", nonsense: true });
+
+    assert.equal(res.status, 400);
+    assert.equal(m.createPost.calls.length, 0);
   });
 });

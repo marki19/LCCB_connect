@@ -157,6 +157,7 @@ export async function updatePost(
     preview_metadata?: any;
     visibility?: ContentVisibility;
     audience?: string[];
+    allow_reposts?: boolean;
   }
 ): Promise<void> {
   return apiJson(`/posts/${id}`, {

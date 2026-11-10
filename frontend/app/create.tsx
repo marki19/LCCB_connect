@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, Globe, RefreshCw, ChevronRight, CheckCircle2, ChevronLeft, SendHorizontal } from "lucide-react-native";
@@ -90,6 +90,7 @@ export default function CreatePostModal() {
   const [title, setTitle] = useState(isEditing ? editTitle ?? "" : "");
   const [technologies, setTechnologies] = useState(isEditing ? editTech ?? "" : "");
   const [githubUrl, setGithubUrl] = useState(isEditing ? editUrl ?? "" : "");
+  const [allowReposts, setAllowReposts] = useState(true);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
 
@@ -205,6 +206,7 @@ export default function CreatePostModal() {
             technologies: techArray,
             github_url: githubUrl || null,
             preview_metadata: finalPreviewMetadata || null,
+            allow_reposts: allowReposts,
             ...(finalImageKey ? { image_url: finalImageKey } : {}),
             ...visibilityPayload,
           });
@@ -221,6 +223,7 @@ export default function CreatePostModal() {
               image_url: finalImageKey,
               preview_metadata: finalPreviewMetadata || null,
               visibility,
+              allow_reposts: allowReposts,
               ...(visibility === "custom" ? { audience } : {}),
             }),
           });
@@ -428,6 +431,16 @@ export default function CreatePostModal() {
                   setVisibilityTouched(true);
                 }}
               />
+
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16 }}>
+                <Text style={{ color: colors.textPrimary, fontWeight: "700", fontSize: 14 }}>Allow reposts</Text>
+                <Switch
+                  value={allowReposts}
+                  onValueChange={setAllowReposts}
+                  trackColor={{ true: colors.action, false: colors.border }}
+                  accessibilityLabel="Allow reposts"
+                />
+              </View>
               
               {(postType === "project" || postType === "capstone" || postType === "website") ? (
                 <>

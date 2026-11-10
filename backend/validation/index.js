@@ -98,6 +98,7 @@ const postFields = {
   preview_metadata: previewMetadataSchema,
   visibility: Visibility.optional(),
   audience: Audience.optional(),
+  allow_reposts: z.boolean().optional(),
 };
 
 const createPostSchema = withCustomAudienceRule(z.object(postFields).strict());
