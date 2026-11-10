@@ -154,18 +154,19 @@ export default function DesktopContactsRail({ peers }: DesktopContactsRailProps)
 
 const styles = StyleSheet.create({
   rail: {
-    width: 260,
+    width: 272,
     display: "flex",
     flexDirection: "column",
     paddingTop: SPACE.x4,
-    paddingHorizontal: SPACE.x2,
+    paddingLeft: 20,
+    paddingRight: SPACE.x2,
     borderLeftWidth: 1,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: SPACE.x2,
+    paddingHorizontal: 4,
     paddingBottom: SPACE.x2,
   },
   title: {
@@ -189,7 +190,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: RADIUS.pill,
     borderWidth: 1,
-    marginHorizontal: SPACE.x2,
+    marginHorizontal: 4,
     marginBottom: SPACE.x2,
   },
   searchInput: {

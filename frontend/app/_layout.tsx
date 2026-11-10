@@ -8,6 +8,7 @@ import { PresenceProvider } from "../src/contexts/PresenceContext";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { FloatingChatProvider } from "../src/contexts/FloatingChatContext";
 import { SettingsSidebarProvider } from "../src/contexts/SettingsSidebarContext";
+import { FeedFilterProvider } from "../src/contexts/FeedFilterContext";
 import SettingsSidebar from "../src/components/SettingsSidebar";
 import {
   isAdminRole,
@@ -183,7 +184,9 @@ export default function RootLayout() {
           <PresenceProvider>
             <FloatingChatProvider>
               <SettingsSidebarProvider>
-                <RouteGuard />
+                <FeedFilterProvider>
+                  <RouteGuard />
+                </FeedFilterProvider>
               </SettingsSidebarProvider>
             </FloatingChatProvider>
           </PresenceProvider>

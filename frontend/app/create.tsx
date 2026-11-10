@@ -149,6 +149,27 @@ export default function CreatePostModal() {
   );
 
   const handlePublish = async () => {
+    if (profile?.role === "student" && !profile?.profile_completed) {
+      if (Platform.OS === "web") {
+        const proceed = typeof window !== "undefined" && window.confirm
+          ? window.confirm(
+              "Complete your profile (student ID, department, and course) before creating posts.\n\nGo to profile setup now?"
+            )
+          : false;
+        if (proceed) router.push("/onboarding");
+      } else {
+        Alert.alert(
+          "Complete Your Profile",
+          "Complete your profile (full name, student ID, department, and course) before creating posts.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Complete Profile", onPress: () => router.push("/onboarding") },
+          ]
+        );
+      }
+      return;
+    }
+
     if (!isPostValid) {
       Alert.alert("Empty Post", "Please add some content, an image, or project details to post.");
       return;
@@ -214,19 +235,29 @@ export default function CreatePostModal() {
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          if (errData.code === "PROFILE_INCOMPLETE") {
-            Alert.alert(
-              "Complete Your Profile",
-              errData.message ||
-                "Complete your profile (full name, student ID, department, and course) before creating posts.",
-              [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Complete Profile",
-                  onPress: () => router.push("/onboarding"),
-                },
-              ]
-            );
+          if (errData.code === "PROFILE_INCOMPLETE" || errData.code === "VERIFICATION_REQUIRED") {
+            if (Platform.OS === "web") {
+              const proceed = typeof window !== "undefined" && window.confirm
+                ? window.confirm(
+                    (errData.message || "Complete your profile before creating posts.") +
+                      "\n\nGo to profile setup now?"
+                  )
+                : false;
+              if (proceed) router.push("/onboarding");
+            } else {
+              Alert.alert(
+                "Complete Your Profile",
+                errData.message ||
+                  "Complete your profile (full name, student ID, department, and course) before creating posts.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Complete Profile",
+                    onPress: () => router.push("/onboarding"),
+                  },
+                ]
+              );
+            }
             return;
           }
           throw new Error(errData.message || "Failed to create post");
@@ -413,6 +444,7 @@ export default function CreatePostModal() {
                 borderWidth: 1,
                 borderColor: colors.border,
                 marginBottom: 8,
+                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
               }}
             />
             <TextInput
@@ -429,6 +461,7 @@ export default function CreatePostModal() {
                 borderWidth: 1,
                 borderColor: colors.border,
                 marginBottom: 8,
+                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
               }}
             />
             <TextInput
@@ -446,6 +479,7 @@ export default function CreatePostModal() {
                 borderRadius: 8,
                 borderWidth: 1,
                 borderColor: colors.border,
+                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
               }}
             />
           </Animated.View>
@@ -490,6 +524,7 @@ export default function CreatePostModal() {
                 borderWidth: 1,
                 borderColor: colors.border,
                 marginBottom: 8,
+                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
               }}
             />
             <TextInput
@@ -505,6 +540,7 @@ export default function CreatePostModal() {
                 borderRadius: 8,
                 borderWidth: 1,
                 borderColor: colors.border,
+                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
               }}
             />
           </Animated.View>
@@ -554,6 +590,7 @@ export default function CreatePostModal() {
                   borderRadius: 8,
                   borderWidth: 1,
                   borderColor: colors.border,
+                  ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
                 }}
               />
               <TouchableOpacity
@@ -603,6 +640,47 @@ export default function CreatePostModal() {
           </Animated.View>
         )}
 
+        {/* Profile Incomplete Banner */}
+        {profile?.role === "student" && !profile?.profile_completed && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: colors.surfaceSunken,
+              borderRadius: 10,
+              padding: 10,
+              marginVertical: 10,
+              borderWidth: 1,
+              borderColor: colors.action,
+            }}
+          >
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}>
+                Profile Incomplete
+              </Text>
+              <Text style={{ fontSize: 11.5, color: colors.textSecondary, marginTop: 2 }}>
+                Complete your student ID, department, and course to publish posts.
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push("/onboarding")}
+              style={{
+                backgroundColor: colors.action,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 6,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Complete profile"
+            >
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#FFFFFF" }}>
+                Complete
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Main Textarea */}
         <TextInput
           placeholder={`What's on your mind, ${firstName}?`}
@@ -618,6 +696,7 @@ export default function CreatePostModal() {
             textAlignVertical: "top",
             lineHeight: 24,
             paddingVertical: 8,
+            ...(Platform.OS === "web" ? ({ outlineStyle: "none", borderWidth: 0 } as any) : {}),
           }}
         />
 
@@ -791,16 +870,6 @@ export default function CreatePostModal() {
               accessibilityLabel="Add Web Link"
             >
               <Globe size={22} color="#0284C7" />
-            </TouchableOpacity>
-
-            {/* Audience / Privacy */}
-            <TouchableOpacity
-              onPress={() => setShowVisibilityPicker((v) => !v)}
-              style={{ padding: 6, borderRadius: 20 }}
-              accessibilityRole="button"
-              accessibilityLabel="Change Privacy"
-            >
-              <Lock size={20} color="#8B5CF6" />
             </TouchableOpacity>
           </View>
         </View>

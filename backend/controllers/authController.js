@@ -917,19 +917,25 @@ async function googleAuth(req, res, next) {
 
     // Check if profile exists
     let profile = await userModel.getUserById(user.id);
+    const googleAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
 
     if (!profile) {
-      // Create profile for new Google user
+      // Create profile for new Google user with Google avatar as default
       const fullName = user.user_metadata?.full_name || user.user_metadata?.name || null;
       await userModel.createUser({
         id: user.id,
         email: user.email,
         full_name: fullName,
+        avatar_url: googleAvatar,
         role: "student",
         verification_status: "verified", // Google already verified the email
         verified_at: new Date().toISOString(),
       });
       profile = await userModel.getUserById(user.id);
+    } else if (!profile.avatar_url && googleAvatar) {
+      // Default to Google avatar if user has not yet set a custom profile photo
+      await userModel.updateUser(user.id, { avatar_url: googleAvatar });
+      profile.avatar_url = googleAvatar;
     }
 
     // Check for suspension

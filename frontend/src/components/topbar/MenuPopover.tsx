@@ -21,7 +21,7 @@ import {
 import { useTheme } from "../../contexts/ThemeContext";
 import { useSettingsSidebar } from "../../contexts/SettingsSidebarContext";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
-import { TOP_BAR_HEIGHT } from "./DesktopTopBar";
+import { TOP_BAR_HEIGHT } from "./constants";
 
 interface MenuPopoverProps {
   onClose: () => void;

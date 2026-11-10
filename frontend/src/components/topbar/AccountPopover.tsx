@@ -19,7 +19,7 @@ import { isAdminRole, isDepartmentAdminRole } from "../../lib/roles";
 import { setAdminAppPreview } from "../../lib/panelMode";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
-import { TOP_BAR_HEIGHT } from "./DesktopTopBar";
+import { TOP_BAR_HEIGHT } from "./constants";
 
 interface AccountPopoverProps {
   onClose: () => void;

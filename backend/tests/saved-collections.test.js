@@ -114,3 +114,4 @@ describe("savedCollectionModel", () => {
     assert.deepEqual(params, [COLLECTION_ID, USER_ID]);
   });
 });
+

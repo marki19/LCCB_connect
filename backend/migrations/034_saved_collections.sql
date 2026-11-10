@@ -61,3 +61,4 @@ CREATE POLICY "Users can manage own collection items"
       WHERE sc.id = collection_id AND sc.user_id = auth.uid()::text
     )
   );
+

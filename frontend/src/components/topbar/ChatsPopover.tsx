@@ -22,7 +22,7 @@ import { useFloatingChat } from "../../contexts/FloatingChatContext";
 import { apiJson } from "../../lib/api";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
-import { TOP_BAR_HEIGHT } from "./DesktopTopBar";
+import { TOP_BAR_HEIGHT } from "./constants";
 
 interface ChatsPopoverProps {
   onClose: () => void;

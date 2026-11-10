@@ -28,9 +28,13 @@ import {
   Users,
   BookOpen,
   MessageSquare,
+  Sparkles,
+  Globe,
+  FolderGit2,
 } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useFeedFilter, type FeedCategory } from "../../contexts/FeedFilterContext";
 import { RADIUS, SPACE, TYPE, elevation } from "../../lib/tokens";
 import { getSearchSuggestions, apiJson } from "../../lib/api";
 import { onMessage, onConversation, onNotification } from "../../lib/realtime";
@@ -39,22 +43,16 @@ import MenuPopover from "./MenuPopover";
 import ChatsPopover from "./ChatsPopover";
 import NotificationsPopover from "./NotificationsPopover";
 import AccountPopover from "./AccountPopover";
-import {
-  HomeNavIcon,
-  RepositoryNavIcon,
-  CapstonesNavIcon,
-  DiscussionsNavIcon,
-} from "./TopBarIcons";
+import { TOP_BAR_HEIGHT } from "./constants";
 
 export type PopoverType = "menu" | "chats" | "notifications" | "account" | null;
 
-const TOP_BAR_HEIGHT = 56;
-
-const NAV_TABS = [
-  { name: "index", label: "Home", href: "/(tabs)/", Icon: HomeNavIcon },
-  { name: "search", label: "Repository", href: "/(tabs)/search", Icon: RepositoryNavIcon },
-  { name: "capstones", label: "Capstones", href: "/(tabs)/capstones", Icon: CapstonesNavIcon },
-  { name: "discussions", label: "Discussions", href: "/(tabs)/discussions", Icon: DiscussionsNavIcon },
+const CATEGORY_TABS = [
+  { id: "all", label: "All Posts", Icon: Sparkles },
+  { id: "websites", label: "Websites", Icon: Globe },
+  { id: "theses", label: "Theses", Icon: BookOpen },
+  { id: "projects", label: "Projects", Icon: FolderGit2 },
+  { id: "discussions", label: "Discussions", Icon: MessageSquare },
 ] as const;
 
 interface DesktopTopBarProps {
@@ -68,6 +66,7 @@ export default function DesktopTopBar({
 }: DesktopTopBarProps) {
   const { colors } = useTheme();
   const { profile } = useAuth();
+  const { activeCategory, setCategory } = useFeedFilter();
   const router = useRouter();
   const segments = useSegments();
   const [activePopover, setActivePopover] = useState<PopoverType>(null);
@@ -371,14 +370,14 @@ export default function DesktopTopBar({
           </View>
         </View>
 
-        {/* ── CENTER: Nav tabs ── */}
+        {/* ── CENTER: Category filter tabs ── */}
         <View style={styles.center}>
-          {NAV_TABS.map(({ name, label, href, Icon }) => {
-            const isActive = activeTab === name || (name === "index" && activeTab === "(tabs)");
+          {CATEGORY_TABS.map(({ id, label, Icon }) => {
+            const isActive = activeCategory === id;
             return (
               <Pressable
-                key={name}
-                onPress={() => router.push(href as any)}
+                key={id}
+                onPress={() => setCategory(id as FeedCategory)}
                 accessibilityRole="tab"
                 accessibilityLabel={label}
                 accessibilityState={{ selected: isActive }}
@@ -390,9 +389,9 @@ export default function DesktopTopBar({
               >
                 <View style={styles.navTabContent}>
                   <Icon
-                    size={26}
+                    size={22}
                     color={isActive ? colors.brand : colors.inkSoft}
-                    active={isActive}
+                    strokeWidth={isActive ? 2.5 : 2}
                   />
                 </View>
                 {isActive && (

@@ -364,16 +364,17 @@ const visiblePostsFor = async ({
   }
 
   // ---- 1. Fetch visible posts ------------------------------------------------
+  const postParams = [...params];
   let fromClausePosts = "FROM posts p";
   if (!includeHidden) {
-    params.push(viewerId);
-    fromClausePosts = `FROM visible_posts($${params.length}::text) p`;
+    postParams.push(viewerId);
+    fromClausePosts = `FROM visible_posts($${postParams.length}::text) p`;
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  params.push(limit);
+  postParams.push(limit);
 
-  const postSelect = buildPostSelect(params.length, viewerId);
+  const postSelect = buildPostSelect(postParams.length, viewerId);
   const postsSql = `
     ${postSelect}
     ${fromClausePosts}
@@ -381,18 +382,16 @@ const visiblePostsFor = async ({
     LEFT JOIN public.departments d ON d.id = pr.department_id
     ${whereClause}
     ORDER BY p.created_at DESC, p.id DESC
-    LIMIT $${params.length};
+    LIMIT $${postParams.length};
   `;
 
-  const postQueryParams = viewerId ? [...params, viewerId] : params;
+  const postQueryParams = viewerId ? [...postParams, viewerId] : postParams;
   const postsResult = await db.query(postsSql, postQueryParams);
 
   // ---- 2. Fetch visible reposts (if requested) -------------------------------
   let reposts = [];
   if (includeReposts) {
-    const repostParams = [...params]; // Copy base params (without limit)
-    repostParams.pop(); // Remove limit from copy
-
+    const repostParams = [...params];
     let fromClauseReposts = `
       FROM reposts r
       JOIN posts p ON p.id = r.original_post_id

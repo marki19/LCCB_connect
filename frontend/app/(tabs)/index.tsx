@@ -32,7 +32,6 @@ import SettingsSidebar from "../../src/components/SettingsSidebar";
 import Avatar from "../../src/components/Avatar";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { usePresence } from "../../src/contexts/PresenceContext";
 import { useFocusEffect, useRouter } from "expo-router";
 import { apiFetch, apiJson } from "../../src/lib/api";
 import {
@@ -47,17 +46,9 @@ import StatusBadge from "../../src/components/admin/StatusBadge";
 import EmptyState from "../../src/components/admin/EmptyState";
 import { Skeleton } from "../../src/components/ui/Skeleton";
 import IdentityBanner from "../../src/components/IdentityBanner";
+import { useFeedFilter, type FeedCategory } from "../../src/contexts/FeedFilterContext";
 
-type FilterValue = "all" | "theses" | "websites" | "projects" | "discussions" | "images";
-
-const FILTERS: { value: FilterValue; label: string; icon: any }[] = [
-  { value: "all", label: "All", icon: Sparkles },
-  { value: "websites", label: "Websites", icon: Globe },
-  { value: "theses", label: "Theses", icon: FileText },
-  { value: "projects", label: "Projects", icon: FolderGit2 },
-  { value: "discussions", label: "Discussions", icon: MessageSquare },
-  { value: "images", label: "Images", icon: ImageIcon },
-];
+type FilterValue = FeedCategory;
 
 const FILTER_COPY: Record<FilterValue, { title: string; body: string; icon: any }> = {
   all: {
@@ -85,11 +76,6 @@ const FILTER_COPY: Record<FilterValue, { title: string; body: string; icon: any 
     body: "Ask a question, share a thought, or start a conversation on campus.",
     icon: MessageSquare,
   },
-  images: {
-    title: "No images yet",
-    body: "Photos from campus life will appear here. Post the first frame.",
-    icon: ImageIcon,
-  },
 };
 
 function getInitials(name?: string | null) {
@@ -107,7 +93,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
   const { colors } = useTheme();
-  const { isOnline } = usePresence();
   const isGuest = profile?.role === "guest";
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 1200;
@@ -120,7 +105,7 @@ export default function HomeScreen() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState<FilterValue>("all");
+  const { activeCategory: filter, setCategory: setFilter } = useFeedFilter();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
@@ -155,7 +140,7 @@ export default function HomeScreen() {
       const rows = isGuest
         ? await apiJson<any[]>("/public/peers?limit=20")
         : await apiJson<{ peer: any }[]>("/friends?limit=20");
-      const list = rows.map((r: any) => r.peer ?? r).filter(Boolean);
+      const list = Array.isArray(rows) ? rows.map((r: any) => r.peer ?? r).filter(Boolean) : [];
       setActivePeers(list.filter((p: any) => p.id !== profile?.id));
     } catch (e) {
       console.error("Failed to load peers:", e);
@@ -186,8 +171,6 @@ export default function HomeScreen() {
   const activeUser = profile;
   const activeName = activeUser?.full_name || (isGuest ? "Guest Visitor" : "You");
 
-  const onlineCount = activePeers.filter((p) => isOnline(p.id)).length;
-
   const fetchUnifiedFeed = useCallback(async () => {
       if (!loadedRef.current) setLoading(true);
       setError("");
@@ -209,7 +192,8 @@ export default function HomeScreen() {
         const res = await apiFetch(`/posts${postQueryStr}`);
         if (res.ok) {
           const data = await res.json();
-          postItems = data.map((row: any) => {
+          const list = Array.isArray(data) ? data : (Array.isArray(data?.posts) ? data.posts : []);
+          postItems = list.map((row: any) => {
             const authorName = row.author?.full_name || "Unknown Author";
             const baseItem: any = {
               id: row.id,
@@ -277,7 +261,8 @@ export default function HomeScreen() {
       const res = await apiFetch(`/theses${thesisQueryStr}`);
       if (res.ok) {
         const data = await res.json();
-        thesisItems = data.map((t: any) => {
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.theses) ? data.theses : []);
+        thesisItems = list.map((t: any) => {
           const uploaderName = t.uploader?.full_name || t.author?.full_name || "Academic Author";
           return {
             id: t.id,
@@ -323,9 +308,7 @@ export default function HomeScreen() {
     } else if (filter === "projects") {
       unified = unified.filter((item) => item.type === "project" || item.type === "capstone");
     } else if (filter === "discussions") {
-      unified = unified.filter((item) => item.type === "text");
-    } else if (filter === "images") {
-      unified = unified.filter((item) => item.type === "image");
+      unified = unified.filter((item) => item.type === "text" || item.type === "image" || item.type === "discussion");
     }
 
     setPosts(unified);
@@ -390,21 +373,6 @@ export default function HomeScreen() {
             ListHeaderComponent={
               <View>
                 <IdentityBanner />
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginHorizontal: SPACE.x4,
-                    marginTop: SPACE.x2,
-                    marginBottom: SPACE.x2,
-                  }}
-                >
-                  <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
-                    {onlineCount} online · {posts.length} {posts.length === 1 ? "post" : "posts"}
-                  </Text>
-                </View>
 
                 {error ? (
                   <View
@@ -598,59 +566,8 @@ export default function HomeScreen() {
                   </View>
                 )}
 
+                {/* Department Faceted Filters */}
                 <View style={{ marginBottom: SPACE.x3 }}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: SPACE.x4, gap: SPACE.x2 }}
-                  >
-                    {FILTERS.map((item) => {
-                      const active = filter === item.value;
-                      const Icon = item.icon;
-                      return (
-                        <Pressable
-                          key={item.value}
-                          accessibilityRole="tab"
-                          accessibilityLabel={`Show ${item.label}`}
-                          accessibilityState={{ selected: active }}
-                          onPress={() => setFilter(item.value)}
-                          style={({ pressed }) => ({
-                            minHeight: 38,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 6,
-                            borderRadius: RADIUS.pill,
-                            borderWidth: 1,
-                            borderColor: active ? colors.brandSolid : colors.line,
-                            backgroundColor: active
-                              ? colors.brandSolid
-                              : pressed
-                              ? colors.panelInset
-                              : colors.panel,
-                            paddingHorizontal: SPACE.x4,
-                            opacity: pressed ? 0.9 : 1,
-                          })}
-                        >
-                          <Icon
-                            size={14}
-                            color={active ? colors.textOnPrimary : colors.inkSoft}
-                            strokeWidth={2.1}
-                          />
-                          <Text
-                            style={{
-                              ...TYPE.caption,
-                              fontWeight: "700",
-                              color: active ? colors.textOnPrimary : colors.inkSoft,
-                            }}
-                          >
-                            {item.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-
-                  {/* Department Faceted Filters */}
                   {departments.length > 0 && (
                     <View style={{ marginTop: SPACE.x2 }}>
                       <ScrollView
