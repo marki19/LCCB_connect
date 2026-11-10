@@ -237,3 +237,86 @@ export async function getPostImageUrl(id: string | number): Promise<string> {
   }
   return data.url;
 }
+
+// ============================================================================
+// Repost endpoints
+// ============================================================================
+
+export async function createRepost(postId: string | number, caption?: string): Promise<any> {
+  return apiJson(`/posts/${postId}/repost`, {
+    method: "POST",
+    body: JSON.stringify({ caption }),
+  });
+}
+
+export async function undoRepost(postId: string | number): Promise<any> {
+  return apiJson(`/posts/${postId}/repost`, { method: "DELETE" });
+}
+
+export async function updateRepostCaption(repostId: string | number, caption: string): Promise<any> {
+  return apiJson(`/reposts/${repostId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ caption }),
+  });
+}
+
+export async function getReposts(postId: string | number): Promise<any[]> {
+  return apiJson(`/posts/${postId}/reposts`);
+}
+
+// ============================================================================
+// Report endpoints
+// ============================================================================
+
+export async function createReport(
+  targetType: string,
+  targetId: string | number,
+  reason: string,
+  note?: string
+): Promise<any> {
+  return apiJson("/reports", {
+    method: "POST",
+    body: JSON.stringify({ targetType, targetId, reason, note }),
+  });
+}
+
+// ============================================================================
+// Block endpoints
+// ============================================================================
+
+export async function blockUser(userId: string | number): Promise<any> {
+  return apiJson("/blocks", {
+    method: "POST",
+    body: JSON.stringify({ blockedId: userId }),
+  });
+}
+
+export async function unblockUser(userId: string | number): Promise<any> {
+  return apiJson(`/blocks/${userId}`, { method: "DELETE" });
+}
+
+export async function listBlocked(): Promise<any[]> {
+  return apiJson("/blocks");
+}
+
+// ============================================================================
+// Profile endpoints
+// ============================================================================
+
+export async function dismissBanner(): Promise<any> {
+  return apiJson("/me/banner-dismissed", {
+    method: "PATCH",
+    body: JSON.stringify({ dismissed: true }),
+  });
+}
+
+// ============================================================================
+// Feed endpoint
+// ============================================================================
+
+export async function getFeed(cursor?: string, type?: string): Promise<any[]> {
+  const params = new URLSearchParams();
+  if (cursor) params.set("cursor", cursor);
+  if (type) params.set("type", type);
+  return apiJson(`/feed?${params.toString()}`);
+}

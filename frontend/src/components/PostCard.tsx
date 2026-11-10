@@ -6,13 +6,17 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Heart, MessageCircle, Share2, ExternalLink, MoreVertical, Pencil, Trash2, Lock, Users, UserCheck } from "lucide-react-native";
+import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { ThemeTokens, elevation, RADIUS } from "../lib/tokens";
 import { apiJson, deletePost, deleteThesis, getThesisFileUrl, getPostImageUrl } from "../lib/api";
+import PostMenu from "./PostMenu";
+import RepostDialog from "./RepostDialog";
+import ReportDialog from "./ReportDialog";
+import BlockConfirmDialog from "./BlockConfirmDialog";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
   const configs: Record<string, { label: string; bg: string; text: string }> = {
@@ -22,16 +26,63 @@ function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: 
     project:  { label: "Project",  bg: colors.badgeProjectBg,  text: colors.badgeProjectText },
     text:     { label: "Update",   bg: colors.badgeUpdateBg,   text: colors.badgeUpdateText },
     image:    { label: "Image",    bg: colors.badgeImageBg,    text: colors.badgeImageText },
+    discussion: { label: "Discussion", bg: colors.badgeDiscussionBg, text: colors.badgeDiscussionText },
   };
   return configs[type] || configs["text"];
+}
+
+function getVisibilityLabel(visibility: string): string {
+  switch (visibility) {
+    case "public": return "Public";
+    case "friends": return "Friends";
+    case "custom": return "Custom";
+    case "private": return "Private";
+    default: return "Public";
+  }
+}
+
+function getVisibilityColors(visibility: string, colors: ThemeTokens): { bg: string; text: string; iconColor: string } {
+  switch (visibility) {
+    case "public": return { bg: colors.badgePublicBg, text: colors.badgePublicText, iconColor: colors.badgePublicText };
+    case "friends": return { bg: colors.badgeFriendsBg, text: colors.badgeFriendsText, iconColor: colors.badgeFriendsText };
+    case "custom": return { bg: colors.badgeCustomBg, text: colors.badgeCustomText, iconColor: colors.badgeCustomText };
+    case "private": return { bg: colors.badgePrivateBg, text: colors.badgePrivateText, iconColor: colors.badgePrivateText };
+    default: return { bg: colors.surfaceSunken, text: colors.textTertiary, iconColor: colors.textTertiary };
+  }
+}
+
+// VisibilityBadge component — shown for ALL viewers
+function VisibilityBadge({ visibility }: { visibility: string }) {
+  const { colors } = useTheme();
+  const label = getVisibilityLabel(visibility);
+  const { text, iconColor } = getVisibilityColors(visibility, colors);
+  
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", marginRight: 8 }}>
+      {(() => {
+        switch (visibility) {
+          case "public": return <Globe size={12} color={iconColor} />;
+          case "friends": return <Users size={12} color={iconColor} />;
+          case "custom": return <UserCheck size={12} color={iconColor} />;
+          case "private": return <Lock size={12} color={iconColor} />;
+          default: return <Globe size={12} color={iconColor} />;
+        }
+      })()}
+      <Text style={{ fontSize: 11, color: text, marginLeft: 3 }}>{label}</Text>
+    </View>
+  );
 }
 
 export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: (id: string | number) => void }) {
   const router = useRouter();
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | undefined>(post.imageUrl);
+
+  // Dialog states
+  const [repostDialogOpen, setRepostDialogOpen] = useState(false);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
 
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
@@ -50,7 +101,6 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   }, [post.id, post.imageUrl]);
 
   const handleEdit = () => {
-    setMenuOpen(false);
     if (post.type === "thesis") {
       // Theses are edited in the deposit screen (backend: PUT /theses/:id).
       router.push({
@@ -74,7 +124,6 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   };
 
   const handleDelete = () => {
-    setMenuOpen(false);
     const isThesis = post.type === "thesis";
     Alert.alert(
       isThesis ? "Delete Thesis" : "Delete Post",
@@ -99,6 +148,23 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         },
       ]
     );
+  };
+
+  const handleRepost = () => {
+    setRepostDialogOpen(true);
+  };
+
+  const handleRepostSuccess = () => {
+    setRepostDialogOpen(false);
+    // Refresh handled by parent
+  };
+
+  const handleReportSuccess = () => {
+    setReportDialogOpen(false);
+  };
+
+  const handleBlockSuccess = () => {
+    setBlockDialogOpen(false);
   };
 
   const handleLike = async () => {
@@ -131,10 +197,15 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
 
   const typeConfig = getTypeConfig(post.type, colors);
 
+  // For text/image/discussion types, content is the primary body (not title/description)
+  const isTextBased = post.type === "text" || post.type === "image" || post.type === "discussion";
+  const primaryText = isTextBased ? (post.content || post.description) : post.description;
+  const primaryTitle = isTextBased ? undefined : post.title;
+
   return (
     <TouchableOpacity
       activeOpacity={0.97}
-      accessibilityLabel={`${post.author.name}: ${post.title}`}
+      accessibilityLabel={`${post.author.name}: ${primaryTitle || primaryText}`}
       onPress={async () => {
         // A thesis has no post-detail screen; open the deposited PDF instead
         // (mirrors the search screen's thesis card). Manuscripts are private
@@ -172,70 +243,37 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 1 }}>{post.author.course || "—"} · {post.author.yearLevel || "—"}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          {/* Only the owner sees the badge; everyone else simply sees the row
-              when they are allowed to. */}
-          {isOwner && post.visibility && post.visibility !== "public" && (() => {
-            const badge =
-              post.visibility === "private"
-                ? { Icon: Lock, label: "Private" }
-                : post.visibility === "friends"
-                  ? { Icon: Users, label: "Friends" }
-                  : { Icon: UserCheck, label: "Custom" };
-            return (
-              <View style={{ flexDirection: "row", alignItems: "center", marginRight: 8 }}>
-                <badge.Icon size={12} color={colors.textTertiary} />
-                <Text style={{ fontSize: 11, color: colors.textTertiary, marginLeft: 3 }}>{badge.label}</Text>
-              </View>
-            );
-          })()}
+          {/* Visibility badge — shown for ALL viewers */}
+          {post.visibility ? (
+            <VisibilityBadge visibility={post.visibility} />
+          ) : null}
           <Text style={{ fontSize: 11, color: colors.textTertiary }}>{post.createdAt}</Text>
           {isOwner && (
-            <TouchableOpacity
-              onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Post options"
-              hitSlop={8}
-              style={{ marginLeft: 6, width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
-            >
-              <MoreVertical size={16} color={colors.textTertiary} />
-            </TouchableOpacity>
+            <PostMenu
+              post={post}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onRepost={handleRepost}
+              onClose={() => {}}
+            />
           )}
         </View>
       </View>
 
-      {/* Owner edit/delete dropdown */}
-      {isOwner && menuOpen && (
-        <View style={{ marginHorizontal: 14, marginBottom: 8, backgroundColor: colors.surfaceSunken, borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden" }}>
-          <TouchableOpacity
-            onPress={(e) => { e.stopPropagation?.(); handleEdit(); }}
-            activeOpacity={0.7}
-            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.border }}
-          >
-            <Pencil size={15} color={colors.action} />
-            <Text style={{ fontSize: 14, color: colors.action, fontWeight: "600", marginLeft: 10 }}>Edit Post</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={(e) => { e.stopPropagation?.(); handleDelete(); }}
-            activeOpacity={0.7}
-            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 11 }}
-          >
-            <Trash2 size={15} color={colors.destructive} />
-            <Text style={{ fontSize: 14, color: colors.destructive, fontWeight: "600", marginLeft: 10 }}>Delete Post</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Title + description */}
+      {/* Content: title + primary text */}
       <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
-        <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary, marginBottom: 5 }}>{post.title}</Text>
-        <Text numberOfLines={2} style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>{post.description}</Text>
+        {primaryTitle ? (
+          <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary, marginBottom: 5 }}>{primaryTitle}</Text>
+        ) : null}
+        {primaryText ? (
+          <Text numberOfLines={isTextBased ? 0 : 2} style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>{primaryText}</Text>
+        ) : null}
       </View>
 
       {imageUrl ? (
         <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
           <Image
-                      source={{ uri: imageUrl }}
+            source={{ uri: imageUrl }}
             style={{ width: "100%", height: 200, borderRadius: 12, backgroundColor: colors.surfaceSunken }}
             resizeMode="cover"
           />
@@ -363,6 +401,28 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           <Text style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>Share</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Dialogs */}
+      <RepostDialog
+        postId={post.id}
+        isOpen={repostDialogOpen}
+        onClose={() => setRepostDialogOpen(false)}
+        onSuccess={handleRepostSuccess}
+      />
+      <ReportDialog
+        targetType="post"
+        targetId={post.id}
+        isOpen={reportDialogOpen}
+        onClose={() => setReportDialogOpen(false)}
+        onSuccess={handleReportSuccess}
+      />
+      <BlockConfirmDialog
+        targetUserId={post.author.id}
+        targetUserName={post.author.name}
+        isOpen={blockDialogOpen}
+        onClose={() => setBlockDialogOpen(false)}
+        onBlocked={handleBlockSuccess}
+      />
     </TouchableOpacity>
   );
 }

@@ -25,19 +25,19 @@ const resolveRequestBodyAudience = async (authorId, body) => {
 // server-side and returns a generic message (never the raw DB error).
 const getPosts = async (req, res, next) => {
   try {
-    // Optional filters: ?q=<text>&author_id=<uuid>
+    // Optional filters: ?q=<text>&author_id=<uuid>&visibility=<public|friends|...>
     // plus keyset pagination: ?limit=<1..100>&cursor=<created_at>|<id>
     const author = parseUuidFilter(req.query.author_id, "author_id");
     if (author.error) {
       return res.status(400).json({ error: author.error });
     }
 
-    const posts = await postModel.getAllPosts({
+    const posts = await postModel.visiblePostsFor(req.user?.id || null, {
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
       q: parseSearch(req.query.q),
       authorId: author.value,
-      userId: req.user?.id || null,
+      visibility: req.query.visibility || null,
     });
     res.json(posts);
   } catch (error) {
@@ -48,9 +48,11 @@ const getPosts = async (req, res, next) => {
 const getPost = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const post = await postModel.getPostById(id, {
-      userId: req.user?.id || null,
+    const result = await postModel.visiblePostsFor(req.user?.id || null, {
+      postId: id,
+      includeHidden: false,
     });
+    const post = result.posts[0];
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -62,6 +64,24 @@ const getPost = async (req, res, next) => {
 
 const createPost = async (req, res, next) => {
   try {
+    // Verify user identity is complete before allowing post creation
+    if (!req.profile?.profile_completed) {
+      return res.status(403).json({
+        error: "Profile incomplete",
+        message: "Complete your profile (full name, student ID, department, and course) before creating posts.",
+        code: "PROFILE_INCOMPLETE",
+      });
+    }
+
+    // Verify user identity is verified before allowing post creation
+    if (!req.profile?.identity_complete) {
+      return res.status(403).json({
+        error: "Identity verification required",
+        message: "Complete your student identity verification before creating posts.",
+        code: "VERIFICATION_REQUIRED",
+      });
+    }
+
     const resolved = await resolveRequestBodyAudience(req.user.id, req.body);
     if (resolved.error) {
       return res.status(400).json({ error: resolved.error, invalid: resolved.invalid });
@@ -121,7 +141,7 @@ const updatePost = async (req, res, next) => {
 const deletePost = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const deleted = await postModel.deletePost(id, req.user.id);
+    const deleted = await postModel.softDeletePost(id, req.user.id);
     if (!deleted) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -287,7 +307,11 @@ const getPostFile = async (req, res, next) => {
     const viewerId = req.user?.id || null;
 
     // Visibility is enforced by the model's use of visible_posts().
-    const post = await postModel.getPostById(id, { userId: viewerId });
+    const result = await postModel.visiblePostsFor(viewerId, {
+      postId: id,
+      includeHidden: false,
+    });
+    const post = result.posts[0];
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -309,6 +333,219 @@ const getPostFile = async (req, res, next) => {
   }
 };
 
+// ============================================================================
+// REPOST ENDPOINTS
+// ============================================================================
+
+const repostModel = require("../models/repostModel");
+const notificationModel = require("../models/notificationModel");
+
+const createRepost = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { caption } = req.body;
+    const reposterId = req.user.id;
+
+    const repost = await repostModel.createRepost(id, reposterId, caption);
+    if (!repost) {
+      return res.status(404).json({ message: "Original post not found or not visible" });
+    }
+
+    // Create notification for original author
+    const originalPost = await postModel.visiblePostsFor(reposterId, {
+      postId: id,
+      includeHidden: false,
+    });
+    if (originalPost.posts[0]) {
+      await notificationModel.createRepostNotification(
+        originalPost.posts[0].author_id,
+        reposterId,
+        repost.id
+      );
+    }
+
+    res.status(201).json(repost);
+  } catch (error) {
+    if (error.code === "DUPLICATE_REPOST") {
+      return res.status(409).json({ error: "Already reposted this post" });
+    }
+    if (error.code === "ALREADY_BLOCKED") {
+      return res.status(403).json({ error: "Cannot repost blocked user's content" });
+    }
+    if (error.code === "REPOSTS_NOT_ALLOWED") {
+      return res.status(403).json({ error: "Author has disabled reposts" });
+    }
+    if (error.code === "POST_DELETED") {
+      return res.status(404).json({ error: "Original post has been deleted" });
+    }
+    next(error);
+  }
+};
+
+const undoRepost = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const reposterId = req.user.id;
+
+    const repost = await repostModel.undoRepost(id, reposterId);
+    if (!repost) {
+      return res.status(404).json({ message: "Repost not found" });
+    }
+
+    res.json({ message: "Repost removed", repost });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getReposts = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const viewerId = req.user?.id || null;
+
+    const reposts = await repostModel.getVisibleRepostsForPost(id, viewerId, {
+      limit: clampLimit(req.query.limit),
+      cursor: req.query.cursor || null,
+    });
+    res.json(reposts);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================================
+// REPORT ENDPOINTS
+// ============================================================================
+
+const reportModel = require("../models/reportModel");
+
+const createReport = async (req, res, next) => {
+  try {
+    const { targetType, targetId, reason, note } = req.body;
+    const reporterId = req.user.id;
+
+    if (!targetType || !targetId || !reason) {
+      return res.status(400).json({ error: "targetType, targetId, and reason are required" });
+    }
+
+    const report = await reportModel.createReport(reporterId, targetType, targetId, reason, note);
+    res.status(201).json(report);
+  } catch (error) {
+    if (error.code === "DUPLICATE_REPORT") {
+      return res.status(409).json({ error: "Already reported this content" });
+    }
+    if (error.code === "INVALID_TARGET_TYPE" || error.code === "INVALID_REASON") {
+      return res.status(400).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
+// Admin only - list reports
+const listReports = async (req, res, next) => {
+  try {
+    // Check admin role
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const { status, targetType, limit, cursor } = req.query;
+    const reports = await reportModel.listReports({
+      status: status || null,
+      targetType: targetType || null,
+      limit: clampLimit(limit),
+      cursor: cursor || null,
+    });
+    res.json(reports);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin only - update report status
+const updateReportStatus = async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ error: "status is required" });
+    }
+
+    const report = await reportModel.updateReportStatus(id, status, req.user.id);
+    if (!report) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+    res.json(report);
+  } catch (error) {
+    if (error.code === "INVALID_STATUS") {
+      return res.status(400).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
+// ============================================================================
+// BLOCK ENDPOINTS
+// ============================================================================
+
+const blockModel = require("../models/blockModel");
+
+const blockUser = async (req, res, next) => {
+  try {
+    const { blockedId } = req.body;
+    const blockerId = req.user.id;
+
+    if (!blockedId) {
+      return res.status(400).json({ error: "blockedId is required" });
+    }
+
+    const block = await blockModel.blockUser(blockerId, blockedId);
+    res.status(201).json(block);
+  } catch (error) {
+    if (error.code === "CANNOT_BLOCK_SELF") {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error.code === "ALREADY_BLOCKED") {
+      return res.status(409).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
+const unblockUser = async (req, res, next) => {
+  try {
+    const { blockedId } = req.params;
+    const blockerId = req.user.id;
+
+    const block = await blockModel.unblockUser(blockerId, blockedId);
+    if (!block) {
+      return res.status(404).json({ message: "Block not found" });
+    }
+
+    res.json({ message: "User unblocked", block });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listBlocked = async (req, res, next) => {
+  try {
+    const blockerId = req.user.id;
+    const blocked = await blockModel.listBlocked(blockerId, {
+      limit: clampLimit(req.query.limit),
+      cursor: req.query.cursor || null,
+    });
+    res.json(blocked);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getPosts,
   getPost,
@@ -322,4 +559,16 @@ module.exports = {
   deleteComment,
   generatePreview,
   getPostFile,
+  // Reposts
+  createRepost,
+  undoRepost,
+  getReposts,
+  // Reports
+  createReport,
+  listReports,
+  updateReportStatus,
+  // Blocks
+  blockUser,
+  unblockUser,
+  listBlocked,
 };

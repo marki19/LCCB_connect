@@ -1,213 +1,252 @@
-import { useState } from "react";
-import { Tabs, useRouter } from "expo-router";
+import { Tabs } from "expo-router";
+import DesktopLayout from "../../src/components/DesktopLayout";
+import { useAuth } from "../../src/contexts/AuthContext";
+import { useTheme } from "../../src/contexts/ThemeContext";
+import { isAdminRole, isDepartmentAdminRole } from "../../src/lib/roles";
+import { setAdminAppPreview } from "../../src/lib/panelMode";
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
   Platform,
-  useWindowDimensions,
   Image,
 } from "react-native";
-import { Home, Plus, Bell, User, BookOpen, Sun, Moon, Shield } from "lucide-react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAuth } from "../../src/contexts/AuthContext";
-import { useTheme } from "../../src/contexts/ThemeContext";
-import { isAdminRole, isDepartmentAdminRole } from "../../src/lib/roles";
-import { setAdminAppPreview } from "../../src/lib/panelMode";
-import {
-  elevation,
-  focusRing,
-  RADIUS,
-  SPACE,
-  TYPE,
-  type ThemeTokens,
-} from "../../src/lib/tokens";
 
-const TAB_ITEMS = [
-  { name: "index", label: "Home", Icon: Home, isAction: false },
-  { name: "search", label: "Repository", Icon: BookOpen, isAction: false },
-  { name: "create", label: "Create", Icon: Plus, isAction: true },
-  { name: "notifications", label: "Notifications", Icon: Bell, isAction: false },
-  { name: "profile", label: "Profile", Icon: User, isAction: false },
+type TabItem = {
+  name: string;
+  label: string;
+  isAction: boolean;
+};
+
+const TAB_ITEMS: readonly TabItem[] = [
+  { name: "index", label: "Home", isAction: false },
+  { name: "search", label: "Repository", isAction: false },
+  { name: "create", label: "Create", isAction: true },
+  { name: "notifications", label: "Notifications", isAction: false },
+  { name: "profile", label: "Profile", isAction: false },
 ] as const;
 
-function DesktopTab({
-  label,
-  icon: Icon,
-  focused,
-  onPress,
-  colors,
-}: {
-  label: string;
-  icon: any;
-  focused: boolean;
-  onPress: () => void;
-  colors: ThemeTokens;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const [focusVisible, setFocusVisible] = useState(false);
-
-  return (
-    <Pressable
-          accessibilityRole="tab"
-          accessibilityLabel={label}
-          accessibilityState={{ selected: focused }}
-          onPress={onPress}
-          onHoverIn={() => setHovered(true)}
-          onHoverOut={() => setHovered(false)}
-          onFocus={() => setFocusVisible(true)}
-          onBlur={() => setFocusVisible(false)}
-          style={[
-            styles.webTab,
-            {
-              backgroundColor: focused
-                ? colors.brandWash
-                : hovered
-                ? colors.panelInset
-                : "transparent",
-            },
-            focusRing(colors, focusVisible),
-          ]}
-        >
-          <Icon
-            size={17}
-            color={focused ? colors.brand : colors.inkFaint}
-            strokeWidth={focused ? 2.4 : 2}
-          />
-          {(hovered || focusVisible) && (
-            <Text pointerEvents="none" style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}>
-              {label}
-            </Text>
-          )}
-        </Pressable>
-  );
-}
-
-function MobileTab({
-  label,
-  icon: Icon,
-  focused,
-  onPress,
-  colors,
-}: {
-  label: string;
-  icon: any;
-  focused: boolean;
-  onPress: () => void;
-  colors: ThemeTokens;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: focused }}
-      onPress={onPress}
-      style={({ pressed }) => [styles.mobileTab, { opacity: pressed ? 0.72 : 1 }]}
-    >
-      {focused ? (
-        <View
-          pointerEvents="none"
-          style={[styles.mobileActiveIndicator, { backgroundColor: colors.brand }]}
-        />
-      ) : null}
-      <View
-        style={[
-          styles.iconBubble,
-          { backgroundColor: focused ? colors.brandWash : "transparent" },
-        ]}
-      >
-        <Icon
-          size={21}
-          color={focused ? colors.brand : colors.inkFaint}
-          strokeWidth={focused ? 2.4 : 2}
-        />
-      </View>
-      <Text
-        style={[
-          styles.mobileLabel,
-          { color: focused ? colors.brand : colors.inkFaint },
-          focused && { fontWeight: "700" },
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function IconAction({
-  label,
-  icon: Icon,
-  iconColor,
-  variant,
-  onPress,
-  colors,
-}: {
-  label: string;
-  icon: any;
-  iconColor: string;
-  variant: "primary" | "outline";
-  onPress: () => void;
-  colors: ThemeTokens;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const [focusVisible, setFocusVisible] = useState(false);
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      onHoverIn={() => setHovered(true)}
-      onHoverOut={() => setHovered(false)}
-      onFocus={() => setFocusVisible(true)}
-      onBlur={() => setFocusVisible(false)}
-      style={({ pressed }) => [
-        styles.iconAction,
-        { width: 40, paddingHorizontal: 0, justifyContent: "center" },
-        variant === "primary"
-          ? {
-              backgroundColor: colors.brandSolid,
-              opacity: pressed ? 0.88 : 1,
-            }
-          : {
-              borderWidth: 1,
-              borderColor: colors.line,
-              backgroundColor: pressed ? colors.panelInset : "transparent",
-            },
-        focusRing(colors, focusVisible),
-      ]}
-    >
-      <Icon size={17} color={iconColor} strokeWidth={2.4} />
-      {(hovered || focusVisible) && (
-        <Text
-          pointerEvents="none"
-          style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}
-        >
-          {label}
-        </Text>
-      )}
-    </Pressable>
-  );
-}
-
-function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
+export default function TabsLayout() {
   const { profile } = useAuth();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const isGuest = profile?.role === "guest";
   const adminUser = isAdminRole(profile?.role);
   const departmentAdmin = isDepartmentAdminRole(profile?.role);
   const visibleTabs = TAB_ITEMS.filter((item) => !isGuest || !item.isAction);
-  const { width } = useWindowDimensions();
-  const isDesktopWeb = Platform.OS === "web" && width >= 768;
 
-  // Shared hover/focus state for Create, Admin, and theme-toggle buttons
-  const [hovered, setHovered] = useState(false);
-  const [focusVisible, setFocusVisible] = useState(false);
+  return (
+    <DesktopLayout
+      leftSidebar={
+        <LeftSidebar
+          visibleTabs={visibleTabs}
+          isGuest={isGuest}
+          adminUser={adminUser}
+          departmentAdmin={departmentAdmin}
+          profile={profile}
+          isDark={isDark}
+          toggleTheme={toggleTheme}
+        />
+      }
+      rightSidebar={
+        <RightSidebar isGuest={isGuest} unreadCount={0} activePeers={[]} />
+      }
+      showRightSidebar={!isGuest}
+    >
+      <Tabs
+        tabBar={(props) => <MobileTabBar {...props} visibleTabs={visibleTabs} />}
+        screenOptions={{ headerShown: false, tabBarPosition: "bottom" }}
+      >
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="search" />
+        <Tabs.Screen name="notifications" />
+        <Tabs.Screen name="profile" />
+      </Tabs>
+    </DesktopLayout>
+  );
+}
+
+function LeftSidebar({
+  visibleTabs,
+  isGuest,
+  adminUser,
+  departmentAdmin,
+  profile,
+  isDark,
+  toggleTheme,
+}: {
+  visibleTabs: typeof TAB_ITEMS;
+  isGuest: boolean;
+  adminUser: boolean;
+  departmentAdmin: boolean;
+  profile: any;
+  isDark: boolean;
+  toggleTheme: () => void;
+}) {
+  const { router } = require("expo-router");
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="LCCB Connect home"
+        onPress={() => router.push("/(tabs)/")}
+        style={styles.sidebarBrand}
+      >
+        <View
+          style={[
+            styles.sidebarLogo,
+            { backgroundColor: "var(--brand-wash)", borderColor: "var(--brand-wash-strong)" },
+          ]}
+        >
+          <Image
+            source={require("../../assets/images/logo-seal.png")}
+            style={{ width: 24, height: 24 }}
+            resizeMode="contain"
+          />
+        </View>
+        <Text style={{ fontSize: 16, fontWeight: "700", color: "var(--ink)" }}>
+          LCCB <Text style={{ color: "var(--brand)" }}>Connect</Text>
+        </Text>
+      </Pressable>
+
+      <View style={styles.sidebarNav}>
+        {visibleTabs.map(({ name, label, isAction }: TabItem) => {
+          if (isAction) {
+            return (
+              <Pressable
+                key={name}
+                accessibilityRole="button"
+                accessibilityLabel="Create a post"
+                onPress={() => router.push("/create")}
+                style={({ pressed }) => [
+                  styles.sidebarAction,
+                  { backgroundColor: pressed ? "var(--brand-solid)" : "var(--brand-solid)" },
+                ]}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: "var(--text-on-primary)",
+                  }}
+                >
+                  Create
+                </Text>
+              </Pressable>
+            );
+          }
+          return (
+            <Pressable
+              key={name}
+              accessibilityRole="tab"
+              accessibilityLabel={label}
+              onPress={() => router.push(`/(tabs)/${name}`)}
+              style={({ pressed }) => [
+                styles.sidebarNavItem,
+                pressed && { backgroundColor: "var(--panel-inset)" },
+              ]}
+            >
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: "var(--ink)",
+                  fontWeight: "500",
+                }}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+
+        {(adminUser || departmentAdmin) && (
+          <View style={styles.sidebarSection}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={adminUser ? "Open the admin console" : "Open the moderation console"}
+              onPress={() => {
+                if (adminUser) {
+                  setAdminAppPreview(false);
+                  router.push("/(admin)");
+                } else {
+                  router.push("/(moderation)" as any);
+                }
+              }}
+              style={styles.sidebarAdminLink}
+            >
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: adminUser ? "var(--brand)" : "var(--action)",
+                  fontWeight: "600",
+                }}
+              >
+                {adminUser ? "Admin Console" : "Moderation Console"}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.sidebarFooter}>
+        <Pressable
+          onPress={() => void toggleTheme()}
+          accessibilityRole="button"
+          accessibilityLabel={isDark ? "Switch to light theme" : "Switch to dark theme"}
+          style={styles.sidebarFooterItem}
+        >
+          <Text style={{ fontSize: 12, color: "var(--ink-faint)" }}>
+            {isDark ? "Light" : "Dark"}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push("/settings")}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          style={styles.sidebarFooterItem}
+        >
+          <Text style={{ fontSize: 12, color: "var(--ink-faint)" }}>Settings</Text>
+        </Pressable>
+      </View>
+    </>
+  );
+}
+
+function RightSidebar({
+  isGuest,
+  unreadCount,
+  activePeers,
+}: {
+  isGuest: boolean;
+  unreadCount: number;
+  activePeers: any[];
+}) {
+  if (isGuest) return null;
+
+  return (
+    <View style={styles.rightSidebar}>
+      <View style={styles.rightSidebarHeader}>
+        <Text style={{ fontSize: 16, fontWeight: "700", color: "var(--ink)" }}>Messages</Text>
+      </View>
+      <View style={styles.messagesEmpty}>
+        <Text style={{ fontSize: 14, color: "var(--ink-faint)", marginTop: 16 }}>No conversations yet</Text>
+      </View>
+    </View>
+  );
+}
+
+function MobileTabBar({
+  visibleTabs,
+  state,
+  descriptors,
+  emitter,
+  navigateToTab,
+}: any) {
+  const { useSafeAreaInsets } = require("react-native-safe-area-context");
+  const { useRouter } = require("expo-router");
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const navigate = (name: string, focused: boolean) => {
     const route = state.routes.find((r: any) => r.name === name);
@@ -222,147 +261,18 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
     }
   };
 
-  // Desktop Web: editorial top bar
-  if (isDesktopWeb) {
-    return (
-      <View
-        style={[
-          styles.webTopBar,
-          {
-            backgroundColor: colors.panel,
-            borderBottomColor: colors.line,
-            ...elevation("sm", colors),
-          },
-        ]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="LCCB Connect home"
-          onPress={() => router.push("/(tabs)/")}
-          style={styles.webBrand}
-        >
-          <View
-            style={[
-              styles.webLogoIcon,
-              { backgroundColor: colors.brandWash, borderColor: colors.brandWashStrong },
-            ]}
-          >
-            <Image
-              source={require("../../assets/images/logo-seal.png")}
-              style={{ width: 26, height: 26 }}
-              resizeMode="contain"
-            />
-          </View>
-          <View>
-            <Text style={[styles.webBrandTitle, { color: colors.ink }]}>
-              LCCB <Text style={{ color: colors.brand }}>Connect</Text>
-            </Text>
-          </View>
-        </Pressable>
-
-        <View style={styles.webNavLinks}>
-          {visibleTabs.map(({ name, label, Icon, isAction }) => {
-            const routeIndex = state.routes.findIndex((route: any) => route.name === name);
-            const focused = !isAction && state.index === routeIndex;
-
-            if (isAction) {
-              return (
-                <IconAction
-                  key={name}
-                  label="Create a post"
-                  icon={Plus}
-                  iconColor={colors.textOnPrimary}
-                  variant="primary"
-                  colors={colors}
-                  onPress={() => router.push("/create")}
-                />
-              );
-            }
-
-            return (
-              <DesktopTab
-                key={name}
-                label={label}
-                icon={Icon}
-                focused={focused}
-                onPress={() => navigate(name, focused)}
-                colors={colors}
-              />
-            );
-          })}
-
-          <Pressable
-            onPress={() => void toggleTheme()}
-            accessibilityRole="button"
-            accessibilityLabel={isDark ? "Switch to light theme" : "Switch to dark theme"}
-            onHoverIn={() => setHovered(true)}
-            onHoverOut={() => setHovered(false)}
-            onFocus={() => setFocusVisible(true)}
-            onBlur={() => setFocusVisible(false)}
-            style={({ pressed }) => [
-              styles.webIconButton,
-              {
-                backgroundColor: pressed ? colors.panelInset : hovered ? colors.panelInset : "transparent",
-              },
-              focusRing(colors, focusVisible),
-            ]}
-          >
-            {isDark ? (
-              <Sun size={18} color={colors.accentText} strokeWidth={2.2} />
-            ) : (
-              <Moon size={18} color={colors.inkSoft} strokeWidth={2} />
-            )}
-            {(hovered || focusVisible) && (
-              <Text
-                pointerEvents="none"
-                style={[styles.webTooltip, { backgroundColor: colors.ink, color: colors.surfacePage }]}
-              >
-                {isDark ? "Switch to light theme" : "Switch to dark theme"}
-              </Text>
-            )}
-          </Pressable>
-
-          {adminUser ? (
-            <IconAction
-              label="Open the admin console"
-              icon={Shield}
-              iconColor={colors.brand}
-              variant="outline"
-              colors={colors}
-              onPress={() => {
-                setAdminAppPreview(false);
-                router.push("/(admin)");
-              }}
-            />
-          ) : departmentAdmin ? (
-            <IconAction
-              label="Open the moderation console"
-              icon={Shield}
-              iconColor={colors.action}
-              variant="outline"
-              colors={colors}
-              onPress={() => router.push("/(moderation)" as any)}
-            />
-          ) : null}
-        </View>
-      </View>
-    );
-  }
-
-  // Mobile: thumb-friendly bottom bar
   return (
     <View
       style={[
         styles.mobileBar,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          backgroundColor: colors.tabBarBg,
-          borderTopColor: colors.line,
-          ...elevation("lg", colors),
+          backgroundColor: "var(--tab-bar-bg)",
+          borderTopColor: "var(--border)",
         },
       ]}
     >
-      {visibleTabs.map(({ name, label, Icon, isAction }) => {
+      {visibleTabs.map(({ name, label, isAction }: TabItem) => {
         const routeIndex = state.routes.findIndex((route: any) => route.name === name);
         const focused = !isAction && state.index === routeIndex;
 
@@ -375,15 +285,10 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
               accessibilityLabel="Create a post"
               style={({ pressed }) => [styles.mobileTab, { opacity: pressed ? 0.78 : 1 }]}
             >
-              <View
-                style={[
-                  styles.actionBubble,
-                  { backgroundColor: colors.brandSolid, ...elevation("sm", colors) },
-                ]}
-              >
-                <Plus size={22} color={colors.textOnPrimary} strokeWidth={2.6} />
+              <View style={[{ ...styles.actionBubble, backgroundColor: "var(--brand-solid)" }]}>
+                <Text style={{ color: "var(--text-on-primary)", fontWeight: "700" }}>+</Text>
               </View>
-              <Text style={[styles.mobileLabel, { color: colors.brand, fontWeight: "700" }]}>
+              <Text style={[{ ...styles.mobileLabel, color: "var(--brand)", fontWeight: "700" }]}>
                 {label}
               </Text>
             </Pressable>
@@ -391,113 +296,147 @@ function TabBar({ state, descriptors, emitter, navigateToTab }: any) {
         }
 
         return (
-          <MobileTab
+          <Pressable
             key={name}
-            label={label}
-            icon={Icon}
-            focused={focused}
             onPress={() => navigate(name, focused)}
-            colors={colors}
-          />
+            style={styles.mobileTab}
+          >
+            {focused && (
+              <View style={[{ ...styles.mobileActiveIndicator, backgroundColor: "var(--brand)" }]} />
+            )}
+            <View
+              style={[
+                styles.iconBubble,
+                { backgroundColor: focused ? "var(--brand-wash)" : "transparent" },
+              ]}
+            >
+              <Text style={{ fontSize: 21, color: focused ? "var(--brand)" : "var(--ink-faint)" }}>
+                {label[0]}
+              </Text>
+            </View>
+            <Text
+              style={[
+                styles.mobileLabel,
+                { color: focused ? "var(--brand)" : "var(--ink-faint)" },
+                focused && { fontWeight: "700" },
+              ]}
+              numberOfLines={1}
+            >
+              {label}
+            </Text>
+          </Pressable>
         );
       })}
     </View>
   );
 }
 
-export default function TabsLayout() {
-  const { width } = useWindowDimensions();
-  const isDesktopWeb = Platform.OS === "web" && width >= 768;
-
-  return (
-    <Tabs
-      tabBar={(props) => <TabBar {...props} />}
-      screenOptions={{
-        headerShown: false,
-        tabBarPosition: isDesktopWeb ? "top" : "bottom",
-      }}
-    >
-      <Tabs.Screen name="index" />
-      <Tabs.Screen name="search" />
-      <Tabs.Screen name="notifications" />
-      <Tabs.Screen name="profile" />
-    </Tabs>
-  );
-}
-
 const styles = StyleSheet.create({
-  webTopBar: {
+  sidebarBrand: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    paddingHorizontal: SPACE.x6,
-    height: 68,
-    zIndex: 100,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 8,
   },
-  webBrand: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.x3,
-    minHeight: 44,
-  },
-  webLogoIcon: {
+  sidebarLogo: {
     width: 36,
     height: 36,
-    borderRadius: RADIUS.md,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  webBrandTitle: {
-    ...TYPE.title,
-    fontSize: 17,
-    letterSpacing: -0.5,
-  },
-  webNavLinks: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.x1,
-  },
-  webTab: {
-    minHeight: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACE.x3,
-    borderRadius: RADIUS.pill,
-    gap: 6,
-  },
-  webTooltip: {
-    position: "absolute",
-    top: 46,
-    alignSelf: "center",
+  sidebarNav: {
+    flex: 1,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    fontSize: 11,
-    fontWeight: "600",
-    zIndex: 200,
+    gap: 2,
   },
-  webIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.md,
+  sidebarNavItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    minHeight: 44,
+  },
+  sidebarAction: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: SPACE.x1,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
+    minHeight: 44,
+    marginBottom: 8,
   },
-  iconAction: {
-    minHeight: 40,
+  sidebarSection: {
+    paddingHorizontal: 12,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  sidebarAdminLink: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: RADIUS.pill,
-    marginLeft: SPACE.x2,
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
   },
+  sidebarFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "var(--border)",
+    marginHorizontal: 8,
+  },
+  sidebarFooterItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+
+  rightSidebar: {
+    width: 360,
+    borderLeftWidth: 1,
+    borderLeftColor: "var(--border)",
+    backgroundColor: "var(--surface)",
+    display: "flex",
+    flexDirection: "column",
+  },
+  rightSidebarHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "var(--border)",
+  },
+  messagesEmpty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+
   mobileBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: "row",
     alignItems: "flex-start",
     borderTopWidth: 1,
-    paddingTop: 7,
+    zIndex: 100,
   },
   mobileTab: {
     flex: 1,

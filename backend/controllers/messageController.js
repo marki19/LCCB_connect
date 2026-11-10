@@ -78,6 +78,15 @@ const createConversation = async (req, res, next) => {
       return res.status(400).json({ error: "You can't message yourself" });
     }
 
+    // Verify user profile is complete before allowing messaging
+    if (!req.profile?.profile_completed) {
+      return res.status(403).json({
+        error: "Profile incomplete",
+        message: "Complete your profile (full name, student ID, department, and course) before messaging.",
+        code: "PROFILE_INCOMPLETE",
+      });
+    }
+
     const decision = await messageModel.canMessage(req.user.id, peer_id);
     if (decision === null) {
       return res.status(404).json({ error: "User not found" });

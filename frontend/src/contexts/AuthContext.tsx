@@ -40,11 +40,15 @@ type Profile = {
   suspension_reason?: string | null;
   suspended_by?: string | null;
   // Email bounce tracking (migration 021). True when Brevo reports a hard bounce (550).
-  email_bounced?: boolean | null;
-  bounce_reason?: string | null;
-  bounced_at?: string | null;
-  created_at?: string | null;
-};
+    email_bounced?: boolean | null;
+    bounce_reason?: string | null;
+    bounced_at?: string | null;
+    created_at?: string | null;
+    // Banner dismiss (migration 028). True when user dismisses the identity completion banner.
+    profile_banner_dismissed?: boolean | null;
+    // Profile completion (migration 028). True when all required fields are present.
+    profile_completed?: boolean | null;
+  };
 
 type ProfileStatus = "idle" | "loading" | "ready" | "error";
 

@@ -68,7 +68,7 @@ const defaultRequireAuth = (req, res, next) => {
   return next();
 };
 const defaultLoadProfile = (req, res, next) => {
-  req.profile = { id: session.id, role: session.role, department_id: session.department_id };
+  req.profile = { id: session.id, role: session.role, department_id: session.department_id, profile_completed: true, identity_complete: true };
   return next();
 };
 
@@ -78,10 +78,12 @@ stub(auth, "requireVerified", (req, res, next) => next());
 
 // Every model method the routes touch.
 const m = {
+  visiblePostsFor: stub(postModel, "visiblePostsFor"),
   getAllPosts: stub(postModel, "getAllPosts"),
   getPostById: stub(postModel, "getPostById"),
   createPost: stub(postModel, "createPost"),
   updatePost: stub(postModel, "updatePost"),
+  softDeletePost: stub(postModel, "softDeletePost"),
   deletePost: stub(postModel, "deletePost"),
   toggleLike: stub(postModel, "toggleLike"),
   getCommentById: stub(postModel, "getCommentById"),
@@ -165,13 +167,13 @@ describe("ownership is enforced in SQL (404, not 403)", () => {
   });
 
   it("404 when deleting a post that is not owned", async () => {
-    m.deletePost.setImpl(async () => undefined);
+      m.softDeletePost.setImpl(async () => undefined);
 
-    const res = await request(app).delete("/api/posts/abc").set(AUTH);
+      const res = await request(app).delete("/api/posts/abc").set(AUTH);
 
-    assert.equal(res.status, 404);
-    assert.deepEqual(m.deletePost.calls, [["abc", "u1"]]);
-  });
+      assert.equal(res.status, 404);
+      assert.deepEqual(m.softDeletePost.calls, [["abc", "u1"]]);
+    });
 
   it("404 when updating a thesis that is not owned", async () => {
     m.updateThesis.setImpl(async () => undefined);
@@ -669,27 +671,33 @@ describe("errors and pagination limits", () => {
   });
 
   it("clamps ?limit and passes ?cursor through to the model", async () => {
-    m.getAllPosts.setImpl(async () => []);
+      m.visiblePostsFor.setImpl(async () => ({ posts: [] }));
 
-    await request(app).get("/api/posts?limit=500").set(AUTH);
-    assert.deepEqual(m.getAllPosts.calls.at(-1), [
-      { limit: 100, cursor: null, q: null, authorId: null, userId: "u1" },
-    ]);
+      await request(app).get("/api/posts?limit=500").set(AUTH);
+      const call1 = m.visiblePostsFor.calls.at(-1);
+      assert.equal(call1[0], "u1");
+      assert.deepEqual(call1[1], {
+        limit: 100,
+        cursor: null,
+        q: null,
+        authorId: null,
+        visibility: null,
+      });
 
-    await request(app)
-      .get("/api/posts")
-      .query({ limit: 2, cursor: "2026-01-01T00:00:00.000Z|abc" })
-      .set(AUTH);
-    assert.deepEqual(m.getAllPosts.calls.at(-1), [
-      {
+      await request(app)
+        .get("/api/posts")
+        .query({ limit: 2, cursor: "2026-01-01T00:00:00.000Z|abc" })
+        .set(AUTH);
+      const call2 = m.visiblePostsFor.calls.at(-1);
+      assert.equal(call2[0], "u1");
+      assert.deepEqual(call2[1], {
         limit: 2,
         cursor: "2026-01-01T00:00:00.000Z|abc",
         q: null,
         authorId: null,
-        userId: "u1",
-      },
-    ]);
-  });
+        visibility: null,
+      });
+    });
 
   it("applies the same clamping to theses and users", async () => {
     session.role = "admin";
@@ -717,39 +725,46 @@ describe("post list filters", () => {
   const AUTHOR = "11111111-1111-4111-8111-111111111111";
 
   it("passes a trimmed search term and author id to the model", async () => {
-    m.getAllPosts.setImpl(async () => []);
+      m.visiblePostsFor.setImpl(async () => ({ posts: [] }));
 
-    const res = await request(app)
-      .get("/api/posts")
-      .query({ q: "  react  ", author_id: AUTHOR, limit: 5 })
-      .set(AUTH);
+      const res = await request(app)
+        .get("/api/posts")
+        .query({ q: "  react  ", author_id: AUTHOR, limit: 5 })
+        .set(AUTH);
 
-    assert.equal(res.status, 200);
-    assert.deepEqual(m.getAllPosts.calls.at(-1), [
-      { limit: 5, cursor: null, q: "react", authorId: AUTHOR, userId: "u1" },
-    ]);
-  });
+      assert.equal(res.status, 200);
+      const call = m.visiblePostsFor.calls.at(-1);
+      assert.equal(call[0], "u1");
+      assert.deepEqual(call[1], {
+        limit: 5,
+        cursor: null,
+        q: "react",
+        authorId: AUTHOR,
+        visibility: null,
+      });
+    });
 
-  it("caps an overlong search term at 100 characters", async () => {
-    m.getAllPosts.setImpl(async () => []);
+    it("caps an overlong search term at 100 characters", async () => {
+        m.visiblePostsFor.setImpl(async () => ({ posts: [] }));
 
-    await request(app)
-      .get("/api/posts")
-      .query({ q: "x".repeat(150) })
-      .set(AUTH);
+        await request(app)
+          .get("/api/posts")
+          .query({ q: "x".repeat(150) })
+          .set(AUTH);
 
-    assert.equal(m.getAllPosts.calls.at(-1)[0].q.length, 100);
-  });
+        const call = m.visiblePostsFor.calls.at(-1);
+        assert.equal(call[1].q.length, 100);
+      });
 
   it("rejects a malformed author_id instead of letting Postgres cast it", async () => {
-    const res = await request(app)
-      .get("/api/posts?author_id=not-a-uuid")
-      .set(AUTH);
+      const res = await request(app)
+        .get("/api/posts?author_id=not-a-uuid")
+        .set(AUTH);
 
-    assert.equal(res.status, 400);
-    assert.deepEqual(res.body, { error: "Invalid author_id" });
-    assert.equal(m.getAllPosts.calls.length, 0);
-  });
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, { error: "Invalid author_id" });
+      assert.equal(m.visiblePostsFor.calls.length, 0);
+    });
 });
 
 describe("thesis list filters", () => {

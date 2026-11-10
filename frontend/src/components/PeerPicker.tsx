@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Search, MessageSquare, UserPlus, Check, X, Lock } from "lucide-react-native";
 import { apiJson, apiFetch } from "../lib/api";
+import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { usePresence } from "../contexts/PresenceContext";
@@ -62,6 +63,7 @@ export default function PeerPicker({ visible, onClose, onOpened, mode = "message
   const { profile } = useAuth();
   const { colors, isDark } = useTheme();
   const { modeOf } = usePresence();
+  const router = useRouter();
   const [sections, setSections] = useState<{ title: string; data: Peer[] }[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -122,8 +124,28 @@ export default function PeerPicker({ visible, onClose, onOpened, mode = "message
   };
 
   const openThread = async (peer: Peer, label: string) => {
-    setBusyId(peer.id);
-    try {
+      // Check profile completion before attempting to start a conversation
+      // Banner dismissal does NOT bypass this - profile must be complete to post/message
+      if (profile?.profile_completed === false) {
+        Alert.alert(
+          "Complete Your Profile",
+          "You need to complete your profile (full name, student ID, department, and course) before you can post or message.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Complete Profile",
+              onPress: () => {
+                handleClose();
+                router.push("/onboarding");
+              }
+            }
+          ]
+        );
+        return;
+      }
+
+      setBusyId(peer.id);
+      try {
       const res = await apiFetch("/conversations", {
         method: "POST",
         body: JSON.stringify({ peer_id: peer.id }),

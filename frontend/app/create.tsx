@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { X, Type, Image as ImageIcon, FolderOpen, GraduationCap, Globe, RefreshCw, ChevronRight, CheckCircle2, ChevronLeft, SendHorizontal } from "lucide-react-native";
 import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { useAuth } from "../src/contexts/AuthContext";
@@ -50,6 +50,7 @@ function OptionCard({ type, title, desc, Icon, color, bg, selected, onSelect }: 
 export default function CreatePostModal() {
   const { profile } = useAuth();
   const { colors } = useTheme();
+  const router = useRouter();
 
   // Edit mode: these params are set when navigating from PostCard / PostDetail
   const {
@@ -129,76 +130,150 @@ export default function CreatePostModal() {
   };
 
   const handlePublish = async () => {
-    if (!profile?.id) return;
-    if (visibility === "custom" && audience.length === 0) {
-      return Alert.alert("Pick an audience", "Choose at least one friend who can see this.");
-    }
-    setIsPublishing(true);
+        if (!profile?.id) return;
 
-    try {
-      let finalImageKey: string | null = null;
-      if (imageUri) {
-        const path = `posts/${profile.id}-${Date.now()}.jpg`;
-        const uploaded = await uploadToStorage(imageUri, 'assets', path, 'image/jpeg', MAX_UPLOAD_BYTES.image);
-        if (uploaded) finalImageKey = uploaded.key;
-      }
-
-      let finalPreviewMetadata = previewData;
-      if (postType === "website" && !finalPreviewMetadata && githubUrl) {
-        try {
-          finalPreviewMetadata = await fetchLinkPreview(githubUrl.trim());
-        } catch {
-          // Non-blocking
+        // Check profile completion before attempting to post
+        // Banner dismissal does NOT bypass this - profile must be complete to post/message
+        if (profile.profile_completed === false) {
+          Alert.alert(
+            "Complete Your Profile",
+            "You need to complete your profile (full name, student ID, department, and course) before you can post or message.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Complete Profile",
+                onPress: () => {
+                  router.push("/onboarding");
+                }
+              }
+            ]
+          );
+          return;
         }
+
+        // Check verification status before attempting to post
+        if (profile.verification_status !== "verified" && profile.role === "student") {
+          Alert.alert(
+            "Identity Verification Required",
+            "You need to verify your student identity before posting. Would you like to do that now?",
+            [
+              { text: "Skip for now", style: "cancel" },
+              {
+                text: "Verify Now",
+                onPress: () => {
+                  router.push("/onboarding");
+                }
+              }
+            ]
+          );
+          return;
+        }
+
+      if (visibility === "custom" && audience.length === 0) {
+        return Alert.alert("Pick an audience", "Choose at least one friend who can see this.");
       }
+      setIsPublishing(true);
 
-      const techArray = technologies ? technologies.split(',').map(t => t.trim()) : null;
-      const visibilityPayload = visibilityTouched
-        ? { visibility, ...(visibility === "custom" ? { audience } : {}) }
-        : {};
+      try {
+        let finalImageKey: string | null = null;
+        if (imageUri) {
+          const path = `posts/${profile.id}-${Date.now()}.jpg`;
+          const uploaded = await uploadToStorage(imageUri, 'assets', path, 'image/jpeg', MAX_UPLOAD_BYTES.image);
+          if (uploaded) finalImageKey = uploaded.key;
+        }
 
-      if (isEditing && postId) {
-        // Edit mode — PUT /posts/:id
-        await updatePost(postId, {
-          content,
-          type: postType || 'text',
-          title: title || (finalPreviewMetadata?.title ?? null),
-          technologies: techArray,
-          github_url: githubUrl || null,
-          preview_metadata: finalPreviewMetadata || null,
-          ...(finalImageKey ? { image_url: finalImageKey } : {}),
-          ...visibilityPayload,
-        });
-      } else {
-        // Create mode — POST /posts
-        const res = await apiFetch(`/posts`, {
-          method: "POST",
-          body: JSON.stringify({
+        let finalPreviewMetadata = previewData;
+        if (postType === "website" && !finalPreviewMetadata && githubUrl) {
+          try {
+            finalPreviewMetadata = await fetchLinkPreview(githubUrl.trim());
+          } catch {
+            // Non-blocking
+          }
+        }
+
+        const techArray = technologies ? technologies.split(',').map(t => t.trim()) : null;
+        const visibilityPayload = visibilityTouched
+          ? { visibility, ...(visibility === "custom" ? { audience } : {}) }
+          : {};
+
+        if (isEditing && postId) {
+          // Edit mode — PUT /posts/:id
+          await updatePost(postId, {
             content,
             type: postType || 'text',
             title: title || (finalPreviewMetadata?.title ?? null),
             technologies: techArray,
             github_url: githubUrl || null,
-            image_url: finalImageKey,
             preview_metadata: finalPreviewMetadata || null,
-            visibility,
-            ...(visibility === "custom" ? { audience } : {}),
-          }),
-        });
+            ...(finalImageKey ? { image_url: finalImageKey } : {}),
+            ...visibilityPayload,
+          });
+        } else {
+          // Create mode — POST /posts
+          const res = await apiFetch(`/posts`, {
+            method: "POST",
+            body: JSON.stringify({
+              content,
+              type: postType || 'text',
+              title: title || (finalPreviewMetadata?.title ?? null),
+              technologies: techArray,
+              github_url: githubUrl || null,
+              image_url: finalImageKey,
+              preview_metadata: finalPreviewMetadata || null,
+              visibility,
+              ...(visibility === "custom" ? { audience } : {}),
+            }),
+          });
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || "Failed to create post");
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+
+            if (errData.code === "PROFILE_INCOMPLETE") {
+              Alert.alert(
+                "Complete Your Profile",
+                errData.message || "Complete your profile (full name, student ID, department, and course) before creating posts.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Complete Profile",
+                    onPress: () => {
+                      router.push("/onboarding");
+                    }
+                  }
+                ]
+              );
+              return;
+            }
+
+            // Handle verification error specifically
+            if (errData.code === "not_verified" || errData.code === "VERIFICATION_REQUIRED") {
+              Alert.alert(
+                "Identity Verification Required",
+                errData.error || errData.message || "You need to verify your student identity before posting.",
+                [
+                  { text: "Skip for now", style: "cancel" },
+                  { 
+                    text: "Verify Now", 
+                    onPress: () => {
+                      router.push("/onboarding");
+                    }
+                  }
+                ]
+              );
+              return;
+            }
+          
+            throw new Error(errData.error || errData.message || "Failed to create post");
+          }
         }
-      }
 
-      safeBack("/(tabs)");
-    } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to publish post");
-    } finally {
-      setIsPublishing(false);
-    }
-  };
+        safeBack("/(tabs)");
+      } catch (err: any) {
+        Alert.alert("Error", err.message || "Failed to publish post");
+      } finally {
+        setIsPublishing(false);
+      }
+    };
 
 
   const handlePickImage = async () => {

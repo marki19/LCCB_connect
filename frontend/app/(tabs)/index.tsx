@@ -25,6 +25,7 @@ import {
 } from "lucide-react-native";
 import HomeHeader from "../../src/components/HomeHeader";
 import PostCard from "../../src/components/PostCard";
+import RepostCard from "../../src/components/RepostCard";
 import SettingsSidebar from "../../src/components/SettingsSidebar";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
@@ -204,6 +205,12 @@ export default function HomeScreen() {
 
   const fetchActivePeers = useCallback(async () => {
     try {
+      // No profile = not authenticated, use public endpoint
+      if (!profile) {
+        const rows = await apiJson<any[]>("/public/peers?limit=20");
+        setActivePeers(rows);
+        return;
+      }
       const rows = isGuest
         ? await apiJson<any[]>("/public/peers?limit=20")
         : await apiJson<{ peer: any }[]>("/friends?limit=20");
@@ -212,7 +219,7 @@ export default function HomeScreen() {
     } catch (e) {
       console.error("Failed to load peers:", e);
     }
-  }, [isGuest, profile?.id]);
+  }, [isGuest, profile]);
 
   const fetchUnreadCount = useCallback(async () => {
     if (isGuest || !profile?.id) {
@@ -245,51 +252,79 @@ export default function HomeScreen() {
   );
 
   const fetchUnifiedFeed = useCallback(async () => {
-    if (!loadedRef.current) setLoading(true);
-    setError("");
-    let postItems: any[] = [];
-    let thesisItems: any[] = [];
-    let postFailed = false;
-    let thesisFailed = false;
+      if (!loadedRef.current) setLoading(true);
+      setError("");
+      let postItems: any[] = [];
+      let thesisItems: any[] = [];
+      let postFailed = false;
+      let thesisFailed = false;
 
-    try {
-      const res = await apiFetch(`/posts`);
-      if (res.ok) {
-        const data = await res.json();
-        postItems = data.map((row: any) => {
-          const authorName = row.author?.full_name || "Unknown Author";
-          return {
-            id: row.id,
-            author: {
-              id: row.author_id,
-              name: authorName,
-              initials: getInitials(authorName),
-              avatarColor: "#BFDBFE",
-              course: row.author?.department_name || "—",
-              yearLevel: row.author?.year_level || "—",
-            },
-            title: row.title || "Post Update",
-            description: row.content || row.description || "",
-            type: row.type || "text",
-            tags: row.technologies || row.tags || [],
-            previewUrl: row.github_url || row.preview_url,
-            imageUrl: row.image_url,
-            preview_metadata: row.preview_metadata || null,
-            likes: row.likes || 0,
-            comments: row.comments || 0,
-            createdAt: new Date(row.created_at).toLocaleDateString(),
-            rawDate: new Date(row.created_at).getTime(),
-            isLiked: Boolean(row.is_liked),
-            visibility: row.visibility,
-          };
-        });
-      } else {
+      try {
+        const res = await apiFetch(`/posts`);
+        if (res.ok) {
+          const data = await res.json();
+          postItems = data.map((row: any) => {
+            const authorName = row.author?.full_name || "Unknown Author";
+            const baseItem: any = {
+              id: row.id,
+              author: {
+                id: row.author_id,
+                name: authorName,
+                initials: getInitials(authorName),
+                avatarColor: "#BFDBFE",
+                course: row.author?.department_name || "—",
+                yearLevel: row.author?.year_level || "—",
+              },
+              title: row.title || "Post Update",
+              description: row.content || row.description || "",
+              content: row.content || undefined,
+              type: row.type || "text",
+              tags: row.technologies || row.tags || [],
+              previewUrl: row.github_url || row.preview_url,
+              imageUrl: row.image_url,
+              preview_metadata: row.preview_metadata || null,
+              likes: row.likes || 0,
+              comments: row.comments || 0,
+              createdAt: new Date(row.created_at).toLocaleDateString(),
+              rawDate: new Date(row.created_at).getTime(),
+              isLiked: Boolean(row.is_liked),
+              visibility: row.visibility,
+              repost_count: row.repost_count || 0,
+              allow_reposts: row.allow_reposts !== false,
+              edited_at: row.edited_at || null,
+              deleted_at: row.deleted_at || null,
+              kind: row.kind || "post",
+              author_department_id: row.author_department_id || null,
+              author_course_id: row.author_course_id || null,
+            };
+
+            // Handle reposts: backend returns kind="repost" with embedded original + reposter info
+            if (row.kind === "repost" && row.repost) {
+              const reposterName = row.reposter?.full_name || authorName;
+              baseItem.repost = {
+                id: row.repost.id,
+                caption: row.repost.caption || undefined,
+                created_at: row.repost.created_at,
+                reposter: {
+                  id: row.reposter?.id || row.author_id,
+                  name: reposterName,
+                  initials: getInitials(reposterName),
+                  avatarColor: "#BFDBFE",
+                  course: row.reposter?.department_name || "—",
+                  yearLevel: row.reposter?.year_level || "—",
+                },
+              };
+            }
+
+            return baseItem;
+          });
+        } else {
+          postFailed = true;
+        }
+      } catch (err) {
         postFailed = true;
+        console.error("Failed to load posts from SQL backend:", err);
       }
-    } catch (err) {
-      postFailed = true;
-      console.error("Failed to load posts from SQL backend:", err);
-    }
 
     try {
       const res = await apiFetch(`/theses`);
@@ -508,55 +543,38 @@ export default function HomeScreen() {
             <FlatList
               data={posts}
               keyExtractor={(item) => String(item.id)}
-              renderItem={({ item }) => <PostCard post={item} onDeleted={handlePostDeleted} />}
+              renderItem={({ item }) =>
+                item.kind === "repost" ? (
+                  <RepostCard post={item} repostInfo={item.repost!} onDeleted={handlePostDeleted} />
+                ) : (
+                  <PostCard post={item} onDeleted={handlePostDeleted} />
+                )
+              }
               contentContainerStyle={{
                 flexGrow: 1,
                 paddingTop: SPACE.x2,
                 paddingBottom: SPACE.x8,
               }}
               showsVerticalScrollIndicator={false}
-              ListHeaderComponent={
-                <View style={{ marginBottom: SPACE.x3 }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginHorizontal: SPACE.x4,
-                      marginVertical: SPACE.x2,
-                      minHeight: 48,
-                    }}
-                  >
-                    <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
-                      {onlineCount} online · {posts.length} posts
-                    </Text>
-                    {!isGuest && (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Create a post"
-                        onPress={goCreate}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 6,
-                          backgroundColor: colors.brandSolid,
-                          borderRadius: RADIUS.pill,
-                          paddingHorizontal: SPACE.x3,
-                          minHeight: 36,
-                        }}
-                      >
-                        <PenLine size={14} color={colors.textOnPrimary} />
-                        <Text
-                          style={{ ...TYPE.caption, fontWeight: "700", color: colors.textOnPrimary }}
-                        >
-                          Create
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
-                </View>
-              }
-              ListEmptyComponent={
+                            ListHeaderComponent={
+                              <View style={{ marginBottom: SPACE.x3 }}>
+                                <View
+                                  style={{
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    marginHorizontal: SPACE.x4,
+                                    marginVertical: SPACE.x2,
+                                    minHeight: 48,
+                                  }}
+                                >
+                                  <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
+                                    {onlineCount} online · {posts.length} posts
+                                  </Text>
+                                </View>
+                              </View>
+                            }
+                            ListEmptyComponent={
                 loading ? (
                   <View style={{ paddingHorizontal: SPACE.x4, gap: SPACE.x3 }}>
                     {[0, 1, 2].map((index) => (

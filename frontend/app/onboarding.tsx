@@ -535,6 +535,24 @@ export default function OnboardingScreen() {
           </Text>
         )}
       </TouchableOpacity>
+
+      {canEdit && !isDeclined && (
+        <TouchableOpacity
+          style={{
+            backgroundColor: "transparent",
+            borderRadius: 16,
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            alignItems: "center",
+            marginTop: 12,
+          }}
+          onPress={() => router.replace("/(tabs)/")}
+        >
+          <Text style={{ fontSize: 14, fontWeight: "500", color: colors.textTertiary }}>
+            Skip for now
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 

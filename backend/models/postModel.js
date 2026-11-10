@@ -157,6 +157,288 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
 };
 
 
+// =============================================================================
+// UNIFIED VISIBILITY FUNCTION — SINGLE SOURCE OF TRUTH
+// =============================================================================
+// Replaces getAllPosts/getPostById as the primary read path.
+// Returns { posts: [] } merged with reposts and sorted by created_at.
+// All visibility enforcement happens in the database via visible_posts() and
+// visible_reposts_for_post(). No code path should query `posts` directly
+// without going through this function (except moderation with includeHidden).
+// =============================================================================
+
+const POST_TYPE_FILTERS = [
+  'text', 'image', 'website', 'project', 'capstone', 'dissertation', 'discussion'
+];
+
+const buildPostSelect = (paramsLength, viewerId) => {
+  const isLikedSubquery = viewerId
+    ? `, (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $${paramsLength + 1})) AS is_liked`
+    : "";
+  return `
+    SELECT
+      p.id,
+      p.author_id,
+      p.content,
+      p.type,
+      p.title,
+      p.technologies,
+      p.github_url,
+      p.image_url,
+      p.preview_metadata,
+      p.visibility,
+      p.allow_reposts,
+      p.author_department_id,
+      p.author_course_id,
+      p.repost_count,
+      p.deleted_at,
+      p.edited_at,
+      p.moderation_status,
+      p.moderation_reason,
+      p.created_at,
+      COALESCE((SELECT COUNT(*)::int FROM likes l WHERE l.post_id = p.id), 0) AS likes,
+      COALESCE((SELECT COUNT(*)::int FROM comments c WHERE c.post_id = p.id AND c.moderation_status != 'hidden'), 0) AS comments,
+      json_build_object(
+        'id', pr.id,
+        'username', pr.username,
+        'full_name', pr.full_name,
+        'avatar_url', pr.avatar_url,
+        'course', pr.course,
+        'year_level', pr.year_level,
+        'department_id', pr.department_id,
+        'department_name', d.name
+      ) AS author
+      ${isLikedSubquery}
+  `;
+};
+
+const buildRepostSelect = (paramsLength, viewerId) => {
+  const isLikedSubquery = viewerId
+    ? `, (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = r.original_post_id AND l.user_id = $${paramsLength + 1})) AS is_liked`
+    : "";
+  return `
+    SELECT
+      r.id AS repost_id,
+      r.reposter_id,
+      r.original_post_id,
+      r.caption AS repost_caption,
+      r.visibility AS repost_visibility,
+      r.created_at AS repost_created_at,
+      r.deleted_at AS repost_deleted_at,
+      p.id,
+      p.author_id,
+      p.content,
+      p.type,
+      p.title,
+      p.technologies,
+      p.github_url,
+      p.image_url,
+      p.preview_metadata,
+      p.visibility,
+      p.allow_reposts,
+      p.author_department_id,
+      p.author_course_id,
+      p.repost_count,
+      p.deleted_at,
+      p.edited_at,
+      p.moderation_status,
+      p.moderation_reason,
+      p.created_at,
+      COALESCE((SELECT COUNT(*)::int FROM likes l WHERE l.post_id = p.id), 0) AS likes,
+      COALESCE((SELECT COUNT(*)::int FROM comments c WHERE c.post_id = p.id AND c.moderation_status != 'hidden'), 0) AS comments,
+      json_build_object(
+        'id', pr.id,
+        'username', pr.username,
+        'full_name', pr.full_name,
+        'avatar_url', pr.avatar_url,
+        'course', pr.course,
+        'year_level', pr.year_level,
+        'department_id', pr.department_id,
+        'department_name', d.name
+      ) AS author
+      ${isLikedSubquery}
+  `;
+};
+
+/**
+ * Single unified function for reading posts with visibility enforcement.
+ * Used by: feed, profile, search, direct link, notifications, repost embeds, counts.
+ * 
+ * @param {Object} options
+ * @param {string|null} options.viewerId - User ID for visibility gating (null for guests)
+ * @param {number} options.limit - Max rows to return (clamped to 1-100)
+ * @param {string|null} options.cursor - Keyset cursor "created_at|id"
+ * @param {string|null} options.q - Search term (title/content)
+ * @param {string|null} options.authorId - Filter by author
+ * @param {string|null} options.type - Filter by post type (text, image, website, project, capstone, dissertation, discussion)
+ * @param {boolean} options.includeReposts - Whether to include reposts in results
+ * @param {boolean} options.includeHidden - Moderation escape hatch (reads base tables)
+ * @returns {Promise<{posts: Array}>}
+ */
+const visiblePostsFor = async ({
+  viewerId = null,
+  limit = DEFAULT_LIMIT,
+  cursor = null,
+  q = null,
+  authorId = null,
+  type = null,
+  visibility = null,
+  postId = null,
+  includeReposts = true,
+  includeHidden = false,
+} = {}) => {
+  const params = [];
+  const conditions = [];
+
+  if (q) {
+    params.push(`%${escapeLike(q)}%`);
+    conditions.push(`(
+      p.title ILIKE $${params.length} ESCAPE '!'
+      OR p.content ILIKE $${params.length} ESCAPE '!'
+    )`);
+  }
+
+  if (authorId) {
+    params.push(authorId);
+    conditions.push(`p.author_id = $${params.length}::text`);
+  }
+
+  if (type && POST_TYPE_FILTERS.includes(type)) {
+      params.push(type);
+      conditions.push(`p.type = $${params.length}`);
+    }
+
+    if (visibility && ['public', 'friends', 'private', 'custom'].includes(visibility)) {
+      params.push(visibility);
+      conditions.push(`p.visibility = $${params.length}`);
+    }
+
+    if (postId) {
+      params.push(postId);
+      conditions.push(`p.id = $${params.length}::uuid`);
+    }
+
+    if (cursor) {
+    const [createdAt, id] = String(cursor).split("|");
+    if (createdAt && id) {
+      params.push(createdAt, id);
+      conditions.push(`(
+        p.created_at < $${params.length - 1}::timestamptz
+        OR (p.created_at = $${params.length - 1}::timestamptz AND p.id < $${params.length}::uuid)
+      )`);
+    }
+  }
+
+  // ---- 1. Fetch visible posts ------------------------------------------------
+  let fromClausePosts = "FROM posts p";
+  if (!includeHidden) {
+    params.push(viewerId);
+    fromClausePosts = `FROM visible_posts($${params.length}::text) p`;
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  params.push(limit);
+
+  const postSelect = buildPostSelect(params.length, viewerId);
+  const postsSql = `
+    ${postSelect}
+    ${fromClausePosts}
+    LEFT JOIN profiles pr ON p.author_id = pr.id
+    LEFT JOIN public.departments d ON d.id = pr.department_id
+    ${whereClause}
+    ORDER BY p.created_at DESC, p.id DESC
+    LIMIT $${params.length};
+  `;
+
+  const postQueryParams = viewerId ? [...params, viewerId] : params;
+  const postsResult = await db.query(postsSql, postQueryParams);
+
+  // ---- 2. Fetch visible reposts (if requested) -------------------------------
+  let reposts = [];
+  if (includeReposts) {
+    const repostParams = [...params]; // Copy base params (without limit)
+    repostParams.pop(); // Remove limit from copy
+
+    let fromClauseReposts = `
+      FROM reposts r
+      JOIN posts p ON p.id = r.original_post_id
+    `;
+    if (!includeHidden) {
+      repostParams.push(viewerId);
+      fromClauseReposts = `
+        FROM visible_reposts_for_post($${repostParams.length}::text) r
+        JOIN posts p ON p.id = r.original_post_id
+      `;
+    }
+
+    const repostWhereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    repostParams.push(limit);
+
+    const repostSelect = buildRepostSelect(repostParams.length, viewerId);
+    const repostsSql = `
+      ${repostSelect}
+      ${fromClauseReposts}
+      LEFT JOIN profiles pr ON p.author_id = pr.id
+      LEFT JOIN public.departments d ON d.id = pr.department_id
+      ${repostWhereClause}
+      ORDER BY r.created_at DESC, r.id DESC
+      LIMIT $${repostParams.length};
+    `;
+
+    const repostQueryParams = viewerId ? [...repostParams, viewerId] : repostParams;
+    const repostsResult = await db.query(repostsSql, repostQueryParams);
+
+    reposts = repostsResult.rows.map(row => ({
+      kind: 'repost',
+      repost: {
+        id: row.repost_id,
+        reposter_id: row.reposter_id,
+        original_post_id: row.original_post_id,
+        caption: row.repost_caption,
+        visibility: row.repost_visibility,
+        created_at: row.repost_created_at,
+        deleted_at: row.repost_deleted_at,
+      },
+      // Original post data (same structure as posts)
+      id: row.id,
+      author_id: row.author_id,
+      content: row.content,
+      type: row.type,
+      title: row.title,
+      technologies: row.technologies,
+      github_url: row.github_url,
+      image_url: row.image_url,
+      preview_metadata: row.preview_metadata,
+      visibility: row.visibility,
+      allow_reposts: row.allow_reposts,
+      author_department_id: row.author_department_id,
+      author_course_id: row.author_course_id,
+      repost_count: row.repost_count,
+      deleted_at: row.deleted_at,
+      edited_at: row.edited_at,
+      moderation_status: row.moderation_status,
+      moderation_reason: row.moderation_reason,
+      created_at: row.created_at,
+      likes: row.likes,
+      comments: row.comments,
+      author: row.author,
+      is_liked: row.is_liked,
+    }));
+  }
+
+  const posts = postsResult.rows.map(row => ({
+    kind: 'post',
+    ...row,
+  }));
+
+  // ---- 3. Merge and sort by created_at ---------------------------------------
+  const allItems = [...posts, ...reposts].sort((a, b) => 
+    new Date(b.created_at) - new Date(a.created_at)
+  );
+
+  return { posts: allItems };
+};
+
 // ---- visibility + audience -------------------------------------------------
 
 /**
@@ -190,12 +472,21 @@ const createPost = async (postData) => {
     moderation_reason = null,
     visibility = 'public',
     audience = null,
+    allow_reposts = true,
   } = postData;
 
   return db.withTransaction(async (client) => {
+    // Snapshot author's department and course at post creation time
+    const profileResult = await client.query(
+      `SELECT department_id, course_id FROM profiles WHERE id = $1`,
+      [author_id]
+    );
+    const author_department_id = profileResult.rows[0]?.department_id || null;
+    const author_course_id = profileResult.rows[0]?.course_id || null;
+
     const sql = `
-      INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, preview_metadata, moderation_status, moderation_reason, visibility)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, preview_metadata, moderation_status, moderation_reason, visibility, allow_reposts, author_department_id, author_course_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *;
     `;
     const values = [
@@ -210,6 +501,9 @@ const createPost = async (postData) => {
       moderation_status,
       moderation_reason,
       visibility,
+      allow_reposts,
+      author_department_id,
+      author_course_id,
     ];
     const result = await client.query(sql, values);
     const post = result.rows[0];
@@ -230,6 +524,7 @@ const POST_UPDATABLE_COLUMNS = [
   "image_url",
   "preview_metadata",
   "visibility",
+  "allow_reposts",
 ];
 
 // Partial update. Ownership is enforced in SQL, and the audience list is only
@@ -254,6 +549,7 @@ const updatePost = async (id, authorId, postData) => {
     let post;
 
     if (fields.length > 0) {
+      // Add edited_at to the update
       const setClause = fields.map((column, i) => `${column} = $${i + 1}`).join(", ");
       const values = fields.map((column) => postData[column]);
       values.push(id, authorId);
@@ -261,7 +557,7 @@ const updatePost = async (id, authorId, postData) => {
       const result = await client.query(
         `
           UPDATE posts
-          SET ${setClause}
+          SET ${setClause}, edited_at = now()
           WHERE id = $${fields.length + 1} AND author_id = $${fields.length + 2}
           RETURNING *;
         `,
@@ -293,8 +589,8 @@ const updatePost = async (id, authorId, postData) => {
 };
 
 
-const deletePost = async (id, authorId) => {
-  const sql = `DELETE FROM posts WHERE id = $1 AND author_id = $2 RETURNING *;`;
+const softDeletePost = async (id, authorId) => {
+  const sql = `UPDATE posts SET deleted_at = now() WHERE id = $1 AND author_id = $2 RETURNING *;`;
   const result = await db.query(sql, [id, authorId]);
   return result.rows[0];
 };
@@ -543,9 +839,10 @@ const deleteCommentByAuthor = async (id, postId, userId) => {
 module.exports = {
   getAllPosts,
   getPostById,
+  visiblePostsFor,
   createPost,
   updatePost,
-  deletePost,
+  softDeletePost,
   adminDeletePost,
   toggleLike,
   getComments,
