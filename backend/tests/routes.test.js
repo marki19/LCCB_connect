@@ -675,8 +675,9 @@ describe("errors and pagination limits", () => {
 
       await request(app).get("/api/posts?limit=500").set(AUTH);
       const call1 = m.visiblePostsFor.calls.at(-1);
-      assert.equal(call1[0], "u1");
-      assert.deepEqual(call1[1], {
+      assert.equal(call1.length, 1, "visiblePostsFor takes one options object");
+      assert.deepEqual(call1[0], {
+        viewerId: "u1",
         limit: 100,
         cursor: null,
         q: null,
@@ -689,8 +690,9 @@ describe("errors and pagination limits", () => {
         .query({ limit: 2, cursor: "2026-01-01T00:00:00.000Z|abc" })
         .set(AUTH);
       const call2 = m.visiblePostsFor.calls.at(-1);
-      assert.equal(call2[0], "u1");
-      assert.deepEqual(call2[1], {
+      assert.equal(call2.length, 1, "visiblePostsFor takes one options object");
+      assert.deepEqual(call2[0], {
+        viewerId: "u1",
         limit: 2,
         cursor: "2026-01-01T00:00:00.000Z|abc",
         q: null,
@@ -734,8 +736,9 @@ describe("post list filters", () => {
 
       assert.equal(res.status, 200);
       const call = m.visiblePostsFor.calls.at(-1);
-      assert.equal(call[0], "u1");
-      assert.deepEqual(call[1], {
+      assert.equal(call.length, 1, "visiblePostsFor takes one options object");
+      assert.deepEqual(call[0], {
+        viewerId: "u1",
         limit: 5,
         cursor: null,
         q: "react",
@@ -753,7 +756,7 @@ describe("post list filters", () => {
           .set(AUTH);
 
         const call = m.visiblePostsFor.calls.at(-1);
-        assert.equal(call[1].q.length, 100);
+        assert.equal(call[0].q.length, 100);
       });
 
   it("rejects a malformed author_id instead of letting Postgres cast it", async () => {

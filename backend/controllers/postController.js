@@ -32,7 +32,8 @@ const getPosts = async (req, res, next) => {
       return res.status(400).json({ error: author.error });
     }
 
-    const posts = await postModel.visiblePostsFor(req.user?.id || null, {
+    const posts = await postModel.visiblePostsFor({
+      viewerId: req.user?.id || null,
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
       q: parseSearch(req.query.q),
@@ -48,7 +49,8 @@ const getPosts = async (req, res, next) => {
 const getPost = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const result = await postModel.visiblePostsFor(req.user?.id || null, {
+    const result = await postModel.visiblePostsFor({
+      viewerId: req.user?.id || null,
       postId: id,
       includeHidden: false,
     });
@@ -307,7 +309,8 @@ const getPostFile = async (req, res, next) => {
     const viewerId = req.user?.id || null;
 
     // Visibility is enforced by the model's use of visible_posts().
-    const result = await postModel.visiblePostsFor(viewerId, {
+    const result = await postModel.visiblePostsFor({
+      viewerId,
       postId: id,
       includeHidden: false,
     });
