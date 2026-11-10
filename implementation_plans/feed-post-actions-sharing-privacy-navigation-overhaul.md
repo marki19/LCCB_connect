@@ -1,10 +1,11 @@
 # LCCB Connect — Feed, Post Actions, Sharing, Privacy, Navigation Overhaul
 ## Phased Implementation Plan with Security Gates
 
-**Status:** All 8 phases complete — 47/47 tasks done  
-**Branch:** mark1e3 (ahead 3, behind 0)  
+**Status:** 51/51 tasks complete — 3 were dropped and replaced (see 3.3, 3.9)  
+**Branch:** mark1e3  
+**Verified:** 2026-11-10 against code, tests and the live database — see `2026-11-10-feed-sharing-privacy-cleanup.md`  
 **Created:** 2026-11-09  
-**Total Tasks:** 47 across 8 phases
+**Total Tasks:** 51 tracked items across 8 phases
 
 ---
 
@@ -217,7 +218,7 @@ npm test                                   # Full suite: no regressions
   - **RED:** Test returns blocked users
   - **GREEN:** Implement
 
-- [ ] **3.8** `profileController.dismissBanner` — `PATCH /me/banner-dismissed { dismissed: true }`
+- [x] **3.8** `socialController.dismissBanner` — `PATCH /api/users/me/banner-dismissed` (implemented 2026-11-10)
   - **RED:** Test persists, does NOT bypass `profile_completed` check
   - **GREEN:** Implement
 
@@ -260,10 +261,10 @@ npm test                                     # Full suite
   - **RED:** Test badge matches post.visibility
   - **GREEN:** Implement
 
-- [ ] **4.3** `PostCard.tsx` — Replace full-width dropdown with `PostMenu` (compact)
+- [x] **4.3** `PostCard.tsx` — `PostMenu` replaces the dropdown and is shown to every viewer (2026-11-10)
   - **Defer to Phase 5.1** — this is the menu component
 
-- [ ] **4.4** `create.tsx` — Fix Discussion/Update content binding
+- [x] **4.4** `create.tsx` — Discussion/Update content binding plus `allow_reposts` toggle; `/post-settings` screen (2026-11-10)
   - Step 2: `content` field maps to `post.content` for `text`/`image` types
   - Step 3: Add `allow_reposts` toggle (default ON)
   - **RED:** Test API payload includes `content` for text/image, `allow_reposts`
