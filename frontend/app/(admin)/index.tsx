@@ -365,7 +365,7 @@ function HeroPulse({ data, colors }: { data: AdminOverview; colors: ThemeTokens 
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Open the user directory"
+          accessibilityLabel="View directory — open the user directory"
           onPress={() => router.push("/(admin)/users" as any)}
           style={({ pressed }) => ({
             minHeight: 34,

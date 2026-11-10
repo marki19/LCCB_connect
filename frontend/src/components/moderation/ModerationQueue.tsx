@@ -380,7 +380,7 @@ export default function ModerationQueue() {
 
       {loading ? (
         <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 80 }}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator accessibilityLabel="Loading" size="large" color={colors.primary} />
         </View>
       ) : queue.length === 0 && !error ? (
         <View

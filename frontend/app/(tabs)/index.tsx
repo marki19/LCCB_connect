@@ -164,12 +164,12 @@ function SideLink({
             height: 20,
             borderRadius: 10,
             paddingHorizontal: 6,
-            backgroundColor: "#DC2626",
+            backgroundColor: colors.coral,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "800" }}>
+          <Text style={{ color: colors.textOnDanger, fontSize: 10, fontWeight: "800" }}>
             {badgeCount > 99 ? "99+" : badgeCount}
           </Text>
         </View>
@@ -264,7 +264,6 @@ export default function HomeScreen() {
               id: row.author_id,
               name: authorName,
               initials: getInitials(authorName),
-              avatarColor: "#BFDBFE",
               course: row.author?.department_name || "—",
               yearLevel: row.author?.year_level || "—",
             },
@@ -303,7 +302,6 @@ export default function HomeScreen() {
               id: t.uploader_id,
               name: uploaderName,
               initials: getInitials(uploaderName),
-              avatarColor: "#EDE9FE",
               course: t.uploader?.department_name || t.department || "—",
               yearLevel: t.category || "Thesis",
             },
@@ -545,15 +543,178 @@ export default function HomeScreen() {
                           minHeight: 36,
                         }}
                       >
-                        <PenLine size={14} color={colors.textOnPrimary} />
+                        <PenLine size={14} color={colors.textOnBrandSolid} />
                         <Text
-                          style={{ ...TYPE.caption, fontWeight: "700", color: colors.textOnPrimary }}
+                          style={{ ...TYPE.caption, fontWeight: "700", color: colors.textOnBrandSolid }}
                         >
                           Create
                         </Text>
                       </Pressable>
                     )}
                   </View>
+
+                  {error ? (
+                    <View
+                      style={{
+                        marginHorizontal: SPACE.x4,
+                        marginBottom: SPACE.x3,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: SPACE.x3,
+                        borderRadius: RADIUS.lg,
+                        borderWidth: 1,
+                        borderColor: colors.coral,
+                        backgroundColor: colors.coralWash,
+                        padding: SPACE.x3,
+                      }}
+                    >
+                      <WifiOff size={17} color={colors.coralText} />
+                      <Text
+                        style={{ ...TYPE.caption, fontWeight: "600", color: colors.coralText, flex: 1 }}
+                      >
+                        {error}
+                      </Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Retry loading the feed"
+                        onPress={() => void onRefresh()}
+                        style={({ pressed }) => ({
+                          minHeight: 32,
+                          justifyContent: "center",
+                          borderRadius: RADIUS.pill,
+                          borderWidth: 1,
+                          borderColor: colors.coral,
+                          paddingHorizontal: SPACE.x3,
+                          opacity: pressed ? 0.8 : 1,
+                        })}
+                      >
+                        <Text
+                          style={{ ...TYPE.caption, fontWeight: "700", color: colors.coralText }}
+                        >
+                          Retry
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+
+                  {!isGuest && (
+                    <Pressable
+                      onPress={goCreate}
+                      accessibilityRole="button"
+                      accessibilityLabel="Create a post or deposit a thesis"
+                      style={({ pressed }) => ({
+                        marginHorizontal: SPACE.x4,
+                        marginBottom: SPACE.x3,
+                        minHeight: 64,
+                        padding: SPACE.x3,
+                        backgroundColor: colors.panel,
+                        borderRadius: RADIUS.xl,
+                        borderWidth: 1,
+                        borderColor: colors.line,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        opacity: pressed ? 0.92 : 1,
+                        ...elevation("sm", colors),
+                      })}
+                    >
+                      <View
+                        style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: 19,
+                          backgroundColor: colors.brandWash,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginRight: SPACE.x3,
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: "800", color: colors.brand }}>
+                          {getInitials(activeName)}
+                        </Text>
+                      </View>
+                      <View
+                        style={{
+                          flex: 1,
+                          minHeight: 40,
+                          backgroundColor: colors.surfaceSunken,
+                          borderRadius: RADIUS.pill,
+                          borderWidth: 1,
+                          borderColor: colors.line,
+                          justifyContent: "center",
+                          paddingHorizontal: SPACE.x4,
+                        }}
+                      >
+                        <Text style={{ color: colors.inkFaint, fontSize: 13 }} numberOfLines={1}>
+                          Share your project or deposit a thesis…
+                        </Text>
+                      </View>
+                      <View
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: colors.brandSolid,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginLeft: SPACE.x2,
+                        }}
+                      >
+                        <PenLine size={16} color={colors.textOnBrandSolid} />
+                      </View>
+                    </Pressable>
+                  )}
+
+                  <ScrollView
+                    horizontal
+                    accessibilityRole="tablist"
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: SPACE.x4, gap: SPACE.x2 }}
+                  >
+                    {FILTERS.map((item) => {
+                      const active = filter === item.value;
+                      const Icon = item.icon;
+                      return (
+                        <Pressable
+                          key={item.value}
+                          accessibilityRole="tab"
+                          accessibilityLabel={`Show ${item.label}`}
+                          accessibilityState={{ selected: active }}
+                          onPress={() => setFilter(item.value)}
+                          style={({ pressed }) => ({
+                            minHeight: 44,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                            borderRadius: RADIUS.pill,
+                            borderWidth: 1,
+                            borderColor: active ? colors.brandSolid : colors.line,
+                            backgroundColor: active
+                              ? colors.brandSolid
+                              : pressed
+                              ? colors.panelInset
+                              : colors.panel,
+                            paddingHorizontal: SPACE.x4,
+                            opacity: pressed ? 0.9 : 1,
+                          })}
+                        >
+                          <Icon
+                            size={14}
+                            color={active ? colors.textOnBrandSolid : colors.inkSoft}
+                            strokeWidth={2.1}
+                          />
+                          <Text
+                            style={{
+                              ...TYPE.caption,
+                              fontWeight: "700",
+                              color: active ? colors.textOnBrandSolid : colors.inkSoft,
+                            }}
+                          >
+                            {item.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
                 </View>
               }
               ListEmptyComponent={
@@ -624,165 +785,6 @@ export default function HomeScreen() {
                 />
               }
             />
-            {error ? (
-              <View
-                style={{
-                  marginHorizontal: SPACE.x4,
-                  marginBottom: SPACE.x3,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: SPACE.x3,
-                  borderRadius: RADIUS.lg,
-                  borderWidth: 1,
-                  borderColor: colors.coral,
-                  backgroundColor: colors.coralWash,
-                  padding: SPACE.x3,
-                }}
-              >
-                <WifiOff size={17} color={colors.coralText} />
-                <Text
-                  style={{ ...TYPE.caption, fontWeight: "600", color: colors.coralText, flex: 1 }}
-                >
-                  {error}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Retry loading the feed"
-                  onPress={() => void onRefresh()}
-                  style={({ pressed }) => ({
-                    minHeight: 32,
-                    justifyContent: "center",
-                    borderRadius: RADIUS.pill,
-                    borderWidth: 1,
-                    borderColor: colors.coral,
-                    paddingHorizontal: SPACE.x3,
-                    opacity: pressed ? 0.8 : 1,
-                  })}
-                >
-                  <Text
-                    style={{ ...TYPE.caption, fontWeight: "700", color: colors.coralText }}
-                  >
-                    Retry
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
-            {!isGuest && (
-              <Pressable
-                onPress={goCreate}
-                accessibilityRole="button"
-                accessibilityLabel="Create a post or deposit a thesis"
-                style={({ pressed }) => ({
-                  marginHorizontal: SPACE.x4,
-                  marginBottom: SPACE.x3,
-                  minHeight: 64,
-                  padding: SPACE.x3,
-                  backgroundColor: colors.panel,
-                  borderRadius: RADIUS.xl,
-                  borderWidth: 1,
-                  borderColor: colors.line,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  opacity: pressed ? 0.92 : 1,
-                  ...elevation("sm", colors),
-                })}
-              >
-                <View
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 19,
-                    backgroundColor: colors.brandWash,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: SPACE.x3,
-                  }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: colors.brand }}>
-                    {getInitials(activeName)}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    flex: 1,
-                    minHeight: 40,
-                    backgroundColor: colors.surfaceSunken,
-                    borderRadius: RADIUS.pill,
-                    borderWidth: 1,
-                    borderColor: colors.line,
-                    justifyContent: "center",
-                    paddingHorizontal: SPACE.x4,
-                  }}
-                >
-                  <Text style={{ color: colors.inkFaint, fontSize: 13 }} numberOfLines={1}>
-                    Share your project or deposit a thesis…
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: colors.brandSolid,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginLeft: SPACE.x2,
-                  }}
-                >
-                  <PenLine size={16} color={colors.textOnPrimary} />
-                </View>
-              </Pressable>
-            )}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: SPACE.x4, gap: SPACE.x2 }}
-            >
-              {FILTERS.map((item) => {
-                const active = filter === item.value;
-                const Icon = item.icon;
-                return (
-                  <Pressable
-                    key={item.value}
-                    accessibilityRole="tab"
-                    accessibilityLabel={`Show ${item.label}`}
-                    accessibilityState={{ selected: active }}
-                    onPress={() => setFilter(item.value)}
-                    style={({ pressed }) => ({
-                      minHeight: 44,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      borderRadius: RADIUS.pill,
-                      borderWidth: 1,
-                      borderColor: active ? colors.brandSolid : colors.line,
-                      backgroundColor: active
-                        ? colors.brandSolid
-                        : pressed
-                        ? colors.panelInset
-                        : colors.panel,
-                      paddingHorizontal: SPACE.x4,
-                      opacity: pressed ? 0.9 : 1,
-                    })}
-                  >
-                    <Icon
-                      size={14}
-                      color={active ? colors.textOnPrimary : colors.inkSoft}
-                      strokeWidth={2.1}
-                    />
-                    <Text
-                      style={{
-                        ...TYPE.caption,
-                        fontWeight: "700",
-                        color: active ? colors.textOnPrimary : colors.inkSoft,
-                      }}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
           </View>
         </View>
 
@@ -820,17 +822,6 @@ export default function HomeScreen() {
                 </Text>
               </Pressable>
             )}
-
-            <Text
-              style={{
-                ...TYPE.micro,
-                fontSize: 8.5,
-                color: colors.inkFaint,
-                marginBottom: SPACE.x2,
-              }}
-            >
-              {isGuest ? "Campus directory" : "Campus peers"}
-            </Text>
 
             <View
               style={{

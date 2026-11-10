@@ -1,13 +1,18 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Settings, Calendar, LogOut } from "lucide-react-native";
+import { Settings, Calendar, LogOut, PenLine } from "lucide-react-native";
 import PostCard from "../../src/components/PostCard";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { apiFetch } from "../../src/lib/api";
-
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/contexts/ThemeContext";
+import { RADIUS, SPACE, TYPE } from "../../src/lib/tokens";import Button, { IconButton } from "../../src/components/ui/Button";
+import Card from "../../src/components/ui/Card";
+import Reveal from "../../src/components/ui/Reveal";
+import SectionHeader from "../../src/components/ui/SectionHeader";
+import StatusBadge from "../../src/components/admin/StatusBadge";
+import EmptyState from "../../src/components/admin/EmptyState";
 
 function getInitials(name: string | null) {
   if (!name) return "??";
@@ -21,7 +26,6 @@ function formatPostRows(rows: any[], user: any) {
       id: user.id,
       name: user.full_name,
       initials: getInitials(user.full_name),
-      avatarColor: "#BFDBFE",
       course: user.department_name,
       yearLevel: user.year_level,
     },
@@ -41,7 +45,7 @@ function formatPostRows(rows: any[], user: any) {
 
 export default function ProfileScreen() {
   const { profile, signOut, refreshProfile, initialized } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const isGuest = profile?.role === "guest";
   const router = useRouter();
 
@@ -141,173 +145,325 @@ export default function ProfileScreen() {
   if (!currentUser) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: SPACE.x6 }}>
           {!initialized ? (
-            <ActivityIndicator size="large" color={colors.action} />
+            <ActivityIndicator accessibilityLabel="Loading" size="large" color={colors.primary} />
           ) : (
-            <>
-              <Text style={{ fontSize: 16, fontWeight: "600", color: colors.textPrimary, textAlign: "center" }}>
+            <Card style={{ alignItems: "center", padding: SPACE.x8, maxWidth: 380 }}>
+              <Text style={{ ...TYPE.title, color: colors.ink, textAlign: "center" }}>
                 Could not load your profile.
               </Text>
-              <TouchableOpacity
-                onPress={() => void refreshProfile()}
+              <Text
                 style={{
-                  marginTop: 16,
-                  borderRadius: 9999,
-                  backgroundColor: colors.action,
-                  paddingHorizontal: 20,
-                  paddingVertical: 10,
+                  ...TYPE.body,
+                  color: colors.inkSoft,
+                  textAlign: "center",
+                  marginTop: SPACE.x2,
                 }}
               >
-                <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Retry</Text>
-              </TouchableOpacity>
-            </>
+                Check your connection and try again.
+              </Text>
+              <Button
+                label="Retry"
+                onPress={() => void refreshProfile()}
+                style={{ marginTop: SPACE.x5 }}
+              />
+            </Card>
           )}
         </View>
       </SafeAreaView>
     );
   }
 
+  const joined = currentUser.created_at
+    ? new Date(currentUser.created_at).toLocaleDateString(undefined, {
+        month: "short",
+        year: "numeric",
+      })
+    : null;
+
+  const verification = (() => {
+    const status = currentUser.verification_status;
+    if (status === "verified") return { label: "Verified", tone: "success" as const };
+    if (status === "pending") return { label: "Under review", tone: "warning" as const };
+    return null;
+  })();
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Cover photo */}
-        <View style={{ height: 120, backgroundColor: colors.actionSurfaceAlt }} />
-
-        {/* Profile info */}
-        <View style={{ paddingHorizontal: 16, paddingBottom: 20, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.actionSurfaceAlt, alignItems: "center", justifyContent: "center", marginTop: -40, borderWidth: 4, borderColor: colors.surface }}>
-              <Text style={{ fontSize: 28, fontWeight: "800", color: colors.textPrimary }}>{getInitials(currentUser.full_name)}</Text>
-            </View>
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-              {!isGuest && (
-                <TouchableOpacity onPress={() => router.push("/edit-profile")} style={{ padding: 8, backgroundColor: colors.surfaceSunken, borderRadius: 20 }}>
-                  <Settings size={20} color={colors.textTertiary} />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity onPress={handleSignOut} style={{ padding: 8, backgroundColor: isDark ? "hsl(360, 40%, 20%)" : "#FEE2E2", borderRadius: 20 }}>
-                <LogOut size={20} color={colors.destructive} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <Text style={{ fontSize: 24, fontWeight: "800", color: colors.textPrimary, marginTop: 8 }}>{isGuest ? "Guest Visitor" : (currentUser.full_name || "Complete your profile")}</Text>
-          
-          {/* Verification status row */}
-          {!isGuest && (
-            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 }}>
-              {(() => {
-                const status = currentUser.verification_status;
-                if (status === "verified") {
-                  return (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: colors.successSurfaceAlt, borderRadius: 9999, borderWidth: 1, borderColor: colors.success }}>
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.success, textTransform: "uppercase" }}>Verified</Text>
-                    </View>
-                  );
-                }
-                if (status === "pending") {
-                  return (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: colors.warningSurface, borderRadius: 9999, borderWidth: 1, borderColor: colors.warning }}>
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.warning, textTransform: "uppercase" }}>Under review</Text>
-                    </View>
-                  );
-                }
-                // unverified or identity incomplete
-                return (
-                  <TouchableOpacity 
-                    onPress={() => router.push("/onboarding")}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: colors.actionSurface, borderRadius: 9999, borderWidth: 1, borderColor: colors.borderStrong }}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.action }}>Complete profile</Text>
-                  </TouchableOpacity>
-                );
-              })()}
-            </View>
-          )}
-          
-          <Text style={{ fontSize: 15, color: colors.textTertiary, marginTop: 2, fontWeight: "500" }}>{isGuest ? "External Visitor · Read-only" : `${currentUser.department_name || "No department"} · ${currentUser.year_level || "—"}`}</Text>
-
-          <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: 12, lineHeight: 22 }}>
-            {isGuest ? "Viewing LCCB academic projects and theses as a guest." : (currentUser.bio || "No bio yet.")}
-          </Text>
-
-          {currentUser.created_at ? (
-            <View style={{ flexDirection: "row", marginTop: 12, gap: 16 }}>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Calendar size={14} color={colors.textTertiary} />
-                <Text style={{ fontSize: 13, color: colors.textTertiary, marginLeft: 4 }}>
-                  Joined {new Date(currentUser.created_at).toLocaleDateString(undefined, {
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-
-          {currentUser.skills && currentUser.skills.length > 0 && (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
-              {currentUser.skills.map((skill, index) => (
-                <View key={index} style={{ backgroundColor: colors.badgeWebsiteBg, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
-                  <Text style={{ color: colors.badgeWebsiteText, fontSize: 13, fontWeight: "600" }}>{skill}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Stats */}
-          <View style={{ flexDirection: "row", marginTop: 20, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
-            <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{visiblePosts.length}</Text>
-              <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Projects</Text>
-            </View>
-            <View style={{ flex: 1, alignItems: "center", borderLeftWidth: 1, borderRightWidth: 1, borderColor: colors.border }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{visiblePosts.reduce((s, p) => s + p.likes, 0)}</Text>
-              <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Likes</Text>
-            </View>
-            <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.textPrimary }}>{visiblePosts.reduce((s, p) => s + p.comments, 0)}</Text>
-              <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Comments</Text>
-            </View>
-          </View>
+        {/* Hero band */}
+        <View style={{ height: 150, backgroundColor: colors.brandSolid, overflow: "hidden" }}>
+          <View
+            style={{
+              position: "absolute",
+              width: 280,
+              height: 280,
+              borderRadius: 140,
+              backgroundColor: colors.heroGlow,
+              opacity: 0.18,
+              top: -150,
+              right: -60,
+            }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              width: 180,
+              height: 180,
+              borderRadius: 90,
+              backgroundColor: colors.accentBright,
+              opacity: 0.14,
+              bottom: -110,
+              left: 40,
+            }}
+          />
         </View>
 
-        {/* Portfolio */}
-        <View style={{ padding: 16 }}>
-          <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary, marginBottom: 16 }}>Portfolio</Text>
-          {visiblePosts.length === 0 ? (
-            <View style={{ alignItems: "center", paddingVertical: 40 }}>
-              <Text style={{ fontSize: 15, color: colors.textTertiary, fontWeight: "500" }}>No posts yet</Text>
-            </View>
-          ) : (
-            <>
-              {visiblePosts.map((post) => <PostCard key={post.id} post={post} />)}
-              {hasMore && (
-                <TouchableOpacity
-                  onPress={() => void loadMorePosts()}
-                  disabled={loadingMore}
-                  activeOpacity={0.8}
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 760,
+            alignSelf: "center",
+            paddingHorizontal: SPACE.x4,
+          }}
+        >
+          {/* Identity card */}
+          <Reveal style={{ marginTop: -56 }}>
+            <Card elevated style={{ padding: SPACE.x5 }}>
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: SPACE.x4 }}>
+                <View
                   style={{
-                    marginTop: 8,
-                    paddingVertical: 12,
+                    width: 96,
+                    height: 96,
+                    borderRadius: 48,
+                    backgroundColor: colors.brandWash,
+                    borderWidth: 4,
+                    borderColor: colors.surface,
                     alignItems: "center",
                     justifyContent: "center",
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.surface,
+                    marginTop: -40,
                   }}
                 >
-                  {loadingMore ? (
-                    <ActivityIndicator size="small" color={colors.action} />
-                  ) : (
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: colors.action }}>Load more posts</Text>
-                  )}
-                </TouchableOpacity>
+                  <Text style={{ fontSize: 32, fontWeight: "800", color: colors.brand }}>
+                    {getInitials(isGuest ? "Guest Visitor" : currentUser.full_name)}
+                  </Text>
+                </View>
+
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: SPACE.x3,
+                    }}
+                  >
+                    <Text
+                      style={{ ...TYPE.h2, color: colors.ink, flex: 1 }}
+                      numberOfLines={2}
+                    >
+                      {isGuest ? "Guest Visitor" : currentUser.full_name || "Complete your profile"}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: SPACE.x2 }}>
+                      {!isGuest && (
+                        <IconButton
+                          icon={Settings}
+                          label="Edit profile"
+                          variant="secondary"
+                          onPress={() => router.push("/edit-profile")}
+                        />
+                      )}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Sign out"
+                        onPress={handleSignOut}
+                        onFocus={() => {}}
+                        style={({ pressed }) => ({
+                          width: 40,
+                          height: 40,
+                          borderRadius: RADIUS.md,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: colors.destructiveSurface,
+                          opacity: pressed ? 0.75 : 1,
+                        })}
+                      >
+                        <LogOut size={18} color={colors.destructive} />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: SPACE.x2,
+                      marginTop: SPACE.x2,
+                    }}
+                  >
+                    {verification ? (
+                      <StatusBadge label={verification.label} tone={verification.tone} />
+                    ) : !isGuest ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Complete your profile"
+                        onPress={() => router.push("/onboarding")}
+                        style={({ pressed }) => ({
+                          minHeight: 30,
+                          justifyContent: "center",
+                          paddingHorizontal: SPACE.x3,
+                          borderRadius: RADIUS.pill,
+                          borderWidth: 1,
+                          borderColor: colors.borderStrong,
+                          backgroundColor: colors.primarySurface,
+                          opacity: pressed ? 0.8 : 1,
+                        })}
+                      >
+                        <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.primary }}>
+                          Complete profile
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                    {joined ? (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x1 }}>
+                        <Calendar size={13} color={colors.textTertiary} />
+                        <Text style={{ ...TYPE.caption, color: colors.textTertiary }}>
+                          Joined {joined}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
+                    {isGuest
+                      ? "External Visitor · Read-only"
+                      : `${currentUser.department_name || "No department"} · ${currentUser.year_level || "—"}`}
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={{
+                  ...TYPE.body,
+                  color: colors.inkSoft,
+                  marginTop: SPACE.x4,
+                  lineHeight: 22,
+                }}
+              >
+                {isGuest
+                  ? "Viewing LCCB academic projects and theses as a guest."
+                  : currentUser.bio || "No bio yet."}
+              </Text>
+
+              {currentUser.skills && currentUser.skills.length > 0 && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: SPACE.x2,
+                    marginTop: SPACE.x4,
+                  }}
+                >
+                  {currentUser.skills.map((skill, index) => (
+                    <View
+                      key={index}
+                      style={{
+                        backgroundColor: colors.primarySurface,
+                        paddingHorizontal: SPACE.x3,
+                        paddingVertical: SPACE.x1,
+                        borderRadius: RADIUS.pill,
+                      }}
+                    >
+                      <Text style={{ ...TYPE.caption, fontWeight: "600", color: colors.primary }}>
+                        {skill}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               )}
-            </>
-          )}
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  marginTop: SPACE.x5,
+                  paddingTop: SPACE.x4,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.divider,
+                }}
+              >
+                {[
+                  { label: "Projects", value: visiblePosts.length },
+                  { label: "Likes", value: visiblePosts.reduce((s, p) => s + p.likes, 0) },
+                  { label: "Comments", value: visiblePosts.reduce((s, p) => s + p.comments, 0) },
+                ].map((stat, i) => (
+                  <View
+                    key={stat.label}
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      borderLeftWidth: i === 0 ? 0 : 1,
+                      borderLeftColor: colors.divider,
+                    }}
+                  >
+                    <Text style={{ ...TYPE.h2, color: colors.ink }}>{stat.value}</Text>
+                    <Text style={{ ...TYPE.caption, color: colors.textTertiary, marginTop: 2 }}>
+                      {stat.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          </Reveal>
+
+          {/* Portfolio */}
+          <View style={{ marginTop: SPACE.x6 }}>
+            <SectionHeader
+              eyebrow="Work"
+              title="Portfolio"
+              description={
+                isGuest
+                  ? "Sign in to build your portfolio."
+                  : "Posts, projects, and deposits you have shared."
+              }
+            />
+
+            {visiblePosts.length === 0 ? (
+              <Card>
+                <EmptyState
+                  icon={PenLine}
+                  tone="brand"
+                  compact
+                  title={isGuest ? "Nothing to show" : "Your portfolio is empty"}
+                  body={
+                    isGuest
+                      ? "Create an account to publish projects and deposit theses."
+                      : "Share an update, a project, or a thesis to start your portfolio."
+                  }
+                  actionLabel={isGuest ? undefined : "Create a post"}
+                  onAction={isGuest ? undefined : () => router.push("/create")}
+                />
+              </Card>
+            ) : (
+              <>
+                {visiblePosts.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+                {hasMore && (
+                  <Button
+                    label={loadingMore ? "Loading…" : "Load more posts"}
+                    variant="secondary"
+                    onPress={() => void loadMorePosts()}
+                    loading={loadingMore}
+                    disabled={loadingMore}
+                    fullWidth
+                    style={{ marginHorizontal: SPACE.x4, marginTop: SPACE.x2 }}
+                  />
+                )}
+              </>
+            )}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -124,7 +124,7 @@ export default function ModerationLayout() {
           style={{
             marginTop: 24,
             borderRadius: 9999,
-            backgroundColor: colors.primary,
+            backgroundColor: colors.brandSolid,
             paddingHorizontal: 24,
             paddingVertical: 12,
           }}
@@ -133,7 +133,7 @@ export default function ModerationLayout() {
             router.replace("/(tabs)/");
           }}
         >
-          <Text style={{ fontWeight: "700", color: colors.textOnPrimary }}>Go to App</Text>
+          <Text style={{ fontWeight: "700", color: colors.textOnBrandSolid }}>Go to App</Text>
         </TouchableOpacity>
       </View>
     );
@@ -149,7 +149,7 @@ export default function ModerationLayout() {
           backgroundColor: colors.surfacePage,
         }}
       >
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator accessibilityLabel="Loading" size="large" color={colors.primary} />
       </View>
     );
   }
@@ -192,7 +192,7 @@ export default function ModerationLayout() {
           style={{
             marginTop: 24,
             borderRadius: 9999,
-            backgroundColor: colors.primary,
+            backgroundColor: colors.brandSolid,
             paddingHorizontal: 24,
             paddingVertical: 12,
           }}
@@ -201,7 +201,7 @@ export default function ModerationLayout() {
             router.replace("/(tabs)/");
           }}
         >
-          <Text style={{ fontWeight: "700", color: colors.textOnPrimary }}>Go to App</Text>
+          <Text style={{ fontWeight: "700", color: colors.textOnBrandSolid }}>Go to App</Text>
         </TouchableOpacity>
       </View>
     );
@@ -245,7 +245,7 @@ export default function ModerationLayout() {
                   style={{
                     fontSize: 15,
                     fontWeight: "800",
-                    color: colors.textPrimary,
+                    color: colors.sidebarActiveText,
                     letterSpacing: -0.2,
                   }}
                   numberOfLines={1}
@@ -258,7 +258,7 @@ export default function ModerationLayout() {
                     fontWeight: "700",
                     textTransform: "uppercase",
                     letterSpacing: 0.8,
-                    color: colors.primary,
+                    color: colors.navAccent,
                     marginTop: 1,
                   }}
                   numberOfLines={1}
@@ -281,8 +281,8 @@ export default function ModerationLayout() {
                   marginTop: 12,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: colors.surface,
+                  borderColor: colors.sidebarBorder,
+                  backgroundColor: colors.sidebarItemHover,
                   padding: 12,
                 }}
               >
@@ -292,7 +292,7 @@ export default function ModerationLayout() {
                     fontWeight: "700",
                     textTransform: "uppercase",
                     letterSpacing: 0.8,
-                    color: colors.textTertiary,
+                    color: colors.sidebarItemText,
                   }}
                 >
                   Department
@@ -302,7 +302,7 @@ export default function ModerationLayout() {
                     marginTop: 4,
                     fontSize: 13,
                     fontWeight: "700",
-                    color: colors.textPrimary,
+                    color: colors.sidebarActiveText,
                   }}
                   numberOfLines={2}
                 >
@@ -312,7 +312,7 @@ export default function ModerationLayout() {
             ) : null}
           </View>
 
-          <View style={{ borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 16 }}>
+          <View style={{ borderTopWidth: 1, borderTopColor: colors.sidebarBorder, paddingTop: 16 }}>
             <View
               style={{
                 marginBottom: 12,
@@ -327,21 +327,21 @@ export default function ModerationLayout() {
                   width: 36,
                   height: 36,
                   borderRadius: 18,
-                  backgroundColor: colors.primarySurface,
+                  backgroundColor: colors.sidebarActiveBg,
                   alignItems: "center",
                   justifyContent: "center",
                   marginRight: 10,
                   borderWidth: 1,
-                  borderColor: colors.border,
+                  borderColor: colors.sidebarBorder,
                 }}
               >
-                <Text style={{ fontWeight: "700", fontSize: 13, color: colors.primary }}>
+                <Text style={{ fontWeight: "700", fontSize: 13, color: colors.sidebarActiveText }}>
                   {(profile.full_name?.[0] || profile.username?.[0] || "M").toUpperCase()}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text
-                  style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}
+                  style={{ fontSize: 13, fontWeight: "700", color: colors.sidebarActiveText }}
                   numberOfLines={1}
                 >
                   {profile.full_name || profile.username || "Moderator"}
@@ -349,7 +349,7 @@ export default function ModerationLayout() {
                 <Text
                   style={{
                     fontSize: 11,
-                    color: colors.textTertiary,
+                    color: colors.sidebarItemText,
                     textTransform: "capitalize",
                   }}
                   numberOfLines={1}
@@ -368,20 +368,20 @@ export default function ModerationLayout() {
                 borderRadius: 12,
                 paddingHorizontal: 12,
                 paddingVertical: 10,
-                backgroundColor: isDark ? colors.surfaceElevated : colors.surfaceSunken,
+                backgroundColor: colors.sidebarItemHover,
               }}
             >
               {isDark ? (
-                <Moon size={16} color={colors.warning} />
+                <Moon size={16} color={colors.navAccent} />
               ) : (
-                <Sun size={16} color={colors.warning} />
+                <Sun size={16} color={colors.navAccent} />
               )}
               <Text
                 style={{
                   marginLeft: 10,
                   fontSize: 12,
                   fontWeight: "600",
-                  color: colors.textSecondary,
+                  color: colors.sidebarItemText,
                   flex: 1,
                 }}
               >
@@ -403,13 +403,13 @@ export default function ModerationLayout() {
                 paddingVertical: 10,
               }}
             >
-              <ExternalLink size={16} color={colors.textSecondary} />
+              <ExternalLink size={16} color={colors.sidebarItemText} />
               <Text
                 style={{
                   marginLeft: 10,
                   fontSize: 12,
                   fontWeight: "600",
-                  color: colors.textSecondary,
+                  color: colors.sidebarItemText,
                 }}
               >
                 Back to App
@@ -426,13 +426,13 @@ export default function ModerationLayout() {
                 paddingVertical: 10,
               }}
             >
-              <LogOut size={16} color={colors.destructiveText} />
+              <LogOut size={16} color={colors.dangerOnDark} />
               <Text
                 style={{
                   marginLeft: 10,
                   fontSize: 12,
                   fontWeight: "600",
-                  color: colors.destructiveText,
+                  color: colors.dangerOnDark,
                 }}
               >
                 Sign Out

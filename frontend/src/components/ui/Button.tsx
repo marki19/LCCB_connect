@@ -140,7 +140,7 @@ export default function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={p.text} />
+        <ActivityIndicator accessibilityLabel="Loading" size="small" color={p.text} />
       ) : Icon ? (
         <Icon size={iconSize} color={inactive ? colors.textDisabled : p.icon} strokeWidth={2.2} />
       ) : null}

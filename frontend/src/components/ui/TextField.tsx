@@ -4,7 +4,9 @@ import {
   TextInput,
   View,
   type KeyboardTypeOptions,
+  type StyleProp,
   type TextInputProps,
+  type TextStyle,
 } from "react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { focusRing, RADIUS, SPACE } from "../../lib/tokens";
@@ -23,6 +25,14 @@ type TextFieldProps = {
   multiline?: boolean;
   editable?: boolean;
   right?: ReactNode;
+  /** Optional leading icon rendered inside the field. */
+  leadingIcon?: (props: { size: number; color: string }) => ReactNode;
+  autoFocus?: boolean;
+  returnKeyType?: TextInputProps["returnKeyType"];
+  onSubmitEditing?: () => void;
+  onBlur?: () => void;
+  maxLength?: number;
+  inputStyle?: StyleProp<TextStyle>;
   minHeight?: number;
 };
 
@@ -40,6 +50,13 @@ export default function TextField({
   multiline = false,
   editable = true,
   right,
+  leadingIcon,
+  autoFocus,
+  returnKeyType,
+  onSubmitEditing,
+  onBlur,
+  maxLength,
+  inputStyle,
   minHeight,
 }: TextFieldProps) {
   const { colors } = useTheme();
@@ -66,7 +83,7 @@ export default function TextField({
       <View
         style={[
           {
-            minHeight: minHeight ?? 48,
+            minHeight: minHeight ?? 50,
             flexDirection: "row",
             alignItems: multiline ? "flex-start" : "center",
             borderRadius: RADIUS.md,
@@ -78,6 +95,11 @@ export default function TextField({
           focusRing(colors, focused),
         ]}
       >
+        {leadingIcon ? (
+          <View style={{ marginRight: SPACE.x2 }}>
+            {leadingIcon({ size: 18, color: focused ? colors.primary : colors.textTertiary })}
+          </View>
+        ) : null}
         <TextInput
           value={value}
           onChangeText={onChangeText}
@@ -89,19 +111,29 @@ export default function TextField({
           autoComplete={autoComplete}
           multiline={multiline}
           editable={editable}
+          autoFocus={autoFocus}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          maxLength={maxLength}
           textAlignVertical={multiline ? "top" : "center"}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          style={{
-            flex: 1,
-            minHeight: multiline ? minHeight ?? 120 : 46,
-            paddingVertical: multiline ? SPACE.x3 : 0,
-            paddingHorizontal: 0,
-            fontSize: 15,
-            lineHeight: 22,
-            color: colors.textPrimary,
-            outlineStyle: "none",
-          } as any}
+          onBlur={() => {
+            setFocused(false);
+            onBlur?.();
+          }}
+          style={[
+            {
+              flex: 1,
+              minHeight: multiline ? minHeight ?? 120 : 48,
+              paddingVertical: multiline ? SPACE.x3 : 0,
+              paddingHorizontal: 0,
+              fontSize: 15,
+              lineHeight: 22,
+              color: colors.textPrimary,
+              outlineStyle: "none",
+            } as any,
+            inputStyle,
+          ]}
         />
         {right ? <View style={{ marginLeft: SPACE.x2 }}>{right}</View> : null}
       </View>

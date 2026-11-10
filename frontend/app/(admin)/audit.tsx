@@ -311,7 +311,7 @@ export default function AdminAuditScreen() {
 
         {loading ? (
           <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator accessibilityLabel="Loading" size="large" color={colors.primary} />
           </View>
         ) : entries.length === 0 ? (
           <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
@@ -378,7 +378,7 @@ export default function AdminAuditScreen() {
           }}
         >
           {loadingMore ? (
-            <ActivityIndicator size="small" color={colors.primary} />
+            <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.primary} />
           ) : (
             <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textSecondary }}>Load more</Text>
           )}

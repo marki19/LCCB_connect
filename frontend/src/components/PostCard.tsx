@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Linking, Image, Alert } from "react-native";
+import { View, Text, TouchableOpacity, Linking, Image } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -11,8 +11,10 @@ import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
-import { ThemeTokens, elevation, RADIUS } from "../lib/tokens";
+import { ThemeTokens, elevation, RADIUS, SPACE, TYPE } from "../lib/tokens";
 import { apiJson, deletePost, deleteThesis, getThesisFileUrl, getPostImageUrl } from "../lib/api";
+import Button from "./ui/Button";
+import Modal from "./ui/Modal";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
   const configs: Record<string, { label: string; bg: string; text: string }> = {
@@ -32,6 +34,9 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const [likeCount, setLikeCount] = useState(post.likes);
   const [menuOpen, setMenuOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | undefined>(post.imageUrl);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
@@ -75,35 +80,31 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
 
   const handleDelete = () => {
     setMenuOpen(false);
+    setConfirmDelete(true);
+  };
+
+  const performDelete = async () => {
     const isThesis = post.type === "thesis";
-    Alert.alert(
-      isThesis ? "Delete Thesis" : "Delete Post",
-      `Are you sure you want to delete this ${isThesis ? "thesis" : "post"}? This cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              if (isThesis) {
-                await deleteThesis(post.id);
-              } else {
-                await deletePost(post.id);
-              }
-              onDeleted?.(post.id);
-            } catch (e: any) {
-              Alert.alert("Error", e.message || "Failed to delete");
-            }
-          },
-        },
-      ]
-    );
+    setDeleting(true);
+    try {
+      if (isThesis) {
+        await deleteThesis(post.id);
+      } else {
+        await deletePost(post.id);
+      }
+      setConfirmDelete(false);
+      onDeleted?.(post.id);
+    } catch (e: any) {
+      setConfirmDelete(false);
+      setNotice(e.message || "Failed to delete");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleLike = async () => {
     if (!profile?.id || profile?.role === "guest") {
-      Alert.alert("Sign In Required", "Please sign in with your institutional account to like posts.");
+      setNotice("Please sign in with your institutional account to like posts.");
       return;
     }
 
@@ -132,8 +133,9 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const typeConfig = getTypeConfig(post.type, colors);
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.97}
+    <>
+      <TouchableOpacity
+        activeOpacity={0.97}
       accessibilityLabel={`${post.author.name}: ${post.title}`}
       onPress={async () => {
         // A thesis has no post-detail screen; open the deposited PDF instead
@@ -145,7 +147,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
             const url = await getThesisFileUrl(post.id);
             await Linking.openURL(url);
           } catch (err: any) {
-            Alert.alert("Could not open manuscript", err.message || "The file is not available.");
+            setNotice(err.message || "The file is not available.");
           }
           return;
         }
@@ -164,8 +166,8 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
     >
       {/* Author row */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 }}>
-        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: post.author.avatarColor, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: colors.ink }}>{post.author.initials}</Text>
+        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandWash, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: colors.brand }}>{post.author.initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }}>{post.author.name}</Text>
@@ -363,6 +365,58 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           <Text style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>Share</Text>
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+
+      <Modal
+        visible={confirmDelete}
+        onClose={() => {
+          if (!deleting) setConfirmDelete(false);
+        }}
+        maxWidth={440}
+        accessibilityLabel="Delete confirmation"
+      >
+        <View style={{ padding: SPACE.x6 }}>
+          <Text style={{ ...TYPE.h2, color: colors.textPrimary }}>
+            {post.type === "thesis" ? "Delete thesis?" : "Delete post?"}
+          </Text>
+          <Text style={{ ...TYPE.body, color: colors.textSecondary, marginTop: SPACE.x2 }}>
+            {post.type === "thesis"
+              ? "This removes the deposit from the repository and cannot be undone."
+              : "This removes the post for everyone and cannot be undone."}
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: SPACE.x3, marginTop: SPACE.x5 }}>
+            <Button
+              label="Cancel"
+              variant="secondary"
+              onPress={() => setConfirmDelete(false)}
+              disabled={deleting}
+            />
+            <Button
+              label={post.type === "thesis" ? "Delete thesis" : "Delete post"}
+              variant="danger"
+              onPress={() => void performDelete()}
+              loading={deleting}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!notice}
+        onClose={() => setNotice(null)}
+        maxWidth={420}
+        accessibilityLabel="Notice"
+      >
+        <View style={{ padding: SPACE.x6 }}>
+          <Text style={{ ...TYPE.h2, color: colors.textPrimary }}>Notice</Text>
+          <Text style={{ ...TYPE.body, color: colors.textSecondary, marginTop: SPACE.x2 }}>
+            {notice}
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: SPACE.x5 }}>
+            <Button label="Got it" onPress={() => setNotice(null)} />
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }

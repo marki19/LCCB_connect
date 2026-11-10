@@ -266,7 +266,7 @@ export default function AdminDepartmentsScreen() {
           </View>
 
           {loading ? (
-            <ActivityIndicator color={colors.primary} />
+            <ActivityIndicator accessibilityLabel="Loading" color={colors.primary} />
           ) : departments.length === 0 ? (
             <Text style={{ fontSize: 13, fontStyle: "italic", color: colors.textTertiary }}>
               No departments yet.

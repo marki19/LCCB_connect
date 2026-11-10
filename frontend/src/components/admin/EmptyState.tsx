@@ -158,10 +158,10 @@ export default function EmptyState({
             focusRing(colors, actionFocused),
           ]}
         >
-          <Text style={{ ...TYPE.bodyStrong, color: colors.textOnPrimary }}>
+          <Text style={{ ...TYPE.bodyStrong, color: colors.textOnBrandSolid }}>
             {actionLabel}
           </Text>
-          <ArrowRight size={15} color={colors.textOnPrimary} />
+          <ArrowRight size={15} color={colors.textOnBrandSolid} />
         </Pressable>
       ) : null}
     </View>

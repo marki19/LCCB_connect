@@ -8,7 +8,6 @@ import {
   type ComponentRef,
 } from "react";
 import {
-  StyleSheet,
   TextInput,
   View,
   useWindowDimensions,

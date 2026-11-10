@@ -3,15 +3,19 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
-import { BookOpen, ShieldCheck, Users } from "lucide-react-native";
+import { Link } from "expo-router";
+import { BookOpen, ChevronLeft, ShieldCheck, Users } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../contexts/ThemeContext";
 import Card from "../ui/Card";
+import Reveal from "../ui/Reveal";
+import ThemeToggle from "../ui/ThemeToggle";
 import { RADIUS, SPACE } from "../../lib/tokens";
 
 type AuthScaffoldProps = {
@@ -19,6 +23,9 @@ type AuthScaffoldProps = {
   subtitle: string;
   children: ReactNode;
   footer?: ReactNode;
+  /** Optional back link shown above the form (e.g. "Back to sign in"). */
+  backHref?: string;
+  backLabel?: string;
 };
 
 const VALUE_PROPS = [
@@ -27,11 +34,38 @@ const VALUE_PROPS = [
   { icon: ShieldCheck, title: "Campus only", body: "Institutional accounts keep the network trusted." },
 ];
 
-export default function AuthScaffold({ title, subtitle, children, footer }: AuthScaffoldProps) {
+export default function AuthScaffold({
+  title,
+  subtitle,
+  children,
+  footer,
+  backHref,
+  backLabel = "Back",
+}: AuthScaffoldProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 960;
+
+  const backLink = backHref ? (
+    <Link href={backHref as any} asChild>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={backLabel}
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          alignSelf: "flex-start",
+          gap: 4,
+          marginBottom: SPACE.x4,
+          opacity: pressed ? 0.6 : 1,
+        })}
+      >
+        <ChevronLeft size={16} color={colors.textSecondary} strokeWidth={2.4} />
+        <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>{backLabel}</Text>
+      </Pressable>
+    </Link>
+  ) : null;
 
   const form = (
     <View style={{ width: "100%", maxWidth: 440 }}>
@@ -39,8 +73,8 @@ export default function AuthScaffold({ title, subtitle, children, footer }: Auth
         <View style={{ alignItems: "center", marginBottom: SPACE.x6 }}>
           <View
             style={{
-              width: 56,
-              height: 56,
+              width: 60,
+              height: 60,
               borderRadius: RADIUS.lg,
               backgroundColor: colors.surface,
               borderWidth: 1,
@@ -52,11 +86,11 @@ export default function AuthScaffold({ title, subtitle, children, footer }: Auth
           >
             <Image
               source={require("../../../assets/images/logo-seal.png")}
-              style={{ width: 40, height: 40 }}
+              style={{ width: 44, height: 44 }}
               resizeMode="contain"
             />
           </View>
-          <Text style={{ fontSize: 18, fontWeight: "600", letterSpacing: -0.3, color: colors.textPrimary }}>
+          <Text style={{ fontSize: 18, fontWeight: "700", letterSpacing: -0.3, color: colors.textPrimary }}>
             LCCB Connect
           </Text>
           <Text style={{ fontSize: 13, color: colors.textTertiary, marginTop: 2 }}>
@@ -66,30 +100,51 @@ export default function AuthScaffold({ title, subtitle, children, footer }: Auth
       ) : null}
 
       <Card padding={isDesktop ? SPACE.x8 : SPACE.x6} elevated={isDesktop}>
+        {backLink}
         <Text
           style={{
             fontSize: isDesktop ? 26 : 24,
             lineHeight: isDesktop ? 32 : 30,
-            fontWeight: "600",
-            letterSpacing: -0.5,
+            fontWeight: "700",
+            letterSpacing: -0.6,
             color: colors.textPrimary,
           }}
         >
           {title}
         </Text>
-        <Text style={{ fontSize: 14, lineHeight: 22, color: colors.textSecondary, marginTop: SPACE.x1, marginBottom: SPACE.x6 }}>
+        <Text
+          style={{
+            fontSize: 14,
+            lineHeight: 22,
+            color: colors.textSecondary,
+            marginTop: SPACE.x1,
+            marginBottom: SPACE.x6,
+          }}
+        >
           {subtitle}
         </Text>
         {children}
       </Card>
 
-      {footer ? <View style={{ marginTop: SPACE.x5 }}>{footer}</View> : null}
+      {footer ? (
+        <Reveal delay={120} style={{ marginTop: SPACE.x5 }}>
+          {footer}
+        </Reveal>
+      ) : null}
+    </View>
+  );
+
+  const themeToggle = (
+    <View style={{ position: "absolute", top: insets.top + 16, right: insets.right + 16, zIndex: 10 }}>
+      <ThemeToggle compact={!isDesktop} />
     </View>
   );
 
   if (isDesktop) {
     return (
       <View style={{ flex: 1, flexDirection: "row", backgroundColor: colors.surfacePage }}>
+        {themeToggle}
+
         <View
           style={{
             width: "44%",
@@ -108,9 +163,9 @@ export default function AuthScaffold({ title, subtitle, children, footer }: Auth
                   width: 44,
                   height: 44,
                   borderRadius: RADIUS.md,
-                  backgroundColor: "rgba(255,255,255,0.10)",
+                  backgroundColor: colors.heroLine,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.18)",
+                  borderColor: colors.heroLine,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -122,69 +177,80 @@ export default function AuthScaffold({ title, subtitle, children, footer }: Auth
                 />
               </View>
               <View>
-                <Text style={{ fontSize: 18, fontWeight: "600", color: "#FFFFFF", letterSpacing: -0.3 }}>
+                <Text style={{ fontSize: 18, fontWeight: "700", color: colors.heroText, letterSpacing: -0.3 }}>
                   LCCB Connect
                 </Text>
-                <Text style={{ fontSize: 11, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase", color: "rgba(255,255,255,0.62)", marginTop: 2 }}>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "600",
+                    letterSpacing: 0.8,
+                    textTransform: "uppercase",
+                    color: colors.heroTextMuted,
+                    marginTop: 2,
+                  }}
+                >
                   Campus network
                 </Text>
               </View>
             </View>
 
-            <Text
-              style={{
-                fontSize: 40,
-                lineHeight: 46,
-                fontWeight: "600",
-                letterSpacing: -1,
-                color: "#FFFFFF",
-                marginTop: SPACE.x16,
-                maxWidth: 420,
-              }}
-            >
-              The campus network for LCCB.
-            </Text>
-            <Text
-              style={{
-                fontSize: 15,
-                lineHeight: 24,
-                color: "rgba(255,255,255,0.74)",
-                marginTop: SPACE.x4,
-                maxWidth: 400,
-              }}
-            >
-              Share your work, discover research, and stay close to the people building things on campus.
-            </Text>
+            <Reveal delay={0}>
+              <Text
+                style={{
+                  fontSize: 40,
+                  lineHeight: 46,
+                  fontWeight: "600",
+                  letterSpacing: -1,
+                  color: colors.heroText,
+                  marginTop: SPACE.x16,
+                  maxWidth: 420,
+                }}
+              >
+                The campus network for LCCB.
+              </Text>
+              <Text
+                style={{
+                  fontSize: 15,
+                  lineHeight: 24,
+                  color: colors.heroTextMuted,
+                  marginTop: SPACE.x4,
+                  maxWidth: 400,
+                }}
+              >
+                Share your work, discover research, and stay close to the people building things on campus.
+              </Text>
+            </Reveal>
 
             <View style={{ marginTop: SPACE.x10, gap: SPACE.x5 }}>
-              {VALUE_PROPS.map(({ icon: Icon, title: itemTitle, body }) => (
-                <View key={itemTitle} style={{ flexDirection: "row", alignItems: "flex-start", gap: SPACE.x3 }}>
-                  <View
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: RADIUS.md,
-                      backgroundColor: "rgba(255,255,255,0.10)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Icon size={17} color="#BFDBFE" strokeWidth={2.1} />
+              {VALUE_PROPS.map(({ icon: Icon, title: itemTitle, body }, i) => (
+                <Reveal key={itemTitle} delay={120 + i * 70}>
+                  <View style={{ flexDirection: "row", alignItems: "flex-start", gap: SPACE.x3 }}>
+                    <View
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: RADIUS.md,
+                        backgroundColor: colors.heroLine,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Icon size={17} color={colors.mixStudent} strokeWidth={2.1} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: colors.heroText }}>{itemTitle}</Text>
+                      <Text style={{ fontSize: 13, lineHeight: 20, color: colors.heroTextMuted, marginTop: 1 }}>
+                        {body}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#FFFFFF" }}>{itemTitle}</Text>
-                    <Text style={{ fontSize: 13, lineHeight: 20, color: "rgba(255,255,255,0.62)", marginTop: 1 }}>
-                      {body}
-                    </Text>
-                  </View>
-                </View>
+                </Reveal>
               ))}
             </View>
           </View>
 
-          <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.46)" }}>
-            La Consolacion College Bacolod
-          </Text>
+          <Text style={{ fontSize: 12, color: colors.heroTextMuted }}>La Consolacion College Bacolod</Text>
         </View>
 
         <ScrollView
@@ -197,7 +263,9 @@ export default function AuthScaffold({ title, subtitle, children, footer }: Auth
           }}
           showsVerticalScrollIndicator={false}
         >
-          {form}
+          <Reveal delay={40} style={{ width: "100%", maxWidth: 440 }}>
+            {form}
+          </Reveal>
         </ScrollView>
       </View>
     );
@@ -208,6 +276,7 @@ export default function AuthScaffold({ title, subtitle, children, footer }: Auth
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: colors.surfacePage }}
     >
+      {themeToggle}
       <ScrollView
         contentContainerStyle={{
           flexGrow: 1,
@@ -220,7 +289,7 @@ export default function AuthScaffold({ title, subtitle, children, footer }: Auth
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {form}
+        <Reveal style={{ width: "100%", maxWidth: 440 }}>{form}</Reveal>
       </ScrollView>
     </KeyboardAvoidingView>
   );

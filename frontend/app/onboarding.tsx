@@ -1,13 +1,36 @@
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert } from "react-native";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { CheckCircle, User, IdCard, Building2, GraduationCap, Calendar } from "lucide-react-native";
+import {
+  CheckCircle2,
+  Clock3,
+  ShieldCheck,
+  User,
+  IdCard,
+  Building2,
+  GraduationCap,
+  Calendar,
+  AlertTriangle,
+} from "lucide-react-native";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { fetchDepartments, fetchCourses } from "../src/lib/catalog";
 import SelectField, { SelectOption } from "../src/components/SelectField";
 import { apiJson, ApiError } from "../src/lib/api";
-import { focusRing } from "../src/lib/tokens";
+import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
+import Button from "../src/components/ui/Button";
+import Card from "../src/components/ui/Card";
+import Modal from "../src/components/ui/Modal";
+import Reveal from "../src/components/ui/Reveal";
+import TextField from "../src/components/ui/TextField";
 
 type VerificationStatus = "unverified" | "pending" | "approved" | "declined";
 
@@ -31,6 +54,8 @@ interface MineResponse {
   request: VerificationRequest | null;
   can_resubmit: boolean;
 }
+
+type Notice = { title: string; message: string };
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -56,6 +81,7 @@ export default function OnboardingScreen() {
 
   const [errors, setErrors] = useState<Partial<typeof form>>({});
   const [touched, setTouched] = useState<Partial<Record<keyof typeof form, boolean>>>({});
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const isPending = verification?.status === "pending";
   const isDeclined = verification?.status === "declined";
@@ -107,7 +133,10 @@ export default function OnboardingScreen() {
         }
       } else {
         console.error("Failed to load verification:", error);
-        Alert.alert("Error", "Failed to load verification status");
+        setNotice({
+          title: "Could not load your status",
+          message: "We couldn't check your verification status. Pull the screen up again in a moment.",
+        });
       }
     } finally {
       setLoadingVerification(false);
@@ -150,14 +179,17 @@ export default function OnboardingScreen() {
     loadInitialData();
   }, [loadInitialData]);
 
-  const loadCoursesForDepartment = useCallback(async (departmentId: string) => {
-    if (departmentId) {
-      await loadCourses(departmentId);
-    } else {
-      setCourses([]);
-      setForm((f) => ({ ...f, course_id: "" }));
-    }
-  }, [loadCourses]);
+  const loadCoursesForDepartment = useCallback(
+    async (departmentId: string) => {
+      if (departmentId) {
+        await loadCourses(departmentId);
+      } else {
+        setCourses([]);
+        setForm((f) => ({ ...f, course_id: "" }));
+      }
+    },
+    [loadCourses]
+  );
 
   const lastDepartmentIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -179,7 +211,8 @@ export default function OnboardingScreen() {
         if (!trimmed) return "Student ID is required";
         if (trimmed.length < 4) return "Student ID must be at least 4 characters";
         if (trimmed.length > 20) return "Student ID must be at most 20 characters";
-        if (!/^[A-Za-z0-9-]+$/.test(trimmed)) return "Student ID may only contain letters, numbers, and hyphens";
+        if (!/^[A-Za-z0-9-]+$/.test(trimmed))
+          return "Student ID may only contain letters, numbers, and hyphens";
         break;
       case "department_id":
         if (!trimmed) return "Department is required";
@@ -275,311 +308,414 @@ export default function OnboardingScreen() {
             birthdate: true,
           });
         } else {
-          Alert.alert("Error", error.message || "Submission failed");
+          setNotice({
+            title: "Submission failed",
+            message: error.message || "We couldn't submit your verification request. Try again.",
+          });
         }
       } else {
-        Alert.alert("Error", "Something went wrong");
+        setNotice({
+          title: "Something went wrong",
+          message: "We couldn't submit your verification request. Please try again.",
+        });
       }
     } finally {
       setSubmitting(false);
     }
   };
 
-  const renderPendingState = () => (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
-      <View style={{ backgroundColor: colors.surface, borderRadius: 28, padding: 32, borderWidth: 1, borderColor: colors.border, width: "100%", maxWidth: 500, alignSelf: "center" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
-          <View style={{ backgroundColor: colors.successSurfaceAlt, borderRadius: 24, padding: 12, marginRight: 16 }}>
-            <CheckCircle size={28} color={colors.success} />
-          </View>
-          <Text style={{ fontSize: 22, fontWeight: "700", color: colors.textPrimary }}>Under Review</Text>
-        </View>
-        <Text style={{ fontSize: 16, color: colors.textMuted, textAlign: "center", lineHeight: 24, marginBottom: 24 }}>
-          Your verification request has been submitted. A department admin will review your details and get back to you soon.
-        </Text>
-        <View style={{ backgroundColor: colors.surfacePage, borderRadius: 16, padding: 16, marginBottom: 24 }}>
-          <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary, marginBottom: 8 }}>Submitted Details</Text>
-          <Text style={{ fontSize: 14, color: colors.textMuted }}>{verification?.full_name || "—"}</Text>
-          <Text style={{ fontSize: 14, color: colors.textMuted }}>{verification?.student_id || "—"}</Text>
-          <Text style={{ fontSize: 14, color: colors.textMuted }}>{verification?.department_name || "—"}</Text>
-          <Text style={{ fontSize: 14, color: colors.textMuted }}>{verification?.course_name || "—"}</Text>
-          <Text style={{ fontSize: 14, color: colors.textMuted }}>{verification?.year_level || "—"}</Text>
-        </View>
-        <TouchableOpacity
-          style={{
-            backgroundColor: colors.actionSurface,
-            borderRadius: 16,
-            paddingVertical: 16,
-            paddingHorizontal: 24,
-            alignItems: "center",
-            borderWidth: 1,
-            borderColor: colors.borderStrong,
-          }}
-          onPress={() => router.back()}
-        >
-          <Text style={{ fontSize: 16, fontWeight: "600", color: colors.action }}>Back to App</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  
-
-  const renderApprovedState = () => (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
-      <View style={{ backgroundColor: colors.surface, borderRadius: 28, padding: 32, borderWidth: 1, borderColor: colors.border, width: "100%", maxWidth: 500, alignSelf: "center" }}>
-        <View style={{ backgroundColor: colors.successSurfaceAlt, borderRadius: 24, padding: 12, marginBottom: 16, alignSelf: "center" }}>
-          <CheckCircle size={48} color={colors.success} />
-        </View>
-        <Text style={{ fontSize: 24, fontWeight: "700", color: colors.textPrimary, textAlign: "center", marginBottom: 8 }}>Verified!</Text>
-        <Text style={{ fontSize: 16, color: colors.textMuted, textAlign: "center", lineHeight: 24, marginBottom: 24 }}>
-          Your identity has been verified. You now have full access to post, message, and connect.
-        </Text>
-        <TouchableOpacity
-          style={{
-            backgroundColor: colors.action,
-            borderRadius: 16,
-            paddingVertical: 16,
-            paddingHorizontal: 32,
-            alignItems: "center",
-          }}
-          onPress={() => router.replace("/(tabs)/")}
-        >
-          <Text style={{ fontSize: 16, fontWeight: "600", color: colors.textOnPrimary }}>Continue to App</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const renderForm = () => (
-    <View style={{ gap: 16 }}>
-      <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-          <User size={20} color={colors.textTertiary} style={{ marginRight: 8 }} />
-          <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary }}>Full Name</Text>
-        </View>
-        <TextInput
-          value={form.full_name}
-          onChangeText={(v) => handleChange("full_name", v)}
-          onBlur={() => handleBlur("full_name")}
-          editable={canEditName}
-          style={{
-            backgroundColor: canEditName ? colors.surface : colors.surfacePage,
-            borderRadius: 16,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-            fontSize: 16,
-            color: colors.textPrimary,
-            borderWidth: 1,
-            borderColor: touched.full_name && errors.full_name ? colors.destructive : colors.border,
-            ...focusRing(colors, true),
-          }}
-          placeholder="Juan Dela Cruz"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="words"
-        />
-        {touched.full_name && errors.full_name && (
-          <Text style={{ fontSize: 12, color: colors.destructive }}>{errors.full_name}</Text>
-        )}
-      </View>
-
-      <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-          <IdCard size={20} color={colors.textTertiary} style={{ marginRight: 8 }} />
-          <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary }}>Student ID</Text>
-        </View>
-        <TextInput
-          value={form.student_id}
-          onChangeText={(v) => handleChange("student_id", v)}
-          onBlur={() => handleBlur("student_id")}
-          editable={canEdit}
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: 16,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-            fontSize: 16,
-            color: colors.textPrimary,
-            borderWidth: 1,
-            borderColor: touched.student_id && errors.student_id ? colors.destructive : colors.border,
-            ...focusRing(colors, true),
-          }}
-          placeholder="2023-12345"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="characters"
-        />
-        {touched.student_id && errors.student_id && (
-          <Text style={{ fontSize: 12, color: colors.destructive }}>{errors.student_id}</Text>
-        )}
-      </View>
-
-      <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-          <Building2 size={20} color={colors.textTertiary} style={{ marginRight: 8 }} />
-          <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary }}>Department</Text>
-        </View>
-        <SelectField
-          value={form.department_id || null}
-          options={departments}
-          onChange={(v) => handleChange("department_id", v)}
-          placeholder="Select department"
-          disabled={!canEdit || loadingDepartments}
-          loading={loadingDepartments}
-          error={touched.department_id && !!errors.department_id}
-          emptyText="No departments available"
-        />
-        {touched.department_id && errors.department_id && (
-          <Text style={{ fontSize: 12, color: colors.destructive }}>{errors.department_id}</Text>
-        )}
-      </View>
-
-      <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-          <GraduationCap size={20} color={colors.textTertiary} style={{ marginRight: 8 }} />
-          <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary }}>Course</Text>
-        </View>
-        <SelectField
-          value={form.course_id || null}
-          options={courses}
-          onChange={(v) => handleChange("course_id", v)}
-          placeholder={form.department_id ? "Select course" : "Select department first"}
-          disabled={!canEdit || loadingCourses || !form.department_id}
-          loading={loadingCourses}
-          error={touched.course_id && !!errors.course_id}
-          emptyText="No courses available for this department"
-        />
-        {touched.course_id && errors.course_id && (
-          <Text style={{ fontSize: 12, color: colors.destructive }}>{errors.course_id}</Text>
-        )}
-      </View>
-
-      <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-          <Calendar size={20} color={colors.textTertiary} style={{ marginRight: 8 }} />
-          <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary }}>Year Level</Text>
-        </View>
-        <TextInput
-          value={form.year_level}
-          onChangeText={(v) => handleChange("year_level", v)}
-          onBlur={() => handleBlur("year_level")}
-          editable={canEdit}
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: 16,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-            fontSize: 16,
-            color: colors.textPrimary,
-            borderWidth: 1,
-            borderColor: touched.year_level && errors.year_level ? colors.destructive : colors.border,
-            ...focusRing(colors, true),
-          }}
-          placeholder="1st Year"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="words"
-        />
-        {touched.year_level && errors.year_level && (
-          <Text style={{ fontSize: 12, color: colors.destructive }}>{errors.year_level}</Text>
-        )}
-      </View>
-
-      <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-          <Calendar size={20} color={colors.textTertiary} style={{ marginRight: 8 }} />
-          <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary }}>Birthdate (YYYY-MM-DD)</Text>
-        </View>
-        <TextInput
-          value={form.birthdate}
-          onChangeText={(v) => handleChange("birthdate", v)}
-          onBlur={() => handleBlur("birthdate")}
-          editable={canEdit}
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: 16,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-            fontSize: 16,
-            color: colors.textPrimary,
-            borderWidth: 1,
-            borderColor: touched.birthdate && errors.birthdate ? colors.destructive : colors.border,
-            ...focusRing(colors, true),
-          }}
-          placeholder="2000-01-15"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="numeric"
-        />
-        {touched.birthdate && errors.birthdate && (
-          <Text style={{ fontSize: 12, color: colors.destructive }}>{errors.birthdate}</Text>
-        )}
-      </View>
-
-      <TouchableOpacity
-        style={{
-          backgroundColor: canEdit ? colors.action : colors.actionSurface,
-          borderRadius: 16,
-          paddingVertical: 16,
-          paddingHorizontal: 24,
-          alignItems: "center",
-          borderWidth: canEdit ? 0 : 1,
-          borderColor: colors.borderStrong,
-          opacity: canEdit ? 1 : 0.6,
-        }}
-        onPress={handleSubmit}
-        disabled={!canEdit || submitting}
-      >
-        {submitting ? (
-          <ActivityIndicator size="large" color={colors.textOnPrimary} />
-        ) : (
-          <Text style={{ fontSize: 16, fontWeight: "600", color: canEdit ? colors.textOnPrimary : colors.textDisabled }}>
-            {isDeclined ? "Resubmit" : "Submit for Verification"}
-          </Text>
-        )}
-      </TouchableOpacity>
-    </View>
-  );
+  const fieldError = (name: keyof typeof form) =>
+    touched[name] && errors[name] ? errors[name] : undefined;
 
   if (loadingVerification) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.surfacePage }}>
-        <ActivityIndicator size="large" color={colors.action} />
-      </View>
+      <SafeAreaView
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.surfacePage,
+        }}
+      >
+        <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.brand} />
+      </SafeAreaView>
     );
   }
 
   if (isPending) {
-    return renderPendingState();
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }} edges={["top"]}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
+          <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
+            <Card style={{ padding: SPACE.x8 }}>
+              <View
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: RADIUS.lg,
+                  backgroundColor: colors.accentWash,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: SPACE.x5,
+                }}
+              >
+                <Clock3 size={26} color={colors.accentText} />
+              </View>
+              <Text style={{ ...TYPE.h1, color: colors.ink }}>Verification under review</Text>
+              <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
+                Your request has been submitted. A department admin will review your details and
+                get back to you soon.
+              </Text>
+
+              <View
+                style={{
+                  marginTop: SPACE.x6,
+                  borderRadius: RADIUS.md,
+                  borderWidth: 1,
+                  borderColor: colors.line,
+                  backgroundColor: colors.panelInset,
+                  padding: SPACE.x4,
+                }}
+              >
+                <Text style={{ ...TYPE.micro, color: colors.inkFaint, marginBottom: SPACE.x3 }}>
+                  Submitted details
+                </Text>
+                <SubmittedRow label="Full name" value={verification?.full_name} />
+                <SubmittedRow label="Student ID" value={verification?.student_id} />
+                <SubmittedRow label="Department" value={verification?.department_name} />
+                <SubmittedRow label="Course" value={verification?.course_name} />
+                <SubmittedRow label="Year level" value={verification?.year_level} last />
+              </View>
+
+              <View style={{ marginTop: SPACE.x6 }}>
+                <Button
+                  label="Back to app"
+                  variant="secondary"
+                  fullWidth
+                  onPress={() => router.back()}
+                />
+              </View>
+            </Card>
+          </Reveal>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   if (isApproved) {
-    return renderApprovedState();
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }} edges={["top"]}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
+          <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
+            <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: RADIUS.xl,
+                  backgroundColor: colors.jadeWash,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: SPACE.x5,
+                }}
+              >
+                <CheckCircle2 size={32} color={colors.jadeText} />
+              </View>
+              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>
+                {"You're verified"}
+              </Text>
+              <Text
+                style={{
+                  ...TYPE.body,
+                  color: colors.inkSoft,
+                  textAlign: "center",
+                  marginTop: SPACE.x2,
+                  maxWidth: 380,
+                }}
+              >
+                Your identity has been verified. You now have full access to post, message, and
+                connect.
+              </Text>
+              <View style={{ marginTop: SPACE.x6, alignSelf: "stretch" }}>
+                <Button
+                  label="Continue to app"
+                  fullWidth
+                  size="lg"
+                  onPress={() => router.replace("/(tabs)/")}
+                />
+              </View>
+            </Card>
+          </Reveal>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   // unverified or declined
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }} edges={["top"]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingVertical: 24 }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingVertical: SPACE.x8 }}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <View style={{ width: "100%", maxWidth: 500, alignSelf: "center", padding: 24 }}>
-            <View style={{ backgroundColor: colors.surface, borderRadius: 28, padding: 32, borderWidth: 1, borderColor: colors.border }}>
-              <Text style={{ fontSize: 28, fontWeight: "800", color: colors.textPrimary, textAlign: "center", marginBottom: 8 }}>
-                {isDeclined ? "Resubmit Verification" : "Verify Your Identity"}
-              </Text>
-              <Text style={{ fontSize: 16, color: colors.textMuted, textAlign: "center", lineHeight: 24, marginBottom: 24 }}>
-                {isDeclined
-                  ? "Please correct the information below and resubmit."
-                  : "Enter your details so a department admin can verify your student identity."}
-              </Text>
-              {renderForm()}
-            </View>
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 540,
+              alignSelf: "center",
+              paddingHorizontal: SPACE.x4,
+            }}
+          >
+            <Reveal>
+              <View style={{ alignItems: "center", marginBottom: SPACE.x6 }}>
+                <View
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: RADIUS.lg,
+                    backgroundColor: colors.brandWash,
+                    borderWidth: 1,
+                    borderColor: colors.line,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: SPACE.x4,
+                  }}
+                >
+                  <ShieldCheck size={26} color={colors.brand} />
+                </View>
+                <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>
+                  {isDeclined ? "Resubmit verification" : "Verify your identity"}
+                </Text>
+                <Text
+                  style={{
+                    ...TYPE.body,
+                    color: colors.inkSoft,
+                    textAlign: "center",
+                    marginTop: SPACE.x2,
+                    maxWidth: 400,
+                  }}
+                >
+                  {isDeclined
+                    ? "Correct the information below and resubmit for review."
+                    : "Enter your student details so a department admin can verify your identity."}
+                </Text>
+              </View>
+
+              <Card style={{ padding: SPACE.x6 }}>
+                {isDeclined && verification?.note ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: SPACE.x3,
+                      padding: SPACE.x3,
+                      borderRadius: RADIUS.md,
+                      borderWidth: 1,
+                      borderColor: colors.accent,
+                      backgroundColor: colors.accentWash,
+                      marginBottom: SPACE.x5,
+                    }}
+                  >
+                    <AlertTriangle size={16} color={colors.accentText} style={{ marginTop: 2 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ ...TYPE.micro, color: colors.accentText, marginBottom: 2 }}>
+                        Reviewer note
+                      </Text>
+                      <Text style={{ ...TYPE.caption, color: colors.ink, lineHeight: 18 }}>
+                        {verification.note}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                <TextField
+                  label="Full name"
+                  value={form.full_name}
+                  onChangeText={(v) => handleChange("full_name", v)}
+                  onBlur={() => handleBlur("full_name")}
+                  placeholder="Juan Dela Cruz"
+                  autoCapitalize="words"
+                  editable={canEditName}
+                  error={fieldError("full_name")}
+                  hint={!canEditName ? "Locked to the name on your student record." : undefined}
+                  leadingIcon={(props) => <User {...props} />}
+                />
+
+                <TextField
+                  label="Student ID"
+                  value={form.student_id}
+                  onChangeText={(v) => handleChange("student_id", v)}
+                  onBlur={() => handleBlur("student_id")}
+                  placeholder="2023-12345"
+                  autoCapitalize="characters"
+                  editable={canEdit}
+                  error={fieldError("student_id")}
+                  leadingIcon={(props) => <IdCard {...props} />}
+                />
+
+                <View style={{ marginBottom: SPACE.x4 }}>
+                  <FieldLabel icon={Building2} label="Department" />
+                  <SelectField
+                    value={form.department_id || null}
+                    options={departments}
+                    onChange={(v) => handleChange("department_id", v)}
+                    placeholder="Select department"
+                    disabled={!canEdit || loadingDepartments}
+                    loading={loadingDepartments}
+                    error={touched.department_id && !!errors.department_id}
+                    emptyText="No departments available"
+                  />
+                  {fieldError("department_id") ? (
+                    <Text
+                      style={{
+                        ...TYPE.caption,
+                        color: colors.destructiveText,
+                        marginTop: SPACE.x2,
+                      }}
+                    >
+                      {fieldError("department_id")}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View style={{ marginBottom: SPACE.x4 }}>
+                  <FieldLabel icon={GraduationCap} label="Course" />
+                  <SelectField
+                    value={form.course_id || null}
+                    options={courses}
+                    onChange={(v) => handleChange("course_id", v)}
+                    placeholder={form.department_id ? "Select course" : "Select department first"}
+                    disabled={!canEdit || loadingCourses || !form.department_id}
+                    loading={loadingCourses}
+                    error={touched.course_id && !!errors.course_id}
+                    emptyText="No courses available for this department"
+                  />
+                  {fieldError("course_id") ? (
+                    <Text
+                      style={{
+                        ...TYPE.caption,
+                        color: colors.destructiveText,
+                        marginTop: SPACE.x2,
+                      }}
+                    >
+                      {fieldError("course_id")}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <TextField
+                  label="Year level"
+                  value={form.year_level}
+                  onChangeText={(v) => handleChange("year_level", v)}
+                  onBlur={() => handleBlur("year_level")}
+                  placeholder="1st Year"
+                  autoCapitalize="words"
+                  editable={canEdit}
+                  error={fieldError("year_level")}
+                  leadingIcon={(props) => <Calendar {...props} />}
+                />
+
+                <TextField
+                  label="Birthdate"
+                  value={form.birthdate}
+                  onChangeText={(v) => handleChange("birthdate", v)}
+                  onBlur={() => handleBlur("birthdate")}
+                  placeholder="2000-01-15"
+                  keyboardType="numbers-and-punctuation"
+                  editable={canEdit}
+                  error={fieldError("birthdate")}
+                  hint="Format: YYYY-MM-DD"
+                  leadingIcon={(props) => <Calendar {...props} />}
+                />
+
+                <View style={{ marginTop: SPACE.x2 }}>
+                  <Button
+                    label={isDeclined ? "Resubmit for verification" : "Submit for verification"}
+                    size="lg"
+                    fullWidth
+                    loading={submitting}
+                    disabled={!canEdit || submitting}
+                    onPress={() => void handleSubmit()}
+                  />
+                </View>
+              </Card>
+            </Reveal>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={!!notice}
+        onClose={() => setNotice(null)}
+        maxWidth={440}
+        accessibilityLabel={notice?.title ?? "Notice"}
+      >
+        <View style={{ padding: SPACE.x6 }}>
+          <Text style={{ ...TYPE.h2, color: colors.ink }}>{notice?.title}</Text>
+          <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
+            {notice?.message}
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: SPACE.x5 }}>
+            <Button label="Got it" onPress={() => setNotice(null)} />
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+function FieldLabel({ icon: Icon, label }: { icon: any; label: string }) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: SPACE.x2,
+        marginBottom: SPACE.x2,
+      }}
+    >
+      <Icon size={14} color={colors.textTertiary} />
+      <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: "600", color: colors.textSecondary }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function SubmittedRow({
+  label,
+  value,
+  last = false,
+}: {
+  label: string;
+  value?: string;
+  last?: boolean;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: SPACE.x4,
+        paddingVertical: SPACE.x2,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: colors.line,
+      }}
+    >
+      <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>{label}</Text>
+      <Text
+        style={{ ...TYPE.caption, fontWeight: "600", color: colors.ink, flexShrink: 1, textAlign: "right" }}
+        numberOfLines={1}
+      >
+        {value || "—"}
+      </Text>
     </View>
   );
 }

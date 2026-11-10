@@ -32,6 +32,7 @@ function IconButton({
   backgroundColor: string;
   badgeCount?: number;
 }) {
+  const { colors } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -59,12 +60,12 @@ function IconButton({
             height: 17,
             borderRadius: 9,
             paddingHorizontal: 4,
-            backgroundColor: "#DC2626",
+            backgroundColor: colors.coral,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: "#FFFFFF", fontSize: 9, fontWeight: "800" }}>
+          <Text style={{ color: colors.textOnDanger, fontSize: 9, fontWeight: "800" }}>
             {badgeCount > 99 ? "99+" : badgeCount}
           </Text>
         </View>
