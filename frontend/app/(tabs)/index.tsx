@@ -270,7 +270,6 @@ export default function HomeScreen() {
               id: t.uploader_id,
               name: uploaderName,
               initials: getInitials(uploaderName),
-              avatarColor: "#EDE9FE",
               course: t.uploader?.department_name || t.department || "—",
               yearLevel: t.category || "Thesis",
             },

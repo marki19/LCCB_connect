@@ -115,7 +115,7 @@ function MobileTabBar({
                   { backgroundColor: colors.brandSolid, ...elevation("sm", colors) },
                 ]}
               >
-                <Plus size={22} color={colors.textOnPrimary} strokeWidth={2.6} />
+                <Plus size={22} color={colors.textOnBrandSolid} strokeWidth={2.6} />
               </View>
               <Text style={[{ ...styles.mobileLabel, color: colors.brand, fontWeight: "700" }]}>
                 {label}

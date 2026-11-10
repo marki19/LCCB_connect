@@ -288,104 +288,104 @@ export default function LoginScreen() {
       ) : (
         <View>
           <TextField
-                      label="Email, student ID, or username"
-                      value={email}
-                      onChangeText={handleEmailChange}
-                      placeholder="student@lccbonline.edu.ph"
-                      keyboardType={identifierIsEmail ? "email-address" : "default"}
-                      autoComplete="username"
-                      leadingIcon={({ size, color }) => <AtSign size={size} color={color} strokeWidth={2.1} />}
-                      error={emailError || (showEmailFormatError ? "Must be an @lccbonline.edu.ph address, a student ID, or a username" : "")}
-                    />
+            label="Email, student ID, or username"
+            value={email}
+            onChangeText={handleEmailChange}
+            placeholder="student@lccbonline.edu.ph"
+            keyboardType={identifierIsEmail ? "email-address" : "default"}
+            autoComplete="username"
+            leadingIcon={({ size, color }) => <AtSign size={size} color={color} strokeWidth={2.1} />}
+            error={emailError || (showEmailFormatError ? "Must be an @lccbonline.edu.ph address, a student ID, or a username" : "")}
+          />
 
-                    {/* Academic Institution Tag */}
-                    <View
-                      style={{
-                        paddingHorizontal: 12,
-                        paddingVertical: 4,
-                        borderRadius: 12,
-                        backgroundColor: colors.primarySurface,
-                                      borderWidth: 1,
-                                      borderColor: colors.primary,
-                                      marginBottom: SPACE.x4,
-                        alignSelf: "center",
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.primary, letterSpacing: 1.2, textTransform: "uppercase" }}>
-                        La Consolacion College Bacolod
-                      </Text>
-                    </View>
+          {/* Academic Institution Tag */}
+          <View
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 4,
+              borderRadius: 12,
+              backgroundColor: colors.primarySurface,
+              borderWidth: 1,
+              borderColor: colors.primary,
+              marginBottom: SPACE.x4,
+              alignSelf: "center",
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.primary, letterSpacing: 1.2, textTransform: "uppercase" }}>
+              La Consolacion College Bacolod
+            </Text>
+          </View>
 
-                    <TextField
-                      label="Password"
-                      value={password}
-                      onChangeText={handlePasswordChange}
-                      placeholder="Enter your password"
-                      secureTextEntry={!showPassword}
-                      autoComplete="current-password"
-                      returnKeyType="go"
-                      onSubmitEditing={() => void signInWithEmail()}
-                      leadingIcon={({ size, color }) => <Lock size={size} color={color} strokeWidth={2.1} />}
-                      error={passwordError}
-                      right={
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-                          onPress={() => setShowPassword((v) => !v)}
-                          hitSlop={8}
-                          style={({ pressed }) => ({ padding: SPACE.x1, opacity: pressed ? 0.6 : 1 })}
-                        >
-                          {showPassword ? (
-                            <EyeOff size={18} color={colors.textTertiary} strokeWidth={2.1} />
-                          ) : (
-                            <Eye size={18} color={colors.textTertiary} strokeWidth={2.1} />
-                          )}
-                        </Pressable>
-                      }
-                    />
-
-                    <Pressable
-                      accessibilityRole="link"
-                      accessibilityLabel="Forgot password"
-                      onPress={() => router.push("/(auth)/forgot-password")}
-                      style={({ pressed }) => ({ alignSelf: "flex-end", marginTop: -SPACE.x2, marginBottom: SPACE.x5, opacity: pressed ? 0.6 : 1 })}
-                    >
-                      <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 13 }}>Forgot password?</Text>
-                    </Pressable>
-
-                    <Button
-                      label={loading ? "Signing in..." : "Sign in"}
-                      onPress={() => void signInWithEmail()}
-                      loading={loading}
-                      disabled={loading}
-                      fullWidth
-                      size="lg"
-                    />
-
-                    <Divider />
-
-                    <Button
-                      label="Continue with Google"
-                      variant="secondary"
-                      icon={Globe}
-                      onPress={() => void signInWithGoogleHandler()}
-                      disabled={loading}
-                      fullWidth
-                      size="lg"
-                    />
-
-                    <View style={{ height: SPACE.x3 }} />
-
-                    <Button
-                      label="Explore as guest"
-                      variant="ghost"
-                      onPress={signInAsGuest}
-                      disabled={loading}
-                      fullWidth
-                      size="lg"
-                    />
-                  </View>
+          <TextField
+            label="Password"
+            value={password}
+            onChangeText={handlePasswordChange}
+            placeholder="Enter your password"
+            secureTextEntry={!showPassword}
+            autoComplete="current-password"
+            returnKeyType="go"
+            onSubmitEditing={() => void signInWithEmail()}
+            leadingIcon={({ size, color }) => <Lock size={size} color={color} strokeWidth={2.1} />}
+            error={passwordError}
+            right={
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={8}
+                style={({ pressed }) => ({ padding: SPACE.x1, opacity: pressed ? 0.6 : 1 })}
+              >
+                {showPassword ? (
+                  <EyeOff size={18} color={colors.textTertiary} strokeWidth={2.1} />
+                ) : (
+                  <Eye size={18} color={colors.textTertiary} strokeWidth={2.1} />
                 )}
-              </AuthScaffold>
-            );
-          }
+              </Pressable>
+            }
+          />
+
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Forgot password"
+            onPress={() => router.push("/(auth)/forgot-password")}
+            style={({ pressed }) => ({ alignSelf: "flex-end", marginTop: -SPACE.x2, marginBottom: SPACE.x5, opacity: pressed ? 0.6 : 1 })}
+          >
+            <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 13 }}>Forgot password?</Text>
+          </Pressable>
+
+          <Button
+            label={loading ? "Signing in..." : "Sign in"}
+            onPress={() => void signInWithEmail()}
+            loading={loading}
+            disabled={loading}
+            fullWidth
+            size="lg"
+          />
+
+          <Divider />
+
+          <Button
+            label="Continue with Google"
+            variant="secondary"
+            icon={Globe}
+            onPress={() => void signInWithGoogleHandler()}
+            disabled={loading}
+            fullWidth
+            size="lg"
+          />
+
+          <View style={{ height: SPACE.x3 }} />
+
+          <Button
+            label="Explore as guest"
+            variant="ghost"
+            onPress={signInAsGuest}
+            disabled={loading}
+            fullWidth
+            size="lg"
+          />
+        </View>
+      )}
+    </AuthScaffold>
+  );
+}
