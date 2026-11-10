@@ -253,13 +253,6 @@ export async function undoRepost(postId: string | number): Promise<any> {
   return apiJson(`/posts/${postId}/repost`, { method: "DELETE" });
 }
 
-export async function updateRepostCaption(repostId: string | number, caption: string): Promise<any> {
-  return apiJson(`/reposts/${repostId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ caption }),
-  });
-}
-
 export async function getReposts(postId: string | number): Promise<any[]> {
   return apiJson(`/posts/${postId}/reposts`);
 }
@@ -305,15 +298,4 @@ export async function listBlocked(): Promise<any[]> {
 
 export async function dismissBanner(): Promise<any> {
   return apiJson("/users/me/banner-dismissed", { method: "PATCH" });
-}
-
-// ============================================================================
-// Feed endpoint
-// ============================================================================
-
-export async function getFeed(cursor?: string, type?: string): Promise<any[]> {
-  const params = new URLSearchParams();
-  if (cursor) params.set("cursor", cursor);
-  if (type) params.set("type", type);
-  return apiJson(`/feed?${params.toString()}`);
 }

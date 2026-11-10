@@ -192,7 +192,7 @@ npm test                                   # Full suite: no regressions
   - **RED:** Test non-reposter gets 404 (not 403 — anti-enumeration)
   - **GREEN:** Implement
 
-- [ ] **3.3** `postController.updateRepostCaption` — `PATCH /reposts/:id { caption }`
+- [x] **3.3** Dropped 2026-11-10 — repost captions are immutable. No route, no client function.
   - Only reposter can edit
   - **RED:** Test authZ
   - **GREEN:** Implement
@@ -221,7 +221,7 @@ npm test                                   # Full suite: no regressions
   - **RED:** Test persists, does NOT bypass `profile_completed` check
   - **GREEN:** Implement
 
-- [ ] **3.9** `feedController.getFeed` — `GET /feed?cursor=&type=`
+- [x] **3.9** Dropped 2026-11-10 — `GET /api/posts` already merges posts and reposts. No separate `/feed`.
   - Merged posts + reposts, cursor pagination, type filter (All/Websites/Theses/Projects/Discussions/Images)
   - Excludes blocked users, applies visibility via `visiblePostsFor`
   - **RED:** Test merged ordering, filters, blocked exclusion
