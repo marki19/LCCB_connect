@@ -18,6 +18,8 @@ const getAllPosts = async ({
   includeHidden = false,
   q = null,
   authorId = null,
+  departmentId = null,
+  courseId = null,
   userId = null,
 } = {}) => {
   const params = [];
@@ -34,6 +36,16 @@ const getAllPosts = async ({
   if (authorId) {
     params.push(authorId);
     conditions.push(`p.author_id = $${params.length}::text`);
+  }
+
+  if (departmentId) {
+    params.push(departmentId);
+    conditions.push(`(p.author_department_id = $${params.length}::uuid OR pr.department_id = $${params.length}::uuid)`);
+  }
+
+  if (courseId) {
+    params.push(courseId);
+    conditions.push(`(p.author_course_id = $${params.length}::uuid OR pr.course_id = $${params.length}::uuid)`);
   }
 
   if (cursor) {
@@ -57,9 +69,10 @@ const getAllPosts = async ({
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   params.push(limit);
 
-  // Build the is_liked subquery if userId is provided
+  // Build the is_liked and is_saved subqueries if userId is provided
   const isLikedSubquery = userId
-    ? `, (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $${params.length + 1})) AS is_liked`
+    ? `, (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $${params.length + 1})) AS is_liked,
+         (SELECT EXISTS(SELECT 1 FROM saved_posts sp WHERE sp.post_id = p.id AND sp.user_id = $${params.length + 1})) AS is_saved`
     : "";
 
   const sql = `
@@ -72,6 +85,8 @@ const getAllPosts = async ({
       p.technologies,
       p.github_url,
       p.image_url,
+      p.image_urls,
+      p.image_urls,
       p.preview_metadata,
       p.visibility,
       p.moderation_status,
@@ -114,9 +129,10 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
     fromClause = `FROM visible_posts($${params.length}::text) p`;
   }
 
-  // Build the is_liked subquery if userId is provided
+  // Build the is_liked and is_saved subqueries if userId is provided
   const isLikedSubquery = userId
-    ? `, (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $${params.length + 1})) AS is_liked`
+    ? `, (SELECT EXISTS(SELECT 1 FROM likes l WHERE l.post_id = p.id AND l.user_id = $${params.length + 1})) AS is_liked,
+         (SELECT EXISTS(SELECT 1 FROM saved_posts sp WHERE sp.post_id = p.id AND sp.user_id = $${params.length + 1})) AS is_saved`
     : "";
 
   const sql = `
@@ -129,6 +145,8 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
       p.technologies,
       p.github_url,
       p.image_url,
+      p.image_urls,
+      p.image_urls,
       p.preview_metadata,
       p.visibility,
       p.moderation_status,
@@ -185,6 +203,8 @@ const buildPostSelect = (paramsLength, viewerId) => {
       p.technologies,
       p.github_url,
       p.image_url,
+      p.image_urls,
+      p.image_urls,
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
@@ -233,6 +253,8 @@ const buildRepostSelect = (paramsLength, viewerId) => {
       p.technologies,
       p.github_url,
       p.image_url,
+      p.image_urls,
+      p.image_urls,
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
@@ -281,6 +303,8 @@ const visiblePostsFor = async ({
   cursor = null,
   q = null,
   authorId = null,
+  departmentId = null,
+  courseId = null,
   type = null,
   visibility = null,
   postId = null,
@@ -301,6 +325,16 @@ const visiblePostsFor = async ({
   if (authorId) {
     params.push(authorId);
     conditions.push(`p.author_id = $${params.length}::text`);
+  }
+
+  if (departmentId) {
+    params.push(departmentId);
+    conditions.push(`(p.author_department_id = $${params.length}::uuid OR pr.department_id = $${params.length}::uuid)`);
+  }
+
+  if (courseId) {
+    params.push(courseId);
+    conditions.push(`(p.author_course_id = $${params.length}::uuid OR pr.course_id = $${params.length}::uuid)`);
   }
 
   if (type && POST_TYPE_FILTERS.includes(type)) {
@@ -366,7 +400,7 @@ const visiblePostsFor = async ({
     if (!includeHidden) {
       repostParams.push(viewerId);
       fromClauseReposts = `
-        FROM visible_reposts_for_post($${repostParams.length}::text) r
+        FROM visible_reposts($${repostParams.length}::text) r
         JOIN posts p ON p.id = r.original_post_id
       `;
     }
@@ -408,6 +442,7 @@ const visiblePostsFor = async ({
       technologies: row.technologies,
       github_url: row.github_url,
       image_url: row.image_url,
+      image_urls: row.image_urls || (row.image_url ? [row.image_url] : []),
       preview_metadata: row.preview_metadata,
       visibility: row.visibility,
       allow_reposts: row.allow_reposts,
@@ -467,6 +502,7 @@ const createPost = async (postData) => {
     technologies,
     github_url,
     image_url,
+    image_urls,
     preview_metadata = null,
     moderation_status = 'approved',
     moderation_reason = null,
@@ -474,6 +510,11 @@ const createPost = async (postData) => {
     audience = null,
     allow_reposts = true,
   } = postData;
+
+  const effectiveImageUrls = Array.isArray(image_urls)
+    ? image_urls
+    : (image_url ? [image_url] : []);
+  const effectiveImageUrl = image_url || (effectiveImageUrls.length > 0 ? effectiveImageUrls[0] : null);
 
   return db.withTransaction(async (client) => {
     // Snapshot author's department and course at post creation time
@@ -485,8 +526,8 @@ const createPost = async (postData) => {
     const author_course_id = profileResult.rows[0]?.course_id || null;
 
     const sql = `
-      INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, preview_metadata, moderation_status, moderation_reason, visibility, allow_reposts, author_department_id, author_course_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, image_urls, preview_metadata, moderation_status, moderation_reason, visibility, allow_reposts, author_department_id, author_course_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *;
     `;
     const values = [
@@ -496,7 +537,8 @@ const createPost = async (postData) => {
       title || null,
       technologies || null,
       github_url || null,
-      image_url || null,
+      effectiveImageUrl,
+      effectiveImageUrls,
       preview_metadata ? JSON.stringify(preview_metadata) : null,
       moderation_status,
       moderation_reason,
@@ -522,6 +564,7 @@ const POST_UPDATABLE_COLUMNS = [
   "technologies",
   "github_url",
   "image_url",
+  "image_urls",
   "preview_metadata",
   "visibility",
   "allow_reposts",
@@ -531,11 +574,20 @@ const POST_UPDATABLE_COLUMNS = [
 // touched when the caller actually sent `visibility`/`audience` - otherwise an
 // unrelated edit (a title change) would silently wipe the custom list.
 const updatePost = async (id, authorId, postData) => {
+  const updatePayload = { ...postData };
+  if (updatePayload.image_urls !== undefined && updatePayload.image_url === undefined) {
+    updatePayload.image_url = Array.isArray(updatePayload.image_urls) && updatePayload.image_urls.length > 0
+      ? updatePayload.image_urls[0]
+      : null;
+  } else if (updatePayload.image_url !== undefined && updatePayload.image_urls === undefined) {
+    updatePayload.image_urls = updatePayload.image_url ? [updatePayload.image_url] : [];
+  }
+
   const fields = POST_UPDATABLE_COLUMNS.filter(
-    (column) => postData[column] !== undefined
+    (column) => updatePayload[column] !== undefined
   );
   const touchesAudience =
-    postData.audience !== undefined || postData.visibility !== undefined;
+    updatePayload.audience !== undefined || updatePayload.visibility !== undefined;
 
   if (fields.length === 0 && !touchesAudience) {
     const current = await db.query(
@@ -551,7 +603,7 @@ const updatePost = async (id, authorId, postData) => {
     if (fields.length > 0) {
       // Add edited_at to the update
       const setClause = fields.map((column, i) => `${column} = $${i + 1}`).join(", ");
-      const values = fields.map((column) => postData[column]);
+      const values = fields.map((column) => updatePayload[column]);
       values.push(id, authorId);
 
       const result = await client.query(
@@ -713,6 +765,7 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
       p.technologies,
       p.github_url,
       p.image_url,
+      p.image_urls,
       p.visibility,
       p.moderation_status,
       p.moderation_reason,

@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const postController = require("../controllers/postController");
+const savedPostController = require("../controllers/savedPostController");
 const { loadProfile, requireVerified } = require("../middleware/auth");
 const {
   validate,
@@ -10,12 +11,19 @@ const {
   updateCommentSchema,
 } = require("../validation");
 
+// Saved posts feed (MUST be declared before /:id)
+router.get("/saved", savedPostController.list);
+
 // Routes (global requireAuth is applied when this router is mounted in app.js)
 router.get("/", postController.getPosts);
 router.get("/:id", postController.getPost);
 router.post("/", loadProfile, requireVerified, validate(createPostSchema), postController.createPost);
 router.put("/:id", requireVerified, validate(updatePostSchema), postController.updatePost);
 router.delete("/:id", requireVerified, postController.deletePost);
+
+// Saved posts bookmarking
+router.post("/:id/save", requireVerified, savedPostController.save);
+router.delete("/:id/save", requireVerified, savedPostController.unsave);
 
 // Reposts
 router.post("/:id/repost", requireVerified, postController.createRepost);

@@ -280,14 +280,43 @@ function getAalFromToken(token) {
 
 /**
  * Middleware to enforce AAL2 for admin roles.
- * Must run after requireAuth + loadProfile.
+ * Must run after requireAuth + loadProfile (and checkSessionAge).
  */
-function requireAal2(req, res, next) {
+async function requireAal2(req, res, next) {
   const role = req.profile?.role?.toLowerCase().replace(/[-_]/g, "");
   if (role !== "admin" && role !== "superadmin") {
     return next(); // Non-admins: AAL1 is fine
   }
-  const aal = getAalFromToken(req.accessToken);
+
+  // 1. Check req.sessionAal (set by checkSessionAge) or JWT claims
+  let aal = req.sessionAal || getAalFromToken(req.accessToken);
+
+  // 2. If not aal2, check session_events / memory cache
+  if (aal !== "aal2" && req.user?.id) {
+    const cache = checkSessionAge.cache;
+    const cached = cache?.get(req.user.id);
+    if (cached?.valid && cached?.aal === "aal2") {
+      aal = "aal2";
+    } else {
+      try {
+        const supabase = getSupabaseAdmin();
+        const { data: events } = await supabase
+          .from("session_events")
+          .select("created_at, event_type, aal")
+          .eq("user_id", req.user.id)
+          .in("event_type", ["login", "logout", "force_signout"])
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (events?.[0]?.event_type === "login" && events[0]?.aal === "aal2") {
+          aal = "aal2";
+        }
+      } catch (err) {
+        console.error("[mfa] Failed to check AAL from session events:", err.message);
+      }
+    }
+  }
+
   if (aal !== "aal2") {
     return res.status(403).json({
       error: "Multi-factor authentication required",
@@ -299,9 +328,10 @@ function requireAal2(req, res, next) {
 }
 
 /**
- * Check if the current session is within the allowed time window.
+ * Check if the current session is within the allowed time window and not revoked.
  * - All roles: 7 days max
- * - Admin/superadmin: 8 hours max
+ * - Admin/superadmin: 24 hours max
+ * Caches session lookup in memory for 60s per user.
  */
 async function checkSessionAge(req, res, next) {
   if (!req.user?.id) return next();
@@ -313,42 +343,52 @@ async function checkSessionAge(req, res, next) {
   if (cached && now - cached.ts < 60000) {
     if (!cached.valid) {
       return res.status(401).json({
-        error: "Session expired",
+        error: cached.error || "Session expired",
         code: "session_expired",
       });
     }
+    req.sessionAal = cached.aal;
     return next();
   }
 
   try {
     const supabase = getSupabaseAdmin();
-    // Get the session's created_at from auth.sessions via admin API
-    // Note: Supabase doesn't expose session created_at directly via REST.
-    // We use session_events table which we write on login.
+    // Query recent session events (login, logout, force_signout)
     const { data: events, error } = await supabase
       .from("session_events")
       .select("created_at, event_type, aal")
       .eq("user_id", req.user.id)
-      .eq("event_type", "login")
+      .in("event_type", ["login", "logout", "force_signout"])
       .order("created_at", { ascending: false })
       .limit(1);
 
     let valid = true;
+    let errorMessage = "Session expired. Please sign in again.";
+    let aal = "aal1";
+
     if (!error && events?.length > 0) {
-      const loginTime = new Date(events[0].created_at).getTime();
-      const ageMs = now - loginTime;
-      const role = req.profile?.role?.toLowerCase().replace(/[-_]/g, "");
-      const maxAgeMs = (role === "admin" || role === "superadmin")
-        ? 8 * 60 * 60 * 1000 // 8 hours
-        : 7 * 24 * 60 * 60 * 1000; // 7 days
-      valid = ageMs <= maxAgeMs;
+      const latest = events[0];
+      if (latest.event_type === "logout" || latest.event_type === "force_signout") {
+        valid = false;
+        errorMessage = "Session has been logged out. Please sign in again.";
+      } else {
+        const loginTime = new Date(latest.created_at).getTime();
+        const ageMs = now - loginTime;
+        const role = req.profile?.role?.toLowerCase().replace(/[-_]/g, "");
+        const maxAgeMs = (role === "admin" || role === "superadmin")
+          ? 24 * 60 * 60 * 1000 // 24 hours
+          : 7 * 24 * 60 * 60 * 1000; // 7 days
+        valid = ageMs <= maxAgeMs;
+        aal = latest.aal || "aal1";
+      }
     }
 
-    cache.set(req.user.id, { valid, ts: now });
+    cache.set(req.user.id, { valid, ts: now, aal, error: errorMessage });
+    req.sessionAal = aal;
 
     if (!valid) {
       return res.status(401).json({
-        error: "Session expired. Please sign in again.",
+        error: errorMessage,
         code: "session_expired",
       });
     }

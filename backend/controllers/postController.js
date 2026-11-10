@@ -32,12 +32,25 @@ const getPosts = async (req, res, next) => {
       return res.status(400).json({ error: author.error });
     }
 
+    const dept = parseUuidFilter(req.query.department_id, "department_id");
+    if (dept.error) {
+      return res.status(400).json({ error: dept.error });
+    }
+
+    const course = parseUuidFilter(req.query.course_id, "course_id");
+    if (course.error) {
+      return res.status(400).json({ error: course.error });
+    }
+
     const posts = await postModel.visiblePostsFor({
       viewerId: req.user?.id || null,
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
       q: parseSearch(req.query.q),
       authorId: author.value,
+      ...(dept.value ? { departmentId: dept.value } : {}),
+      ...(course.value ? { courseId: course.value } : {}),
+      ...(req.query.type ? { type: req.query.type } : {}),
       visibility: req.query.visibility || null,
     });
     res.json(posts);
@@ -319,18 +332,25 @@ const getPostFile = async (req, res, next) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    if (!post.image_url) {
+    const imageKeys = Array.isArray(post.image_urls) && post.image_urls.length > 0
+      ? post.image_urls
+      : (post.image_url ? [post.image_url] : []);
+
+    if (imageKeys.length === 0) {
       return res.status(404).json({ message: "Post has no image" });
     }
 
-    // Issue a signed URL for the private assets bucket.
-    const { url } = await signedStorageUrl("assets", post.image_url, { expiresIn: 300 });
+    // Issue signed URLs for all images in the private assets bucket.
+    const signedResults = await Promise.all(
+      imageKeys.map((key) => signedStorageUrl("assets", key, { expiresIn: 300 }))
+    );
+    const urls = signedResults.map((r) => r.url).filter(Boolean);
 
-    if (!url) {
+    if (urls.length === 0) {
       return res.status(404).json({ message: "Could not generate file URL" });
     }
 
-    res.json({ url });
+    res.json({ url: urls[0], urls });
   } catch (error) {
     next(error);
   }

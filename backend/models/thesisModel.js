@@ -17,6 +17,7 @@ const getAllTheses = async ({
   q = null,
   uploaderId = null,
   categories = null,
+  departmentId = null,
   viewerId = null,
 } = {}) => {
   const params = [];
@@ -51,6 +52,11 @@ const getAllTheses = async ({
   if (Array.isArray(categories) && categories.length > 0) {
     params.push(categories);
     conditions.push(`t.category = ANY($${params.length}::text[])`);
+  }
+
+  if (departmentId) {
+    params.push(departmentId);
+    conditions.push(`(t.department_id = $${params.length}::uuid OR pr.department_id = $${params.length}::uuid)`);
   }
 
   const whereClause = conditions.length

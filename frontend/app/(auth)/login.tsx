@@ -1,7 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Image, Pressable, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
-import { Eye, EyeOff, AlertCircle, Sun, Moon, Monitor, Globe } from "lucide-react-native";
+import { Eye, EyeOff, AlertCircle, Sun, Moon, Monitor, Globe, Lock } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { signInWithIdentifier, signInWithGoogle, completeMfaChallenge, type MfaChallengeResponse } from "../../src/lib/auth";
@@ -432,7 +432,7 @@ export default function LoginScreen() {
                 <View style={{ backgroundColor: colors.infoSurface, borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: colors.border }}>
                   <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
                     <View style={{ backgroundColor: colors.info, borderRadius: 8, padding: 8, marginRight: 12 }}>
-                      <Text style={{ color: colors.textOnPrimary, fontSize: 16 }}>🔐</Text>
+                      <Lock size={18} color={colors.textOnPrimary} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: colors.textPrimary, fontWeight: "700", fontSize: 15 }}>Multi-Factor Authentication</Text>

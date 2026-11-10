@@ -41,6 +41,9 @@ stub(auth, "loadProfile", (req, res, next) => {
   };
   return next();
 });
+// Stub new admin middleware (checkSessionAge, requireAal2) to pass through
+stub(auth, "checkSessionAge", (req, res, next) => next());
+stub(auth, "requireAal2", (req, res, next) => next());
 
 const model = {
   getOverview: stub(adminModel, "getOverview"),

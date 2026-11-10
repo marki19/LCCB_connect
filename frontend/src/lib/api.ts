@@ -232,11 +232,22 @@ export async function getThesisFileUrl(id: string | number): Promise<string> {
  * URL that expires after 5 minutes.
  */
 export async function getPostImageUrl(id: string | number): Promise<string> {
-  const data = await apiJson<{ url?: string }>(`/posts/${id}/file`);
+  const data = await apiJson<{ url?: string; urls?: string[] }>(`/posts/${id}/file`);
   if (!data?.url) {
     throw new ApiError("Could not generate image URL", 404);
   }
   return data.url;
+}
+
+export async function getPostImageUrls(id: string | number): Promise<string[]> {
+  const data = await apiJson<{ url?: string; urls?: string[] }>(`/posts/${id}/file`);
+  if (data?.urls && Array.isArray(data.urls) && data.urls.length > 0) {
+    return data.urls;
+  }
+  if (data?.url) {
+    return [data.url];
+  }
+  return [];
 }
 
 // ============================================================================
@@ -299,4 +310,124 @@ export async function listBlocked(): Promise<any[]> {
 
 export async function dismissBanner(): Promise<any> {
   return apiJson("/users/me/banner-dismissed", { method: "PATCH" });
+}
+
+// ============================================================================
+// Saved Posts endpoints
+// ============================================================================
+
+export async function savePost(postId: string | number): Promise<{ saved: boolean }> {
+  return apiJson<{ saved: boolean }>(`/posts/${postId}/save`, { method: "POST" });
+}
+
+export async function unsavePost(postId: string | number): Promise<{ saved: boolean }> {
+  return apiJson<{ saved: boolean }>(`/posts/${postId}/save`, { method: "DELETE" });
+}
+
+export async function getSavedPosts(
+  limit: number = 20,
+  cursor?: string | null
+): Promise<{ posts: any[]; nextCursor: string | null }> {
+  const params = new URLSearchParams();
+  if (limit) params.set("limit", String(limit));
+  if (cursor) params.set("cursor", cursor);
+  const q = params.toString();
+  return apiJson<{ posts: any[]; nextCursor: string | null }>(`/posts/saved${q ? `?${q}` : ""}`);
+}
+
+// ============================================================================
+// Search endpoints
+// ============================================================================
+
+export async function searchEverything(
+  query: string,
+  type: "all" | "people" | "posts" | "theses" = "all",
+  limit: number = 20
+): Promise<any> {
+  const params = new URLSearchParams();
+  params.set("q", query);
+  params.set("type", type);
+  params.set("limit", String(limit));
+  return apiJson(`/search?${params.toString()}`);
+}
+
+export async function getSearchSuggestions(query: string, limit: number = 6): Promise<any[]> {
+  const params = new URLSearchParams();
+  params.set("q", query);
+  params.set("limit", String(limit));
+  return apiJson<any[]>(`/search/suggestions?${params.toString()}`);
+}
+
+// ============================================================================
+// Post Adapter Helper
+// ============================================================================
+
+export function adaptPost(row: any): any {
+  if (!row) return null;
+  const authorName = row.author?.full_name || row.author?.name || "Unknown Author";
+  const initials = (authorName.split(" ").map((n: string) => n[0]).join("").substring(0, 2) || "LC").toUpperCase();
+  return {
+    id: String(row.id),
+    author: {
+      id: row.author?.id || row.author_id,
+      name: authorName,
+      initials,
+      avatarColor: row.author?.avatarColor || "#BFDBFE",
+      course: row.author?.department_name || row.department_name || "—",
+      yearLevel: row.author?.year_level || "—",
+      username: row.author?.username,
+    },
+    title: row.title || "Post Update",
+    description: row.content || row.description || "",
+    content: row.content || undefined,
+    type: row.type || "text",
+    tags: row.technologies || row.tags || [],
+    previewUrl: row.github_url || row.preview_url || row.previewUrl,
+    imageUrl: row.image_url || row.imageUrl,
+    preview_metadata: row.preview_metadata || null,
+    likes: Number(row.like_count ?? row.likes ?? 0),
+    comments: Number(row.comment_count ?? row.comments ?? 0),
+    createdAt: row.created_at ? new Date(row.created_at).toLocaleDateString() : (row.createdAt || "Just now"),
+    rawDate: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    isLiked: Boolean(row.is_liked ?? row.isLiked),
+    is_saved: Boolean(row.is_saved),
+    visibility: row.visibility || "public",
+    repost_count: row.repost_count || 0,
+    allow_reposts: row.allow_reposts !== false,
+    edited_at: row.edited_at || null,
+    deleted_at: row.deleted_at || null,
+    kind: row.kind || "post",
+  };
+}
+
+// ============================================================================
+// User Profile endpoints
+// ============================================================================
+
+export interface UserProfileData {
+  id: string;
+  username: string;
+  full_name: string;
+  avatar_url?: string | null;
+  bio?: string | null;
+  year_level?: string | null;
+  role: string;
+  skills: string[];
+  department_id?: string | null;
+  course_id?: string | null;
+  department_name?: string | null;
+  course_name?: string | null;
+  created_at: string;
+  verified_status?: string | null;
+  friendship: "friend" | "pending_out" | "pending_in" | "none";
+  is_self: boolean;
+  stats: {
+    posts_count: number;
+    theses_count: number;
+    friends_count: number;
+  };
+}
+
+export async function getUserProfile(userId: string): Promise<UserProfileData> {
+  return apiJson<UserProfileData>(`/users/${userId}/profile`);
 }

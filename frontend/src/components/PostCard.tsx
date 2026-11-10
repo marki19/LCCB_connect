@@ -12,11 +12,13 @@ import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { ThemeTokens, elevation, RADIUS } from "../lib/tokens";
-import { apiJson, deletePost, deleteThesis, getThesisFileUrl, getPostImageUrl } from "../lib/api";
+import { apiJson, deletePost, deleteThesis, getThesisFileUrl, getPostImageUrl, getPostImageUrls, savePost, unsavePost } from "../lib/api";
 import PostMenu from "./PostMenu";
 import RepostDialog from "./RepostDialog";
 import ReportDialog from "./ReportDialog";
 import BlockConfirmDialog from "./BlockConfirmDialog";
+import InlineCommentsDrawer from "./InlineCommentsDrawer";
+import { PostImageGallery } from "./PostImageGallery";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
   const configs: Record<string, { label: string; bg: string; text: string }> = {
@@ -77,7 +79,15 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const router = useRouter();
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes);
+  const [imageUrls, setImageUrls] = useState<string[]>(
+    post.image_urls && post.image_urls.length > 0
+      ? post.image_urls
+      : (post.imageUrl ? [post.imageUrl] : [])
+  );
   const [imageUrl, setImageUrl] = useState<string | undefined>(post.imageUrl);
+  const [showComments, setShowComments] = useState(false);
+  const [commentsCount, setCommentsCount] = useState(post.comments || 0);
+  const [isSaved, setIsSaved] = useState<boolean>(Boolean(post.is_saved));
 
   // Dialog states
   const [menuOpen, setMenuOpen] = useState(false);
@@ -94,12 +104,24 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const { colors } = useTheme();
   const isOwner = !!profile?.id && profile.id === post.author.id;
 
-  // Fetch signed URL for private post images (assets bucket is private per migration 015)
+  // Fetch signed URLs for private post images (assets bucket is private per migration 015)
   useEffect(() => {
-    if (post.imageUrl) {
-      getPostImageUrl(post.id).then(setImageUrl).catch(() => setImageUrl(undefined));
+    const hasImages = (post.image_urls && post.image_urls.length > 0) || Boolean(post.imageUrl);
+    if (hasImages) {
+      getPostImageUrls(post.id)
+        .then((urls) => {
+          if (urls.length > 0) {
+            setImageUrls(urls);
+            setImageUrl(urls[0]);
+          }
+        })
+        .catch(() => {
+          if (post.imageUrl) {
+            getPostImageUrl(post.id).then(setImageUrl).catch(() => setImageUrl(undefined));
+          }
+        });
     }
-  }, [post.id, post.imageUrl]);
+  }, [post.id, post.imageUrl, post.image_urls]);
 
   const handleEdit = () => {
     if (post.type === "thesis") {
@@ -166,6 +188,25 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
 
   const handleBlockSuccess = () => {
     setBlockDialogOpen(false);
+  };
+
+  const handleToggleSave = async () => {
+    if (!profile?.id || profile?.role === "guest") {
+      Alert.alert("Sign In Required", "Please sign in to save posts.");
+      return;
+    }
+    const next = !isSaved;
+    setIsSaved(next);
+    try {
+      if (next) {
+        await savePost(post.id);
+      } else {
+        await unsavePost(post.id);
+      }
+    } catch (e: any) {
+      setIsSaved(!next);
+      Alert.alert("Error", e.message || "Failed to update saved post");
+    }
   };
 
   const handleLike = async () => {
@@ -271,15 +312,10 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         ) : null}
       </View>
 
-      {imageUrl ? (
-        <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
-          <Image
-            source={{ uri: imageUrl }}
-            style={{ width: "100%", height: 200, borderRadius: 12, backgroundColor: colors.surfaceSunken }}
-            resizeMode="cover"
-          />
-        </View>
-      ) : null}
+      <PostImageGallery
+        images={imageUrls}
+        fallbackImageUrl={imageUrl}
+      />
 
       {/* Type badge + tags */}
       <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 14, paddingBottom: 12, gap: 6 }}>
@@ -373,14 +409,30 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
             </Animated.View>
 
             <TouchableOpacity
-              onPress={() => router.push(`/post/${post.id}`)}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                setShowComments((v) => !v);
+              }}
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Open comments"
               style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, minHeight: 44 }}
             >
-              <MessageCircle size={18} color={colors.textTertiary} strokeWidth={2} />
-              <Text style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>{post.comments}</Text>
+              <MessageCircle
+                size={18}
+                color={showComments ? colors.action : colors.textTertiary}
+                strokeWidth={2}
+              />
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: showComments ? colors.action : colors.textTertiary,
+                  marginLeft: 5,
+                  fontWeight: "600",
+                }}
+              >
+                {commentsCount}
+              </Text>
             </TouchableOpacity>
           </>
         )}
@@ -403,6 +455,15 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         </TouchableOpacity>
       </View>
 
+      {/* Inline Comments Drawer */}
+      {showComments && (
+        <InlineCommentsDrawer
+          postId={post.id}
+          initialCount={commentsCount}
+          onCountChange={(newCount) => setCommentsCount(newCount)}
+        />
+      )}
+
       {/* Dialogs */}
       {menuOpen ? (
         <PostMenu
@@ -413,6 +474,8 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           onRepost={handleRepost}
           onReport={() => setReportDialogOpen(true)}
           onBlock={() => setBlockDialogOpen(true)}
+          onSave={handleToggleSave}
+          isSaved={isSaved}
         />
       ) : null}
       <RepostDialog

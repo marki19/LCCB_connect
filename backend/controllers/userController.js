@@ -90,6 +90,21 @@ const getUser = async (req, res, next) => {
   }
 };
 
+const getPublicProfile = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const viewerId = req.user?.id || null;
+
+    const profile = await userModel.getPublicProfile(id, viewerId);
+    if (!profile) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.json(profile);
+  } catch (error) {
+    next(error);
+  }
+};
+
 /**
  * Verifies any department_id/course_id on a payload point at active catalog
  * rows and that the course belongs to the department. Returns an error message
@@ -282,6 +297,7 @@ const disableUser = async (req, res, next) => {
 module.exports = {
   getUsers,
   getUser,
+  getPublicProfile,
   getDirectory,
   createUser,
   updateUser,

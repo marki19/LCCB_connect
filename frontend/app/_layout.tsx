@@ -6,6 +6,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 import { PresenceProvider } from "../src/contexts/PresenceContext";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
+import { FloatingChatProvider } from "../src/contexts/FloatingChatContext";
+import { SettingsSidebarProvider } from "../src/contexts/SettingsSidebarContext";
+import SettingsSidebar from "../src/components/SettingsSidebar";
 import {
   isAdminRole,
   isModeratorRole,
@@ -151,14 +154,23 @@ function RouteGuard() {
         <Stack.Screen name="suspended" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="verify-requests" />
-        <Stack.Screen name="create" options={{ presentation: "modal" }} />
+        <Stack.Screen
+          name="create"
+          options={{
+            presentation: "transparentModal",
+            contentStyle: { backgroundColor: "transparent" },
+          }}
+        />
         <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
+        <Stack.Screen name="profile/[id]" />
         <Stack.Screen name="post/[id]" />
         <Stack.Screen name="messages/index" />
         <Stack.Screen name="messages/[id]" />
         <Stack.Screen name="friends" />
+        <Stack.Screen name="saved" />
         <Stack.Screen name="settings" options={{ presentation: "modal" }} />
       </Stack>
+      <SettingsSidebar />
     </>
   );
 }
@@ -169,7 +181,11 @@ export default function RootLayout() {
       <ThemeProvider>
         <AuthProvider>
           <PresenceProvider>
-            <RouteGuard />
+            <FloatingChatProvider>
+              <SettingsSidebarProvider>
+                <RouteGuard />
+              </SettingsSidebarProvider>
+            </FloatingChatProvider>
           </PresenceProvider>
         </AuthProvider>
       </ThemeProvider>

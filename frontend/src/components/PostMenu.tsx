@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
-import { Trash2, Flag, UserX, Share2, Settings, Edit3 } from "lucide-react-native";
+import { Trash2, Flag, UserX, Share2, Settings, Edit3, Bookmark } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import { RADIUS, SPACE, elevation } from "../lib/tokens";
@@ -14,6 +14,8 @@ interface PostMenuProps {
   onRepost?: (caption?: string) => void;
   onReport: () => void;
   onBlock: () => void;
+  onSave?: () => void;
+  isSaved?: boolean;
 }
 
 const createStyles = (colors: any) => StyleSheet.create({
@@ -72,7 +74,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
 });
 
-export default function PostMenu({ post, onClose, onEdit, onDelete, onRepost, onReport, onBlock }: PostMenuProps) {
+export default function PostMenu({ post, onClose, onEdit, onDelete, onRepost, onReport, onBlock, onSave, isSaved }: PostMenuProps) {
   const { colors } = useTheme();
   const { profile } = useAuth();
   const router = useRouter();
@@ -117,6 +119,12 @@ export default function PostMenu({ post, onClose, onEdit, onDelete, onRepost, on
             <>
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>Your Post</Text>
+                {onSave && (
+                  <TouchableOpacity style={styles.item} onPress={() => { onClose(); onSave(); }}>
+                    <Bookmark size={16} color={isSaved ? "#8B5CF6" : colors.action} />
+                    <Text style={styles.itemText}>{isSaved ? "Remove from Saved" : "Save Post"}</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={styles.item} onPress={() => { onClose(); onEdit?.(); }}>
                   <Edit3 size={16} color={colors.action} />
                   <Text style={styles.itemText}>Edit Post</Text>
@@ -143,6 +151,12 @@ export default function PostMenu({ post, onClose, onEdit, onDelete, onRepost, on
             <>
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>Actions</Text>
+                {onSave && (
+                  <TouchableOpacity style={styles.item} onPress={() => { onClose(); onSave(); }}>
+                    <Bookmark size={16} color={isSaved ? "#8B5CF6" : colors.action} />
+                    <Text style={styles.itemText}>{isSaved ? "Remove from Saved" : "Save Post"}</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={styles.item} onPress={() => { onClose(); handleRepost(); }}>
                   <Share2 size={16} color={colors.action} strokeWidth={2} />
                   <Text style={styles.itemText}>Repost</Text>

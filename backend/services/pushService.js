@@ -134,7 +134,22 @@ const notifyNewMessage = (
   { recipientId, senderId, senderName, body, conversationId, isRequest = false },
   opts = {}
 ) => {
-  const preview = String(body || "").replace(/\s+/g, " ").trim().slice(0, PREVIEW_LENGTH);
+  let text = String(body || "").trim();
+
+  // If payload is a photo attachment
+  if (text.startsWith('{"type":"image"')) {
+    try {
+      const parsed = JSON.parse(text);
+      text = parsed.text ? `Sent a photo: ${parsed.text}` : "Sent a photo";
+    } catch {
+      text = "Sent a photo";
+    }
+  } else if (text.startsWith("[image:")) {
+    const textPart = text.replace(/^\[image:[^\]]+\]\s*/, "");
+    text = textPart ? `Sent a photo: ${textPart}` : "Sent a photo";
+  }
+
+  const preview = text.replace(/\s+/g, " ").slice(0, PREVIEW_LENGTH);
   return sendToUser(
     {
       userId: recipientId,

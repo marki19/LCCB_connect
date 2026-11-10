@@ -22,6 +22,8 @@ const friendRouter = require("./routes/friendRouter");
 const socialRouter = require("./routes/socialRouter");
 const reportRouter = require("./routes/reportRouter");
 const blockRouter = require("./routes/blockRouter");
+const searchRouter = require("./routes/searchRouter");
+const notificationRouter = require("./routes/notificationRouter");
 
 // The Express app is built here and exported WITHOUT listening, so tests can
 // drive it via supertest. `index.js` owns dotenv + boot-time env validation and
@@ -169,11 +171,25 @@ app.use(
   thesisRouter
 );
 app.use(
+  "/api/search",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  searchRouter
+);
+app.use(
   "/api/moderation",
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
   moderationRouter
+);
+app.use(
+  "/api/notifications",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  notificationRouter
 );
 
 // Messaging & social graph (Messaging_plan.md §11). `loadProfile` runs where the
@@ -212,22 +228,18 @@ app.use(
 
 // Superadmin console API. Keep this mount before the catalog router so its
 // specific paths win; unmatched paths fall through.
-app.use(
-  "/api/admin",
+// Admin routes require AAL2 (MFA) + session age check (24h admin / 7d user)
+const adminMiddleware = [
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
   auth.requireRole("admin", "superadmin"),
-  adminRouter
-);
-app.use(
-  "/api/admin",
-  auth.requireAuth,
-  auth.loadProfile,
-  auth.requireActiveAccount,
-  auth.requireRole("admin", "superadmin"),
-  adminCatalogRouter
-);
+  auth.checkSessionAge,
+  auth.requireAal2,
+];
+
+app.use("/api/admin", ...adminMiddleware, adminRouter);
+app.use("/api/admin", ...adminMiddleware, adminCatalogRouter);
 
 // Test route
 app.get("/", (req, res) => {

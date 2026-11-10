@@ -292,94 +292,12 @@ const requireFaculty = [requireAuth, loadProfile, requireRole("faculty", "depart
 const requireStudent = [requireAuth, loadProfile, requireRole("student")];
 
 
-/**
- * Middleware to enforce AAL2 (multi-factor authentication) for admin roles.
- * Must run after requireAuth + loadProfile.
- */
-function requireAal2(req, res, next) {
-  const role = req.profile?.role?.toLowerCase().replace(/[-_]/g, "");
-  if (role !== "admin" && role !== "superadmin") {
-    return next(); // Non-admins: AAL1 is fine
-  }
-  const aal = mfaService.getAalFromToken(req.accessToken);
-  if (aal !== "aal2") {
-    return res.status(403).json({
-      error: "Multi-factor authentication required",
-      code: "mfa_required",
-      aal: "aal2",
-    });
-  }
-  next();
-}
-
-/**
- * Middleware to enforce session age limits.
- * - All roles: 7 days max
- * - Admin/superadmin: 8 hours max
- * Caches session lookup in memory for 60 seconds per user.
- */
-async function checkSessionAge(req, res, next) {
-  if (!req.user?.id) return next();
-
-  const now = Date.now();
-  const cache = checkSessionAge.cache || (checkSessionAge.cache = new Map());
-  const cached = cache.get(req.user.id);
-  if (cached && now - cached.ts < 60000) {
-    if (!cached.valid) {
-      return res.status(401).json({
-        error: "Session expired",
-        code: "session_expired",
-      });
-    }
-    return next();
-  }
-
-  try {
-    const { getSupabaseAdmin } = require("../services/supabaseAdmin");
-    const supabase = getSupabaseAdmin();
-    // Get the session's created_at from session_events table
-    const { data: events, error } = await supabase
-      .from("session_events")
-      .select("created_at, event_type, aal")
-      .eq("user_id", req.user.id)
-      .eq("event_type", "login")
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    let valid = true;
-    if (!error && events?.length > 0) {
-      const loginTime = new Date(events[0].created_at).getTime();
-      const ageMs = now - loginTime;
-      const role = req.profile?.role?.toLowerCase().replace(/[-_]/g, "");
-      const maxAgeMs = (role === "admin" || role === "superadmin")
-        ? 8 * 60 * 60 * 1000 // 8 hours
-        : 7 * 24 * 60 * 60 * 1000; // 7 days
-      valid = ageMs <= maxAgeMs;
-    }
-
-    cache.set(req.user.id, { valid, ts: now });
-
-    if (!valid) {
-      return res.status(401).json({
-        error: "Session expired. Please sign in again.",
-        code: "session_expired",
-      });
-    }
-    next();
-  } catch (err) {
-    // On error, allow through but log
-    console.error("[session-age] Check failed:", err.message);
-    next();
-  }
-}
-
-/**
- * Clear session age cache for a user (e.g., on logout or force signout).
- */
-function clearSessionAgeCache(userId) {
-  const cache = checkSessionAge.cache;
-  if (cache) cache.delete(userId);
-}
+// MFA & Session Age middleware delegated to mfaService
+const {
+  requireAal2,
+  checkSessionAge,
+  clearSessionAgeCache,
+} = mfaService;
 
 
 module.exports = {

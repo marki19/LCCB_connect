@@ -16,6 +16,7 @@ import { usePresence } from "../../src/contexts/PresenceContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { onConversation, onMessage } from "../../src/lib/realtime";
 import { acceptConversation, listConversations, listRequests } from "../../src/lib/messages";
+import { formatMessagePreview } from "../../src/lib/chatMedia";
 import type { Conversation } from "../../src/types";
 import { safeBack } from "../../src/lib/navigation";
 
@@ -153,7 +154,7 @@ export default function MessagesInbox() {
           <View style={{ flexDirection: "row", alignItems: "center", marginTop: 3 }}>
             <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: item.unread > 0 ? colors.textPrimary : colors.textTertiary, fontWeight: item.unread > 0 ? "600" : "400" }}>
               {item.last_message
-                ? `${item.last_message.sender_id === peer?.id ? "" : "You: "}${item.last_message.body}`
+                ? `${item.last_message.sender_id === peer?.id ? "" : "You: "}${formatMessagePreview(item.last_message.body)}`
                 : "No messages yet"}
             </Text>
             {item.unread > 0 && (
@@ -188,7 +189,7 @@ export default function MessagesInbox() {
           </Text>
           <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textTertiary, marginTop: 3 }}>
             {kind === "received" ? "Wants to message you" : "Request sent · pending"}
-            {item.last_message?.body ? ` · ${item.last_message.body}` : ""}
+            {item.last_message?.body ? ` · ${formatMessagePreview(item.last_message.body)}` : ""}
           </Text>
         </View>
 

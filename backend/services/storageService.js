@@ -128,6 +128,14 @@ function withStorageUrlsSync(value) {
         // Private buckets keep the raw key.
       }
     }
+    if (Array.isArray(output.image_urls)) {
+      output.image_urls = output.image_urls.map((key) => {
+        if (typeof key === "string" && !isAbsoluteUrl(key) && PUBLIC_BUCKETS.has("assets")) {
+          return publicStorageUrl("assets", key);
+        }
+        return key;
+      });
+    }
     if (output.author && typeof output.author === "object") {
       if (typeof output.author.avatar_url === "string" && !isAbsoluteUrl(output.author.avatar_url)) {
         output.author.avatar_url = publicStorageUrl("avatars", output.author.avatar_url);
@@ -164,6 +172,22 @@ async function withStorageUrls(value) {
           );
         }
       }
+    }
+    if (Array.isArray(output.image_urls)) {
+      output.image_urls = [...output.image_urls];
+      output.image_urls.forEach((key, idx) => {
+        if (typeof key === "string" && !isAbsoluteUrl(key)) {
+          if (PUBLIC_BUCKETS.has("assets")) {
+            output.image_urls[idx] = publicStorageUrl("assets", key);
+          } else {
+            pending.push(
+              resolveStorageUrl("assets", key).then((url) => {
+                output.image_urls[idx] = url;
+              })
+            );
+          }
+        }
+      });
     }
     if (output.author && typeof output.author === "object") {
       if (typeof output.author.avatar_url === "string" && !isAbsoluteUrl(output.author.avatar_url)) {

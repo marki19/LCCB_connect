@@ -95,6 +95,7 @@ const postFields = {
   technologies: stringArray(30, 40),
   github_url: optionalUrl(),
   image_url: optionalStorageUrl(),
+  image_urls: z.array(StorageKey).max(4).nullable().optional(),
   preview_metadata: previewMetadataSchema,
   visibility: Visibility.optional(),
   audience: Audience.optional(),

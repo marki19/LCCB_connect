@@ -25,6 +25,9 @@ stub(auth, "loadProfile", (req, res, next) => {
   return next();
 });
 stub(auth, "requireActiveAccount", (req, res, next) => next());
+// Stub new admin middleware (checkSessionAge, requireAal2) to pass through
+stub(auth, "checkSessionAge", (req, res, next) => next());
+stub(auth, "requireAal2", (req, res, next) => next());
 
 // Also stub messageModel.resolveDecision to return predictable decisions
 const resolveDecision = stub(messageModel, "resolveDecision", (opts) => {

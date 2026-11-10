@@ -65,11 +65,12 @@ function adminClientOr503(res) {
   }
 }
 
-function sendTokens(res, session, status = 200) {
+function sendTokens(res, session, status = 200, extra = {}) {
   return res.status(status).json({
     access_token: session.access_token,
     refresh_token: session.refresh_token,
     expires_at: session.expires_at,
+    ...extra,
   });
 }
 
@@ -263,19 +264,39 @@ async function login(req, res, next) {
     }
 
     if (isSuspendedProfile(profile)) {
-      return res.status(403).json({
-        error: "Account suspended",
-        code: "account_suspended",
-        suspended_until: profile.suspended_until || null,
-        reason: profile.suspension_reason || null,
-      });
-    }
+          return res.status(403).json({
+            error: "Account suspended",
+            code: "account_suspended",
+            suspended_until: profile.suspended_until || null,
+            reason: profile.suspension_reason || null,
+          });
+        }
 
     // Check if user has verified MFA
     const hasMfa = await mfaService.hasVerifiedTotp(data.user.id);
 
+    // Admin/superadmin must have MFA enrolled
+    const role = profile?.role?.toLowerCase().replace(/[-_]/g, "");
+    const isAdmin = role === "admin" || role === "superadmin";
+
     // Reset failed login attempts on successful login
     await userModel.resetFailedLogins(data.user.id);
+
+    // Admin without MFA gets an initial session with mfa_enrollment_required: true
+    // so they can authenticate to /api/auth/mfa/enroll while /api/admin/* remains locked
+    if (isAdmin && !hasMfa) {
+      await mfaService.recordLogin({
+        userId: data.user.id,
+        req,
+        aal: "aal1",
+        mfaChallenged: false,
+      });
+
+      return sendTokens(res, data.session, 200, {
+        mfa_enrollment_required: true,
+        message: "Admin accounts require MFA. Please complete MFA enrollment.",
+      });
+    }
 
     if (hasMfa) {
       // User has MFA enrolled - store the session and return a challenge token
@@ -283,11 +304,13 @@ async function login(req, res, next) {
       storePendingMfaSession(challengeToken, data.session);
 
       // Record the MFA challenge initiation
-      await mfaService.recordLogin({
+      await mfaService.recordSessionEvent({
         userId: data.user.id,
-        req,
-        aal: "aal2",
-        mfaChallenged: true,
+        eventType: "mfa_challenge",
+        aal: "aal1",
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        metadata: { mfa_challenged: true },
       });
 
       return res.status(200).json({
@@ -412,7 +435,16 @@ async function mfaChallenge(req, res, next) {
       });
     }
 
-    // Record successful MFA challenge
+    // Record successful login with AAL2 elevation
+    await mfaService.recordLogin({
+      userId,
+      req,
+      aal: "aal2",
+      mfaChallenged: true,
+    });
+    mfaService.clearSessionAgeCache(userId);
+
+    // Record audit event
     await mfaService.recordMfaChallenge({ userId, req, success: true });
 
     return sendTokens(res, session);
@@ -708,6 +740,15 @@ async function mfaEnrollVerify(req, res, next) {
     }
 
     const factor = await mfaService.verifyTotpFactor(userId, factor_id, code);
+
+    // Elevate current session to AAL2
+    await mfaService.recordLogin({
+      userId,
+      req,
+      aal: "aal2",
+      mfaChallenged: true,
+    });
+    mfaService.clearSessionAgeCache(userId);
 
     // Audit
     await mfaService.recordMfaEnroll({ userId, req, factorId: factor.id });

@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
   Alert,
+  Image as RNImage,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
@@ -25,6 +26,7 @@ import {
   Ban,
   ShieldCheck,
   X,
+  Image as ImageIcon,
 } from "lucide-react-native";
 import Avatar, { PRESENCE_LABELS } from "../../src/components/Avatar";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -44,6 +46,14 @@ import { ApiError } from "../../src/lib/api";
 import { setActiveConversation } from "../../src/lib/push";
 import { messageStatus, type Conversation, type Message } from "../../src/types";
 import { safeBack } from "../../src/lib/navigation";
+import { pickImage } from "../../src/lib/upload";
+import {
+  parseMessageContent,
+  formatMediaMessage,
+  uploadChatImage,
+} from "../../src/lib/chatMedia";
+import ChatImageBubble from "../../src/components/chat/ChatImageBubble";
+import ChatImageLightbox from "../../src/components/chat/ChatImageLightbox";
 
 /**
  * 1:1 thread (Messaging_plan.md §6, §7, §9, §12): bubbles + sent/delivered/seen
@@ -86,6 +96,9 @@ export default function ThreadScreen() {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [attachedImage, setAttachedImage] = useState<{ uri: string } | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [lightboxData, setLightboxData] = useState<{ url: string; caption?: string } | null>(null);
   const [accepting, setAccepting] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
@@ -160,14 +173,51 @@ export default function ThreadScreen() {
     typingTimer.current = setTimeout(() => notifyTyping(false), 2000);
   };
 
+  const handlePickPhoto = async () => {
+    if (!canReply || sending || uploadingImage) return;
+    try {
+      const res = await pickImage({ allowsEditing: false });
+      if (res?.uri) {
+        setAttachedImage({ uri: res.uri });
+      }
+    } catch (err) {
+      console.error("Failed to pick image in messages thread:", err);
+    }
+  };
+
   const handleSend = async () => {
     const text = draft.trim();
-    if (!text || sending || !canReply) return;
-    setDraft("");
-    notifyTyping(false);
+    if ((!text && !attachedImage) || sending || uploadingImage || !canReply) return;
     setSending(true);
+
+    let payloadBody = text;
+    if (attachedImage) {
+      setUploadingImage(true);
+      try {
+        const key = await uploadChatImage(attachedImage.uri, conversationId);
+        if (!key) {
+          Alert.alert("Upload failed", "Could not upload image. Please try again.");
+          setUploadingImage(false);
+          setSending(false);
+          return;
+        }
+        payloadBody = formatMediaMessage(key, text);
+      } catch (err) {
+        console.error("Chat image upload failed:", err);
+        Alert.alert("Upload failed", "Could not upload image.");
+        setUploadingImage(false);
+        setSending(false);
+        return;
+      } finally {
+        setUploadingImage(false);
+      }
+    }
+
+    setDraft("");
+    setAttachedImage(null);
+    notifyTyping(false);
     try {
-      await send(text);
+      await send(payloadBody);
     } catch (err) {
       // A 4xx (blocked / validation) is permanent — surface it. A network/5xx
       // failure was queued in the outbox and shows as a pending bubble instead.
@@ -267,6 +317,40 @@ export default function ThreadScreen() {
 
   const renderBubble = (message: Message) => {
     const mine = message.sender_id === userId;
+    const parsed = parseMessageContent(message.body);
+
+    if (parsed.isMedia && parsed.mediaUrl) {
+      return (
+        <TouchableOpacity
+          activeOpacity={1}
+          onLongPress={() => openReport(message)}
+          delayLongPress={350}
+          style={{
+            flexDirection: "row",
+            justifyContent: mine ? "flex-end" : "flex-start",
+            marginBottom: 8,
+            paddingHorizontal: 12,
+          }}
+        >
+          <ChatImageBubble
+            mediaUrl={parsed.mediaUrl}
+            caption={parsed.text}
+            isMine={mine}
+            maxWidth={280}
+            onPressImage={(url, cap) => setLightboxData({ url, caption: cap })}
+            statusFooter={
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 2, gap: 4 }}>
+                <Text style={{ fontSize: 10, color: mine ? colors.textOnActionMuted : colors.textTertiary }}>
+                  {formatClock(message.created_at)}
+                </Text>
+                {mine && <Ticks message={message} />}
+              </View>
+            }
+          />
+        </TouchableOpacity>
+      );
+    }
+
     return (
       <TouchableOpacity
         activeOpacity={1}
@@ -306,26 +390,50 @@ export default function ThreadScreen() {
     );
   };
 
-  const renderPending = (item: PendingMessage) => (
-    <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 8, paddingHorizontal: 12 }}>
-      <View
-        style={{
-          maxWidth: "78%",
-          backgroundColor: isDark ? "hsl(215, 60%, 40%)" : "#93B4F5",
-          borderRadius: 16,
-          borderBottomRightRadius: 4,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-        }}
-      >
-        <Text style={{ fontSize: 15, lineHeight: 20, color: "#FFFFFF" }}>{item.body}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 3, gap: 4 }}>
-          <Clock size={11} color="#EEF2FF" />
-          <Text style={{ fontSize: 10, color: "#EEF2FF" }}>Sending…</Text>
+  const renderPending = (item: PendingMessage) => {
+    const parsedPending = parseMessageContent(item.body);
+
+    if (parsedPending.isMedia && parsedPending.mediaUrl) {
+      return (
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 8, paddingHorizontal: 12 }}>
+          <ChatImageBubble
+            mediaUrl={parsedPending.mediaUrl}
+            caption={parsedPending.text}
+            isMine={true}
+            sending={true}
+            maxWidth={280}
+            statusFooter={
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 2, gap: 4 }}>
+                <Clock size={11} color="#EEF2FF" />
+                <Text style={{ fontSize: 10, color: "#EEF2FF" }}>Sending…</Text>
+              </View>
+            }
+          />
+        </View>
+      );
+    }
+
+    return (
+      <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 8, paddingHorizontal: 12 }}>
+        <View
+          style={{
+            maxWidth: "78%",
+            backgroundColor: isDark ? "hsl(215, 60%, 40%)" : "#93B4F5",
+            borderRadius: 16,
+            borderBottomRightRadius: 4,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+          }}
+        >
+          <Text style={{ fontSize: 15, lineHeight: 20, color: "#FFFFFF" }}>{item.body}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 3, gap: 4 }}>
+            <Clock size={11} color="#EEF2FF" />
+            <Text style={{ fontSize: 10, color: "#EEF2FF" }}>Sending…</Text>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
@@ -452,6 +560,46 @@ export default function ThreadScreen() {
           />
         )}
 
+        {/* Attachment preview strip */}
+        {attachedImage && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              backgroundColor: colors.surfaceSunken,
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              gap: 10,
+            }}
+          >
+            <View style={{ position: "relative", width: 44, height: 44, borderRadius: 8, overflow: "hidden" }}>
+              <RNImage source={{ uri: attachedImage.uri }} style={{ width: "100%", height: "100%" }} />
+              <TouchableOpacity
+                onPress={() => setAttachedImage(null)}
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  right: 2,
+                  width: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: "rgba(0,0,0,0.65)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                accessibilityLabel="Remove photo"
+              >
+                <X size={12} color="#FFFFFF" strokeWidth={3} />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: colors.textTertiary, fontStyle: "italic", flex: 1 }} numberOfLines={1}>
+              Photo attached
+            </Text>
+          </View>
+        )}
+
         {/* Composer */}
         <View
           style={{
@@ -462,13 +610,39 @@ export default function ThreadScreen() {
             backgroundColor: colors.surface,
             borderTopWidth: 1,
             borderTopColor: colors.border,
+            gap: 8,
           }}
         >
+          <TouchableOpacity
+            onPress={handlePickPhoto}
+            disabled={!canReply || sending || uploadingImage}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              backgroundColor: colors.surfaceSunken,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: canReply ? 1 : 0.4,
+            }}
+            accessibilityLabel="Attach photo"
+          >
+            <ImageIcon size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+
           <TextInput
             value={draft}
             onChangeText={handleDraftChange}
             editable={canReply}
-            placeholder={canReply ? "Message…" : blocked ? "You blocked this user" : "Accept the request to reply"}
+            placeholder={
+              canReply
+                ? attachedImage
+                  ? "Add a caption…"
+                  : "Message…"
+                : blocked
+                  ? "You blocked this user"
+                  : "Accept the request to reply"
+            }
             placeholderTextColor={colors.textTertiary}
             multiline
             style={{
@@ -485,18 +659,24 @@ export default function ThreadScreen() {
           />
           <TouchableOpacity
             onPress={handleSend}
-            disabled={!draft.trim() || !canReply || sending}
+            disabled={(!draft.trim() && !attachedImage) || !canReply || sending || uploadingImage}
             style={{
               width: 42,
               height: 42,
               borderRadius: 21,
-              backgroundColor: draft.trim() && canReply ? colors.action : colors.surfaceSunken,
+              backgroundColor: (draft.trim() || attachedImage) && canReply ? colors.action : colors.surfaceSunken,
               alignItems: "center",
               justifyContent: "center",
-              marginLeft: 8,
             }}
           >
-            <Send size={18} color={draft.trim() && canReply ? "#FFFFFF" : colors.textTertiary} />
+            {sending || uploadingImage ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Send
+                size={18}
+                color={(draft.trim() || attachedImage) && canReply ? "#FFFFFF" : colors.textTertiary}
+              />
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -606,6 +786,14 @@ export default function ThreadScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Photo Lightbox */}
+      <ChatImageLightbox
+        visible={Boolean(lightboxData)}
+        imageUrl={lightboxData?.url || null}
+        caption={lightboxData?.caption}
+        onClose={() => setLightboxData(null)}
+      />
     </SafeAreaView>
   );
 }

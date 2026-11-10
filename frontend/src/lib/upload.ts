@@ -32,14 +32,22 @@ function isAllowedMime(bucketName: string, contentType: string): boolean {
   return allowed.includes(contentType.toLowerCase());
 }
 
+export interface PickedImage {
+  uri: string;
+  type: string;
+  name: string;
+  width?: number;
+  height?: number;
+}
+
 /**
  * Prompts the user to pick an image from their device gallery.
  * @returns An object with the local uri and mimetype, or null if cancelled.
  */
-export async function pickImage() {
+export async function pickImage(options: { allowsEditing?: boolean } = {}): Promise<PickedImage | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
-    allowsEditing: true, // Let users crop avatars
+    allowsEditing: options.allowsEditing ?? true, // Default to true for avatar crop
     quality: 0.8,
   });
   if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -47,10 +55,34 @@ export async function pickImage() {
     return {
       uri: asset.uri,
       type: 'image/jpeg',
-      name: asset.fileName || `image-${Date.now()}.jpg`
+      name: asset.fileName || `image-${Date.now()}.jpg`,
+      width: asset.width,
+      height: asset.height,
     };
   }
   return null;
+}
+
+/**
+ * Prompts the user to select one or multiple images (up to selectionLimit, default 4).
+ */
+export async function pickMultipleImages(options: { selectionLimit?: number } = {}): Promise<PickedImage[]> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsMultipleSelection: true,
+    selectionLimit: options.selectionLimit ?? 4,
+    quality: 0.8,
+  });
+  if (!result.canceled && result.assets && result.assets.length > 0) {
+    return result.assets.map((asset, index) => ({
+      uri: asset.uri,
+      type: 'image/jpeg',
+      name: asset.fileName || `image-${Date.now()}-${index}.jpg`,
+      width: asset.width,
+      height: asset.height,
+    }));
+  }
+  return [];
 }
 
 /**
@@ -114,26 +146,36 @@ export function validateUpload(
  */
 export async function uploadToStorage(
   uri: string,
-  bucket: string,
-  path: string,
-  contentType: string,
-  maxBytes: number,
+  bucket: string = 'assets',
+  path?: string,
+  contentType: string = 'image/jpeg',
+  maxBytes: number = MAX_UPLOAD_BYTES.image,
   sizeBytes: number | null = null
 ): Promise<{ key: string } | null> {
+  const finalPath = path || `uploads/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.jpg`;
   const error = validateUpload(bucket, contentType, sizeBytes ?? 0, maxBytes);
   if (error) {
     console.error("[upload] validation failed:", error);
     return null;
   }
 
+  // Convert uri to binary Blob so Supabase stores real image bytes on both web and native
+  let body: any = uri;
+  try {
+    const res = await fetch(uri);
+    body = await res.blob();
+  } catch (e) {
+    console.warn("[upload] fetch blob failed, falling back to uri:", e);
+  }
+
   const { error: uploadError } = await supabase.storage
     .from(bucket)
-    .upload(path, uri, { contentType, upsert: true });
+    .upload(finalPath, body, { contentType, upsert: true });
 
   if (uploadError) {
     console.error("[upload] Supabase upload failed:", uploadError.message);
     return null;
   }
 
-  return { key: path };
+  return { key: finalPath };
 }

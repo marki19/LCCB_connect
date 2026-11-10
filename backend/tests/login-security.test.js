@@ -70,6 +70,10 @@ const loadProfileStub = stub(authMiddleware, "loadProfile", (req, res, next) => 
   return next();
 });
 
+// Stub new admin middleware (checkSessionAge, requireAal2) to pass through
+stub(authMiddleware, "checkSessionAge", (req, res, next) => next());
+stub(authMiddleware, "requireAal2", (req, res, next) => next());
+
 // Import app AFTER stubs are installed
 const app = require("../app");
 

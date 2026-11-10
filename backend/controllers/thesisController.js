@@ -34,11 +34,17 @@ const getTheses = async (req, res, next) => {
       return res.status(400).json({ error: uploader.error });
     }
 
+    const department = parseUuidFilter(req.query.department_id, "department_id");
+    if (department.error) {
+      return res.status(400).json({ error: department.error });
+    }
+
     const theses = await thesisModel.getAllTheses({
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
       q: parseSearch(req.query.q),
       uploaderId: uploader.value,
+      ...(department.value ? { departmentId: department.value } : {}),
       categories: parseCategoryFilter(req.query.category),
       viewerId: req.user?.id || null,
     });

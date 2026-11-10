@@ -134,6 +134,110 @@ const getAllUsers = async ({
   return result.rows[0];
 };
 
+const getPublicProfile = async (targetId, viewerId = null) => {
+  if (!targetId) return null;
+
+  // 1. Block check: if blocked in either direction, profile is hidden
+  if (viewerId) {
+    const blockCheck = await db.query(
+      `SELECT EXISTS (
+        SELECT 1 FROM public.blocks b
+        WHERE (b.blocker_id = $1 AND b.blocked_id = $2)
+           OR (b.blocker_id = $2 AND b.blocked_id = $1)
+      ) AS is_blocked`,
+      [viewerId, targetId]
+    );
+    if (blockCheck.rows[0]?.is_blocked) {
+      return null;
+    }
+  }
+
+  // 2. Fetch sanitized public profile + stats
+  const sql = `
+    SELECT
+      p.id,
+      p.username,
+      p.full_name,
+      p.avatar_url,
+      p.bio,
+      p.year_level,
+      p.role,
+      p.skills,
+      p.department_id,
+      p.course_id,
+      p.created_at,
+      p.verified_status,
+      d.name AS department_name,
+      c.name AS course_name,
+      (
+        SELECT f.status FROM public.friendships f
+        WHERE (f.requester_id = $2 AND f.addressee_id = p.id)
+           OR (f.addressee_id = $2 AND f.requester_id = p.id)
+        LIMIT 1
+      ) AS friendship_status,
+      (
+        SELECT f.requester_id = $2 FROM public.friendships f
+        WHERE (f.requester_id = $2 AND f.addressee_id = p.id)
+           OR (f.addressee_id = $2 AND f.requester_id = p.id)
+        LIMIT 1
+      ) AS friendship_outgoing,
+      (
+        SELECT COUNT(*)::int FROM visible_posts($2::text) vp
+        WHERE vp.author_id = p.id AND vp.deleted_at IS NULL
+      ) AS posts_count,
+      (
+        SELECT COUNT(*)::int FROM visible_theses($2::text) vt
+        WHERE vt.uploader_id = p.id
+      ) AS theses_count,
+      (
+        SELECT COUNT(*)::int FROM public.friendships f
+        WHERE (f.requester_id = p.id OR f.addressee_id = p.id)
+          AND f.status = 'accepted'
+      ) AS friends_count
+    FROM public.profiles p
+    LEFT JOIN public.departments d ON d.id = p.department_id
+    LEFT JOIN public.courses c ON c.id = p.course_id
+    WHERE p.id = $1;
+  `;
+
+  const result = await db.query(sql, [targetId, viewerId]);
+  const row = result.rows[0];
+  if (!row) return null;
+
+  const friendship =
+    row.friendship_status === "accepted"
+      ? "friend"
+      : row.friendship_status === "pending"
+      ? row.friendship_outgoing
+        ? "pending_out"
+        : "pending_in"
+      : "none";
+
+  return {
+    id: row.id,
+    username: row.username,
+    full_name: row.full_name,
+    avatar_url: row.avatar_url,
+    bio: row.bio,
+    year_level: row.year_level,
+    role: row.role,
+    skills: row.skills || [],
+    department_id: row.department_id,
+    course_id: row.course_id,
+    department_name: row.department_name,
+    course_name: row.course_name,
+    created_at: row.created_at,
+    verified_status: row.verified_status,
+    friendship,
+    is_self: Boolean(viewerId && String(viewerId) === String(row.id)),
+    stats: {
+      posts_count: row.posts_count || 0,
+      theses_count: row.theses_count || 0,
+      friends_count: row.friends_count || 0,
+    },
+  };
+};
+
 const createUser = async (userData) => {
   const {
     id, username, full_name, avatar_url, bio, course, year_level, role,
@@ -436,6 +540,7 @@ const updateBouncedEmail = async (email, bounceReason, bouncedAt) => {
 module.exports = {
   getAllUsers,
   getUserById,
+  getPublicProfile,
   getDirectory,
   createUser,
   updateUser,

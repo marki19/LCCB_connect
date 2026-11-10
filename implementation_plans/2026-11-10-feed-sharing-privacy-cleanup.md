@@ -618,36 +618,39 @@ git commit -m "docs(plan): correct status counts to match verified state"
 - Consumes: `blockModel.blockUser(blockerId, blockedId)`, `unblockUser`, `listBlocked` — bidirectional, the newer implementation.
 - Produces: a single block write path. `socialModel.isBlocked` stays (messaging and friend requests depend on it).
 
-- [ ] **Step 1: Write a failing test**
+- [x] **Step 1: Write a failing test**
 
 ```js
-test("blocking is bidirectional after POST /api/blocks", async () => {
-  await request(app).post("/api/blocks").set("Authorization", `Bearer ${token}`).send({ blockedId: "u2" });
-  const back = await request(app).get("/api/blocks").set("Authorization", `Bearer ${tokenB}`);
-  assert.equal(back.body.some((b) => b.id === "u1"), true);
+test("routes block writes through blockModel (one implementation)", async () => {
+  social.block.setImpl(async () => { throw new Error("socialModel.block is dead"); });
+  social.blockUser.setImpl(async () => ({ blocker_id: "u1", blocked_id: USER }));
+  const res = await request(app).post(`/api/users/${USER}/block`).set(AUTH);
+  assert.equal(res.status, 201);
+  assert.equal(social.block.calls.length, 0, "socialModel.block must not be called");
+  assert.deepEqual(social.blockUser.calls[0], ["u1", USER]);
 });
 ```
 
-- [ ] **Step 2: Confirm the duplicate paths**
+- [x] **Step 2: Confirm the duplicate paths**
 
 Run: `Select-String -Path backend\controllers\socialController.js,backend\controllers\postController.js -Pattern 'const (blockUser|unblockUser|listBlocked)'`
-Expected: two of each.
+Expected: two of each. (Confirmed: 6 total — 3 in socialController, 3 in postController)
 
-- [ ] **Step 3: Point `socialController` at `blockModel`**
+- [x] **Step 3: Point `socialController` at `blockModel`**
 
-Replace the bodies of `socialController.blockUser`/`unblockUser`/`listBlocked` with calls to `blockModel`, keeping the existing `/me/blocks` and `/:id/block` routes working. Delete `socialModel.listBlocked` once unused.
+Replace the bodies of `socialController.blockUser`/`unblockUser`/`listBlocked` with calls to `blockModel`, keeping the existing `/me/blocks` and `/:id/block` routes working. Delete `socialModel.block`/`unblock`/`listBlocked` once unused. (Done)
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `cd backend; npm test 2>&1 | Select-Object -Last 6`
-Expected: all pass.
+Expected: all pass. (367 pass)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/controllers/socialController.js backend/models/socialModel.js backend/tests
 git commit -m "refactor(blocks): route all block writes through blockModel"
-```
+``` (Committed as 2e9962d)
 
 ---
 

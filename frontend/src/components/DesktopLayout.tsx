@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Platform,
@@ -31,7 +32,13 @@ import { usePresence } from "../contexts/PresenceContext";
 import { isAdminRole, isDepartmentAdminRole } from "../lib/roles";
 import { setAdminAppPreview } from "../lib/panelMode";
 import { apiJson } from "../lib/api";
+import { onMessage, onConversation } from "../lib/realtime";
 import { elevation, RADIUS, SPACE, TYPE, type ThemeTokens } from "../lib/tokens";
+import DesktopTopBar, { TOP_BAR_HEIGHT } from "./topbar/DesktopTopBar";
+import FloatingChatWindow from "./chat/FloatingChatWindow";
+import DesktopContactsRail from "./chat/DesktopContactsRail";
+import DesktopLeftRail from "./leftrail/DesktopLeftRail";
+import { useFloatingChat } from "../contexts/FloatingChatContext";
 
 type TabItem = (typeof TAB_ITEMS)[number];
 type TabName = TabItem["name"];
@@ -69,6 +76,7 @@ export default function DesktopLayout({
   const { modeOf } = usePresence();
   const router = useRouter();
   const segments = useSegments();
+  const { openChat } = useFloatingChat();
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -93,21 +101,41 @@ export default function DesktopLayout({
     load();
   }, [isGuest, profile?.id, session?.user?.id]);
 
-  // Load unread count for messages badge
+  // Load unread count for messages badge + Realtime sync
   useEffect(() => {
+    if (isGuest || !profile?.id) {
+      setUnreadCount(0);
+      return;
+    }
+
+    let cancelled = false;
     const load = async () => {
-      if (isGuest || !profile?.id) {
-        setUnreadCount(0);
-        return;
-      }
       try {
-        const data = await apiJson<{ total: number }>("/api/conversations/unread-count");
-        setUnreadCount(data.total);
+        const data = await apiJson<{ unread: number }>("/conversations/unread-count");
+        if (!cancelled && typeof data?.unread === "number") {
+          setUnreadCount(data.unread);
+        }
       } catch (e) {
         console.error("Failed to load unread count:", e);
       }
     };
     load();
+
+    const unsubMsg = onMessage((evt) => {
+      if (evt.action === "INSERT") {
+        setUnreadCount((c) => c + 1);
+      }
+    });
+
+    const unsubConv = onConversation(() => {
+      load();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubMsg();
+      unsubConv();
+    };
   }, [isGuest, profile?.id]);
 
   // Get active tab index
@@ -115,22 +143,11 @@ export default function DesktopLayout({
   const activeTabName = (seg.length > 1 ? (seg[1] as TabName) : undefined) || "index";
   const activeTabIndex = visibleTabs.findIndex((t) => t.name === activeTabName);
 
-  // Mobile: render tabs at bottom
+  // Mobile: render children directly (Tabs will render MobileTabBar)
   if (!isDesktopWeb) {
     return (
       <View style={styles.mobileContainer}>
         {children}
-        <MobileTabBar
-          visibleTabs={visibleTabs}
-          activeIndex={activeTabIndex}
-          onTabPress={(name) => router.push(`/(tabs)/${name}`)}
-          unreadCount={unreadCount}
-          onCreatePress={() => router.push("/create")}
-          onMessagesPress={() => router.push("/messages")}
-          onThemeToggle={toggleTheme}
-          isDark={isDark}
-          colors={colors}
-        />
       </View>
     );
   }
@@ -138,176 +155,13 @@ export default function DesktopLayout({
   // Desktop: render three-column layout
   return (
     <SafeAreaView style={[styles.desktopContainer, { backgroundColor: colors.surfacePage }]}>
-      {/* LEFT SIDEBAR */}
+      {/* DESKTOP TOP BAR */}
+      <DesktopTopBar unreadCount={unreadCount} />
+
+      {/* LEFT SIDEBAR - Facebook Style Shortcuts Rail */}
       {showLeftSidebar && (
-        <View style={styles.leftSidebar}>
-          {/* Brand */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="LCCB Connect home"
-            onPress={() => router.push("/(tabs)/")}
-            style={styles.sidebarBrand}
-          >
-            <View
-              style={[
-                styles.sidebarLogo,
-                { backgroundColor: colors.brandWash, borderColor: colors.brandWashStrong },
-              ]}
-            >
-              <RNImage
-                source={require("../../assets/images/logo-seal.png")}
-                style={{ width: 24, height: 24 }}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={[TYPE.title, { fontSize: 16, color: colors.ink }]}>
-              LCCB <Text style={{ color: colors.brand }}>Connect</Text>
-            </Text>
-          </Pressable>
-
-          {/* Navigation */}
-          <View style={styles.sidebarNav}>
-            {visibleTabs.map(({ name, label, Icon, isAction }) => {
-              const isActive = activeTabName === name;
-              if (isAction) {
-                return (
-                  <Pressable
-                    key={name}
-                    accessibilityRole="button"
-                    accessibilityLabel="Create a post"
-                    onPress={() => router.push("/create")}
-                    style={({ pressed }) => [
-                      styles.sidebarAction,
-                      { backgroundColor: pressed ? colors.brandSolid : colors.brandSolid },
-                    ]}
-                  >
-                    <Icon size={18} color={colors.textOnPrimary} strokeWidth={2.4} />
-                    <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.textOnPrimary }}>
-                      Create
-                    </Text>
-                  </Pressable>
-                );
-              }
-              return (
-                <Pressable
-                  key={name}
-                  accessibilityRole="tab"
-                  accessibilityLabel={label}
-                  accessibilityState={{ selected: isActive }}
-                  onPress={() => router.push(`/(tabs)/${name}`)}
-                  style={({ pressed }) => [
-                    styles.sidebarNavItem,
-                    isActive && { backgroundColor: colors.brandWash },
-                    pressed && !isActive && { backgroundColor: colors.panelInset },
-                  ]}
-                >
-                  <Icon
-                    size={18}
-                    color={isActive ? colors.brand : colors.inkFaint}
-                    strokeWidth={isActive ? 2.4 : 2}
-                  />
-                  <Text
-                    style={{
-                      ...TYPE.body,
-                      fontSize: 14,
-                      color: isActive ? colors.brand : colors.ink,
-                      fontWeight: isActive ? "700" : "500",
-                    }}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-
-            {/* Active peers section */}
-            {!isGuest && activePeers.length > 0 && (
-              <View style={styles.sidebarSection}>
-                <Text style={[styles.sidebarSectionTitle, { color: colors.inkFaint }]}>
-                  Active Peers
-                </Text>
-                {activePeers.slice(0, 8).map((peer: any) => (
-                  <Pressable
-                    key={peer.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Message ${peer.full_name || peer.username}`}
-                    onPress={() => router.push(`/messages/${peer.id}`)}
-                    style={styles.sidebarPeer}
-                  >
-                    <Avatar
-                      name={peer.full_name}
-                      username={peer.username}
-                      avatarUrl={peer.avatar_url}
-                      size={32}
-                    />
-                    <Text
-                      style={{ ...TYPE.body, fontSize: 13, color: colors.ink, flex: 1 }}
-                      numberOfLines={1}
-                    >
-                      {peer.full_name || peer.username}
-                    </Text>
-                    {modeOf(peer.id) === "online" && (
-                      <View style={styles.onlineDot} />
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-            )}
-
-            {/* Admin/Moderation links */}
-            {(adminUser || departmentAdmin) && (
-              <View style={styles.sidebarSection}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={adminUser ? "Open the admin console" : "Open the moderation console"}
-                  onPress={() => {
-                    if (adminUser) {
-                      setAdminAppPreview(false);
-                      router.push("/(admin)");
-                    } else {
-                      router.push("/(moderation)" as any);
-                    }
-                  }}
-                  style={styles.sidebarAdminLink}
-                >
-                  <Shield size={18} color={adminUser ? colors.brand : colors.action} strokeWidth={2} />
-                  <Text
-                    style={{
-                      ...TYPE.body,
-                      fontSize: 14,
-                      color: adminUser ? colors.brand : colors.action,
-                      fontWeight: "600",
-                    }}
-                  >
-                    {adminUser ? "Admin Console" : "Moderation Console"}
-                  </Text>
-                  <ChevronRight size={16} color={colors.inkFaint} />
-                </Pressable>
-              </View>
-            )}
-          </View>
-
-          {/* Footer: Theme toggle + Settings */}
-          <View style={styles.sidebarFooter}>
-            <Pressable
-              onPress={() => void toggleTheme()}
-              accessibilityRole="button"
-              accessibilityLabel={isDark ? "Switch to light theme" : "Switch to dark theme"}
-              style={styles.sidebarFooterItem}
-            >
-              {isDark ? <Sun size={18} color={colors.accentText} strokeWidth={2.2} /> : <Moon size={18} color={colors.inkSoft} strokeWidth={2} />}
-              <Text style={[TYPE.caption, { color: colors.inkFaint }]}>{isDark ? "Light" : "Dark"}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push("/settings")}
-              accessibilityRole="button"
-              accessibilityLabel="Settings"
-              style={styles.sidebarFooterItem}
-            >
-              <Settings size={18} color={colors.inkSoft} strokeWidth={2} />
-              <Text style={[TYPE.caption, { color: colors.inkFaint }]}>Settings</Text>
-            </Pressable>
-          </View>
+        <View style={{ marginTop: TOP_BAR_HEIGHT }}>
+          {leftSidebar ? leftSidebar : <DesktopLeftRail unreadCount={unreadCount} />}
         </View>
       )}
 
@@ -318,28 +172,10 @@ export default function DesktopLayout({
         </View>
       </View>
 
-      {/* RIGHT SIDEBAR - Messages */}
-      {showRightSidebar && !isGuest && (
-        <View style={styles.rightSidebar}>
-          <View style={styles.rightSidebarHeader}>
-            <Text style={{ ...TYPE.title, fontSize: 16, color: colors.ink }}>Messages</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="New message"
-              onPress={() => router.push("/messages")}
-              style={styles.rightSidebarNewBtn}
-            >
-              <MessageSquarePlus size={16} color={colors.textOnPrimary} />
-            </Pressable>
-          </View>
-
-          <MessagesSidebar
-            unreadCount={unreadCount}
-            activePeers={activePeers}
-            modeOf={modeOf}
-            colors={colors}
-            onOpenChat={(peerId) => router.push(`/messages/${peerId}`)}
-          />
+      {/* RIGHT SIDEBAR - Contacts Rail on Wide Desktop */}
+      {width >= 1200 && !isGuest && (
+        <View style={{ marginTop: TOP_BAR_HEIGHT }}>
+          <DesktopContactsRail peers={activePeers} />
         </View>
       )}
 
@@ -351,6 +187,9 @@ export default function DesktopLayout({
           accessibilityLabel="Close sidebar"
         />
       )}
+
+      {/* Floating Mini-Chat Window (Facebook style) */}
+      <FloatingChatWindow />
     </SafeAreaView>
   );
 }
@@ -654,11 +493,6 @@ function Avatar({ name, username, avatarUrl, size = 40 }: { name?: string; usern
 }
 
 // ============================================================================
-// HOOKS
-// ============================================================================
-import { useState, useEffect, useRef } from "react";
-
-// ============================================================================
 // STYLES
 // ============================================================================
 const styles = StyleSheet.create({
@@ -685,6 +519,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     paddingTop: SPACE.x4,
     paddingBottom: SPACE.x4,
+    marginTop: TOP_BAR_HEIGHT,
   },
   sidebarBrand: {
     flexDirection: "row",
@@ -782,6 +617,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.x4,
     paddingTop: SPACE.x4,
     paddingBottom: SPACE.x8,
+    marginTop: TOP_BAR_HEIGHT,
   },
   centerColumnInner: {
     width: "100%",
@@ -796,6 +632,7 @@ const styles = StyleSheet.create({
     backgroundColor: "var(--surface)",
     display: "flex",
     flexDirection: "column",
+    marginTop: TOP_BAR_HEIGHT,
   },
   rightSidebarHeader: {
     flexDirection: "row",

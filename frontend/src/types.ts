@@ -35,6 +35,7 @@ export type Post = {
   type: PostType;
   previewUrl?: string;
   imageUrl?: string;
+  image_urls?: string[];
   preview_metadata?: {
     title?: string | null;
     description?: string | null;
@@ -49,6 +50,7 @@ export type Post = {
   createdAt: string;
   rawDate?: number;
   isLiked?: boolean;
+  is_saved?: boolean;
   visibility?: ContentVisibility;
   allow_reposts: boolean;
   edited_at?: string | null;
