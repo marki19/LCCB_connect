@@ -1,4 +1,6 @@
 const socialModel = require("../models/socialModel");
+const blockModel = require("../models/blockModel");
+const { clampLimit } = require("../models/pagination");
 
 /**
  * Social settings controller (Messaging_plan.md §4, §5, §7, §8):
@@ -78,23 +80,33 @@ const removeDeviceToken = async (req, res, next) => {
 };
 
 // ---- blocks (§7) -----------------------------------------------------------
+// One block implementation. `blockModel` owns the write path (bidirectional,
+// with the ALREADY_BLOCKED / CANNOT_BLOCK_SELF codes the client already
+// handles); `socialModel.isBlocked` stays because the messaging and friend
+// request paths depend on it.
 
 const blockUser = async (req, res, next) => {
   try {
-    if (req.params.id === req.user.id) {
-      return res.status(400).json({ error: "You can't block yourself" });
-    }
-    const block = await socialModel.block(req.user.id, req.params.id);
+    const block = await blockModel.blockUser(req.user.id, req.params.id);
     res.status(201).json(block);
   } catch (error) {
+    if (error.code === "CANNOT_BLOCK_SELF") {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error.code === "ALREADY_BLOCKED") {
+      return res.status(409).json({ error: error.message });
+    }
     next(error);
   }
 };
 
 const unblockUser = async (req, res, next) => {
   try {
-    const removed = await socialModel.unblock(req.user.id, req.params.id);
-    res.json({ unblocked: Boolean(removed) });
+    const block = await blockModel.unblockUser(req.user.id, req.params.id);
+    if (!block) {
+      return res.status(404).json({ message: "Block not found" });
+    }
+    res.json({ unblocked: true, block });
   } catch (error) {
     next(error);
   }
@@ -102,7 +114,11 @@ const unblockUser = async (req, res, next) => {
 
 const listBlocked = async (req, res, next) => {
   try {
-    res.json(await socialModel.listBlocked(req.user.id));
+    const blocked = await blockModel.listBlocked(req.user.id, {
+      limit: clampLimit(req.query.limit),
+      cursor: req.query.cursor || null,
+    });
+    res.json(blocked);
   } catch (error) {
     next(error);
   }

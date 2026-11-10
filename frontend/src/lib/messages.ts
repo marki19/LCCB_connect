@@ -200,15 +200,18 @@ export type BlockedUser = {
 };
 
 export function listBlocked(): Promise<BlockedUser[]> {
-  return apiJson(`/users/me/blocks`);
+  return apiJson(`/blocks`);
 }
 
 export function blockUser(userId: string): Promise<unknown> {
-  return apiJson(`/users/${userId}/block`, { method: "POST" });
+  return apiJson(`/blocks`, {
+    method: "POST",
+    body: JSON.stringify({ blockedId: userId }),
+  });
 }
 
 export function unblockUser(userId: string): Promise<unknown> {
-  return apiJson(`/users/${userId}/block`, { method: "DELETE" });
+  return apiJson(`/blocks/${userId}`, { method: "DELETE" });
 }
 
 // ---- device tokens (push, §10) ---------------------------------------------

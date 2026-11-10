@@ -10,6 +10,7 @@ const request = require("supertest");
 const { stub } = require("./stub.helper");
 const auth = require("../middleware/auth");
 const socialModel = require("../models/socialModel");
+const blockModel = require("../models/blockModel");
 const friendModel = require("../models/friendModel");
 const notificationService = require("../services/notificationService");
 
@@ -41,6 +42,9 @@ const social = {
   block: stub(socialModel, "block"),
   unblock: stub(socialModel, "unblock"),
   isBlocked: stub(socialModel, "isBlocked"),
+  blockUser: stub(blockModel, "blockUser"),
+  unblockUser: stub(blockModel, "unblockUser"),
+  listBlocked: stub(blockModel, "listBlocked"),
 };
 
 const friends = {
@@ -174,20 +178,36 @@ describe("presence & device tokens (§7, §8)", () => {
 
 describe("blocks (§7)", () => {
   it("400 when blocking yourself", async () => {
+    social.blockUser.setImpl(async () => {
+      const err = new Error("Cannot block yourself");
+      err.code = "CANNOT_BLOCK_SELF";
+      throw err;
+    });
     const res = await request(app).post("/api/users/u1/block").set(AUTH);
     assert.equal(res.status, 400);
-    assert.equal(social.block.calls.length, 0);
+    assert.equal(social.blockUser.calls.length, 1);
+    assert.deepEqual(social.blockUser.calls[0], ["u1", "u1"]);
   });
 
   it("blocks and unblocks another user", async () => {
-    social.block.setImpl(async () => ({ blocker_id: "u1", blocked_id: USER }));
+    social.blockUser.setImpl(async () => ({ blocker_id: "u1", blocked_id: USER }));
     const block = await request(app).post(`/api/users/${USER}/block`).set(AUTH);
     assert.equal(block.status, 201);
-    assert.deepEqual(social.block.calls[0], ["u1", USER]);
+    assert.deepEqual(social.blockUser.calls[0], ["u1", USER]);
 
-    social.unblock.setImpl(async () => ({ blocker_id: "u1", blocked_id: USER }));
+    social.unblockUser.setImpl(async () => ({ blocker_id: "u1", blocked_id: USER }));
     const unblock = await request(app).delete(`/api/users/${USER}/block`).set(AUTH);
     assert.equal(unblock.body.unblocked, true);
+  });
+
+  it("routes block writes through blockModel (one implementation)", async () => {
+    social.block.setImpl(async () => { throw new Error("socialModel.block is dead"); });
+    social.blockUser.setImpl(async () => ({ blocker_id: "u1", blocked_id: USER }));
+
+    const res = await request(app).post(`/api/users/${USER}/block`).set(AUTH);
+    assert.equal(res.status, 201);
+    assert.equal(social.block.calls.length, 0, "socialModel.block must not be called");
+    assert.deepEqual(social.blockUser.calls[0], ["u1", USER]);
   });
 });
 
