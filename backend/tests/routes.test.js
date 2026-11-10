@@ -848,4 +848,29 @@ describe("reposts", () => {
     );
     assert.deepEqual(m.createRepostNotification.calls[0], ["author-1", "u1", "r1"]);
   });
+
+  it("returns 409 for a duplicate repost", async () => {
+    m.createRepost.setImpl(async () => {
+      const err = new Error("Already reposted");
+      err.code = "ALREADY_REPOSTED";
+      throw err;
+    });
+
+    const res = await request(app).post("/api/posts/p1/repost").set(AUTH);
+
+    assert.equal(res.status, 409);
+    assert.deepEqual(res.body, { error: "Already reposted this post" });
+  });
+
+  it("returns 403 when the author disabled reposts", async () => {
+    m.createRepost.setImpl(async () => {
+      const err = new Error("disabled");
+      err.code = "REPOSTS_NOT_ALLOWED";
+      throw err;
+    });
+
+    const res = await request(app).post("/api/posts/p1/repost").set(AUTH);
+
+    assert.equal(res.status, 403);
+  });
 });

@@ -363,20 +363,21 @@ const createRepost = async (req, res, next) => {
 
     res.status(201).json(repost);
   } catch (error) {
-    if (error.code === "DUPLICATE_REPOST") {
-      return res.status(409).json({ error: "Already reposted this post" });
-    }
-    if (error.code === "ALREADY_BLOCKED") {
-      return res.status(403).json({ error: "Cannot repost blocked user's content" });
-    }
-    if (error.code === "REPOSTS_NOT_ALLOWED") {
-      return res.status(403).json({ error: "Author has disabled reposts" });
-    }
-    if (error.code === "POST_DELETED") {
-      return res.status(404).json({ error: "Original post has been deleted" });
+    const mapped = REPOST_ERRORS[error.code];
+    if (mapped) {
+      return res.status(mapped[0]).json({ error: mapped[1] });
     }
     next(error);
   }
+};
+
+// Codes thrown by repostModel.createRepost, mapped to the HTTP contract the
+// client already renders.
+const REPOST_ERRORS = {
+  ALREADY_REPOSTED: [409, "Already reposted this post"],
+  BLOCKED: [403, "Cannot repost blocked user's content"],
+  REPOSTS_NOT_ALLOWED: [403, "Author has disabled reposts"],
+  POST_NOT_FOUND: [404, "Original post not found or not visible"],
 };
 
 const undoRepost = async (req, res, next) => {
