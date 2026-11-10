@@ -180,12 +180,18 @@ const verificationSubmitSchema = z
     student_id: studentIdSchema,
     department_id: requiredUuid(),
     course_id: requiredUuid(),
-    year_level: z.string().trim().min(1).max(50),
+    year_level: z.string().trim().min(1, "Year level is required").max(50),
     birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Birthdate must be YYYY-MM-DD").refine((d) => {
-      const date = new Date(d);
+      const [yearStr, monthStr, dayStr] = d.split("-");
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+      const day = parseInt(dayStr, 10);
+      if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+      const date = new Date(year, month - 1, day);
+      if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return false;
       const today = new Date();
       return date < today && date > new Date("1900-01-01");
-    }, "Birthdate must be a valid past date"),
+    }, "Birthdate must be a valid calendar date in the past"),
   })
   .strict();
 

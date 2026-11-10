@@ -14,5 +14,6 @@ router.get("/peers", publicController.getPeers);
 // Catalog pickers for the (pre-login) registration form — active entries only.
 router.get("/departments", catalogController.getDepartments);
 router.get("/departments/:id/courses", catalogController.getCourses);
+router.get("/academic-levels", catalogController.getAcademicLevels);
 
 module.exports = router;
