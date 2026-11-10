@@ -19,6 +19,7 @@ const repostModel = require("../models/repostModel");
 const notificationModel = require("../models/notificationModel");
 const reportModel = require("../models/reportModel");
 const blockModel = require("../models/blockModel");
+const socialModel = require("../models/socialModel");
 
 // The controllers fire off background notification/moderation work after
 // responding. Stub it so the suite stays hermetic (and quiet).
@@ -117,6 +118,7 @@ const m = {
   blockUser: stub(blockModel, "blockUser"),
   unblockUser: stub(blockModel, "unblockUser"),
   listBlocked: stub(blockModel, "listBlocked"),
+  dismissProfileBanner: stub(socialModel, "dismissProfileBanner"),
 };
 
 // Imported only after the stubs are installed.
@@ -924,5 +926,19 @@ describe("reports and blocks", () => {
     session.role = "admin";
     const asAdmin = await request(app).get("/api/reports").set(AUTH);
     assert.equal(asAdmin.status, 200);
+  });
+});
+
+describe("profile banner", () => {
+  it("PATCH /api/users/me/banner-dismissed hides the banner", async () => {
+    m.dismissProfileBanner.setImpl(async () => true);
+
+    const res = await request(app)
+      .patch("/api/users/me/banner-dismissed")
+      .set(AUTH);
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { profile_banner_dismissed: true });
+    assert.deepEqual(m.dismissProfileBanner.calls[0], ["u1"]);
   });
 });

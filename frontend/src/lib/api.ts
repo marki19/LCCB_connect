@@ -304,10 +304,7 @@ export async function listBlocked(): Promise<any[]> {
 // ============================================================================
 
 export async function dismissBanner(): Promise<any> {
-  return apiJson("/me/banner-dismissed", {
-    method: "PATCH",
-    body: JSON.stringify({ dismissed: true }),
-  });
+  return apiJson("/users/me/banner-dismissed", { method: "PATCH" });
 }
 
 // ============================================================================

@@ -108,6 +108,17 @@ const listBlocked = async (req, res, next) => {
   }
 };
 
+// ---- profile banner --------------------------------------------------------
+
+const dismissBanner = async (req, res, next) => {
+  try {
+    const dismissed = await socialModel.dismissProfileBanner(req.user.id);
+    res.json({ profile_banner_dismissed: dismissed });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getMessagePolicy,
   setMessagePolicy,
@@ -118,4 +129,5 @@ module.exports = {
   blockUser,
   unblockUser,
   listBlocked,
+  dismissBanner,
 };

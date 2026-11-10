@@ -181,11 +181,24 @@ const deleteDeviceTokens = async (tokens) => {
   return result.rowCount;
 };
 
+// ---- profile banner --------------------------------------------------------
+
+const dismissProfileBanner = async (userId) => {
+  const result = await db.query(
+    `UPDATE public.profiles SET profile_banner_dismissed = TRUE
+     WHERE id = $1
+     RETURNING profile_banner_dismissed`,
+    [userId]
+  );
+  return result.rows[0]?.profile_banner_dismissed ?? true;
+};
+
 module.exports = {
   block,
   unblock,
   isBlocked,
   listBlocked,
+  dismissProfileBanner,
   getMessagePolicy,
   setMessagePolicy,
   setPresenceMode,

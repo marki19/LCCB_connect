@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Text, Pressable, View } from "react-native";
 import { X } from "lucide-react-native";
 import { useAuth } from "../contexts/AuthContext";
@@ -15,6 +16,11 @@ export default function IdentityBanner() {
   const { profile } = useAuth();
   const { colors } = useTheme();
   const router = useRouter();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) {
+    return null;
+  }
 
   if (profile?.role !== "student" || profile?.identity_complete !== false) {
     return null;
@@ -41,10 +47,11 @@ export default function IdentityBanner() {
   };
 
   const handleDismiss = async () => {
+    setDismissed(true);
     try {
       await dismissBanner();
-      // Profile will be refreshed by parent or on next load
     } catch (e) {
+      setDismissed(false);
       console.error("Failed to dismiss banner:", e);
     }
   };
