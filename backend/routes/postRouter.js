@@ -22,16 +22,6 @@ router.post("/:id/repost", requireVerified, postController.createRepost);
 router.delete("/:id/repost", requireVerified, postController.undoRepost);
 router.get("/:id/reposts", postController.getReposts);
 
-// Reports
-router.post("/reports", requireVerified, postController.createReport);
-router.get("/reports", requireVerified, postController.listReports);
-router.put("/reports/:id", requireVerified, postController.updateReportStatus);
-
-// Blocks
-router.post("/blocks", requireVerified, postController.blockUser);
-router.delete("/blocks/:blockedId", requireVerified, postController.unblockUser);
-router.get("/blocks", requireVerified, postController.listBlocked);
-
 // Pure Raw SQL Likes and Comments
 router.post("/:id/like", requireVerified, postController.toggleLike);
 router.get("/:id/comments", postController.getComments);

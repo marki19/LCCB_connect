@@ -17,6 +17,8 @@ const auditService = require("../services/auditService");
 const accountService = require("../services/accountService");
 const repostModel = require("../models/repostModel");
 const notificationModel = require("../models/notificationModel");
+const reportModel = require("../models/reportModel");
+const blockModel = require("../models/blockModel");
 
 // The controllers fire off background notification/moderation work after
 // responding. Stub it so the suite stays hermetic (and quiet).
@@ -109,6 +111,12 @@ const m = {
   undoRepost: stub(repostModel, "undoRepost"),
   getVisibleRepostsForPost: stub(repostModel, "getVisibleRepostsForPost"),
   createRepostNotification: stub(notificationModel, "createRepostNotification"),
+  createReport: stub(reportModel, "createReport"),
+  listReports: stub(reportModel, "listReports"),
+  updateReportStatus: stub(reportModel, "updateReportStatus"),
+  blockUser: stub(blockModel, "blockUser"),
+  unblockUser: stub(blockModel, "unblockUser"),
+  listBlocked: stub(blockModel, "listBlocked"),
 };
 
 // Imported only after the stubs are installed.
@@ -872,5 +880,49 @@ describe("reposts", () => {
     const res = await request(app).post("/api/posts/p1/repost").set(AUTH);
 
     assert.equal(res.status, 403);
+  });
+});
+
+describe("reports and blocks", () => {
+  it("POST /api/reports reaches createReport", async () => {
+    m.createReport.setImpl(async () => ({ id: "r1" }));
+
+    const res = await request(app)
+      .post("/api/reports")
+      .set(AUTH)
+      .send({ targetType: "post", targetId: "p1", reason: "spam" });
+
+    assert.equal(res.status, 201);
+    assert.deepEqual(m.createReport.calls[0], ["u1", "post", "p1", "spam", undefined]);
+  });
+
+  it("POST /api/blocks reaches blockUser", async () => {
+    m.blockUser.setImpl(async () => ({ id: "b1" }));
+
+    const res = await request(app)
+      .post("/api/blocks")
+      .set(AUTH)
+      .send({ blockedId: "u2" });
+
+    assert.equal(res.status, 201);
+  });
+
+  it("GET /api/blocks reaches listBlocked", async () => {
+    m.listBlocked.setImpl(async () => []);
+
+    const res = await request(app).get("/api/blocks").set(AUTH);
+
+    assert.equal(res.status, 200);
+  });
+
+  it("GET /api/reports is admin-only", async () => {
+    m.listReports.setImpl(async () => []);
+
+    const asStudent = await request(app).get("/api/reports").set(AUTH);
+    assert.equal(asStudent.status, 403);
+
+    session.role = "admin";
+    const asAdmin = await request(app).get("/api/reports").set(AUTH);
+    assert.equal(asAdmin.status, 200);
   });
 });

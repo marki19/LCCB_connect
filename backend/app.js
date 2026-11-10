@@ -20,6 +20,8 @@ const conversationRouter = require("./routes/conversationRouter");
 const messageRouter = require("./routes/messageRouter");
 const friendRouter = require("./routes/friendRouter");
 const socialRouter = require("./routes/socialRouter");
+const reportRouter = require("./routes/reportRouter");
+const blockRouter = require("./routes/blockRouter");
 
 // The Express app is built here and exported WITHOUT listening, so tests can
 // drive it via supertest. `index.js` owns dotenv + boot-time env validation and
@@ -144,6 +146,20 @@ app.use(
   auth.loadProfile,
   auth.requireActiveAccount,
   postRouter
+);
+app.use(
+  "/api/reports",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  reportRouter
+);
+app.use(
+  "/api/blocks",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  blockRouter
 );
 app.use(
   "/api/theses",

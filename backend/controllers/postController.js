@@ -442,8 +442,9 @@ const createReport = async (req, res, next) => {
 // Admin only - list reports
 const listReports = async (req, res, next) => {
   try {
-    // Check admin role
-    if (req.user.role !== "admin") {
+    // Role lives on the profile loaded by loadProfile, not on the auth user.
+    const role = req.profile?.role;
+    if (role !== "admin" && role !== "superadmin") {
       return res.status(403).json({ error: "Admin access required" });
     }
 
@@ -463,7 +464,8 @@ const listReports = async (req, res, next) => {
 // Admin only - update report status
 const updateReportStatus = async (req, res, next) => {
   try {
-    if (req.user.role !== "admin") {
+    const role = req.profile?.role;
+    if (role !== "admin" && role !== "superadmin") {
       return res.status(403).json({ error: "Admin access required" });
     }
 
