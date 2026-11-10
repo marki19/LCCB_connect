@@ -16,6 +16,37 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_DB: lcc_connect_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgrespassword@127.0.0.1:5432/lcc_connect_test
+      DATABASE_SSL: "false"
+      SUPABASE_URL: https://test-project.supabase.co
+      SUPABASE_ANON_KEY: test-anon-key-for-ci-testing-only
+      SUPABASE_SERVICE_ROLE_KEY: test-service-role-key-for-ci-testing-only
+      OTP_PEPPER: test-otp-pepper-value-0123456789
+      BREVO_WEBHOOK_SECRET: test-webhook-secret-32-chars!!
+      JWT_SECRET: test-jwt-secret-value-32-chars-long
+      PUSH_ENABLED: "false"
+      RATE_LIMIT_MAX: "1000000"
+      RATE_LIMIT_WRITE_MAX: "1000000"
+      RATE_LIMIT_SEND_MAX: "1000000"
+      RATE_LIMIT_SEND_DAILY_MAX: "1000000"
+      RATE_LIMIT_FRIEND_MAX: "1000000"
+      RATE_LIMIT_REPORT_MAX: "1000000"
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +58,9 @@ jobs:
 
       - name: Install
         run: npm ci
+
+      - name: Initialize Test Database
+        run: node scripts/init-db.js
 
       - name: Tests (auth, authorization, validation)
         run: npm test

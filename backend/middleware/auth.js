@@ -4,16 +4,18 @@ const mfaService = require("../services/mfaService");
 const { normalizeRole, ROLES, ADMIN_ROLES, DEPARTMENT_ADMIN_ROLES, FACULTY_ROLES, ALL_ROLES } = require("../utils/roles");
 
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-  console.warn(
-    "[auth] SUPABASE_URL / SUPABASE_ANON_KEY are not set. " +
-      "Authenticated requests will fail. Copy backend/.env.example to backend/.env."
-  );
+  if (process.env.NODE_ENV !== "test") {
+    console.warn(
+      "[auth] SUPABASE_URL / SUPABASE_ANON_KEY are not set. " +
+        "Authenticated requests will fail. Copy backend/.env.example to backend/.env."
+    );
+  }
 }
 
 // Anon client used ONLY to verify access tokens presented by callers.
 // No session is persisted on the server.
 const supabase = createClient(
-  process.env.SUPABASE_URL,
+  process.env.SUPABASE_URL || "https://test-project.supabase.co",
   process.env.SUPABASE_ANON_KEY || "missing-anon-key",
   { auth: { persistSession: false, autoRefreshToken: false } }
 );

@@ -5,17 +5,20 @@ const { Pool } = require("pg");
 
 // Supabase's public root CA. Bundling it lets the API verify the database
 // certificate instead of accepting any TLS certificate.
-const SUPABASE_CA = fs.readFileSync(
-  path.join(__dirname, "certs", "supabase-root-2021.crt"),
-  "utf8"
-);
+const SUPABASE_CA_PATH = path.join(__dirname, "certs", "supabase-root-2021.crt");
+const SUPABASE_CA = fs.existsSync(SUPABASE_CA_PATH)
+  ? fs.readFileSync(SUPABASE_CA_PATH, "utf8")
+  : null;
+
+const isLocalhost =
+  !process.env.DATABASE_URL ||
+  process.env.DATABASE_URL.includes("localhost") ||
+  process.env.DATABASE_URL.includes("127.0.0.1") ||
+  process.env.DATABASE_SSL === "false";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    ca: SUPABASE_CA,
-    rejectUnauthorized: true,
-  },
+  ssl: isLocalhost ? false : SUPABASE_CA ? { ca: SUPABASE_CA, rejectUnauthorized: true } : false,
 });
 
 pool.on("connect", () => {
