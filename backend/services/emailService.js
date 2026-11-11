@@ -135,4 +135,57 @@ If this wasn't you, you can ignore this email. Your account is unchanged.
   });
 }
 
-module.exports = { sendOtpEmail, sendAccountExistsEmail };
+/**
+ * Password reset OTP email. Same template shape as the signup code so the
+ * unique requestId marker still busts Gmail's quoted-text clustering.
+ *
+ * The subject is deliberately different from the signup email so the two
+ * flows are distinguishable in an inbox, but neither the subject nor the
+ * body carries any account-specific state that could confirm or deny the
+ * address is registered.
+ */
+async function sendPasswordResetOtpEmail({ to, otpCode, fullName, expiresMinutes = 10 }) {
+  const safeName = escapeHtml(singleLine(fullName, 80) || "there");
+  const requestId = crypto.randomBytes(4).toString("hex");
+
+  const html = `
+    <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: #1a1a2e;">Reset your password</h2>
+      <p>Hi ${safeName},</p>
+      <p>Use this code to set a new password:</p>
+      <div style="background: #f5f5f5; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0;">
+        <span style="font-size: 32px; font-weight: 700; letter-spacing: 4px; color: #1a1a2e;">${otpCode}</span>
+      </div>
+      <p style="color: #666;">This code expires in ${expiresMinutes} minutes.</p>
+      <p style="color: #666; font-size: 14px;">If you set a new password you will be signed out on other devices.</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+      <p style="color: #999; font-size: 12px;">If you didn't request this, you can ignore this email. Your password is unchanged.</p>
+      <!-- ${requestId} -->
+    </div>
+  `;
+
+  const text = `
+Reset your password
+
+Hi ${safeName}
+
+Your reset code is: ${otpCode}
+
+This code expires in ${expiresMinutes} minutes.
+After you set a new password you will be signed out on other devices.
+
+If you didn't request this, you can ignore this email. Your password is unchanged.
+---
+${requestId}
+  `;
+
+  return deliver({
+    to,
+    subject: `Your LCCB Connect password reset code (${requestId})`,
+    text,
+    html,
+    devNote: `Expires: ${expiresMinutes} min (code suppressed)`,
+  });
+}
+
+module.exports = { sendOtpEmail, sendAccountExistsEmail, sendPasswordResetOtpEmail };

@@ -141,6 +141,36 @@ const mfaChallengeLimiter = rateLimit({
   },
 });
 
+/**
+ * Password reset request limiter: 5 requests per 15 minutes per IP.
+ */
+const requestPasswordResetLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many reset requests. Try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Password reset verification limiter: 5 attempts per 15 minutes per email.
+ */
+const verifyPasswordResetLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many verification attempts. Try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: function (req) {
+    const email = req.body?.email || "";
+    if (typeof email === "string" && email.length > 0) {
+      return email.trim().toLowerCase();
+    }
+    return "unknown";
+  },
+  skipSuccessfulRequests: false,
+});
+
 module.exports = {
   loginIpLimiter,
   loginIdentifierLimiter,
@@ -149,4 +179,6 @@ module.exports = {
   requestSignupLimiter,
   requestSignupEmailLimiter,
   googleAuthLimiter,
+  requestPasswordResetLimiter,
+  verifyPasswordResetLimiter,
 };

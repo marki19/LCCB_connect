@@ -46,7 +46,12 @@ client.interceptors.request.use(async (config) => {
     }
   }
 
-  if (session?.access_token) {
+  const existingAuth =
+    typeof (config.headers as any)?.get === "function"
+      ? (config.headers as any).get("Authorization")
+      : (config.headers as any)?.["Authorization"];
+
+  if (!existingAuth && session?.access_token) {
     config.headers["Authorization"] = `Bearer ${session.access_token}`;
   }
   return config;

@@ -30,3 +30,10 @@
 ## Phase 5: Verification & Polish
 - [x] Task 8: Run `cmd /c "cd frontend && npx tsc --noEmit"` and verify 0 errors.
 - [x] Task 9: Run `cmd /c "cd backend && npm test"` and verify test suite passes.
+
+## Phase 6: Superadmin MFA Enforcement & Routing Guard Fix
+- [x] Task 10: In `frontend/src/lib/auth.ts`, do NOT install session prematurely when `mfa_enrollment_required: true`. Pass temporary token to `enrollMfa` and `verifyMfaEnrollment`.
+- [x] Task 11: In `frontend/src/lib/api.ts`, preserve explicit `Authorization` headers when provided.
+- [x] Task 12: In `frontend/app/(auth)/login.tsx`, hold pending tokens in state; install session only after `MfaSetupModal` verification succeeds, preventing premature `_layout.tsx` RouteGuard redirection to `/(admin)/`.
+- [x] Task 13: In `backend/controllers/authController.js`, add matching MFA challenge & admin enrollment enforcement to `googleAuth`.
+- [x] Task 14: In `backend/app.js`, restore `auth.requireAal2` in `adminMiddleware` for network-level defense-in-depth.

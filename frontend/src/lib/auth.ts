@@ -15,7 +15,7 @@ type SessionTokens = {
  * gone has been deleted and must not receive a session. The server's 403
  * carries the user-facing explanation, so callers can show `err.message`.
  */
-async function installSession(tokens: SessionTokens): Promise<void> {
+export async function installSession(tokens: SessionTokens): Promise<void> {
   const { error } = await supabase.auth.setSession({
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
@@ -73,13 +73,23 @@ export async function requestSignup(email: string, password: string, fullName: s
  * Signs in with Google using an ID token.
  * Requires @react-native-google-signin/google-signin (dev build only).
  */
-export async function signInWithGoogle(idToken: string): Promise<void> {
-  const tokens = await apiJson<SessionTokens>("/auth/google", {
+export async function signInWithGoogle(
+  idToken: string
+): Promise<void | MfaChallengeResponse | MfaEnrollmentRequiredResponse> {
+  const response = await apiJson<SessionTokens | MfaChallengeResponse | MfaEnrollmentRequiredResponse>("/auth/google", {
     method: "POST",
     body: JSON.stringify({ id_token: idToken }),
   });
 
-  await installSession(tokens);
+  if ("mfa_required" in response && response.mfa_required === true) {
+    return response;
+  }
+
+  if ("mfa_enrollment_required" in response && response.mfa_enrollment_required === true) {
+    return response;
+  }
+
+  await installSession(response as SessionTokens);
 }
 
 /**
@@ -142,12 +152,7 @@ export async function signInWithIdentifier(
   }
 
   if ("mfa_enrollment_required" in response && response.mfa_enrollment_required === true) {
-    // Install initial session so the client can authenticate to /api/auth/mfa/enroll
-    await installSession({
-      access_token: response.access_token,
-      refresh_token: response.refresh_token,
-      expires_at: response.expires_at,
-    });
+    // Return to caller so the UI can prompt MFA enrollment modal BEFORE establishing session
     return response;
   }
 
@@ -173,24 +178,29 @@ export async function completeMfaChallenge(
 /**
  * Initiates TOTP MFA enrollment.
  * Returns the secret, otpauth URI, and QR code data URL.
+ * Accepts an optional tempToken when called during the login onboarding flow.
  */
-export async function enrollMfa(): Promise<MfaEnrollResult> {
+export async function enrollMfa(tempToken?: string): Promise<MfaEnrollResult> {
   return apiJson<MfaEnrollResult>("/auth/mfa/enroll", {
     method: "POST",
+    headers: tempToken ? { Authorization: `Bearer ${tempToken}` } : undefined,
   });
 }
 
 /**
  * Verifies initial TOTP code and activates the factor.
+ * Accepts an optional tempToken when called during the login onboarding flow.
  */
 export async function verifyMfaEnrollment(
   factorId: string,
-  code: string
+  code: string,
+  tempToken?: string
 ): Promise<{ message: string; factor_id: string; verified_at: string }> {
   return apiJson<{ message: string; factor_id: string; verified_at: string }>(
     "/auth/mfa/enroll/verify",
     {
       method: "POST",
+      headers: tempToken ? { Authorization: `Bearer ${tempToken}` } : undefined,
       body: JSON.stringify({ factor_id: factorId, code }),
     }
   );

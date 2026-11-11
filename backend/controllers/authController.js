@@ -1,4 +1,5 @@
 const bcrypt = require("bcrypt");
+const db = require("../db");
 const userModel = require("../models/userModel");
 const accountService = require("../services/accountService");
 const { getSupabaseAdmin } = require("../services/supabaseAdmin");
@@ -356,11 +357,18 @@ async function mfaChallenge(req, res, next) {
     }
 
     // Update the factor's last_used_step
-    const supabase = getSupabaseAdmin();
-    await supabase
-      .from("mfa_factors")
-      .update({ last_used_step: currentStep })
-      .eq("id", verifiedFactor.id);
+    try {
+      await db.query(`UPDATE public.mfa_factors SET last_used_step = $1 WHERE id = $2`, [
+        currentStep,
+        verifiedFactor.id,
+      ]);
+    } catch {
+      const supabase = getSupabaseAdmin();
+      await supabase
+        .from("mfa_factors")
+        .update({ last_used_step: currentStep })
+        .eq("id", verifiedFactor.id);
+    }
 
     // Claim the pending session. It is single-use, so a replayed challenge
     // token cannot mint a second pair of tokens.
@@ -635,7 +643,7 @@ async function requestSignup(req, res, next) {
 async function mfaEnroll(req, res, next) {
   try {
     const userId = req.user.id;
-    const email = req.user.email;
+    const email = req.user.email || req.profile?.email || null;
 
     // Check if user already has a verified TOTP factor
     const hasVerified = await mfaService.hasVerifiedTotp(userId);
@@ -658,6 +666,7 @@ async function mfaEnroll(req, res, next) {
       qr_code_url: qrCodeDataUrl,
     });
   } catch (err) {
+    console.error("[mfa] Error in mfaEnroll:", err);
     next(err);
   }
 }
@@ -720,15 +729,25 @@ async function mfaUnenroll(req, res, next) {
     }
 
     // Verify the code first
-    const supabase = getSupabaseAdmin();
-    const { data: factor, error: fetchError } = await supabase
-      .from("mfa_factors")
-      .select("*")
-      .eq("id", factor_id)
-      .eq("user_id", userId)
-      .single();
+    let factor = null;
+    try {
+      const res = await db.query(
+        `SELECT * FROM public.mfa_factors WHERE id = $1 AND user_id = $2`,
+        [factor_id, userId]
+      );
+      factor = res.rows[0];
+    } catch {
+      const supabase = getSupabaseAdmin();
+      const { data } = await supabase
+        .from("mfa_factors")
+        .select("*")
+        .eq("id", factor_id)
+        .eq("user_id", userId)
+        .single();
+      factor = data;
+    }
 
-    if (fetchError || !factor) {
+    if (!factor) {
       return res.status(404).json({ error: "Factor not found" });
     }
 
@@ -888,12 +907,50 @@ async function googleAuth(req, res, next) {
     // Check if user has verified MFA
     const hasMfa = await mfaService.hasVerifiedTotp(user.id);
 
-    // Record successful login
+    // Admin/superadmin must have MFA enrolled
+    const role = profile?.role?.toLowerCase().replace(/[-_]/g, "");
+    const isAdmin = role === "admin" || role === "superadmin";
+
+    // Admin without MFA gets an initial session with mfa_enrollment_required: true
+    // so they can authenticate to /api/auth/mfa/enroll while /api/admin/* remains locked
+    if (isAdmin && !hasMfa) {
+      await mfaService.recordLogin({
+        userId: user.id,
+        req,
+        aal: "aal1",
+        mfaChallenged: false,
+      });
+
+      return sendTokens(res, data.session, 200, {
+        mfa_enrollment_required: true,
+        message: "Admin accounts require MFA. Please complete MFA enrollment.",
+      });
+    }
+
+    if (hasMfa) {
+      const challengeToken = mfaService.createMfaChallenge(user.id, data.session);
+      await mfaService.recordSessionEvent({
+        userId: user.id,
+        eventType: "mfa_challenge",
+        aal: "aal1",
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        metadata: { mfa_challenged: true },
+      });
+
+      return res.status(200).json({
+        mfa_required: true,
+        challenge_token: challengeToken,
+        message: "Multi-factor authentication required",
+      });
+    }
+
+    // Record successful login (non-admin, no MFA)
     await mfaService.recordLogin({
       userId: user.id,
       req,
-      aal: hasMfa ? "aal2" : "aal1",
-      mfaChallenged: hasMfa,
+      aal: "aal1",
+      mfaChallenged: false,
     });
 
     return sendTokens(res, data.session);

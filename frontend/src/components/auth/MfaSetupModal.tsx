@@ -30,6 +30,7 @@ interface MfaSetupModalProps {
   onClose?: () => void;
   onSuccess: () => void;
   isMandatory?: boolean;
+  tempToken?: string;
 }
 
 export default function MfaSetupModal({
@@ -37,6 +38,7 @@ export default function MfaSetupModal({
   onClose,
   onSuccess,
   isMandatory = false,
+  tempToken,
 }: MfaSetupModalProps) {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
@@ -59,7 +61,7 @@ export default function MfaSetupModal({
     setLoading(true);
     setError("");
 
-    enrollMfa()
+    enrollMfa(tempToken)
       .then((data) => {
         if (!cancelled) {
           setEnrollData(data);
@@ -103,7 +105,7 @@ export default function MfaSetupModal({
     setError("");
 
     try {
-      await verifyMfaEnrollment(enrollData.factor_id, cleanCode);
+      await verifyMfaEnrollment(enrollData.factor_id, cleanCode, tempToken);
       onSuccess();
     } catch (err: any) {
       setError(err?.message || "Invalid verification code. Please check your authenticator and try again.");

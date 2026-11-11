@@ -2,18 +2,18 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { Eye, EyeOff, KeyRound, Lock } from "lucide-react-native";
-import { supabase } from "../../src/lib/supabase";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import AuthScaffold from "../../src/components/auth/AuthScaffold";
 import Alert from "../../src/components/ui/Alert";
 import Button from "../../src/components/ui/Button";
 import TextField from "../../src/components/ui/TextField";
 import { SPACE } from "../../src/lib/tokens";
+import { apiJson, ApiError } from "../../src/lib/api";
 
 /**
- * Plan §5 Phase 2.4: fields are code, new password, confirm.
- * Submit → verifyOtp({ email, token, type: "recovery" }) → updateUser({ password })
- * → signOut() → login with a one-line success message.
+ * Option B: backend-owned password reset flow.
+ * fields: 6-digit code, new password, confirm.
+ * Submit → POST /api/auth/verify-password-reset → login with success message.
  */
 export default function ResetPasswordScreen() {
   const router = useRouter();
@@ -50,29 +50,25 @@ export default function ResetPasswordScreen() {
     setError("");
 
     try {
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email,
-        token: code,
-        type: "recovery",
+      const res = await apiJson<{ message: string }>("/auth/verify-password-reset", {
+        method: "POST",
+        body: JSON.stringify({
+          email,
+          token: code,
+          password,
+        }),
       });
-      if (verifyError) {
-        setError("That code is wrong or expired.");
-        return;
-      }
 
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) {
-        setError(updateError.message);
-        return;
-      }
-
-      await supabase.auth.signOut();
       router.replace({
         pathname: "/(auth)/login",
-        params: { success: "Password updated. Sign in with your new password." },
+        params: { success: res.message || "Password updated. Sign in with your new password." },
       });
-    } catch {
-      setError("Something went wrong. Check the code and try again.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Something went wrong. Check the code and try again.");
+      }
     } finally {
       setLoading(false);
     }
