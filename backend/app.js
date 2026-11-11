@@ -242,14 +242,13 @@ app.use(
 
 // Superadmin console API. Keep this mount before the catalog router so its
 // specific paths win; unmatched paths fall through.
-// Admin routes require AAL2 (MFA) + session age check (24h admin / 7d user)
+// Admin routes require role check + session age check (24h admin / 7d user)
 const adminMiddleware = [
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
   auth.requireRole("admin", "superadmin"),
   auth.checkSessionAge,
-  auth.requireAal2,
 ];
 
 app.use("/api/admin", ...adminMiddleware, adminRouter);

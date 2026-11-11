@@ -2,12 +2,13 @@ const bcrypt = require("bcrypt");
 const userModel = require("../models/userModel");
 const accountService = require("../services/accountService");
 const { getSupabaseAdmin } = require("../services/supabaseAdmin");
-const { sendOtpEmail, sendAccountExistsEmail } = require("../services/emailService");
+const { sendOtpEmail, sendAccountExistsEmail, sendPasswordResetOtpEmail } = require("../services/emailService");
 const { generateOtp, hashOtp, verifyOtpHash, MAX_OTP_ATTEMPTS } = require("../utils/otp");
 const { isSuspendedProfile } = require("../middleware/auth");
 const mfaService = require("../services/mfaService");
 const { record, ACTIONS } = require("../services/auditService");
 const { lockoutIntervalFor } = require("../utils/lockout");
+const passwordResetModel = require("../models/passwordResetModel");
 
 const GENERIC_LOGIN_ERROR = "Invalid email, student ID, or password";
 const GENERIC_CODE_ERROR = "That code is incorrect or has expired. Request a new one.";
@@ -901,6 +902,121 @@ async function googleAuth(req, res, next) {
   }
 }
 
+/**
+ * POST /api/auth/request-password-reset
+ *
+ * Backend-owned password reset (Option B). Stores a pending row with only an
+ * HMAC of the 6-digit code and emails it. The response is identical whether
+ * or not the address is registered, so this endpoint cannot enumerate accounts.
+ *
+ * Rate limited: 3 requests per 10 minutes per email (handled by middleware).
+ */
+async function requestPasswordReset(req, res, next) {
+  try {
+    const { email } = req.body;
+    const normalizedEmail = email.toLowerCase();
+
+    const accepted = () =>
+      res.status(202).json({
+        message: "If that address is registered, a reset code is on its way.",
+        retry_after: 60,
+      });
+
+    // Look up the profile. A missing profile is NOT distinguishable from a
+    // present one in the response — the same code email shape is sent either
+    // way, so an attacker cannot tell which addresses are registered.
+    const profile = await passwordResetModel.getProfileByEmail(normalizedEmail);
+
+    // Generate OTP
+    const otpCode = generateOtp();
+    const otpExpiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    await passwordResetModel.createPasswordReset({
+      email: normalizedEmail,
+      otpHash: hashOtp(normalizedEmail, otpCode),
+      otpExpiresAt,
+      userId: profile?.id || null,
+    });
+
+    // Send OTP email. `fullName` is only used for the greeting and is escaped
+    // in the email service; it is never logged.
+    await sendPasswordResetOtpEmail({
+      to: normalizedEmail,
+      otpCode,
+      fullName: profile?.full_name || "",
+      expiresMinutes: OTP_EXPIRY_MINUTES,
+    });
+
+    return accepted();
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/verify-password-reset
+ *
+ * Verifies the 6-digit reset code and applies the new password through the
+ * admin client. Every failure returns the same body so the endpoint cannot
+ * be used to probe reset state.
+ *
+ * On success the reset row is marked used and the caller is redirected to
+ * login with a one-line success message.
+ */
+async function verifyPasswordReset(req, res, next) {
+  try {
+    const { email, token, password } = req.body;
+    const normalizedEmail = email.toLowerCase();
+
+    const invalidCode = () =>
+      res.status(401).json({ error: GENERIC_CODE_ERROR, code: "code_invalid" });
+
+    const reset = await passwordResetModel.getPasswordResetByEmail(normalizedEmail);
+    if (!reset || reset.used_at) {
+      return invalidCode();
+    }
+
+    // Check expiry. The record is useless after this point either way.
+    if (new Date(reset.otp_expires_at) < new Date()) {
+      await passwordResetModel.deletePasswordReset(normalizedEmail);
+      return invalidCode();
+    }
+
+    // Verify OTP against the stored HMAC.
+    if (!verifyOtpHash(normalizedEmail, token, reset.otp_hash)) {
+      const attempts = await passwordResetModel.incrementPasswordResetAttempts(normalizedEmail);
+      if (attempts >= MAX_OTP_ATTEMPTS) {
+        await passwordResetModel.deletePasswordReset(normalizedEmail);
+      }
+      return invalidCode();
+    }
+
+    const supabase = adminClientOr503(res);
+    if (!supabase) return;
+
+    // Apply the new password to the auth user.
+    try {
+      await passwordResetModel.updateUserPassword(reset.user_id, password);
+    } catch (err) {
+      console.error("[auth] Password reset update failed:", err.message);
+      return res.status(500).json({
+        error: "Could not update the password. Try again in a moment.",
+        code: "update_failed",
+      });
+    }
+
+    // Mark the reset row used and clean up any expired rows.
+    await passwordResetModel.markPasswordResetUsed(normalizedEmail);
+    await passwordResetModel.deleteExpiredPasswordResets().catch(() => {});
+
+    return res.status(200).json({
+      message: "Password updated. Sign in with your new password.",
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   login,
   verifySignup,
@@ -916,4 +1032,7 @@ module.exports = {
   mfaList,
   // Session endpoints
   logout,
+  // Password reset (Option B)
+  requestPasswordReset,
+  verifyPasswordReset,
 };

@@ -88,37 +88,70 @@ export async function signInWithGoogle(idToken: string): Promise<void> {
 export type MfaChallengeResponse = {
   mfa_required: true;
   challenge_token: string;
-  message: string;
+  message?: string;
+};
+
+/**
+ * Response from signInWithIdentifier when admin MFA enrollment is required.
+ */
+export type MfaEnrollmentRequiredResponse = {
+  mfa_enrollment_required: true;
+  access_token: string;
+  refresh_token: string;
+  expires_at?: number;
+  message?: string;
+};
+
+export type MfaFactor = {
+  id: string;
+  type?: string;
+  factor_type?: string;
+  status: "verified" | "unverified";
+  created_at: string;
+  verified_at: string | null;
+};
+
+export type MfaEnrollResult = {
+  factor_id: string;
+  secret: string;
+  uri: string;
+  qr_code_url: string;
 };
 
 /**
  * Signs in with either an email address or a student ID.
- * Returns MfaChallengeResponse if MFA is required, otherwise installs session and returns void.
+ * Returns MfaChallengeResponse if MFA is required, MfaEnrollmentRequiredResponse
+ * if admin MFA setup is required, otherwise installs session and returns void.
  */
 export async function signInWithIdentifier(
   identifier: string,
   password: string
-): Promise<void | MfaChallengeResponse> {
+): Promise<void | MfaChallengeResponse | MfaEnrollmentRequiredResponse> {
   const trimmed = identifier.trim();
   const normalized = trimmed.includes("@")
     ? trimmed.toLowerCase()
     : trimmed;
 
-  const response = await apiJson<SessionTokens | MfaChallengeResponse>("/auth/login", {
+  const response = await apiJson<SessionTokens | MfaChallengeResponse | MfaEnrollmentRequiredResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ identifier: normalized, password }),
   });
 
-  // Type guard to check if response is MfaChallengeResponse
-  const isMfaChallenge = (res: SessionTokens | MfaChallengeResponse): res is MfaChallengeResponse => {
-    return "mfa_required" in res && res.mfa_required === true;
-  };
-
-  if (isMfaChallenge(response)) {
+  if ("mfa_required" in response && response.mfa_required === true) {
     return response;
   }
 
-  await installSession(response);
+  if ("mfa_enrollment_required" in response && response.mfa_enrollment_required === true) {
+    // Install initial session so the client can authenticate to /api/auth/mfa/enroll
+    await installSession({
+      access_token: response.access_token,
+      refresh_token: response.refresh_token,
+      expires_at: response.expires_at,
+    });
+    return response;
+  }
+
+  await installSession(response as SessionTokens);
 }
 
 /**
@@ -135,4 +168,50 @@ export async function completeMfaChallenge(
   });
 
   await installSession(tokens);
+}
+
+/**
+ * Initiates TOTP MFA enrollment.
+ * Returns the secret, otpauth URI, and QR code data URL.
+ */
+export async function enrollMfa(): Promise<MfaEnrollResult> {
+  return apiJson<MfaEnrollResult>("/auth/mfa/enroll", {
+    method: "POST",
+  });
+}
+
+/**
+ * Verifies initial TOTP code and activates the factor.
+ */
+export async function verifyMfaEnrollment(
+  factorId: string,
+  code: string
+): Promise<{ message: string; factor_id: string; verified_at: string }> {
+  return apiJson<{ message: string; factor_id: string; verified_at: string }>(
+    "/auth/mfa/enroll/verify",
+    {
+      method: "POST",
+      body: JSON.stringify({ factor_id: factorId, code }),
+    }
+  );
+}
+
+/**
+ * Unenrolls an active TOTP factor.
+ */
+export async function unenrollMfa(
+  factorId: string,
+  code: string
+): Promise<{ message: string }> {
+  return apiJson<{ message: string }>("/auth/mfa/unenroll", {
+    method: "POST",
+    body: JSON.stringify({ factor_id: factorId, code }),
+  });
+}
+
+/**
+ * Lists enrolled MFA factors for the current user.
+ */
+export async function listMfaFactors(): Promise<MfaFactor[]> {
+  return apiJson<MfaFactor[]>("/auth/mfa/list");
 }

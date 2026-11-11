@@ -10,6 +10,7 @@ import {
   completeMfaChallenge,
 } from "../../src/lib/auth";
 import AuthScaffold from "../../src/components/auth/AuthScaffold";
+import MfaSetupModal from "../../src/components/auth/MfaSetupModal";
 import Alert from "../../src/components/ui/Alert";
 import Button from "../../src/components/ui/Button";
 import TextField from "../../src/components/ui/TextField";
@@ -49,8 +50,9 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // MFA Challenge state
+  // MFA Challenge & Setup state
   const [showMfaChallenge, setShowMfaChallenge] = useState(false);
+  const [showMfaEnrollModal, setShowMfaEnrollModal] = useState(false);
   const [mfaChallengeToken, setMfaChallengeToken] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [mfaCodeError, setMfaCodeError] = useState("");
@@ -152,6 +154,11 @@ export default function LoginScreen() {
       if (result && typeof result === "object" && "mfa_required" in result) {
         setMfaChallengeToken(result.challenge_token);
         setShowMfaChallenge(true);
+        setLoading(false);
+        return;
+      }
+      if (result && typeof result === "object" && "mfa_enrollment_required" in result) {
+        setShowMfaEnrollModal(true);
         setLoading(false);
         return;
       }
@@ -386,6 +393,16 @@ export default function LoginScreen() {
           />
         </View>
       )}
+
+      <MfaSetupModal
+        visible={showMfaEnrollModal}
+        isMandatory={true}
+        onClose={() => setShowMfaEnrollModal(false)}
+        onSuccess={() => {
+          setShowMfaEnrollModal(false);
+          router.replace("/(tabs)");
+        }}
+      />
     </AuthScaffold>
   );
 }

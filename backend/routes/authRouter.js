@@ -12,6 +12,8 @@ const {
   mfaUnenroll,
   mfaList,
   logout,
+  requestPasswordReset,
+  verifyPasswordReset,
 } = require("../controllers/authController");
 const {
   loginIpLimiter,
@@ -21,6 +23,8 @@ const {
   requestSignupLimiter,
   requestSignupEmailLimiter,
   googleAuthLimiter,
+  requestPasswordResetLimiter,
+  verifyPasswordResetLimiter,
 } = require("../middleware/loginLimits");
 const {
   validate,
@@ -28,6 +32,8 @@ const {
   verifySignupSchema,
   resendSignupSchema,
   requestSignupSchema,
+  requestPasswordResetSchema,
+  verifyPasswordResetSchema,
   mfaChallengeSchema,
 } = require("../validation");
 const { requireAuth, loadProfile } = require("../middleware/auth");
@@ -89,6 +95,31 @@ router.post(
 );
 
 /**
+ * POST /api/auth/request-password-reset
+ *
+ * Starts password reset by emailing a 6-digit code.
+ * Always returns 202 regardless of whether the account exists.
+ */
+router.post(
+  "/request-password-reset",
+  requestPasswordResetLimiter,
+  validate(requestPasswordResetSchema),
+  requestPasswordReset
+);
+
+/**
+ * POST /api/auth/verify-password-reset
+ *
+ * Verifies the 6-digit reset code and updates the password via admin client.
+ */
+router.post(
+  "/verify-password-reset",
+  verifyPasswordResetLimiter,
+  validate(verifyPasswordResetSchema),
+  verifyPasswordReset
+);
+
+/**
  * POST /api/auth/google
  *
  * Exchanges a Google ID token for a session (Supabase signInWithIdToken).
@@ -139,6 +170,7 @@ router.post("/mfa/unenroll", mfaUnenroll);
  * Lists all MFA factors for the current user.
  */
 router.get("/mfa/list", mfaList);
+router.get("/mfa/factors", mfaList);
 
 /**
  * POST /api/auth/logout

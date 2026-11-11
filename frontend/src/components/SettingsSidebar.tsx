@@ -34,6 +34,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useSettingsSidebar } from "../contexts/SettingsSidebarContext";
 import { supabase } from "../lib/supabase";
 import { elevation, focusRing, RADIUS, SPACE, TYPE } from "../lib/tokens";
+import SecuritySettingsModal from "./settings/SecuritySettingsModal";
 
 const DESKTOP_SIDEBAR_WIDTH = 360;
 const MOBILE_SIDEBAR_RATIO = 0.82;
@@ -130,6 +131,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
 
   const [translateX] = useState(() => new Animated.Value(-sidebarWidth));
   const [backdrop] = useState(() => new Animated.Value(0));
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
 
   const displayName = profile?.full_name || (isGuest ? "Guest Visitor" : "User");
 
@@ -292,7 +294,14 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
             label="Privacy"
             onPress={() => go("/settings")}
           />
-          <MenuItem icon={<Lock size={20} color={colors.brand} />} label="Security" />
+          <MenuItem
+            icon={<Lock size={20} color={colors.brand} />}
+            label="Security"
+            onPress={() => {
+              onClose();
+              setSecurityModalOpen(true);
+            }}
+          />
 
           <SectionLabel label="Messages" />
           <MenuItem
@@ -368,6 +377,11 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
           />
         </ScrollView>
       </Animated.View>
+
+      <SecuritySettingsModal
+        visible={securityModalOpen}
+        onClose={() => setSecurityModalOpen(false)}
+      />
     </View>
   );
 }
