@@ -32,6 +32,7 @@ import { useConversationRealtime, type PendingMessage } from "../../hooks/useCon
 import {
   acceptConversation,
   blockUser,
+  getConversation,
   listBlocked,
   listConversations,
   listRequests,
@@ -113,6 +114,15 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
     if (!conversationId) return;
     let cancelled = false;
     (async () => {
+      try {
+        const direct = await getConversation(conversationId);
+        if (!cancelled && direct) {
+          setConversation(direct);
+          return;
+        }
+      } catch {
+        // Fall back to listing if direct lookup fails
+      }
       try {
         const [chats, requests] = await Promise.all([listConversations(), listRequests()]);
         const found = [...chats, ...requests.received, ...requests.sent].find(

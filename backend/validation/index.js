@@ -70,7 +70,7 @@ const previewMetadataSchema = z
 // The enforcement lives in `visible_posts()` / `visible_theses()` in Postgres
 // (migration 014); these schemas only validate what a client may ask for.
 // `custom` must carry an explicit, non-empty audience.
-const Visibility = z.enum(["public", "friends", "custom", "private"]);
+const Visibility = z.enum(["public", "department", "friends", "custom", "private"]);
 const Audience = z.array(z.string().uuid()).max(500);
 
 const withCustomAudienceRule = (schema) =>

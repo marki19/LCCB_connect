@@ -6,7 +6,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical } from "lucide-react-native";
+import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical, Building2 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
@@ -38,6 +38,7 @@ function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: 
 function getVisibilityLabel(visibility: string): string {
   switch (visibility) {
     case "public": return "Public";
+    case "department": return "Department";
     case "friends": return "Friends";
     case "custom": return "Custom";
     case "private": return "Private";
@@ -48,6 +49,7 @@ function getVisibilityLabel(visibility: string): string {
 function getVisibilityColors(visibility: string, colors: ThemeTokens): { bg: string; text: string; iconColor: string } {
   switch (visibility) {
     case "public": return { bg: colors.badgePublicBg, text: colors.badgePublicText, iconColor: colors.badgePublicText };
+    case "department": return { bg: colors.brandWash, text: colors.brand, iconColor: colors.brand };
     case "friends": return { bg: colors.badgeFriendsBg, text: colors.badgeFriendsText, iconColor: colors.badgeFriendsText };
     case "custom": return { bg: colors.badgeCustomBg, text: colors.badgeCustomText, iconColor: colors.badgeCustomText };
     case "private": return { bg: colors.badgePrivateBg, text: colors.badgePrivateText, iconColor: colors.badgePrivateText };
@@ -66,6 +68,7 @@ function VisibilityBadge({ visibility }: { visibility: string }) {
       {(() => {
         switch (visibility) {
           case "public": return <Globe size={12} color={iconColor} />;
+          case "department": return <Building2 size={12} color={iconColor} />;
           case "friends": return <Users size={12} color={iconColor} />;
           case "custom": return <UserCheck size={12} color={iconColor} />;
           case "private": return <Lock size={12} color={iconColor} />;

@@ -10,6 +10,13 @@ const { validate, friendRequestSchema } = require("../validation");
 router.get("/", friendController.listFriends);
 router.get("/requests", friendController.getRequests);
 router.post(
+  "/",
+  requireVerified,
+  friendRequestLimiter,
+  validate(friendRequestSchema),
+  friendController.createRequest
+);
+router.post(
   "/requests",
   requireVerified,
   friendRequestLimiter,

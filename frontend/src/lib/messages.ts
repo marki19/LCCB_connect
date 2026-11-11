@@ -24,6 +24,10 @@ export function listConversations(limit?: number): Promise<Conversation[]> {
   return apiJson<Conversation[]>(`/conversations${query}`);
 }
 
+export function getConversation(id: string): Promise<Conversation> {
+  return apiJson<Conversation>(`/conversations/${id}`);
+}
+
 export function listRequests(limit?: number): Promise<MessageRequests> {
   const query = limit ? `?limit=${limit}` : "";
   return apiJson<MessageRequests>(`/conversations/requests${query}`);

@@ -169,6 +169,13 @@ const deletePost = async (req, res, next) => {
 const toggleLike = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const post = await postModel.getPostById(id, {
+      includeHidden: false,
+      userId: req.user?.id || null,
+    });
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
     // The liking user is the authenticated caller, not a body field.
     const result = await postModel.toggleLike(id, req.user.id);
     res.json(result);

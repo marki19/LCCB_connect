@@ -57,13 +57,49 @@ const requestCapError = () => {
  *
  * `runner` lets the send path evaluate this inside its own transaction.
  */
+const ADMIN_MESSAGE_ROLES = [
+  "admin",
+  "superadmin",
+  "superAdmin",
+  "departmentAdmin",
+  "department_admin",
+];
+
+const PEER_JOIN = `
+  LEFT JOIN public.profiles pr
+    ON pr.id = CASE WHEN c.user_a = $1 THEN c.user_b ELSE c.user_a END
+  LEFT JOIN public.departments d ON d.id = pr.department_id
+`;
+
+const CONVERSATION_SELECT = `
+  c.id, c.status, c.requester_id, c.last_message_at, c.created_at,
+  c.user_a, c.user_b,
+  json_build_object(
+    'id', pr.id,
+    'username', pr.username,
+    'full_name', pr.full_name,
+    'avatar_url', pr.avatar_url,
+    'department_id', pr.department_id,
+    'department_name', d.name
+  ) AS peer,
+  (SELECT json_build_object(
+      'id', m.id, 'body', m.body, 'sender_id', m.sender_id,
+      'seq', m.seq, 'created_at', m.created_at)
+     FROM public.messages m WHERE m.conversation_id = c.id
+     ORDER BY m.seq DESC LIMIT 1) AS last_message,
+  (SELECT COUNT(*)::int FROM public.messages m
+     WHERE m.conversation_id = c.id AND m.recipient_id = $1 AND m.read_at IS NULL) AS unread
+`;
+
 const canMessage = async (senderId, recipientId, runner = db) => {
   const sql = `
-    WITH s AS (SELECT department_id FROM public.profiles WHERE id = $1),
-         r AS (SELECT department_id, message_policy FROM public.profiles WHERE id = $2)
+    WITH s AS (SELECT department_id, role FROM public.profiles WHERE id = $1),
+         r AS (SELECT department_id, message_policy, role FROM public.profiles WHERE id = $2)
     SELECT
       EXISTS (SELECT 1 FROM s)                  AS sender_exists,
       EXISTS (SELECT 1 FROM r)                  AS recipient_exists,
+      (SELECT role FROM s)                      AS sender_role,
+      (SELECT role FROM r)                      AS recipient_role,
       (SELECT department_id FROM s)             AS sender_department_id,
       (SELECT department_id FROM r)             AS recipient_department_id,
       (SELECT message_policy FROM r)            AS recipient_policy,
@@ -90,11 +126,21 @@ const canMessage = async (senderId, recipientId, runner = db) => {
  * The §4 decision table, isolated from I/O so it can be reasoned about and
  * tested on its own.
  *
- * Order of precedence: block (hard stop) → accepted friend (bypass) → recipient
- * policy. `department` fails closed when either side has no department on file.
+ * Order of precedence: block (hard stop) → admin/staff bypass → accepted friend
+ * (bypass) → recipient policy. `department` fails closed when either side has
+ * no department on file.
  */
 const resolveDecision = (row) => {
   if (row.is_blocked) return "blocked";
+
+  // Admins & moderators bypass message requests for student safety & administration
+  if (
+    ADMIN_MESSAGE_ROLES.includes(row.sender_role) ||
+    ADMIN_MESSAGE_ROLES.includes(row.recipient_role)
+  ) {
+    return "direct";
+  }
+
   if (row.is_friend) return "direct";
 
   switch (row.recipient_policy) {
@@ -129,52 +175,37 @@ const getOrCreateConversation = async (senderId, peerId, status) => {
       VALUES (LEAST($1, $2), GREATEST($1, $2), $3, $4)
       ON CONFLICT (user_a, user_b) DO NOTHING
       RETURNING *
+    ),
+    raw AS (
+      SELECT * FROM ins
+      UNION ALL
+      SELECT * FROM public.conversations
+        WHERE user_a = LEAST($1, $2) AND user_b = GREATEST($1, $2)
+      LIMIT 1
     )
-    SELECT * FROM ins
-    UNION ALL
-    SELECT * FROM public.conversations
-      WHERE user_a = LEAST($1, $2) AND user_b = GREATEST($1, $2)
-    LIMIT 1;
+    SELECT ${CONVERSATION_SELECT}
+    FROM raw c
+    ${PEER_JOIN}
+    LEFT JOIN public.conversation_state cs
+      ON cs.conversation_id = c.id AND cs.user_id = $1;
   `;
   const result = await db.query(sql, [senderId, peerId, requesterId, status]);
   return result.rows[0];
 };
 
-/** Participant-scoped lookup — anything else must look like a 404, not a 403. */
+/** Participant-scoped lookup returning full conversation object with peer data. */
 const getConversationForParticipant = async (id, userId) => {
-  const result = await db.query(
-    `SELECT * FROM public.conversations
-      WHERE id = $1 AND (user_a = $2 OR user_b = $2);`,
-    [id, userId]
-  );
+  const sql = `
+    SELECT ${CONVERSATION_SELECT}
+    FROM public.conversations c
+    ${PEER_JOIN}
+    LEFT JOIN public.conversation_state cs
+      ON cs.conversation_id = c.id AND cs.user_id = $1
+    WHERE c.id = $2 AND (c.user_a = $1 OR c.user_b = $1);
+  `;
+  const result = await db.query(sql, [userId, id]);
   return result.rows[0];
 };
-
-const PEER_JOIN = `
-  LEFT JOIN public.profiles pr
-    ON pr.id = CASE WHEN c.user_a = $1 THEN c.user_b ELSE c.user_a END
-  LEFT JOIN public.departments d ON d.id = pr.department_id
-`;
-
-const CONVERSATION_SELECT = `
-  c.id, c.status, c.requester_id, c.last_message_at, c.created_at,
-  c.user_a, c.user_b,
-  json_build_object(
-    'id', pr.id,
-    'username', pr.username,
-    'full_name', pr.full_name,
-    'avatar_url', pr.avatar_url,
-    'department_id', pr.department_id,
-    'department_name', d.name
-  ) AS peer,
-  (SELECT json_build_object(
-      'id', m.id, 'body', m.body, 'sender_id', m.sender_id,
-      'seq', m.seq, 'created_at', m.created_at)
-     FROM public.messages m WHERE m.conversation_id = c.id
-     ORDER BY m.seq DESC LIMIT 1) AS last_message,
-  (SELECT COUNT(*)::int FROM public.messages m
-     WHERE m.conversation_id = c.id AND m.recipient_id = $1 AND m.read_at IS NULL) AS unread
-`;
 
 /** Main inbox: `active` threads the caller participates in, newest activity first. */
 const listConversations = async (userId, { limit = DEFAULT_LIMIT } = {}) => {

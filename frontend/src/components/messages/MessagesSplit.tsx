@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { MessagesSquare } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { SPACE } from "../../lib/tokens";
+import { safeBack } from "../../lib/navigation";
 import EmptyState from "../admin/EmptyState";
 import InboxPane from "./InboxPane";
 import ThreadPane from "./ThreadPane";
@@ -38,7 +39,12 @@ export default function MessagesSplit({ initialId = null }: MessagesSplitProps) 
           backgroundColor: colors.surfacePage,
         }}
       >
-        <InboxPane onSelect={setSelectedId} activeId={selectedId} />
+        <InboxPane
+          onSelect={setSelectedId}
+          activeId={selectedId}
+          showBack={true}
+          onBack={() => safeBack("/(tabs)")}
+        />
       </View>
 
       <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.surfacePage }}>

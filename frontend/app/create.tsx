@@ -31,6 +31,7 @@ import {
   Lock,
   Users,
   UserCheck,
+  Building2,
 } from "lucide-react-native";
 import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 import { useAuth } from "../src/contexts/AuthContext";
@@ -315,6 +316,8 @@ export default function CreatePostModal() {
           >
             {visibility === "public" ? (
               <Globe size={13} color={colors.textSecondary} style={{ marginRight: 4 }} />
+            ) : visibility === "department" ? (
+              <Building2 size={13} color={colors.textSecondary} style={{ marginRight: 4 }} />
             ) : visibility === "friends" ? (
               <Users size={13} color={colors.textSecondary} style={{ marginRight: 4 }} />
             ) : visibility === "custom" ? (
@@ -325,6 +328,8 @@ export default function CreatePostModal() {
             <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary, marginRight: 4 }}>
               {visibility === "public"
                 ? "Public"
+                : visibility === "department"
+                ? "My Department"
                 : visibility === "friends"
                 ? "Friends"
                 : visibility === "custom"

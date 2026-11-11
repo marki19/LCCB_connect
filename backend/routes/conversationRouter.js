@@ -19,6 +19,7 @@ router.get("/requests", messageController.getRequests);
 router.get("/unread-count", messageController.getUnreadCount);
 router.post("/", requireVerified, validate(createConversationSchema), messageController.createConversation);
 
+router.get("/:id", messageController.getConversationById);
 router.post("/:id/accept", messageController.acceptRequest);
 router.get("/:id/messages", messageController.getMessages);
 router.post(

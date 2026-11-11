@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
-import { Globe, Users, UserCheck, Lock, Check } from "lucide-react-native";
+import { Globe, Users, UserCheck, Lock, Check, Building2 } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import { listFriends } from "../lib/messages";
 import type { ContentVisibility, Friend } from "../types";
 
 /**
- * Four-way visibility picker for the post and thesis composers.
+ * Five-way visibility picker for the post and thesis composers.
  *
  * The enforcement is server-side (`visible_posts` / `visible_theses`); this only
  * collects the choice. `custom` reveals the friend list, and the selected ids are
@@ -15,6 +15,7 @@ import type { ContentVisibility, Friend } from "../types";
 
 const OPTIONS: { value: ContentVisibility; label: string; Icon: any }[] = [
   { value: "public", label: "Public", Icon: Globe },
+  { value: "department", label: "My Department", Icon: Building2 },
   { value: "friends", label: "Friends", Icon: Users },
   { value: "custom", label: "Custom", Icon: UserCheck },
   { value: "private", label: "Private", Icon: Lock },
