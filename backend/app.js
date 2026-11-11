@@ -31,6 +31,20 @@ const notificationRouter = require("./routes/notificationRouter");
 // module only after the environment is known to be valid.
 const app = express();
 
+// --- proxy trust -------------------------------------------------------------
+// Behind a reverse proxy (nginx, Cloudflare, a load balancer) `req.ip` is the
+// proxy's address unless Express is told how many hops to trust. Left unset,
+// every user shares one rate-limit bucket. TRUST_PROXY accepts a hop count
+// ("1"), `true` (one trusted hop), or an Express trust-proxy string.
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy === "true") {
+  app.set("trust proxy", 1);
+} else if (trustProxy && /^\d+$/.test(trustProxy)) {
+  app.set("trust proxy", Number(trustProxy));
+} else if (trustProxy) {
+  app.set("trust proxy", trustProxy);
+}
+
 // --- CORS -------------------------------------------------------------------
 // Native (iOS/Android) requests send no Origin header; browsers do. Only the
 // configured origins are allowed. Override with a comma-separated CORS_ORIGINS.

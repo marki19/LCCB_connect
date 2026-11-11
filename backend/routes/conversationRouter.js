@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const messageController = require("../controllers/messageController");
-const { messagingSendLimiter, messagingDailyLimiter } = require("../middleware/messagingLimits");
+const { messagingSendLimiter, messagingDailyLimiter } = require("../middleware/actionLimits");
 const { requireVerified } = require("../middleware/auth");
 const {
   validate,

@@ -519,6 +519,140 @@ async function recordMfaChallenge({ userId, req, success }) {
   }
 }
 
+// ---- login MFA challenge ----------------------------------------------------
+// A first-factor login that needs a TOTP code returns a signed challenge token
+// plus a server-side pending session. The token carries only an opaque `jti`;
+// the session stays in memory and is claimed after the code verifies, so a
+// forged token can never reach TOTP verification or mint tokens on its own.
+
+const MFA_CHALLENGE_TTL_SECONDS = 300; // 5 minutes
+const pendingMfaChallenges = new Map(); // jti -> { userId, session, expiresAt }
+
+let cachedChallengeSecret = null;
+
+function getChallengeSecret() {
+  if (cachedChallengeSecret) return cachedChallengeSecret;
+  const secret =
+    process.env.MFA_CHALLENGE_SECRET ||
+    (process.env.NODE_ENV === "test" ? "test-mfa-challenge-secret-0123456789" : "");
+  if (!secret) {
+    throw new Error("MFA_CHALLENGE_SECRET is not configured");
+  }
+  cachedChallengeSecret = secret;
+  return cachedChallengeSecret;
+}
+
+function encodeSegment(value) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+function signChallenge(header, payload) {
+  return crypto
+    .createHmac("sha256", getChallengeSecret())
+    .update(`${header}.${payload}`)
+    .digest("base64url");
+}
+
+function timingSafeEqualStrings(a, b) {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
+/**
+ * Issues a signed MFA challenge token and stores the pending session under its
+ * `jti`. Returns the token the client must send back with the TOTP code.
+ */
+function createMfaChallenge(userId, session) {
+  const jti = crypto.randomBytes(16).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const header = encodeSegment({ alg: "HS256", typ: "JWT" });
+  const payload = encodeSegment({
+    sub: userId,
+    type: "mfa_challenge",
+    jti,
+    iat: now,
+    exp: now + MFA_CHALLENGE_TTL_SECONDS,
+  });
+  const signature = signChallenge(header, payload);
+
+  pendingMfaChallenges.set(jti, {
+    userId,
+    session,
+    expiresAt: Date.now() + MFA_CHALLENGE_TTL_SECONDS * 1000,
+  });
+  if (pendingMfaChallenges.size > 1000) {
+    const cutoff = Date.now();
+    for (const [key, entry] of pendingMfaChallenges) {
+      if (entry.expiresAt < cutoff) pendingMfaChallenges.delete(key);
+    }
+  }
+
+  return `${header}.${payload}.${signature}`;
+}
+
+/**
+ * Verifies the token signature and expiry, then confirms a matching pending
+ * session exists. Does not consume the session, so a wrong TOTP code can be
+ * retried within the rate limit.
+ *
+ * @returns {{ userId: string, jti: string } | null}
+ */
+function resolveMfaChallenge(token) {
+  if (typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+
+  const [header, payload, signature] = parts;
+  const expected = signChallenge(header, payload);
+  if (!timingSafeEqualStrings(signature, expected)) return null;
+
+  let claims;
+  try {
+    claims = JSON.parse(Buffer.from(payload, "base64url").toString());
+  } catch {
+    return null;
+  }
+  if (
+    claims?.type !== "mfa_challenge" ||
+    typeof claims.jti !== "string" ||
+    typeof claims.sub !== "string" ||
+    typeof claims.exp !== "number"
+  ) {
+    return null;
+  }
+  if (claims.exp < Math.floor(Date.now() / 1000)) return null;
+
+  const entry = pendingMfaChallenges.get(claims.jti);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    pendingMfaChallenges.delete(claims.jti);
+    return null;
+  }
+  if (entry.userId !== claims.sub) return null;
+
+  return { userId: entry.userId, jti: claims.jti };
+}
+
+/**
+ * Claims the pending session for a resolved challenge (single use).
+ *
+ * @returns {{ userId: string, session: object } | null}
+ */
+function consumeMfaChallenge(jti) {
+  const entry = pendingMfaChallenges.get(jti);
+  if (!entry) return null;
+  pendingMfaChallenges.delete(jti);
+  if (entry.expiresAt < Date.now()) return null;
+  return { userId: entry.userId, session: entry.session };
+}
+
+/** Test helper: drops every pending challenge. */
+function _clearPendingMfaChallenges() {
+  pendingMfaChallenges.clear();
+}
+
 module.exports = {
   generateTotpSecret,
   verifyTotp,
@@ -528,6 +662,10 @@ module.exports = {
   listFactors,
   deleteFactor,
   hasVerifiedTotp,
+  createMfaChallenge,
+  resolveMfaChallenge,
+  consumeMfaChallenge,
+  _clearPendingMfaChallenges,
   recordSessionEvent,
   getAalFromToken,
   requireAal2,

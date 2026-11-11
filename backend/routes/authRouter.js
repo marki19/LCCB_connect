@@ -16,6 +16,7 @@ const {
 const {
   loginIpLimiter,
   loginIdentifierLimiter,
+  mfaChallengeLimiter,
   resendSignupLimiter,
   requestSignupLimiter,
   requestSignupEmailLimiter,
@@ -100,12 +101,12 @@ router.post("/google", googleAuthLimiter, googleAuth);
  * POST /api/auth/mfa/challenge
  * Verifies a TOTP code during login and returns session tokens.
  * Public endpoint - requires the challenge_token from the first-factor login.
- * Rate limited by loginIpLimiter and loginIdentifierLimiter.
+ * Rate limited per challenge token (5 attempts / 15 min) with an IP fallback.
  */
 router.post(
   "/mfa/challenge",
   loginIpLimiter,
-  loginIdentifierLimiter,
+  mfaChallengeLimiter,
   validate(mfaChallengeSchema),
   mfaChallenge
 );

@@ -13,40 +13,6 @@ const GENERIC_LOGIN_ERROR = "Invalid email, student ID, or password";
 const GENERIC_CODE_ERROR = "That code is incorrect or has expired. Request a new one.";
 const BCRYPT_COST = 12;
 const OTP_EXPIRY_MINUTES = 10;
-const MFA_CHALLENGE_TTL_SECONDS = 300; // 5 minutes
-
-// In-memory cache for pending MFA sessions (use Redis in production)
-const pendingMfaSessions = new Map();
-
-/**
- * Stores a pending MFA session keyed by challenge token.
- * Automatically expires after MFA_CHALLENGE_TTL_SECONDS.
- */
-function storePendingMfaSession(challengeToken, session) {
-  const expiry = Date.now() + MFA_CHALLENGE_TTL_SECONDS * 1000;
-  pendingMfaSessions.set(challengeToken, { session, expiry });
-  // Clean up expired entries periodically
-  if (pendingMfaSessions.size > 1000) {
-    const now = Date.now();
-    for (const [key, value] of pendingMfaSessions.entries()) {
-      if (value.expiry < now) pendingMfaSessions.delete(key);
-    }
-  }
-}
-
-/**
- * Retrieves and removes a pending MFA session.
- */
-function consumePendingMfaSession(challengeToken) {
-  const entry = pendingMfaSessions.get(challengeToken);
-  if (!entry) return null;
-  if (entry.expiry < Date.now()) {
-    pendingMfaSessions.delete(challengeToken);
-    return null;
-  }
-  pendingMfaSessions.delete(challengeToken);
-  return entry.session;
-}
 
 /**
  * The service-role client is required for every sign-in path now that login is
@@ -72,40 +38,6 @@ function sendTokens(res, session, status = 200, extra = {}) {
     expires_at: session.expires_at,
     ...extra,
   });
-}
-
-/**
- * Creates a short-lived challenge token for MFA.
- * The token contains the user ID and is signed with a server-side secret.
- */
-function createMfaChallengeToken(userId) {
-  const payload = {
-    sub: userId,
-    type: "mfa_challenge",
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + MFA_CHALLENGE_TTL_SECONDS,
-  };
-  // Simple base64url encoding for the challenge token (not a JWT, just encoded payload)
-  // In production, consider using a proper JWT library with HS256 signing
-  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
-  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  // Note: For simplicity, we use an unsigned token. The server validates expiry and type.
-  // A production system should sign this with a secret.
-  return `${header}.${encodedPayload}.`;
-}
-
-function verifyMfaChallengeToken(token) {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
-    if (payload.type !== "mfa_challenge") return null;
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp < now) return null;
-    return payload.sub;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -299,9 +231,9 @@ async function login(req, res, next) {
     }
 
     if (hasMfa) {
-      // User has MFA enrolled - store the session and return a challenge token
-      const challengeToken = createMfaChallengeToken(data.user.id);
-      storePendingMfaSession(challengeToken, data.session);
+      // User has MFA enrolled - hand back a signed challenge token bound to
+      // the first-factor session.
+      const challengeToken = mfaService.createMfaChallenge(data.user.id, data.session);
 
       // Record the MFA challenge initiation
       await mfaService.recordSessionEvent({
@@ -343,14 +275,17 @@ async function mfaChallenge(req, res, next) {
   try {
     const { challenge_token, code } = req.body;
 
-    // Verify the challenge token
-    const userId = verifyMfaChallengeToken(challenge_token);
-    if (!userId) {
+    // Verify the signed challenge and confirm a pending first-factor session
+    // exists for it. A forged token has no `jti` entry, so it never reaches
+    // TOTP verification.
+    const challenge = mfaService.resolveMfaChallenge(challenge_token);
+    if (!challenge) {
       return res.status(401).json({
         error: "Invalid or expired challenge. Please sign in again.",
         code: "challenge_invalid",
       });
     }
+    const userId = challenge.userId;
 
     // Get user profile
     const profile = await userModel.getUserById(userId);
@@ -426,9 +361,10 @@ async function mfaChallenge(req, res, next) {
       .update({ last_used_step: currentStep })
       .eq("id", verifiedFactor.id);
 
-    // Consume the stored session
-    const session = consumePendingMfaSession(challenge_token);
-    if (!session) {
+    // Claim the pending session. It is single-use, so a replayed challenge
+    // token cannot mint a second pair of tokens.
+    const pending = mfaService.consumeMfaChallenge(challenge.jti);
+    if (!pending) {
       return res.status(401).json({
         error: "Invalid or expired challenge. Please sign in again.",
         code: "challenge_invalid",
@@ -447,7 +383,7 @@ async function mfaChallenge(req, res, next) {
     // Record audit event
     await mfaService.recordMfaChallenge({ userId, req, success: true });
 
-    return sendTokens(res, session);
+    return sendTokens(res, pending.session);
   } catch (err) {
     next(err);
   }

@@ -16,9 +16,19 @@ const isLocalhost =
   process.env.DATABASE_URL.includes("127.0.0.1") ||
   process.env.DATABASE_SSL === "false";
 
+const parsePositiveInt = (raw, fallback) => {
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: isLocalhost ? false : SUPABASE_CA ? { ca: SUPABASE_CA, rejectUnauthorized: true } : false,
+  // Bounded pool: Supabase enforces a hard connection ceiling, and an
+  // unbounded queue turns overload into request timeouts instead of fast 503s.
+  max: parsePositiveInt(process.env.PG_POOL_MAX, 20),
+  idleTimeoutMillis: parsePositiveInt(process.env.PG_IDLE_TIMEOUT_MS, 30_000),
+  connectionTimeoutMillis: parsePositiveInt(process.env.PG_CONNECT_TIMEOUT_MS, 5_000),
 });
 
 pool.on("connect", () => {
