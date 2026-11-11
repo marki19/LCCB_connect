@@ -41,16 +41,13 @@ function perUserLimiter({ windowMs, limit, message }) {
 
 // ---- messaging (Messaging_plan.md §6, §13) ---------------------------------
 
+// Burst protection only: no daily ceiling, so a long conversation is never cut
+// off. 50/minute is high enough for normal back-and-forth and low enough to
+// stop a scripted flood.
 const messagingSendLimiter = perUserLimiter({
   windowMs: MINUTE,
-  limit: parseLimit(process.env.RATE_LIMIT_SEND_MAX, 20),
+  limit: parseLimit(process.env.RATE_LIMIT_SEND_MAX, 50),
   message: "You're sending messages too quickly. Please slow down.",
-});
-
-const messagingDailyLimiter = perUserLimiter({
-  windowMs: DAY,
-  limit: parseLimit(process.env.RATE_LIMIT_SEND_DAILY_MAX, 200),
-  message: "Daily message limit reached. Try again tomorrow.",
 });
 
 const friendRequestLimiter = perUserLimiter({
@@ -62,8 +59,8 @@ const friendRequestLimiter = perUserLimiter({
 // ---- moderation ------------------------------------------------------------
 
 const reportLimiter = perUserLimiter({
-  windowMs: MINUTE,
-  limit: parseLimit(process.env.RATE_LIMIT_REPORT_MAX, 10),
+  windowMs: HOUR,
+  limit: parseLimit(process.env.RATE_LIMIT_REPORT_MAX, 20),
   message: "Too many reports. Please slow down.",
 });
 
@@ -113,12 +110,8 @@ const thesisUploadLimiter = perUserLimiter({
 
 // ---- read-side expensive work ---------------------------------------------
 
-const searchLimiter = perUserLimiter({
-  windowMs: MINUTE,
-  limit: parseLimit(process.env.RATE_LIMIT_SEARCH_MAX, 30),
-  message: "Too many searches. Please slow down.",
-});
-
+// Search has no per-user limit by design. The global IP limiter in app.js is
+// still the backstop for raw request volume.
 const linkPreviewLimiter = perUserLimiter({
   windowMs: MINUTE,
   limit: parseLimit(process.env.RATE_LIMIT_PREVIEW_MAX, 10),
@@ -134,7 +127,6 @@ const likeLimiter = perUserLimiter({
 module.exports = {
   perUserLimiter,
   messagingSendLimiter,
-  messagingDailyLimiter,
   friendRequestLimiter,
   reportLimiter,
   postCreateLimiter,
@@ -144,7 +136,6 @@ module.exports = {
   commentCreateLimiter,
   commentDailyLimiter,
   thesisUploadLimiter,
-  searchLimiter,
   linkPreviewLimiter,
   likeLimiter,
 };
