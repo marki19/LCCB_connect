@@ -7,7 +7,6 @@ const {
   roleChangeSchema,
   suspendUserSchema,
   reasonBodySchema,
-  announcementSchema,
 } = require("../validation");
 
 // Mounted at /api/admin behind requireAuth + loadProfile + requireActiveAccount
@@ -62,15 +61,7 @@ router.get(
   adminController.listAudit
 );
 
-router.get(
-  "/announcements/audience-count",
-  adminController.getAudienceCount
-);
-router.post(
-  "/announcements",
-  validate(announcementSchema),
-  adminController.sendAnnouncement
-);
-router.get("/announcements", adminController.listAnnouncements);
+// Announcements live at /api/announcements (routes/announcementRouter.js):
+// department admins send them, and this mount is admin + superadmin only.
 
 module.exports = router;

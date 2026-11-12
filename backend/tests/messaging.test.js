@@ -48,7 +48,7 @@ const m = {
   reportMessage: stub(messageModel, "reportMessage"),
 };
 
-stub(notificationService, "notifyUser", async () => {});
+const notifyUser = stub(notificationService, "notifyUser", async () => {});
 stub(notificationService, "getTargetAdmins", async () => []);
 stub(notificationService, "createNotifications", async () => {});
 
@@ -312,6 +312,8 @@ describe("reads and receipts (§9)", () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.status, "active");
     assert.deepEqual(m.acceptRequest.calls[0], [CONV, "u1"]);
+    // Accepting a request is a messaging event, not a bell event.
+    assert.equal(notifyUser.calls.length, 0);
   });
 
   it("404 when a non-recipient tries to accept", async () => {

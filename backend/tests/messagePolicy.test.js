@@ -202,7 +202,7 @@ describe("sendMessage (atomic send path)", () => {
     );
   });
 
-  it("inserts, bumps the thread, and notifies on a direct send", async () => {
+  it("inserts, bumps the thread, and writes no notification row", async () => {
     const message = { id: "m1", conversation_id: CONV, sender_id: "u1", body: "hi" };
     const client = fakeClient([
       ["FOR UPDATE", () => ({ rows: [conversationRow()] })],
@@ -223,9 +223,9 @@ describe("sendMessage (atomic send path)", () => {
 
     assert.equal(result.message, message);
     assert.equal(result.deduped, false);
-    assert.equal(notifyUser.calls.length, 1);
-    assert.equal(notifyUser.calls[0][0].type, "new_message");
-    assert.equal(notifyUser.calls[0][0].userId, "u2");
+    // Messages are their own surface. The OS push (pushService.notifyNewMessage)
+    // carries them to the status bar; the in-app bell must not get a row.
+    assert.equal(notifyUser.calls.length, 0);
   });
 
   it("replays a duplicate client_msg_id without re-notifying", async () => {

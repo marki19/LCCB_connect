@@ -105,3 +105,19 @@ describe("POST /api/notifications/read-all", () => {
   });
 });
 
+describe("messages never appear in the bell", () => {
+  it("excludes message types from the list and the unread count", async () => {
+    query.setImpl(async () => ({ rows: [] }));
+
+    await request(app).get("/api/notifications").set(AUTH);
+    const listSql = query.calls.map((c) => c[0]).join("\n");
+    assert.match(listSql, /NOT IN \('new_message', 'message_request'\)/);
+
+    query.calls.length = 0;
+    await request(app).get("/api/notifications/unread-count").set(AUTH);
+    const countSql = query.calls.map((c) => c[0]).join("\n");
+    assert.match(countSql, /NOT IN \('new_message', 'message_request'\)/);
+  });
+});
+
+

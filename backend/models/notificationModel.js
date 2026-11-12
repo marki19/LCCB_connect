@@ -2,7 +2,14 @@ const db = require("../db");
 
 /**
  * Raw SQL Model for Notifications
+ *
+ * Messages are deliberately absent from this surface. They have their own tab,
+ * and `pushService.notifyNewMessage` already puts them on the status bar and
+ * lock screen. `new_message` / `message_request` rows are therefore filtered
+ * out of every read here, so neither the list nor the badge counts them.
  */
+
+const EXCLUDED_TYPES = "('new_message', 'message_request')";
 
 const getUserNotifications = async (userId, { limit = 30 } = {}) => {
   const sql = `
@@ -25,6 +32,7 @@ const getUserNotifications = async (userId, { limit = 30 } = {}) => {
     FROM public.notifications n
     LEFT JOIN public.profiles pr ON n.actor_id = pr.id
     WHERE n.user_id = $1
+      AND n.type NOT IN ${EXCLUDED_TYPES}
     ORDER BY n.created_at DESC
     LIMIT $2;
   `;
@@ -36,7 +44,9 @@ const getUnreadCount = async (userId) => {
   const sql = `
     SELECT COUNT(*)::int AS unread
     FROM public.notifications
-    WHERE user_id = $1 AND is_read = FALSE;
+    WHERE user_id = $1
+      AND is_read = FALSE
+      AND type NOT IN ${EXCLUDED_TYPES};
   `;
   const result = await db.query(sql, [userId]);
   return result.rows[0]?.unread || 0;

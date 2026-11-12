@@ -136,10 +136,7 @@ export default function NotificationsScreen() {
     }
 
     // Navigate to target if applicable
-    if (item.type === "new_message" || item.type === "message_request") {
-      if (item.target_id) router.push(`/messages/${item.target_id}` as any);
-      else router.push("/messages" as any);
-    } else if (item.type === "friend_request" || item.type === "friend_accepted") {
+    if (item.type === "friend_request" || item.type === "friend_accepted") {
       router.push("/friends" as any);
     } else if (item.entity_type === "post" && item.entity_id) {
       router.push(`/post/${item.entity_id}` as any);

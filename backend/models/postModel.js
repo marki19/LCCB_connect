@@ -109,7 +109,7 @@ const getAllPosts = async ({
     LEFT JOIN profiles pr ON p.author_id = pr.id
     LEFT JOIN public.departments d ON d.id = pr.department_id
     ${whereClause}
-    ORDER BY p.created_at DESC, p.id DESC
+    ORDER BY p.pinned DESC, p.created_at DESC, p.id DESC
     LIMIT $${params.length};
   `;
   
@@ -381,7 +381,7 @@ const visiblePostsFor = async ({
     LEFT JOIN profiles pr ON p.author_id = pr.id
     LEFT JOIN public.departments d ON d.id = pr.department_id
     ${whereClause}
-    ORDER BY p.created_at DESC, p.id DESC
+    ORDER BY p.pinned DESC, p.created_at DESC, p.id DESC
     LIMIT $${postParams.length};
   `;
 

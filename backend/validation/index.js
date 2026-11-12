@@ -443,6 +443,13 @@ const announcementAudienceSchema = z.discriminatedUnion("type", [
   z
     .object({ type: z.literal("department"), department_id: requiredUuid() })
     .strict(),
+  z.object({ type: z.literal("course"), course_id: requiredUuid() }).strict(),
+  z
+    .object({
+      type: z.literal("year_level"),
+      year_level: z.string().trim().min(1).max(50),
+    })
+    .strict(),
 ]);
 
 const announcementSchema = z
@@ -450,6 +457,28 @@ const announcementSchema = z
     title: z.string().trim().min(3).max(120),
     body: z.string().trim().min(3).max(2000),
     audience: announcementAudienceSchema,
+    pinned: z.boolean().optional().default(false),
+    expires_at: z
+      .string()
+      .trim()
+      .datetime({ offset: true })
+      .nullable()
+      .optional()
+      .default(null),
+  })
+  .strict();
+
+/**
+ * Editing an announcement after it was sent. Every field is optional; the
+ * audience is absent on purpose — the notification fan-out is a snapshot, so
+ * changing who it was for is a delete-and-repost, not an edit.
+ */
+const announcementUpdateSchema = z
+  .object({
+    title: z.string().trim().min(3).max(120).optional(),
+    body: z.string().trim().min(3).max(2000).optional(),
+    pinned: z.boolean().optional(),
+    expires_at: z.string().trim().datetime({ offset: true }).nullable().optional(),
   })
   .strict();
 
@@ -523,6 +552,8 @@ const validate = (schema) => (req, res, next) => {
   suspendUserSchema,
   reasonBodySchema,
   announcementSchema,
+  announcementAudienceSchema,
+  announcementUpdateSchema,
   studentIdSchema,
   verificationSubmitSchema,
   verificationDecisionSchema,

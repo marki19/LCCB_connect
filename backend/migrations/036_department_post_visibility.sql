@@ -71,8 +71,8 @@ AS $$
           WHERE viewer_pr.id = viewer
             AND viewer_pr.department_id IS NOT NULL
             AND (
-              viewer_pr.department_id = (SELECT pr.department_id FROM public.profiles pr WHERE pr.id = t.uploader_id)
-              OR viewer_pr.department_id = (SELECT c.department_id FROM public.courses c WHERE c.id = t.course_id)
+              viewer_pr.department_id = t.department_id
+              OR viewer_pr.department_id = (SELECT pr.department_id FROM public.profiles pr WHERE pr.id = t.uploader_id)
             )
         )
       )

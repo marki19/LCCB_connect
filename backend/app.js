@@ -24,6 +24,7 @@ const reportRouter = require("./routes/reportRouter");
 const blockRouter = require("./routes/blockRouter");
 const searchRouter = require("./routes/searchRouter");
 const notificationRouter = require("./routes/notificationRouter");
+const announcementRouter = require("./routes/announcementRouter");
 
 // The Express app is built here and exported WITHOUT listening, so tests can
 // drive it via supertest. `index.js` owns dotenv + boot-time env validation and
@@ -254,6 +255,18 @@ const adminMiddleware = [
 
 app.use("/api/admin", ...adminMiddleware, adminRouter);
 app.use("/api/admin", ...adminMiddleware, adminCatalogRouter);
+
+// Announcements. Not under /api/admin: department admins send them, and the
+// admin mount is gated to admin + superadmin. Audience scope is enforced per
+// request in the controller.
+app.use(
+  "/api/announcements",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  auth.requireRole("departmentAdmin", "admin", "superadmin"),
+  announcementRouter
+);
 
 // Test route
 app.get("/", (req, res) => {

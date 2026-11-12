@@ -1,4 +1,3 @@
-const crypto = require("crypto");
 const adminModel = require("../models/adminModel");
 const userModel = require("../models/userModel");
 const accountService = require("../services/accountService");
@@ -369,98 +368,6 @@ const listAudit = async (req, res, next) => {
   }
 };
 
-function audienceFromQuery(query) {
-  const type = String(query.type || "all");
-  if (!["all", "role", "department"].includes(type)) return { error: "Unknown audience" };
-  if (type === "role") {
-    const role = canonicalRole(query.role);
-    if (!role) return { error: "Unknown role" };
-    return { audience: { type, role } };
-  }
-  if (type === "department") {
-    const departmentId = String(query.department_id || "");
-    if (!UUID_RE.test(departmentId)) return { error: "Invalid department id" };
-    return { audience: { type, department_id: departmentId } };
-  }
-  return { audience: { type: "all" } };
-}
-
-const getAudienceCount = async (req, res, next) => {
-  try {
-    const parsed = audienceFromQuery(req.query);
-    if (parsed.error) return badRequest(res, parsed.error);
-
-    const recipients = await adminModel.getAnnouncementRecipients({
-      actorId: req.user.id,
-      role: parsed.audience.type === "role" ? parsed.audience.role : null,
-      departmentId:
-        parsed.audience.type === "department"
-          ? parsed.audience.department_id
-          : null,
-    });
-    res.json({ count: recipients.length });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const sendAnnouncement = async (req, res, next) => {
-  try {
-    const { title, body, audience } = req.body;
-    let departmentName = null;
-
-    if (audience.type === "department") {
-      departmentName = await adminModel.getDepartmentName(audience.department_id);
-      if (!departmentName) return badRequest(res, "Unknown department");
-    }
-
-    const recipients = await adminModel.getAnnouncementRecipients({
-      actorId: req.user.id,
-      role: audience.type === "role" ? audience.role : null,
-      departmentId: audience.type === "department" ? audience.department_id : null,
-    });
-
-    if (recipients.length === 0) {
-      return badRequest(res, "No active recipients match this audience");
-    }
-
-    const announcementId = crypto.randomUUID();
-    const message = `${title}\n\n${body}`;
-    await adminModel.createAnnouncementNotifications({
-      recipients: recipients.map((r) => r.id),
-      actorId: req.user.id,
-      announcementId,
-      departmentId: audience.type === "department" ? audience.department_id : null,
-      departmentName,
-      message,
-    });
-
-    await auditService.recordRequest(req, {
-      action: ACTIONS.ANNOUNCEMENT_SEND,
-      targetType: "announcement",
-      targetId: announcementId,
-      targetLabel: title,
-      reason: null,
-      metadata: { title, body, audience, recipients: recipients.length },
-    });
-
-    res.status(201).json({ id: announcementId, recipients: recipients.length });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const listAnnouncements = async (req, res, next) => {
-  try {
-    const result = await adminModel.listAnnouncementHistory({
-      limit: parseLimit(req.query.limit),
-      cursor: req.query.cursor ? String(req.query.cursor) : null,
-    });
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-};
 
 const generateImpersonation = async (req, res, next) => {
   try {
@@ -530,9 +437,6 @@ module.exports = {
   forceSignOut,
   listContent,
   listAudit,
-  getAudienceCount,
-  sendAnnouncement,
-  listAnnouncements,
   generateImpersonation,
   unlockUser,
 };
