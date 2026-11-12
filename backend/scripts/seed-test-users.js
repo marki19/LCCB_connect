@@ -37,7 +37,7 @@ const COURSE = {
 const TEST_USERS = [
   {
     role: "student",
-    email: "student@lccb.edu.ph",
+    email: "student@lccbonline.edu.ph",
     username: "student_test",
     full_name: "Student Test",
     department: true,
@@ -45,7 +45,7 @@ const TEST_USERS = [
   },
   {
     role: "faculty",
-    email: "faculty@lccb.edu.ph",
+    email: "faculty@lccbonline.edu.ph",
     username: "faculty_test",
     full_name: "Faculty Test",
     department: true,
@@ -53,7 +53,7 @@ const TEST_USERS = [
   },
   {
     role: "departmentAdmin",
-    email: "deptadmin@lccb.edu.ph",
+    email: "deptadmin@lccbonline.edu.ph",
     username: "deptadmin_test",
     full_name: "Department Admin Test",
     department: true,
@@ -61,7 +61,7 @@ const TEST_USERS = [
   },
   {
     role: "admin",
-    email: "admin@lccb.edu.ph",
+    email: "admin@lccbonline.edu.ph",
     username: "admin_test",
     full_name: "Admin Test",
     department: false,
@@ -69,7 +69,7 @@ const TEST_USERS = [
   },
   {
     role: "superadmin",
-    email: "superadmin@lccb.edu.ph",
+    email: "superadmin@lccbonline.edu.ph",
     username: "superadmin_test",
     full_name: "Super Admin Test",
     department: false,
@@ -144,8 +144,8 @@ async function upsertProfile(id, user, catalog) {
 
   await db.query(
     `INSERT INTO public.profiles
-       (id, username, full_name, role, department_id, course_id, course, year_level)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (id, username, full_name, role, department_id, course_id, course, year_level, verification_status, verified_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'verified', NOW())
      ON CONFLICT (id) DO UPDATE SET
        username = EXCLUDED.username,
        full_name = EXCLUDED.full_name,
@@ -153,7 +153,9 @@ async function upsertProfile(id, user, catalog) {
        department_id = EXCLUDED.department_id,
        course_id = EXCLUDED.course_id,
        course = EXCLUDED.course,
-       year_level = EXCLUDED.year_level;`,
+       year_level = EXCLUDED.year_level,
+       verification_status = EXCLUDED.verification_status,
+       verified_at = EXCLUDED.verified_at;`,
     [
       id,
       user.username,

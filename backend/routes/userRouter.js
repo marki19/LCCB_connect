@@ -12,12 +12,15 @@ const {
 
 // CRUD routes (global requireAuth is applied when this router is mounted in app.js)
 router.get("/", userController.getUsers);
+router.get("/directory", userController.getDirectory);   // <-- before /:id
+router.get("/:id/profile", userController.getPublicProfile);
 router.get("/:id", userController.getUser);
 router.post("/", validate(createProfileSchema), userController.createUser);
 
 // Self-or-admin actions need the caller's profile (for the role check).
 router.put("/:id", auth.loadProfile, validate(updateProfileSchema), userController.updateUser);
-router.delete("/:id", auth.loadProfile, userController.deleteUser);
+// Account deletion is disabled via API per policy. Use PATCH /admin/users/:id/suspend for disable.
+// Self-disable is removed. Manual DB query only for permanent deletion.
 
 module.exports = router;
 

@@ -31,7 +31,8 @@
           "color": "#1D4ED8",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }

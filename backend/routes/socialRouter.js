@@ -32,6 +32,7 @@ router.delete(
 );
 
 router.get("/me/blocks", socialController.listBlocked);
+router.patch("/me/banner-dismissed", socialController.dismissBanner);
 router.post("/:id/block", socialController.blockUser);
 router.delete("/:id/block", socialController.unblockUser);
 

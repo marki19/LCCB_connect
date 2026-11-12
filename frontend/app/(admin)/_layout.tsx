@@ -26,6 +26,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  UserCheck,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react-native";
@@ -239,7 +240,7 @@ export default function AdminLayout() {
             width: 74,
             height: 74,
             borderRadius: 24,
-            backgroundColor: "rgba(255,255,255,0.06)",
+            backgroundColor: colors.navHoverBg,
             borderWidth: 1,
             borderColor: colors.navLine,
             alignItems: "center",
@@ -297,8 +298,8 @@ export default function AdminLayout() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ ...TYPE.bodyStrong, color: "#20160A" }}>Go to App</Text>
-          <ExternalLink size={15} color="#20160A" />
+          <Text style={{ ...TYPE.bodyStrong, color: colors.navBg }}>Go to App</Text>
+          <ExternalLink size={15} color={colors.navBg} />
         </Pressable>
       </LinearGradient>
     );
@@ -315,7 +316,7 @@ export default function AdminLayout() {
           gap: SPACE.x4,
         }}
       >
-        <ActivityIndicator size="large" color={colors.brandSolid} />
+        <ActivityIndicator accessibilityLabel="Loading" size="large" color={colors.brandSolid} />
         <Text style={{ ...TYPE.body, color: colors.inkSoft }}>Loading the console…</Text>
       </View>
     );
@@ -375,7 +376,7 @@ export default function AdminLayout() {
             opacity: pressed ? 0.88 : 1,
           })}
         >
-          <Text style={{ ...TYPE.bodyStrong, color: colors.textOnPrimary }}>Go to App</Text>
+          <Text style={{ ...TYPE.bodyStrong, color: colors.textOnBrandSolid }}>Go to App</Text>
         </Pressable>
       </View>
     );
@@ -391,6 +392,7 @@ export default function AdminLayout() {
   const governance: NavEntry[] = [
     { label: "Overview", path: "/(admin)", icon: LayoutDashboard },
     { label: "Users", path: "/(admin)/users", icon: Users },
+    { label: "Verification", path: "/verify-requests", icon: UserCheck },
     { label: "Reports & Content", path: "/(admin)/content", icon: FileText },
     { label: "Announcements", path: "/(admin)/announcements", icon: Megaphone },
   ];
@@ -477,7 +479,7 @@ export default function AdminLayout() {
                   borderRadius: RADIUS.md,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "rgba(255,255,255,0.06)",
+                  backgroundColor: colors.navHoverBg,
                   borderWidth: 1,
                   borderColor: colors.navLine,
                 }}

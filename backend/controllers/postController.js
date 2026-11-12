@@ -4,24 +4,54 @@ const { parseSearch, parseUuidFilter } = require("../utils/queryFilters");
 const moderationService = require("../services/moderationService");
 const notificationService = require("../services/notificationService");
 const previewService = require("../services/previewService");
+const { resolveAudience } = require("../services/visibilityService");
+const { signedStorageUrl } = require("../services/storageService");
+
+/**
+ * A custom-visibility write must name accepted friends. Returns the normalized
+ * audience, or a `{ error, invalid }` payload the controller returns as 400.
+ * Anything else (public/friends/private) carries no audience.
+ */
+const resolveRequestBodyAudience = async (authorId, body) => {
+  if (body.audience === undefined && body.visibility !== "custom") {
+    return { body };
+  }
+  const resolved = await resolveAudience(authorId, body.audience ?? []);
+  if (resolved.error) return { error: resolved.error, invalid: resolved.invalid };
+  return { body: { ...body, audience: resolved.audience } };
+};
 
 // Errors are forwarded to the centralized handler in index.js, which logs
 // server-side and returns a generic message (never the raw DB error).
 const getPosts = async (req, res, next) => {
   try {
-    // Optional filters: ?q=<text>&author_id=<uuid>
+    // Optional filters: ?q=<text>&author_id=<uuid>&visibility=<public|friends|...>
     // plus keyset pagination: ?limit=<1..100>&cursor=<created_at>|<id>
     const author = parseUuidFilter(req.query.author_id, "author_id");
     if (author.error) {
       return res.status(400).json({ error: author.error });
     }
 
-    const posts = await postModel.getAllPosts({
+    const dept = parseUuidFilter(req.query.department_id, "department_id");
+    if (dept.error) {
+      return res.status(400).json({ error: dept.error });
+    }
+
+    const course = parseUuidFilter(req.query.course_id, "course_id");
+    if (course.error) {
+      return res.status(400).json({ error: course.error });
+    }
+
+    const posts = await postModel.visiblePostsFor({
+      viewerId: req.user?.id || null,
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
       q: parseSearch(req.query.q),
       authorId: author.value,
-      userId: req.user?.id || null,
+      ...(dept.value ? { departmentId: dept.value } : {}),
+      ...(course.value ? { courseId: course.value } : {}),
+      ...(req.query.type ? { type: req.query.type } : {}),
+      visibility: req.query.visibility || null,
     });
     res.json(posts);
   } catch (error) {
@@ -32,9 +62,12 @@ const getPosts = async (req, res, next) => {
 const getPost = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const post = await postModel.getPostById(id, {
-      userId: req.user?.id || null,
+    const result = await postModel.visiblePostsFor({
+      viewerId: req.user?.id || null,
+      postId: id,
+      includeHidden: false,
     });
+    const post = result.posts[0];
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -46,8 +79,31 @@ const getPost = async (req, res, next) => {
 
 const createPost = async (req, res, next) => {
   try {
+    // Verify user identity is complete before allowing post creation
+    if (!req.profile?.profile_completed) {
+      return res.status(403).json({
+        error: "Profile incomplete",
+        message: "Complete your profile (full name, student ID, department, and course) before creating posts.",
+        code: "PROFILE_INCOMPLETE",
+      });
+    }
+
+    // Verify user identity is verified before allowing post creation
+    if (!req.profile?.identity_complete) {
+      return res.status(403).json({
+        error: "Identity verification required",
+        message: "Complete your student identity verification before creating posts.",
+        code: "VERIFICATION_REQUIRED",
+      });
+    }
+
+    const resolved = await resolveRequestBodyAudience(req.user.id, req.body);
+    if (resolved.error) {
+      return res.status(400).json({ error: resolved.error, invalid: resolved.invalid });
+    }
+
     const newPost = await postModel.createPost({
-      ...req.body,
+      ...resolved.body,
       author_id: req.user.id,
     });
     res.status(201).json(newPost);
@@ -81,9 +137,13 @@ const createPost = async (req, res, next) => {
 const updatePost = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const resolved = await resolveRequestBodyAudience(req.user.id, req.body);
+    if (resolved.error) {
+      return res.status(400).json({ error: resolved.error, invalid: resolved.invalid });
+    }
     // Ownership is enforced in SQL (author_id = caller). An unauthorized caller
     // receives the same 404 as a missing post.
-    const updated = await postModel.updatePost(id, req.user.id, req.body);
+    const updated = await postModel.updatePost(id, req.user.id, resolved.body);
     if (!updated) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -96,7 +156,7 @@ const updatePost = async (req, res, next) => {
 const deletePost = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const deleted = await postModel.deletePost(id, req.user.id);
+    const deleted = await postModel.softDeletePost(id, req.user.id);
     if (!deleted) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -109,6 +169,13 @@ const deletePost = async (req, res, next) => {
 const toggleLike = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const post = await postModel.getPostById(id, {
+      includeHidden: false,
+      userId: req.user?.id || null,
+    });
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
     // The liking user is the authenticated caller, not a body field.
     const result = await postModel.toggleLike(id, req.user.id);
     res.json(result);
@@ -120,12 +187,13 @@ const toggleLike = async (req, res, next) => {
 const getComments = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const post = await postModel.getPostById(id, { includeHidden: false });
+    const viewerId = req.user?.id || null;
+    const post = await postModel.getPostById(id, { includeHidden: false, userId: viewerId });
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    const comments = await postModel.getComments(id);
+    const comments = await postModel.getComments(id, { viewerId });
     res.json(comments);
   } catch (error) {
     next(error);
@@ -136,7 +204,10 @@ const addComment = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
-    const post = await postModel.getPostById(id, { includeHidden: false });
+    const post = await postModel.getPostById(id, {
+      includeHidden: false,
+      userId: req.user?.id || null,
+    });
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -245,6 +316,263 @@ const generatePreview = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/posts/:id/file — signed URL for the post image.
+ *
+ * Returns a signed URL that the front-end can use to display the image.
+ * The URL expires after 5 minutes. Only the owner, visible viewers, or
+ * a moderator can access this endpoint.
+ */
+const getPostFile = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const viewerId = req.user?.id || null;
+
+    // Visibility is enforced by the model's use of visible_posts().
+    const result = await postModel.visiblePostsFor({
+      viewerId,
+      postId: id,
+      includeHidden: false,
+    });
+    const post = result.posts[0];
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const imageKeys = Array.isArray(post.image_urls) && post.image_urls.length > 0
+      ? post.image_urls
+      : (post.image_url ? [post.image_url] : []);
+
+    if (imageKeys.length === 0) {
+      return res.status(404).json({ message: "Post has no image" });
+    }
+
+    // Issue signed URLs for all images in the private assets bucket.
+    const signedResults = await Promise.all(
+      imageKeys.map((key) => signedStorageUrl("assets", key, { expiresIn: 300 }))
+    );
+    const urls = signedResults.map((r) => r.url).filter(Boolean);
+
+    if (urls.length === 0) {
+      return res.status(404).json({ message: "Could not generate file URL" });
+    }
+
+    res.json({ url: urls[0], urls });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================================
+// REPOST ENDPOINTS
+// ============================================================================
+
+const repostModel = require("../models/repostModel");
+const notificationModel = require("../models/notificationModel");
+
+const createRepost = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { caption } = req.body ?? {};
+    const reposterId = req.user.id;
+
+    const repost = await repostModel.createRepost(id, reposterId, caption);
+    if (!repost) {
+      return res.status(404).json({ message: "Original post not found or not visible" });
+    }
+
+    // Notify the original author (the model skips self-reposts).
+    await notificationModel.createRepostNotification(
+      repost.original_post?.author_id,
+      reposterId,
+      repost.id
+    );
+
+    res.status(201).json(repost);
+  } catch (error) {
+    const mapped = REPOST_ERRORS[error.code];
+    if (mapped) {
+      return res.status(mapped[0]).json({ error: mapped[1] });
+    }
+    next(error);
+  }
+};
+
+// Codes thrown by repostModel.createRepost, mapped to the HTTP contract the
+// client already renders.
+const REPOST_ERRORS = {
+  ALREADY_REPOSTED: [409, "Already reposted this post"],
+  BLOCKED: [403, "Cannot repost blocked user's content"],
+  REPOSTS_NOT_ALLOWED: [403, "Author has disabled reposts"],
+  POST_NOT_FOUND: [404, "Original post not found or not visible"],
+};
+
+const undoRepost = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const reposterId = req.user.id;
+
+    const repost = await repostModel.undoRepost(id, reposterId);
+    if (!repost) {
+      return res.status(404).json({ message: "Repost not found" });
+    }
+
+    res.json({ message: "Repost removed", repost });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getReposts = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const viewerId = req.user?.id || null;
+
+    const reposts = await repostModel.getVisibleRepostsForPost(id, viewerId, {
+      limit: clampLimit(req.query.limit),
+      cursor: req.query.cursor || null,
+    });
+    res.json(reposts);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================================
+// REPORT ENDPOINTS
+// ============================================================================
+
+const reportModel = require("../models/reportModel");
+
+const createReport = async (req, res, next) => {
+  try {
+    const { targetType, targetId, reason, note } = req.body;
+    const reporterId = req.user.id;
+
+    if (!targetType || !targetId || !reason) {
+      return res.status(400).json({ error: "targetType, targetId, and reason are required" });
+    }
+
+    const report = await reportModel.createReport(reporterId, targetType, targetId, reason, note);
+    res.status(201).json(report);
+  } catch (error) {
+    if (error.code === "DUPLICATE_REPORT") {
+      return res.status(409).json({ error: "Already reported this content" });
+    }
+    if (error.code === "INVALID_TARGET_TYPE" || error.code === "INVALID_REASON") {
+      return res.status(400).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
+// Admin only - list reports
+const listReports = async (req, res, next) => {
+  try {
+    // Role lives on the profile loaded by loadProfile, not on the auth user.
+    const role = req.profile?.role;
+    if (role !== "admin" && role !== "superadmin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const { status, targetType, limit, cursor } = req.query;
+    const reports = await reportModel.listReports({
+      status: status || null,
+      targetType: targetType || null,
+      limit: clampLimit(limit),
+      cursor: cursor || null,
+    });
+    res.json(reports);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin only - update report status
+const updateReportStatus = async (req, res, next) => {
+  try {
+    const role = req.profile?.role;
+    if (role !== "admin" && role !== "superadmin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ error: "status is required" });
+    }
+
+    const report = await reportModel.updateReportStatus(id, status, req.user.id);
+    if (!report) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+    res.json(report);
+  } catch (error) {
+    if (error.code === "INVALID_STATUS") {
+      return res.status(400).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
+// ============================================================================
+// BLOCK ENDPOINTS
+// ============================================================================
+
+const blockModel = require("../models/blockModel");
+
+const blockUser = async (req, res, next) => {
+  try {
+    const { blockedId } = req.body;
+    const blockerId = req.user.id;
+
+    if (!blockedId) {
+      return res.status(400).json({ error: "blockedId is required" });
+    }
+
+    const block = await blockModel.blockUser(blockerId, blockedId);
+    res.status(201).json(block);
+  } catch (error) {
+    if (error.code === "CANNOT_BLOCK_SELF") {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error.code === "ALREADY_BLOCKED") {
+      return res.status(409).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
+const unblockUser = async (req, res, next) => {
+  try {
+    const { blockedId } = req.params;
+    const blockerId = req.user.id;
+
+    const block = await blockModel.unblockUser(blockerId, blockedId);
+    if (!block) {
+      return res.status(404).json({ message: "Block not found" });
+    }
+
+    res.json({ message: "User unblocked", block });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listBlocked = async (req, res, next) => {
+  try {
+    const blockerId = req.user.id;
+    const blocked = await blockModel.listBlocked(blockerId, {
+      limit: clampLimit(req.query.limit),
+      cursor: req.query.cursor || null,
+    });
+    res.json(blocked);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getPosts,
   getPost,
@@ -257,4 +585,17 @@ module.exports = {
   updateComment,
   deleteComment,
   generatePreview,
+  getPostFile,
+  // Reposts
+  createRepost,
+  undoRepost,
+  getReposts,
+  // Reports
+  createReport,
+  listReports,
+  updateReportStatus,
+  // Blocks
+  blockUser,
+  unblockUser,
+  listBlocked,
 };

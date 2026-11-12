@@ -7,7 +7,6 @@ const {
   roleChangeSchema,
   suspendUserSchema,
   reasonBodySchema,
-  deleteUserSchema,
   announcementSchema,
 } = require("../validation");
 
@@ -38,12 +37,23 @@ router.post(
   validate(reasonBodySchema),
   adminController.forceSignOut
 );
-router.delete(
-  "/users/:id",
+
+router.post(
+  "/users/:id/impersonate",
   auth.requireRole("superadmin"),
-  validate(deleteUserSchema),
-  adminController.deleteUser
+  validate(reasonBodySchema),
+  adminController.generateImpersonation
 );
+
+router.post(
+  "/users/:id/unlock",
+  auth.requireRole("superadmin"),
+  validate(reasonBodySchema),
+  adminController.unlockUser
+);
+
+// Account deletion removed per policy. Use POST /users/:id/suspend for disable.
+// Manual DB query only for permanent deletion.
 
 router.get("/content", adminController.listContent);
 router.get(

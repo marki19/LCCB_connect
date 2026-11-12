@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const messageController = require("../controllers/messageController");
-const { reportLimiter } = require("../middleware/messagingLimits");
+const { reportLimiter } = require("../middleware/actionLimits");
 const { validate, reportMessageSchema } = require("../validation");
 
 // Mounted at /api/messages behind requireAuth + loadProfile.

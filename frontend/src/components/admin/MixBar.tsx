@@ -22,6 +22,7 @@ export default function MixBar({ segments, height = 8, trackColor }: MixBarProps
   return (
     <View
       accessibilityRole="progressbar"
+      accessibilityLabel={segments.map((segment) => `${segment.label}: ${segment.value}`).join(", ") || "Distribution"}
       accessibilityValue={{ min: 0, max: total || 1, now: total }}
       style={{
         height,

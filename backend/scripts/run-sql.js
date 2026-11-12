@@ -25,15 +25,18 @@ async function main() {
     process.exit(1);
   }
 
+  const isLocalhost =
+    !connectionString ||
+    connectionString.includes("localhost") ||
+    connectionString.includes("127.0.0.1") ||
+    process.env.DATABASE_SSL === "false";
+
+  const caPath = path.join(__dirname, "..", "certs", "supabase-root-2021.crt");
+  const ca = fs.existsSync(caPath) ? fs.readFileSync(caPath, "utf8") : null;
+
   const client = new Client({
     connectionString,
-    ssl: {
-      ca: fs.readFileSync(
-        path.join(__dirname, "..", "certs", "supabase-root-2021.crt"),
-        "utf8"
-      ),
-      rejectUnauthorized: true,
-    },
+    ssl: isLocalhost ? false : ca ? { ca, rejectUnauthorized: true } : false,
   });
 
   await client.connect();

@@ -1,9 +1,9 @@
 # Spec: Superadmin Console
 
-**Status:** Implemented and verified on 2026-10-20. `tasks/todo.md` records the completed build and QA checks.
+**Status:** Implemented and verified on 2026-10-20. `implementation_plans/superadmin-console-todo.md` records the completed build and QA checks.
 **Date:** 2026-10-20
 **Scope owner:** LCCB Connect
-**Supersedes:** the S1/S2/S3 sequence in `Feature_plan.md` for admin work.
+**Supersedes:** the S1/S2/S3 sequence in `implementation_plans/Feature_plan.md` for admin work.
 
 ---
 
@@ -54,7 +54,7 @@ Mobile keeps the normal student/faculty experience. The panel is desktop-only.
 - Ownership failures return 404, never 403.
 - Announcements are in-app only. No email or push delivery in v1.
 - Deferred: impersonation, dedicated analytics page, departmentAdmin console, mobile admin UI, report assignment/handoffs.
-- Testing uses the cleaned Supabase database and the five `@lccb.edu.ph` accounts; their passwords are stored in Supabase Auth, not in this repository.
+- Testing uses the cleaned Supabase database and the five `@lccbonline.edu.ph` accounts; their passwords are stored in Supabase Auth, not in this repository.
 
 ## 5. Assumptions
 
@@ -382,7 +382,7 @@ Returns the same profile fields plus:
 
 ```json
 {
-  "email": "student@lccb.edu.ph",
+  "email": "student@lccbonline.edu.ph",
   "bio": "...",
   "skills": [],
   "suspension_reason": null,
@@ -818,11 +818,11 @@ Use the seeded accounts.
 
 | # | Account | Check |
 |---|---|---|
-| 1 | `superadmin@lccb.edu.ph` | Login lands on `/(admin)`; all nav items; overview populated; Audit visible. |
-| 2 | `admin@lccb.edu.ph` | Login lands on panel; Audit hidden; no delete/force-sign-out controls; role options do not include `admin`. |
-| 3 | `student@lccb.edu.ph` | Login lands on feed; direct `/(admin)` redirects to feed; `/api/admin/overview` returns 403. |
-| 4 | `faculty@lccb.edu.ph` | Same as student for panel access. |
-| 5 | `deptadmin@lccb.edu.ph` | Same as student for panel access; existing department moderation still works. |
+| 1 | `superadmin@lccbonline.edu.ph` | Login lands on `/(admin)`; all nav items; overview populated; Audit visible. |
+| 2 | `admin@lccbonline.edu.ph` | Login lands on panel; Audit hidden; no delete/force-sign-out controls; role options do not include `admin`. |
+| 3 | `student@lccbonline.edu.ph` | Login lands on feed; direct `/(admin)` redirects to feed; `/api/admin/overview` returns 403. |
+| 4 | `faculty@lccbonline.edu.ph` | Same as student for panel access. |
+| 5 | `deptadmin@lccbonline.edu.ph` | Same as student for panel access; existing department moderation still works. |
 | 6 | superadmin | Back to App opens feed; Admin Console link returns to panel; no re-login. |
 | 7 | superadmin | Change a student to faculty with a reason; audit row appears; user sees the new role. |
 | 8 | admin | Attempt to grant `admin`; 403; no audit row. |

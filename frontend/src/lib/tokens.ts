@@ -34,11 +34,12 @@ export const LIGHT_TOKENS = {
   // Text
   textPrimary: "#0B1B33",         // headings, body (ink)
   textSecondary: "#44516A",       // secondary info
-  textTertiary: "#6A7789",        // labels, captions, timestamps
+  textTertiary: "#5A6577",        // labels, captions, timestamps
   textDisabled: "#9AA3B2",        // disabled controls
   textMuted: "#8A94A4",           // placeholder-style text
   textOnPrimary: "#FFFFFF",       // text on primary-colored backgrounds
   textOnDanger: "#FFFFFF",        // text on destructive backgrounds
+  textOnBrandSolid: "#FFFFFF",    // text on the deep brandSolid blue (active chips, CTA pills)
 
   // Brand primary (institutional cobalt)
   primary: "#0E3C9C",             // primary buttons, active nav, links
@@ -62,6 +63,7 @@ export const LIGHT_TOKENS = {
   // Semantic: Success (jade)
   success: "#0B7C5C",
   successSurface: "#E2F4EC",
+  successSurfaceAlt: "#D1EAD9",
   successText: "#086349",
 
   // Semantic: Warning (saffron)
@@ -106,20 +108,32 @@ export const LIGHT_TOKENS = {
   activeOverlay: "rgba(11, 27, 51, 0.07)",
 
   // Badge variants (portfolio types)
-  badgeWebsiteBg: "#E8EDFA",
-  badgeWebsiteText: "#1D4ED8",
-  badgeThesisBg: "#EFE9FB",
-  badgeThesisText: "#6D28D9",
-  badgeCapstoneBg: "#E2F4EC",
-  badgeCapstoneText: "#086349",
-  badgeProjectBg: "#FDF3D4",
-  badgeProjectText: "#8A5C00",
-  badgeUpdateBg: "#F0EBE0",
-  badgeUpdateText: "#44516A",
-  badgeImageBg: "#FBE9F1",
-  badgeImageText: "#A61E5C",
+    badgeWebsiteBg: "#E8EDFA",
+    badgeWebsiteText: "#1D4ED8",
+    badgeThesisBg: "#EFE9FB",
+    badgeThesisText: "#6D28D9",
+    badgeCapstoneBg: "#E2F4EC",
+    badgeCapstoneText: "#086349",
+    badgeProjectBg: "#FDF3D4",
+    badgeProjectText: "#8A5C00",
+    badgeUpdateBg: "#F0EBE0",
+    badgeUpdateText: "#44516A",
+    badgeImageBg: "#FBE9F1",
+    badgeImageText: "#A61E5C",
+    badgeDiscussionBg: "#E8EDFA",
+    badgeDiscussionText: "#1D4ED8",
 
-  // Chat bubbles
+    // Visibility badge variants
+    badgePublicBg: "#E8EDFA",
+    badgePublicText: "#1D4ED8",
+    badgeFriendsBg: "#E2F4EC",
+    badgeFriendsText: "#086349",
+    badgeCustomBg: "#FDF3D4",
+    badgeCustomText: "#8A5C00",
+    badgePrivateBg: "#FAE9E5",
+    badgePrivateText: "#9E2F24",
+
+    // Chat bubbles
   bubbleMine: "#0E3C9C",
   bubbleMineText: "#FFFFFF",
   bubblePeer: "#FFFCF6",
@@ -148,7 +162,7 @@ export const LIGHT_TOKENS = {
   lineStrong: "#C9BFAD",
   ink: "#0B1B33",
   inkSoft: "#44516A",
-  inkFaint: "#6A7789",
+  inkFaint: "#5A6577",
   inkOnDark: "#F6F2E8",
 
   // ── Editorial layer: cobalt ──────────────────────────────────────────────
@@ -186,6 +200,9 @@ export const LIGHT_TOKENS = {
   navActiveBg: "rgba(76, 123, 255, 0.20)",
   navHoverBg: "rgba(255, 255, 255, 0.06)",
   navAccent: "#F2B21B",
+  // Destructive text that sits on an always-dark surface (console sidebars).
+  // The regular `destructiveText` is a deep red that only works on light cards.
+  dangerOnDark: "#FF9F94",
 
   // ── Hero / pulse ────────────────────────────────────────────────────────
   heroFrom: "#0B2F78",
@@ -227,8 +244,13 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
   textTertiary: "#8595AD",
   textDisabled: "#4A5B75",
   textMuted: "#62748F",
-  textOnPrimary: "#FFFFFF",
-  textOnDanger: "#FFFFFF",
+  // The dark palette's `primary` and `destructive` are intentionally bright so
+  // they read as accents on a dark canvas. Bright fills need dark content, not
+  // white: #FFFFFF on #6E9BFF is only 2.69:1. `textOnBrandSolid` stays white
+  // because `brandSolid` is the deep blue used for active chips and CTA pills.
+  textOnPrimary: "#0B1B33",
+  textOnDanger: "#2A0E0A",
+  textOnBrandSolid: "#FFFFFF",
 
   // Brand primary (lighter cobalt for dark backgrounds)
   primary: "#6E9BFF",
@@ -252,6 +274,7 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
   // Semantic: Success
   success: "#4FD3AC",
   successSurface: "rgba(79, 211, 172, 0.12)",
+  successSurfaceAlt: "rgba(79, 211, 172, 0.18)",
   successText: "#6FE3C0",
 
   // Semantic: Warning
@@ -296,20 +319,32 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
   activeOverlay: "rgba(255, 255, 255, 0.07)",
 
   // Badge variants (dark-friendly)
-  badgeWebsiteBg: "rgba(110, 155, 255, 0.18)",
-  badgeWebsiteText: "#8FB4FF",
-  badgeThesisBg: "rgba(139, 92, 246, 0.18)",
-  badgeThesisText: "#B794F6",
-  badgeCapstoneBg: "rgba(79, 211, 172, 0.15)",
-  badgeCapstoneText: "#6FE3C0",
-  badgeProjectBg: "rgba(242, 178, 27, 0.15)",
-  badgeProjectText: "#F5C55C",
-  badgeUpdateBg: "rgba(148, 163, 184, 0.12)",
-  badgeUpdateText: "#A9B6CC",
-  badgeImageBg: "rgba(244, 114, 182, 0.15)",
-  badgeImageText: "#F472B6",
+    badgeWebsiteBg: "rgba(110, 155, 255, 0.18)",
+    badgeWebsiteText: "#8FB4FF",
+    badgeThesisBg: "rgba(139, 92, 246, 0.18)",
+    badgeThesisText: "#B794F6",
+    badgeCapstoneBg: "rgba(79, 211, 172, 0.15)",
+    badgeCapstoneText: "#6FE3C0",
+    badgeProjectBg: "rgba(242, 178, 27, 0.15)",
+    badgeProjectText: "#F5C55C",
+    badgeUpdateBg: "rgba(148, 163, 184, 0.12)",
+    badgeUpdateText: "#A9B6CC",
+    badgeImageBg: "rgba(244, 114, 182, 0.15)",
+    badgeImageText: "#F472B6",
+    badgeDiscussionBg: "rgba(110, 155, 255, 0.18)",
+    badgeDiscussionText: "#8FB4FF",
 
-  // Chat bubbles
+    // Visibility badge variants (dark)
+    badgePublicBg: "rgba(110, 155, 255, 0.18)",
+    badgePublicText: "#8FB4FF",
+    badgeFriendsBg: "rgba(79, 211, 172, 0.15)",
+    badgeFriendsText: "#6FE3C0",
+    badgeCustomBg: "rgba(242, 178, 27, 0.15)",
+    badgeCustomText: "#F5C55C",
+    badgePrivateBg: "rgba(255, 139, 126, 0.12)",
+    badgePrivateText: "#FF9F94",
+
+    // Chat bubbles
   bubbleMine: "#2A4A8A",
   bubbleMineText: "#FFFFFF",
   bubblePeer: "#141E30",
@@ -376,6 +411,7 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
   navActiveBg: "rgba(110, 155, 255, 0.16)",
   navHoverBg: "rgba(255, 255, 255, 0.05)",
   navAccent: "#F2B21B",
+  dangerOnDark: "#FF9F94",
 
   // ── Hero / pulse ────────────────────────────────────────────────────────
   heroFrom: "#0A255C",

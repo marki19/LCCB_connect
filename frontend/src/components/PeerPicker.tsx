@@ -1,25 +1,33 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Modal,
   View,
   Text,
   TextInput,
-  FlatList,
-  TouchableOpacity,
+  SectionList,
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { Search, MessageSquare, UserPlus, Check, X } from "lucide-react-native";
-import { apiJson } from "../lib/api";
-import { openConversation, sendFriendRequest } from "../lib/messages";
+import { Search, MessageSquare, UserPlus, Check, X, Lock, Users } from "lucide-react-native";
+import { apiJson, apiFetch } from "../lib/api";
+import { sendFriendRequest } from "../lib/messages";
+import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { usePresence } from "../contexts/PresenceContext";
 import Avatar from "./Avatar";
+import Modal from "./ui/Modal";
+import Button, { IconButton } from "./ui/Button";
+import EmptyState from "./admin/EmptyState";
+import { focusRing, RADIUS, SPACE, TYPE } from "../lib/tokens";
 
 /**
- * Peer directory with Message / Add-friend actions (Messaging_plan.md §4, §12).
- * The button reads "Message" or "Request" based on the server's permission
- * decision (POST /conversations returns the created thread either way).
+ * Peer directory with Message / Request / Add-friend actions.
+ * Uses GET /api/users/directory for friendship state, department grouping, and message_decision.
+ * SectionList sections: Friends, Same department, Others.
+ *
+ * Modes:
+ * - "message": primary = message/request via POST /conversations; secondary = add friend via POST /friends
+ * - "friend": primary = add friend via POST /friends
  */
 
 type Peer = {
@@ -27,26 +35,43 @@ type Peer = {
   username: string | null;
   full_name: string | null;
   avatar_url: string | null;
-  department_name: string | null;
   year_level: string | null;
-  role: string | null;
+  department_id: string | null;
+  department_name: string | null;
+  friendship: "friend" | "pending_out" | "pending_in" | "none";
+  message_decision: "direct" | "request" | "blocked";
 };
+
+type Mode = "message" | "friend";
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   onOpened?: (conversationId: string) => void;
+  mode?: Mode;
 };
 
-export default function PeerPicker({ visible, onClose, onOpened }: Props) {
+type Action = {
+  icon: any;
+  text: string;
+  variant: "primary" | "secondary" | "muted";
+  disabled: boolean;
+  label: string;
+  onPress?: () => void;
+};
+
+export default function PeerPicker({ visible, onClose, onOpened, mode = "message" }: Props) {
   const { profile } = useAuth();
-  const { colors, isDark } = useTheme();
-  const [peers, setPeers] = useState<Peer[]>([]);
+  const { colors } = useTheme();
+  const { modeOf } = usePresence();
+  const router = useRouter();
+  const [sections, setSections] = useState<{ title: string; data: Peer[] }[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [requested, setRequested] = useState<Record<string, boolean>>({});
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -60,11 +85,29 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
     (async () => {
       setLoading(true);
       try {
-        const params = ["limit=100"];
+        const params = ["limit=50"];
         if (debouncedQuery) params.push(`q=${encodeURIComponent(debouncedQuery)}`);
-        const data: Peer[] = await apiJson<Peer[]>(`/public/peers?${params.join("&")}`);
+        params.push("scope=network");
+        const data: Peer[] = await apiJson<Peer[]>(`/users/directory?${params.join("&")}`);
         if (cancelled) return;
-        setPeers(data.filter((p) => p.id !== profile?.id));
+
+        // Group into sections
+        const friends = data.filter((p) => p.friendship === "friend");
+        const myDept = profile?.department_id;
+        const sameDept = data.filter(
+          (p) => p.friendship !== "friend" && myDept && p.department_id === myDept
+        );
+        const others = data.filter(
+          (p) => p.friendship !== "friend" && (!myDept || p.department_id !== myDept)
+        );
+
+        const newSections = [];
+        if (friends.length > 0) newSections.push({ title: "Friends", data: friends });
+        if (sameDept.length > 0) newSections.push({ title: "Same department", data: sameDept });
+        if (others.length > 0) newSections.push({ title: "Others", data: others });
+        if (newSections.length === 0) newSections.push({ title: "All", data: data });
+
+        setSections(newSections);
       } catch {
         // Leave the list empty; the user can reopen.
       } finally {
@@ -74,23 +117,53 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [visible, profile?.id, debouncedQuery]);
+  }, [visible, profile?.id, profile?.department_id, debouncedQuery]);
 
   const handleClose = () => {
     setQuery("");
     setDebouncedQuery("");
-    setPeers([]);
+    setSections([]);
+    setError(null);
     onClose();
   };
 
-  const handleMessage = async (peer: Peer) => {
+  const openThread = async (peer: Peer, label: string) => {
+    // Check profile completion before attempting to start a conversation
+    // Banner dismissal does NOT bypass this - profile must be complete to post/message
+    if (profile?.profile_completed === false) {
+      Alert.alert(
+        "Complete Your Profile",
+        "You need to complete your profile (full name, student ID, department, and course) before you can post or message.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Complete Profile",
+            onPress: () => {
+              handleClose();
+              router.push("/onboarding");
+            }
+          }
+        ]
+      );
+      return;
+    }
+
     setBusyId(peer.id);
+    setError(null);
     try {
-      const conversation = await openConversation(peer.id);
+      const res = await apiFetch("/conversations", {
+        method: "POST",
+        body: JSON.stringify({ peer_id: peer.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || `Could not ${label.toLowerCase()}`);
+      }
+      const conversation = await res.json();
       handleClose();
       onOpened?.(conversation.id);
     } catch (err) {
-      Alert.alert("Can't message", err instanceof Error ? err.message : "Please try again.");
+      setError(err instanceof Error ? err.message : "Please try again.");
     } finally {
       setBusyId(null);
     }
@@ -98,148 +171,288 @@ export default function PeerPicker({ visible, onClose, onOpened }: Props) {
 
   const handleAdd = async (peer: Peer) => {
     setBusyId(peer.id);
+    setError(null);
     try {
       await sendFriendRequest(peer.id);
-      setRequested((prev) => ({ ...prev, [peer.id]: true }));
+      setSections((prev) =>
+        prev.map((section) => ({
+          ...section,
+          data: section.data.map((p) =>
+            p.id === peer.id ? { ...p, friendship: "pending_out" as const } : p
+          ),
+        }))
+      );
     } catch (err) {
-      Alert.alert("Can't send request", err instanceof Error ? err.message : "Please try again.");
+      setError(err instanceof Error ? err.message : "Please try again.");
     } finally {
       setBusyId(null);
     }
   };
 
+  const renderItem = ({ item }: { item: Peer }) => {
+    const isBusy = busyId === item.id;
+    // Blocked pairs are excluded by the directory query; trust message_decision.
+    const isBlocked = item.message_decision === "blocked";
+    const isFriend = item.friendship === "friend";
+    const isPendingOut = item.friendship === "pending_out";
+    const isPendingIn = item.friendship === "pending_in";
+    const isNone = item.friendship === "none";
+    const isRequest = item.message_decision === "request" && !isFriend;
+    const isMessageMode = mode === "message";
+    const name = item.full_name || item.username || "Peer";
+
+    // Compute primary action (never null unless blocked with no fallback)
+    let primary: Action | null = null;
+
+    if (isFriend || (isMessageMode && item.message_decision === "direct" && !isBlocked)) {
+      primary = {
+        icon: MessageSquare,
+        text: "Message",
+        variant: "primary",
+        disabled: isBusy,
+        label: `Message ${name}`,
+        onPress: () => void openThread(item, "message"),
+      };
+    } else if (isMessageMode && isRequest) {
+      primary = {
+        icon: MessageSquare,
+        text: "Request",
+        variant: "secondary",
+        disabled: isBusy,
+        label: `Request to message ${name}`,
+        onPress: () => void openThread(item, "request"),
+      };
+    } else if (isMessageMode && isBlocked) {
+      primary = {
+        icon: Lock,
+        text: "Blocked",
+        variant: "muted",
+        disabled: true,
+        label: `Cannot message ${name}`,
+      };
+    } else if (!isMessageMode && !isBlocked) {
+      if (isPendingIn) {
+        primary = {
+          icon: Check,
+          text: "Pending",
+          variant: "muted",
+          disabled: true,
+          label: `Request pending from ${name}`,
+        };
+      } else {
+        primary = {
+          icon: UserPlus,
+          text: "Add friend",
+          variant: "primary",
+          disabled: isBusy || isPendingOut,
+          label: `Add ${name} as friend`,
+          onPress: () => void handleAdd(item),
+        };
+      }
+    }
+
+    // Secondary add-friend icon: message mode, non-friend, no block, friendship === "none" only
+    const showSecondaryAdd = isMessageMode && !isFriend && !isBlocked && isNone;
+
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: SPACE.x3,
+          paddingHorizontal: SPACE.x4,
+          paddingVertical: SPACE.x3,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.line,
+        }}
+      >
+        <Avatar name={item.full_name || item.username} size={42} showPresence mode={modeOf(item.id)} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            numberOfLines={1}
+            style={{ ...TYPE.bodyStrong, fontWeight: "700", color: colors.ink }}
+          >
+            {name}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: 2 }}
+          >
+            {item.department_name || "No department"}
+            {item.year_level ? ` · ${item.year_level}` : ""}
+          </Text>
+        </View>
+
+        {isPendingOut ? (
+          <View
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              backgroundColor: colors.jadeWash,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            accessibilityLabel={`Friend request sent to ${name}`}
+          >
+            <Check size={15} color={colors.jadeText} />
+          </View>
+        ) : null}
+
+        {primary ? (
+          <Button
+            label={primary.text}
+            size="sm"
+            variant={
+              primary.variant === "primary"
+                ? "primary"
+                : primary.variant === "secondary"
+                ? "secondary"
+                : "subtle"
+            }
+            icon={primary.icon}
+            onPress={primary.onPress}
+            disabled={primary.disabled}
+            accessibilityLabel={primary.label}
+          />
+        ) : null}
+
+        {showSecondaryAdd ? (
+          <IconButton
+            icon={UserPlus}
+            label={`Add ${name} as friend`}
+            variant="subtle"
+            size={34}
+            onPress={() => void handleAdd(item)}
+          />
+        ) : null}
+      </View>
+    );
+  };
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end" }}>
+    <Modal
+      visible={visible}
+      onClose={handleClose}
+      maxWidth={540}
+      accessibilityLabel={mode === "message" ? "New message" : "Add friend"}
+      sheetOnMobile
+    >
+      <View style={{ flexShrink: 1, maxHeight: "100%", paddingBottom: SPACE.x3 }}>
         <View
           style={{
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            maxHeight: "85%",
-            paddingBottom: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: SPACE.x3,
+            paddingHorizontal: SPACE.x4,
+            paddingTop: SPACE.x4,
+            paddingBottom: SPACE.x2,
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 16,
-              paddingTop: 16,
-              paddingBottom: 8,
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.textPrimary }}>New message</Text>
-            <TouchableOpacity onPress={handleClose} style={{ padding: 6 }}>
-              <X size={20} color={colors.textTertiary} />
-            </TouchableOpacity>
-          </View>
+          <Text style={{ ...TYPE.h2, color: colors.ink }}>
+            {mode === "message" ? "New message" : "Add friend"}
+          </Text>
+          <IconButton icon={X} label="Close" size={36} onPress={handleClose} />
+        </View>
 
+        <View style={{ paddingHorizontal: SPACE.x4, paddingBottom: SPACE.x2 }}>
           <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: colors.surfaceSunken,
-              borderRadius: 12,
-              marginHorizontal: 16,
-              marginBottom: 8,
-              paddingHorizontal: 12,
-            }}
+            style={[
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                gap: SPACE.x2,
+                backgroundColor: colors.inputBg,
+                borderRadius: RADIUS.md,
+                borderWidth: 1,
+                borderColor: searchFocused ? colors.brand : colors.inputBorder,
+                paddingHorizontal: SPACE.x3,
+              },
+              focusRing(colors, searchFocused),
+            ]}
           >
-            <Search size={16} color={colors.textTertiary} />
+            <Search size={16} color={colors.inkFaint} />
             <TextInput
               value={query}
               onChangeText={setQuery}
               placeholder="Search by name, username, or department"
-              placeholderTextColor={colors.textTertiary}
-              style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: colors.textPrimary }}
+              placeholderTextColor={colors.inkFaint}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              style={
+                {
+                  flex: 1,
+                  minHeight: 44,
+                  fontSize: 14,
+                  color: colors.ink,
+                  outlineStyle: "none",
+                } as any
+              }
+              accessibilityLabel="Search peers by name, username, or department"
             />
           </View>
-
-          {loading ? (
-            <View style={{ paddingVertical: 48, alignItems: "center" }}>
-              <ActivityIndicator size="small" color={colors.action} />
-            </View>
-          ) : (
-            <FlatList
-              data={peers}
-              keyExtractor={(item) => item.id}
-              keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={
-                <View style={{ paddingVertical: 48, alignItems: "center" }}>
-                  <Text style={{ color: colors.textTertiary, fontSize: 14 }}>No people found</Text>
-                </View>
-              }
-              renderItem={({ item }) => {
-                const isBusy = busyId === item.id;
-                const alreadyRequested = requested[item.id];
-                return (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                      borderBottomWidth: 1,
-                      borderBottomColor: colors.border,
-                    }}
-                  >
-                    <Avatar name={item.full_name || item.username} size={44} />
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}>
-                        {item.full_name || item.username || "Peer"}
-                      </Text>
-                      <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>
-                        {item.department_name || "No department"}
-                        {item.year_level ? ` · ${item.year_level}` : ""}
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      disabled={isBusy}
-                      onPress={() => handleAdd(item)}
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 17,
-                        backgroundColor: alreadyRequested ? (isDark ? "hsl(150, 30%, 15%)" : "#DCFCE7") : colors.surfaceSunken,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginRight: 8,
-                      }}
-                    >
-                      {alreadyRequested ? (
-                        <Check size={16} color="#16A34A" />
-                      ) : (
-                        <UserPlus size={16} color={colors.action} />
-                      )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      disabled={isBusy}
-                      onPress={() => handleMessage(item)}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: colors.action,
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 18,
-                        opacity: isBusy ? 0.6 : 1,
-                      }}
-                    >
-                      <MessageSquare size={14} color="#FFFFFF" />
-                      <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700", marginLeft: 6 }}>
-                        Message
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              }}
-            />
-          )}
         </View>
+
+        {error ? (
+          <View
+            style={{
+              marginHorizontal: SPACE.x4,
+              marginBottom: SPACE.x2,
+              padding: SPACE.x3,
+              borderRadius: RADIUS.md,
+              backgroundColor: colors.coralWash,
+              borderWidth: 1,
+              borderColor: colors.coral,
+            }}
+            accessibilityLiveRegion="polite"
+          >
+            <Text style={{ ...TYPE.caption, color: colors.coralText, fontWeight: "600" }}>
+              {error}
+            </Text>
+          </View>
+        ) : null}
+
+        {loading ? (
+          <View style={{ paddingVertical: SPACE.x10, alignItems: "center" }}>
+            <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.brand} />
+          </View>
+        ) : (
+          <SectionList
+            style={{ flexShrink: 1 }}
+            sections={sections}
+            keyExtractor={(item) => item.id}
+            keyboardShouldPersistTaps="handled"
+            renderSectionHeader={({ section: { title } }) => (
+              <View
+                style={{
+                  paddingHorizontal: SPACE.x4,
+                  paddingTop: SPACE.x3,
+                  paddingBottom: SPACE.x1,
+                  backgroundColor: colors.surfaceElevated,
+                }}
+              >
+                <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>{title}</Text>
+              </View>
+            )}
+            ListEmptyComponent={
+              <View style={{ paddingVertical: SPACE.x8, paddingHorizontal: SPACE.x6 }}>
+                <EmptyState
+                  icon={query ? Search : Users}
+                  tone="neutral"
+                  compact
+                  title={query ? "No people found" : "No one to show yet"}
+                  body={
+                    query
+                      ? "Try a different name, username, or department."
+                      : "People in your network will appear here."
+                  }
+                />
+              </View>
+            }
+            renderItem={renderItem}
+          />
+        )}
       </View>
     </Modal>
   );

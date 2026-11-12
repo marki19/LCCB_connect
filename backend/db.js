@@ -5,17 +5,30 @@ const { Pool } = require("pg");
 
 // Supabase's public root CA. Bundling it lets the API verify the database
 // certificate instead of accepting any TLS certificate.
-const SUPABASE_CA = fs.readFileSync(
-  path.join(__dirname, "certs", "supabase-root-2021.crt"),
-  "utf8"
-);
+const SUPABASE_CA_PATH = path.join(__dirname, "certs", "supabase-root-2021.crt");
+const SUPABASE_CA = fs.existsSync(SUPABASE_CA_PATH)
+  ? fs.readFileSync(SUPABASE_CA_PATH, "utf8")
+  : null;
+
+const isLocalhost =
+  !process.env.DATABASE_URL ||
+  process.env.DATABASE_URL.includes("localhost") ||
+  process.env.DATABASE_URL.includes("127.0.0.1") ||
+  process.env.DATABASE_SSL === "false";
+
+const parsePositiveInt = (raw, fallback) => {
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    ca: SUPABASE_CA,
-    rejectUnauthorized: true,
-  },
+  ssl: isLocalhost ? false : SUPABASE_CA ? { ca: SUPABASE_CA, rejectUnauthorized: true } : false,
+  // Bounded pool: Supabase enforces a hard connection ceiling, and an
+  // unbounded queue turns overload into request timeouts instead of fast 503s.
+  max: parsePositiveInt(process.env.PG_POOL_MAX, 20),
+  idleTimeoutMillis: parsePositiveInt(process.env.PG_IDLE_TIMEOUT_MS, 30_000),
+  connectionTimeoutMillis: parsePositiveInt(process.env.PG_CONNECT_TIMEOUT_MS, 5_000),
 });
 
 pool.on("connect", () => {

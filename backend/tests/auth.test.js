@@ -24,12 +24,13 @@ const getClaims = stub(auth.supabase.auth, "getClaims", async () => ({
 }));
 
 // Route handlers must not touch a database.
+stub(postModel, "visiblePostsFor", async () => ({ posts: [] }));
 stub(postModel, "getAllPosts", async () => []);
 stub(thesisModel, "getAllTheses", async () => []);
 stub(userModel, "getAllUsers", async () => []);
 // Every authenticated mount now loads the profile so suspended accounts are
 // blocked. Auth tests only exercise the middleware, so return a minimal row.
-const getProfile = stub(userModel, "getUserById", async (id) => ({ id, role: "student" }));
+const getProfile = stub(userModel, "getUserById", async (id) => ({ id, role: "student", profile_completed: true }));
 
 // Imported only after the stubs are installed.
 const app = require("../app");
@@ -119,14 +120,14 @@ describe("requireAuth", () => {
   });
 
   it("allows the request through with a valid token", async () => {
-    getUser.setImpl(async () => ({ data: { user: { id: "u1", email: "a@b.c" } }, error: null }));
+      getUser.setImpl(async () => ({ data: { user: { id: "u1", email: "a@b.c" } }, error: null }));
 
-    const res = await request(app).get("/api/posts").set("Authorization", "Bearer good");
+      const res = await request(app).get("/api/posts").set("Authorization", "Bearer good");
 
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, []);
-    assert.deepEqual(getUser.calls, [["good"]]);
-  });
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body, { posts: [] });
+      assert.deepEqual(getUser.calls, [["good"]]);
+    });
 
   it("protects mutating actions across all API mounts", async () => {
     const paths = [

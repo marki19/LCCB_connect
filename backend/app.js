@@ -20,12 +20,30 @@ const conversationRouter = require("./routes/conversationRouter");
 const messageRouter = require("./routes/messageRouter");
 const friendRouter = require("./routes/friendRouter");
 const socialRouter = require("./routes/socialRouter");
+const reportRouter = require("./routes/reportRouter");
+const blockRouter = require("./routes/blockRouter");
+const searchRouter = require("./routes/searchRouter");
+const notificationRouter = require("./routes/notificationRouter");
 
 // The Express app is built here and exported WITHOUT listening, so tests can
 // drive it via supertest. `index.js` owns dotenv + boot-time env validation and
 // calls `app.listen()`. Environment is read at require time, so import this
 // module only after the environment is known to be valid.
 const app = express();
+
+// --- proxy trust -------------------------------------------------------------
+// Behind a reverse proxy (nginx, Cloudflare, a load balancer) `req.ip` is the
+// proxy's address unless Express is told how many hops to trust. Left unset,
+// every user shares one rate-limit bucket. TRUST_PROXY accepts a hop count
+// ("1"), `true` (one trusted hop), or an Express trust-proxy string.
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy === "true") {
+  app.set("trust proxy", 1);
+} else if (trustProxy && /^\d+$/.test(trustProxy)) {
+  app.set("trust proxy", Number(trustProxy));
+} else if (trustProxy) {
+  app.set("trust proxy", trustProxy);
+}
 
 // --- CORS -------------------------------------------------------------------
 // Native (iOS/Android) requests send no Origin header; browsers do. Only the
@@ -83,6 +101,11 @@ const isWrite = (req) => ["POST", "PUT", "PATCH", "DELETE"].includes(req.method)
 app.disable("x-powered-by");
 app.use(helmet());
 app.use(cors(corsOptions));
+
+// Capture raw body for Brevo webhook BEFORE express.json() parses it.
+// Brevo signs the raw request body, so we need the bytes for HMAC verification.
+app.use("/api/email/webhook/brevo", express.raw({ type: "application/json" }));
+
 app.use(express.json({ limit: "1mb" })); // bound request body size
 
 // File columns are stored as bucket-relative keys; expand them to public URLs
@@ -111,6 +134,19 @@ app.use("/api", (req, res, next) => (isWrite(req) ? writeLimiter(req, res, next)
 // Public read-only endpoints (no token required)
 app.use("/api/public", publicRouter);
 
+// Authentication routes (no requireAuth! Must come before authenticated routes)
+const authRouter = require("./routes/authRouter");
+app.use("/api/auth", authRouter);
+
+// Email webhook routes (public, no auth - Brevo webhooks)
+const emailRouter = require("./routes/emailRouter");
+app.use("/api/email", emailRouter);
+
+// Verification routes (requireAuth + loadProfile + requireActiveAccount, NOT requireVerified)
+// An unverified student is exactly who calls these.
+const verificationRouter = require("./routes/verificationRouter");
+app.use("/api/verification", verificationRouter);
+
 // Every API route requires a valid Supabase access token. Identity is taken
 // from the verified token, never from the request body.
 app.use(
@@ -128,6 +164,20 @@ app.use(
   postRouter
 );
 app.use(
+  "/api/reports",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  reportRouter
+);
+app.use(
+  "/api/blocks",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  blockRouter
+);
+app.use(
   "/api/theses",
   auth.requireAuth,
   auth.loadProfile,
@@ -135,11 +185,25 @@ app.use(
   thesisRouter
 );
 app.use(
+  "/api/search",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  searchRouter
+);
+app.use(
   "/api/moderation",
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
   moderationRouter
+);
+app.use(
+  "/api/notifications",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  notificationRouter
 );
 
 // Messaging & social graph (Messaging_plan.md §11). `loadProfile` runs where the
@@ -178,22 +242,18 @@ app.use(
 
 // Superadmin console API. Keep this mount before the catalog router so its
 // specific paths win; unmatched paths fall through.
-app.use(
-  "/api/admin",
+// Admin routes require role check + session age check (24h admin / 7d user).
+// MFA is enforced at login gateway, so logged-in admins can browse uninterrupted.
+const adminMiddleware = [
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
   auth.requireRole("admin", "superadmin"),
-  adminRouter
-);
-app.use(
-  "/api/admin",
-  auth.requireAuth,
-  auth.loadProfile,
-  auth.requireActiveAccount,
-  auth.requireRole("admin", "superadmin"),
-  adminCatalogRouter
-);
+  auth.checkSessionAge,
+];
+
+app.use("/api/admin", ...adminMiddleware, adminRouter);
+app.use("/api/admin", ...adminMiddleware, adminCatalogRouter);
 
 // Test route
 app.get("/", (req, res) => {

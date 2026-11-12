@@ -1,47 +1,21 @@
 const { createClient } = require("@supabase/supabase-js");
 const userModel = require("../models/userModel");
-
-/**
- * Supported Roles in LCCB Connect
- * - superAdmin: System-wide owner (all access)
- * - admin: Institution administrator (content & user management)
- * - departmentAdmin: Academic department head/dean (theses & capstone reviews)
- * - faculty: Academic adviser/faculty reviewer
- * - student: Undergraduate/graduate student researcher
- */
-const ROLES = {
-  SUPER_ADMIN: "superadmin",
-  ADMIN: "admin",
-  DEPARTMENT_ADMIN: "departmentAdmin",
-  FACULTY: "faculty",
-  STUDENT: "student",
-};
-
-/**
- * Normalizes a role string to lowercase alphanumeric (stripping underscores/dashes)
- * so "superAdmin", "superadmin", "department_admin", "departmentAdmin" match consistently.
- */
-function normalizeRole(role) {
-  if (!role || typeof role !== "string") return "";
-  return role.toLowerCase().replace(/[-_]/g, "");
-}
-
-const ADMIN_ROLES = ["admin", "superadmin", "superAdmin"];
-const DEPARTMENT_ADMIN_ROLES = ["departmentAdmin", "department_admin", "admin", "superadmin", "superAdmin"];
-const FACULTY_ROLES = ["faculty", "departmentAdmin", "department_admin", "admin", "superadmin", "superAdmin"];
-const ALL_ROLES = ["student", "faculty", "departmentAdmin", "department_admin", "admin", "superadmin", "superAdmin"];
+const mfaService = require("../services/mfaService");
+const { normalizeRole, ROLES, ADMIN_ROLES, DEPARTMENT_ADMIN_ROLES, FACULTY_ROLES, ALL_ROLES } = require("../utils/roles");
 
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-  console.warn(
-    "[auth] SUPABASE_URL / SUPABASE_ANON_KEY are not set. " +
-      "Authenticated requests will fail. Copy backend/.env.example to backend/.env."
-  );
+  if (process.env.NODE_ENV !== "test") {
+    console.warn(
+      "[auth] SUPABASE_URL / SUPABASE_ANON_KEY are not set. " +
+        "Authenticated requests will fail. Copy backend/.env.example to backend/.env."
+    );
+  }
 }
 
 // Anon client used ONLY to verify access tokens presented by callers.
 // No session is persisted on the server.
 const supabase = createClient(
-  process.env.SUPABASE_URL,
+  process.env.SUPABASE_URL || "https://test-project.supabase.co",
   process.env.SUPABASE_ANON_KEY || "missing-anon-key",
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
@@ -283,18 +257,33 @@ function requireRole(...allowedRoles) {
   const normalizedAllowed = allowedRoles.map(normalizeRole);
   return (req, res, next) => {
     if (!req.profile) {
-      return res.status(403).json({ error: "Forbidden: profile not loaded" });
+      return res.status(403).json({ error: "Forbidden" });
     }
     const userRole = normalizeRole(req.profile.role);
     if (!normalizedAllowed.includes(userRole)) {
-      return res.status(403).json({
-        error: "Forbidden: insufficient role permission",
-        required: allowedRoles,
-        actual: req.profile.role || "student",
-      });
+      return res.status(403).json({ error: "Forbidden" });
     }
     return next();
   };
+}
+
+/**
+ * Blocks students who have not been verified from performing writes.
+ *
+ * Staff accounts (faculty, departmentAdmin, admin, superadmin) are never
+ * gated: they are provisioned by an admin and must not be trapped in
+ * onboarding (D12). The verification endpoints themselves are mounted
+ * without this middleware, and profile edits stay open because bio, avatar,
+ * and year level remain editable after approval (D11).
+ */
+function requireVerified(req, res, next) {
+  const role = normalizeRole(getRole(req));
+  if (role !== "student") return next();
+  if (req.profile?.verification_status === "verified") return next();
+  return res.status(403).json({
+    error: "Verify your identity to do that",
+    code: "not_verified",
+  });
 }
 
 // Composable role security gates
@@ -303,6 +292,15 @@ const requireAdmin = [requireAuth, loadProfile, requireRole("admin", "superadmin
 const requireDepartmentAdmin = [requireAuth, loadProfile, requireRole("departmentAdmin", "admin", "superadmin")];
 const requireFaculty = [requireAuth, loadProfile, requireRole("faculty", "departmentAdmin", "admin", "superadmin")];
 const requireStudent = [requireAuth, loadProfile, requireRole("student")];
+
+
+// MFA & Session Age middleware delegated to mfaService
+const {
+  requireAal2,
+  checkSessionAge,
+  clearSessionAgeCache,
+} = mfaService;
+
 
 module.exports = {
   requireAuth,
@@ -326,6 +324,7 @@ module.exports = {
   isFaculty,
   isStudent,
   isSuspendedProfile,
+  requireVerified,
   // Privilege ranking (account management)
   ROLE_RANK,
   rankOf,
@@ -338,4 +337,8 @@ module.exports = {
   requireFaculty,
   requireStudent,
   supabase,
+  // MFA & Session middleware
+  requireAal2,
+  checkSessionAge,
+  clearSessionAgeCache,
 };

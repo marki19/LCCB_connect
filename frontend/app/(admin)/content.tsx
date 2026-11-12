@@ -507,7 +507,7 @@ export default function AdminContentScreen() {
 
           {queueLoading ? (
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 80 }}>
-              <ActivityIndicator size="large" color={colors.primary} />
+              <ActivityIndicator accessibilityLabel="Loading" size="large" color={colors.primary} />
             </View>
           ) : queue.length === 0 ? (
             <View
@@ -872,7 +872,7 @@ export default function AdminContentScreen() {
 
             {libraryLoading ? (
               <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
-                <ActivityIndicator size="large" color={colors.primary} />
+                <ActivityIndicator accessibilityLabel="Loading" size="large" color={colors.primary} />
               </View>
             ) : items.length === 0 ? (
               <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
@@ -1001,7 +1001,7 @@ export default function AdminContentScreen() {
               }}
             >
               {loadingMore ? (
-                <ActivityIndicator size="small" color={colors.primary} />
+                <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.primary} />
               ) : (
                 <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textSecondary }}>Load more</Text>
               )}
