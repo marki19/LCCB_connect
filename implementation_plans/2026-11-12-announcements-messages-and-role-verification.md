@@ -63,17 +63,35 @@ Department admins are additionally restricted to their own department.
     exist on `theses`. Changed to `t.department_id` (the column that does exist)
     and kept the uploader-department fallback. Cost if wrong: department theses
     visible to the wrong department.
-- [ ] **2. Messages out of notifications** — remove the two `notifyUser` writes,
+- [x] **2. Messages out of notifications** — remove the two `notifyUser` writes,
   filter both types out of the read queries, prune existing rows.
-- [ ] **3. `039_announcement_posts.sql`** — enum value, post type, six columns,
-  `visible_posts()` + `visible_reposts()` rewrite.
-- [ ] **4. `/api/announcements`** — new mount, create/edit/delete/pin, audience
-  mapping, department-admin scope.
-- [ ] **5. `040_verification_roles.sql` + OTP** — kind/role columns, nullable
-  fields, per-role CHECK, `verification_otp`, OTP endpoints, queue matrix.
+  - `039_prune_message_notifications.sql` applied; only `announcement`,
+    `new_post`, `verification_*` rows remain.
+- [x] **3. `040`/`041` announcement posts** — enum value, post type, six columns,
+  `visible_posts()` + `visible_reposts()` rewrite. Applied.
+- [x] **4. `/api/announcements`** — new mount, create/edit/delete/pin, audience
+  mapping, department-admin scope. 16 HTTP tests.
+- [x] **5. `042_verification_roles.sql` + OTP** — role column, nullable catalog
+  fields, per-role CHECK, `verification_otp`, `POST /api/verification/otp`,
+  `services/verificationPolicy.js`, matrix-driven queue and decisions.
+  - Ruling: the reviewer sets are **exclusive**, exactly as stated. A superadmin
+    reviews admin *and* department-admin requests; an admin reviews
+    department-admin requests; a department admin reviews faculty and student
+    requests inside their own department. Consequence: a department with no
+    department admin cannot verify its students or faculty. That is an
+    operational gap, not a code path.
+  - Ruling: `identityComplete` now follows the role's form shape, so a verified
+    student missing a year level can resubmit to fill it in.
+  - Ruling: approving writes the catalog columns with `COALESCE`, so an admin
+    form (which carries no department/course) cannot clear values the profile
+    already had.
 - [ ] **6. Frontend** — three verification forms, composer, feed badge,
   notifications cleanup.
 
 ## Ledger
 
 - 036 applied: enum split-run, `visible_theses` course_id → department_id.
+- 040 + 041 applied. `visible_reposts` now defers to `visible_posts`.
+- 042 applied. `verification_otp` is one row per user; issuing a new code
+  replaces the old one.
+- Backend suite after task 5: 502 pass, 0 fail.

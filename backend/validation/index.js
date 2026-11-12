@@ -163,7 +163,7 @@ const updateCourseSchema = z
   })
   .strict();
 
-// ---- identity verification (migration 016) ----------------------------------
+// ---- identity verification (migrations 016, 042) -----------------------------
 // Student ID: 4-20 chars of [A-Za-z0-9-], stored uppercased. No roster exists
 // to validate against, so the admin review *is* the identity check.
 const studentIdSchema = z
@@ -174,13 +174,29 @@ const studentIdSchema = z
   .regex(/^[A-Za-z0-9-]+$/, "Student ID may only contain letters, numbers, and hyphens")
   .transform((v) => v.toUpperCase());
 
+// Staff ID format is temporary — one constant to change when the real format
+// arrives. Kept separate from the student shape so the two can diverge.
+const STAFF_ID_RE = /^[A-Z]{2,4}-\d{4,8}$/;
+const STAFF_ID_MESSAGE = "Staff ID must look like ADM-00123";
+const staffIdSchema = z
+  .string()
+  .trim()
+  .transform((v) => v.toUpperCase())
+  .refine((v) => STAFF_ID_RE.test(v), STAFF_ID_MESSAGE);
+
+/**
+ * The submitted fields are the union of every role's form; which ones are
+ * required depends on the caller's role, so that split lives in the controller
+ * (it is the layer that knows the role). `verification_otp` must have been
+ * issued to the same school account and is single-use.
+ */
 const verificationSubmitSchema = z
   .object({
     full_name: z.string().trim().min(2, "Full name must be at least 2 characters").max(200),
     student_id: studentIdSchema,
-    department_id: requiredUuid(),
-    course_id: requiredUuid(),
-    year_level: z.string().trim().min(1, "Year level is required").max(50),
+    department_id: requiredUuid().optional(),
+    course_id: requiredUuid().optional(),
+    year_level: z.string().trim().min(1).max(50).optional(),
     birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Birthdate must be YYYY-MM-DD").refine((d) => {
       const [yearStr, monthStr, dayStr] = d.split("-");
       const year = parseInt(yearStr, 10);
@@ -192,8 +208,13 @@ const verificationSubmitSchema = z
       const today = new Date();
       return date < today && date > new Date("1900-01-01");
     }, "Birthdate must be a valid calendar date in the past"),
+    otp_code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code we emailed you"),
   })
   .strict();
+
+// Sending a verification code takes no body: the address is the caller's own
+// school account, never a value from the client.
+const verificationOtpSchema = z.object({}).strict();
 
 // Used by the decline endpoint only: the note is optional but, when present,
 // must explain why so the student can fix and resubmit.
@@ -555,7 +576,9 @@ const validate = (schema) => (req, res, next) => {
   announcementAudienceSchema,
   announcementUpdateSchema,
   studentIdSchema,
+  staffIdSchema,
   verificationSubmitSchema,
+  verificationOtpSchema,
   verificationDecisionSchema,
   loginIdentifierSchema,
   verifySignupSchema,

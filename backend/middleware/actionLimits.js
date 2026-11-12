@@ -124,6 +124,17 @@ const likeLimiter = perUserLimiter({
   message: "You're reacting too quickly. Please slow down.",
 });
 
+// ---- identity verification -------------------------------------------------
+
+// Each send is an email to a real mailbox, so the budget is deliberately tight.
+// Three per quarter hour covers "I typed it wrong" and "it never arrived"; the
+// per-code attempt cap (utils/otp.js) handles guessing.
+const verificationOtpLimiter = perUserLimiter({
+  windowMs: 15 * MINUTE,
+  limit: parseLimit(process.env.RATE_LIMIT_VERIFICATION_OTP_MAX, 3),
+  message: "You've requested too many codes. Try again in 15 minutes.",
+});
+
 module.exports = {
   perUserLimiter,
   messagingSendLimiter,
@@ -138,4 +149,5 @@ module.exports = {
   thesisUploadLimiter,
   linkPreviewLimiter,
   likeLimiter,
+  verificationOtpLimiter,
 };

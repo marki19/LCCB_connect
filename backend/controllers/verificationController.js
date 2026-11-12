@@ -1,10 +1,186 @@
 const verificationModel = require("../models/verificationModel");
+const verificationOtpModel = require("../models/verificationOtpModel");
 const userModel = require("../models/userModel");
 const departmentModel = require("../models/departmentModel");
 const { validateCatalogReferences } = require("./userController");
 const notificationService = require("../services/notificationService");
+const emailService = require("../services/emailService");
 const auditService = require("../services/auditService");
-const db = require("../db");
+const policy = require("../services/verificationPolicy");
+
+const { ACTIONS } = auditService;
+
+/**
+ * Identity verification.
+ *
+ * Every role proves who they are against their school account, but the evidence
+ * differs: students supply a full academic identity, staff supply employment
+ * details, and campus admins supply only name/ID/birthdate. `verificationPolicy`
+ * owns that table; this controller only enforces it.
+ *
+ * The emailed code is the first gate and the reviewer is the second. Neither
+ * replaces the other: the code proves control of the school mailbox, the reviewer
+ * proves the ID belongs to that person.
+ */
+
+// ---- shared helpers ---------------------------------------------------------
+
+/**
+ * Builds the stored snapshot from the request body, keeping only the fields the
+ * caller's role actually proves. A faculty form that also sends a course is
+ * silently reduced to the staff shape rather than failing the database CHECK.
+ *
+ * Returns `{ snapshot }` or `{ error }`.
+ */
+function snapshotFor(role, body) {
+  const fields = policy.fieldsFor(role);
+  if (!fields) return { error: "This account does not verify" };
+
+  const snapshot = {
+    role: policy.canonicalRole(role),
+    full_name: body.full_name,
+    student_id: body.student_id,
+    birthdate: body.birthdate,
+    department_id: fields.department ? body.department_id || null : null,
+    course_id: fields.course ? body.course_id || null : null,
+    year_level: fields.yearLevel ? body.year_level || null : null,
+  };
+
+  if (fields.department && !snapshot.department_id) {
+    return { error: "Select your department" };
+  }
+  if (fields.course && !snapshot.course_id) {
+    return { error: "Select your course" };
+  }
+  if (fields.yearLevel && !snapshot.year_level) {
+    return { error: "Select your year level" };
+  }
+  return { snapshot };
+}
+
+/**
+ * Checks the caller's role and school account before anything is emailed or
+ * stored. Returns an error message, or null when the caller may verify.
+ */
+function verifiableAccountError(profile) {
+  if (!policy.fieldsFor(profile?.role)) {
+    return "Superadmin accounts are not verified";
+  }
+  if (!policy.isSchoolAccount(profile?.email)) {
+    return `Verification is only available to ${policy.SCHOOL_EMAIL_DOMAIN} accounts`;
+  }
+  return null;
+}
+
+/** True when the profile already carries the identity its role has to prove. */
+function identityComplete(profile) {
+  const fields = policy.fieldsFor(profile?.role);
+  if (!fields || !profile.full_name || !profile.student_id) return false;
+  if (fields.department && !profile.department_id) return false;
+  if (fields.course && !profile.course_id) return false;
+  if (fields.yearLevel && !profile.year_level) return false;
+  return true;
+}
+
+/**
+ * Verifies and burns the submitted code. On failure the response is already
+ * sent, so the caller just returns.
+ */
+async function requireVerifiedCode(req, res) {
+  const result = await verificationOtpModel.verifyAndConsume({
+    userId: req.user.id,
+    email: req.profile?.email,
+    code: req.body.otp_code,
+  });
+  if (result.ok) return true;
+
+  switch (result.reason) {
+    case "too_many":
+      res.status(429).json({ error: "Too many incorrect codes. Request a new one." });
+      return false;
+    case "mismatch":
+      res.status(400).json({
+        error: "That code is incorrect",
+        attempts_left: Math.max(result.attemptsLeft ?? 0, 0),
+      });
+      return false;
+    default:
+      res.status(400).json({ error: "That code has expired. Request a new one." });
+      return false;
+  }
+}
+
+/**
+ * Resolves what the caller may review. Returns `{ error, status }` when they
+ * review nothing, otherwise `{ roles, departmentId }` — `departmentId` is null
+ * for campus-wide reviewers.
+ */
+function reviewerContext(profile) {
+  const roles = policy.reviewableRolesFor(profile?.role);
+  if (!roles) {
+    return { status: 403, error: "You are not a verification reviewer" };
+  }
+  if (!policy.reviewsByDepartment(profile?.role)) {
+    return { roles, departmentId: null };
+  }
+  if (!profile?.department_id) {
+    return { status: 403, error: "Your account has no department assigned" };
+  }
+  return { roles, departmentId: profile.department_id };
+}
+
+/** Notifies everyone the matrix says may act on this request. */
+async function notifyReviewers(request) {
+  const groups = policy.reviewersForRequest(request.role);
+  const reviewers = await verificationModel.resolveReviewers({
+    campusRoles: groups.campusRoles,
+    departmentRoles: groups.departmentRoles,
+    departmentId: request.department_id,
+  });
+  if (reviewers.length === 0) return;
+
+  await notificationService.createNotifications(
+    reviewers.map((r) => r.id),
+    {
+      actorId: request.user_id,
+      type: "verification_submitted",
+      targetId: request.id,
+      departmentId: request.department_id,
+      departmentName: reviewers[0]?.department_name || null,
+      message: `${request.full_name} submitted an identity verification request.`,
+    }
+  );
+}
+
+// ---- self-service -----------------------------------------------------------
+
+/** POST /api/verification/otp — email a code to the caller's school account. */
+const sendOtp = async (req, res, next) => {
+  try {
+    const error = verifiableAccountError(req.profile);
+    if (error) return res.status(403).json({ error });
+
+    const email = req.profile.email.trim().toLowerCase();
+    const { code, expiresAt } = await verificationOtpModel.issue({
+      userId: req.user.id,
+      email,
+    });
+
+    await emailService.sendOtpEmail({
+      to: email,
+      otpCode: code,
+      fullName: req.profile.full_name,
+      expiresMinutes: verificationOtpModel.expiresInMinutes(),
+    });
+
+    res.status(202).json({
+      message: "Verification code sent to your school account",
+      expires_at: expiresAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 /** POST /api/verification — submit a new request or upsert pending. */
 const submit = async (req, res, next) => {
@@ -12,37 +188,39 @@ const submit = async (req, res, next) => {
     const userId = req.user.id;
     const profile = req.profile;
 
-    // Already verified AND identity complete? Nothing to do.
-    // Identity complete means full_name, student_id, department_id, course_id are all set.
-    const identityComplete = profile?.full_name && profile?.student_id && profile?.department_id && profile?.course_id;
-    if (profile?.verification_status === "verified" && identityComplete) {
+    const accountError = verifiableAccountError(profile);
+    if (accountError) return res.status(403).json({ error: accountError });
+
+    if (profile.verification_status === "verified" && identityComplete(profile)) {
       return res.status(409).json({ error: "Your account is already verified" });
     }
 
-    const snapshot = req.body; // already validated by verificationSubmitSchema
+    const { snapshot, error } = snapshotFor(profile.role, req.body);
+    if (error) return res.status(400).json({ error });
 
-    // Catalog validation — reuse the helper from userController.
+    if (!(await requireVerifiedCode(req, res))) return;
+
+    // Only the catalog fields this role carries; validateCatalogReferences
+    // ignores the ones that are null.
     const refError = await validateCatalogReferences({
       department_id: snapshot.department_id,
       course_id: snapshot.course_id,
     });
     if (refError) return res.status(400).json({ error: refError });
 
-    // Insert pending request. The partial unique index prevents a second pending.
     let request;
     try {
       request = await verificationModel.createPending(userId, snapshot);
     } catch (err) {
       if (err?.code === "23505") {
-        // unique_violation on uq_verification_one_pending
-        return res
-          .status(409)
-          .json({ error: "You already have a request under review" });
+        return res.status(409).json({ error: "You already have a request under review" });
       }
       throw err;
     }
 
-    // Mirror identity fields onto profile + set verification_status='pending'
+    // Mirror the identity onto the profile and mark it pending. Absent fields
+    // are left alone (updateUser COALESCEs), so a staff approval cannot wipe a
+    // catalog value the form never asked for.
     await userModel.updateUser(userId, {
       full_name: snapshot.full_name,
       student_id: snapshot.student_id,
@@ -52,27 +230,15 @@ const submit = async (req, res, next) => {
       verification_status: "pending",
     });
 
-    // Audit
     await auditService.recordRequest(req, {
-      action: auditService.ACTIONS.VERIFICATION_SUBMIT,
+      action: ACTIONS.VERIFICATION_SUBMIT,
       targetType: "verification_request",
       targetId: request.id,
       targetLabel: `${snapshot.full_name} (${snapshot.student_id})`,
+      metadata: { role: snapshot.role },
     });
 
-    // Notify department admins
-    const admins = await notificationService.getTargetAdmins(snapshot.department_id);
-    await notificationService.createNotifications(
-      admins.map((a) => a.id),
-      {
-        actorId: userId,
-        type: "verification_submitted",
-        targetId: request.id,
-        departmentId: snapshot.department_id,
-        departmentName: admins[0]?.department_name || null,
-        message: `${snapshot.full_name} submitted an identity verification request.`,
-      }
-    );
+    await notifyReviewers(request);
 
     res.status(201).json(request);
   } catch (err) {
@@ -80,20 +246,25 @@ const submit = async (req, res, next) => {
   }
 };
 
-/** PUT /api/verification/mine — update a pending request (resubmit after decline). */
+/** PUT /api/verification/mine — update a pending request (fix and resubmit). */
 const updateMine = async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const profile = req.profile;
 
-    // Must have a pending request to update.
+    const accountError = verifiableAccountError(profile);
+    if (accountError) return res.status(403).json({ error: accountError });
+
     const existing = await verificationModel.getLatestForUser(userId);
     if (!existing || existing.status !== "pending") {
       return res.status(404).json({ error: "No pending request to update" });
     }
 
-    const snapshot = req.body;
+    const { snapshot, error } = snapshotFor(profile.role, req.body);
+    if (error) return res.status(400).json({ error });
 
-    // Catalog validation.
+    if (!(await requireVerifiedCode(req, res))) return;
+
     const refError = await validateCatalogReferences({
       department_id: snapshot.department_id,
       course_id: snapshot.course_id,
@@ -105,13 +276,12 @@ const updateMine = async (req, res, next) => {
       return res.status(404).json({ error: "No pending request to update" });
     }
 
-    // Audit (resubmission)
     await auditService.recordRequest(req, {
-      action: auditService.ACTIONS.VERIFICATION_SUBMIT,
+      action: ACTIONS.VERIFICATION_SUBMIT,
       targetType: "verification_request",
       targetId: request.id,
       targetLabel: `${snapshot.full_name} (${snapshot.student_id})`,
-      metadata: { resubmission: true },
+      metadata: { role: snapshot.role, resubmission: true },
     });
 
     res.json(request);
@@ -120,41 +290,42 @@ const updateMine = async (req, res, next) => {
   }
 };
 
-/** GET /api/verification/mine — caller's latest request + can_resubmit flag. */
+/** GET /api/verification/mine — caller's latest request, plus the form shape. */
 const getMine = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const request = await verificationModel.getLatestForUser(userId);
+    const request = await verificationModel.getLatestForUser(req.user.id);
+    const fields = policy.fieldsFor(req.profile?.role);
 
-    const can_resubmit = !request || request.status === "declined";
-    res.json({ request, can_resubmit });
+    res.json({
+      request,
+      can_resubmit: !request || request.status === "declined",
+      // The authoritative form shape for the caller's role, so the client does
+      // not have to keep its own copy of which fields each role proves.
+      fields,
+      school_account: policy.isSchoolAccount(req.profile?.email),
+    });
   } catch (err) {
     next(err);
   }
 };
 
-/** GET /api/verification/queue — department-admin scoped list. */
+// ---- review -----------------------------------------------------------------
+
+/** GET /api/verification/queue — the requests this reviewer may act on. */
 const queue = async (req, res, next) => {
   try {
-    const role = req.profile?.role || "";
-    const norm = role.toLowerCase().replace(/[-_]/g, "");
-
-    let departmentId = req.query.department_id || null;
-    if (norm === "departmentadmin") {
-      departmentId = req.profile?.department_id || null;
-      if (!departmentId) {
-        return res
-          .status(403)
-          .json({ error: "Your account has no department assigned" });
-      }
+    const context = reviewerContext(req.profile);
+    if (context.error) {
+      return res.status(context.status).json({ error: context.error });
     }
 
-    const status = req.query.status || null; // pending|approved|declined
-    const limit = Math.min(Math.max(parseInt(req.query.limit || "50", 10), 1), 100);
+    const status = req.query.status || null; // pending | approved | declined
+    const limit = Math.min(Math.max(parseInt(req.query.limit || "50", 10) || 50, 1), 100);
     const cursor = req.query.cursor || null;
 
     const rows = await verificationModel.listQueue({
-      departmentId,
+      roles: context.roles,
+      departmentId: context.departmentId,
       status,
       limit,
       cursor,
@@ -166,227 +337,134 @@ const queue = async (req, res, next) => {
   }
 };
 
-/** POST /api/verification/:id/approve — approve a request (admin scoped). */
+/**
+ * Shared front half of approve/decline: load the request and confirm the caller
+ * may act on it. Returns the request, or sends the error and returns null.
+ */
+async function authorizeReview(req, res) {
+  const request = await verificationModel.getById(req.params.id);
+  if (!request) {
+    res.status(404).json({ error: "Request not found" });
+    return null;
+  }
+  if (request.status !== "pending") {
+    res.status(409).json({ error: "Request is no longer pending" });
+    return null;
+  }
+
+  const allowed = policy.canReview({
+    reviewerRole: req.profile?.role,
+    reviewerDepartmentId: req.profile?.department_id,
+    requestRole: request.role,
+    requestDepartmentId: request.department_id,
+  });
+  if (!allowed) {
+    res.status(403).json({ error: "Forbidden: this request is outside your scope" });
+    return null;
+  }
+
+  // The catalog may have changed since submission. Re-check only the fields the
+  // request actually carries — a staff form has no course to validate.
+  if (request.department_id) {
+    const dept = await departmentModel.getActiveDepartmentById(request.department_id);
+    if (!dept) {
+      res.status(409).json({
+        error: "That department is no longer available. Ask them to resubmit.",
+      });
+      return null;
+    }
+  }
+  if (request.course_id) {
+    const course = await departmentModel.getActiveCourseById(request.course_id);
+    if (!course || course.department_id !== request.department_id) {
+      res.status(409).json({
+        error: "That course is no longer available. Ask them to resubmit.",
+      });
+      return null;
+    }
+  }
+
+  return request;
+}
+
+/** POST /api/verification/:id/approve */
 const approve = async (req, res, next) => {
   try {
-    const role = req.profile?.role || "";
-    const norm = role.toLowerCase().replace(/[-_]/g, "");
-    const requestId = req.params.id;
+    const request = await authorizeReview(req, res);
+    if (!request) return;
 
-    const result = await db.withTransaction(async (client) => {
-      // 1. Lock + load
-      const locked = await client.query(
-        `SELECT * FROM public.profile_verification_requests WHERE id = $1 FOR UPDATE;`,
-        [requestId]
-      );
-      const request = locked.rows[0];
-      if (!request) {
-        const err = new Error("Request not found");
-        err.status = 404;
-        throw err;
+    let updated;
+    try {
+      updated = await verificationModel.approve(request.id, req.user.id);
+    } catch (err) {
+      // The student_id uniqueness guard: one verified owner per ID.
+      if (err?.code === "23505") {
+        return res
+          .status(409)
+          .json({ error: "That ID is already verified to another account" });
       }
-      if (request.status !== "pending") {
-        const err = new Error("Request is no longer pending");
-        err.status = 409;
-        throw err;
-      }
+      throw err;
+    }
 
-      // 2. Scope check
-      if (norm === "departmentadmin") {
-        if (!req.profile?.department_id) {
-          const err = new Error("Your account has no department assigned");
-          err.status = 403;
-          throw err;
-        }
-        if (request.department_id !== req.profile.department_id) {
-          const err = new Error("Forbidden: request is outside your department");
-          err.status = 403;
-          throw err;
-        }
-      }
-
-      // 3. Re-validate catalog: department + course must still be active and match
-      const dept = await departmentModel.getActiveDepartmentById(request.department_id);
-      if (!dept) {
-        const err = new Error("That department or course is no longer available. Ask the student to resubmit.");
-        err.status = 409;
-        throw err;
-      }
-      const course = await departmentModel.getActiveCourseById(request.course_id);
-      if (!course || course.department_id !== request.department_id) {
-        const err = new Error("That department or course is no longer available. Ask the student to resubmit.");
-        err.status = 409;
-        throw err;
-      }
-
-      // 4. Write identity fields onto profile + set verification_status='verified'
-      await client.query(
-        `UPDATE public.profiles
-            SET full_name = $2,
-                student_id = $3,
-                department_id = $4,
-                course_id = $5,
-                course = (SELECT name FROM public.courses WHERE id = $5),
-                year_level = $6,
-                verification_status = 'verified',
-                verified_at = NOW()
-          WHERE id = $1;`,
-        [
-          request.user_id,
-          request.full_name,
-          request.student_id,
-          request.department_id,
-          request.course_id,
-          request.year_level,
-        ]
-      );
-
-      // 5. Mark request approved
-      const updated = await client.query(
-        `UPDATE public.profile_verification_requests
-            SET status = 'approved',
-                reviewed_by = $2,
-                reviewed_at = NOW()
-          WHERE id = $1
-          RETURNING *;`,
-        [requestId, req.user.id]
-      );
-
-      return { request: updated.rows[0], userId: request.user_id };
-    });
-
-    // 6. Audit
     await auditService.recordRequest(req, {
-      action: auditService.ACTIONS.VERIFICATION_APPROVE,
+      action: ACTIONS.VERIFICATION_APPROVE,
       targetType: "verification_request",
-      targetId: result.request.id,
-      targetLabel: `${result.request.full_name} (${result.request.student_id})`,
+      targetId: updated.id,
+      targetLabel: `${updated.full_name} (${updated.student_id})`,
+      metadata: { role: updated.role },
     });
 
-    // 7. Notify the student
-    await notificationService.notifyUser(
-      { userId: result.userId, type: "verification_approved", message: "Your account is verified." },
-      db
-    );
+    await notificationService.notifyUser({
+      userId: updated.user_id,
+      type: "verification_approved",
+      message: "Your account is verified.",
+    });
 
-    res.json(result.request);
+    res.json(updated);
   } catch (err) {
     next(err);
   }
 };
 
-/** POST /api/verification/:id/decline — decline a request (admin scoped). */
+/** POST /api/verification/:id/decline */
 const decline = async (req, res, next) => {
   try {
-    const role = req.profile?.role || "";
-    const norm = role.toLowerCase().replace(/[-_]/g, "");
-    const requestId = req.params.id;
+    const request = await authorizeReview(req, res);
+    if (!request) return;
+
     const note = req.body.note; // validated by verificationDecisionSchema
+    const updated = await verificationModel.decline(request.id, req.user.id, note);
 
-    const result = await db.withTransaction(async (client) => {
-      const locked = await client.query(
-        `SELECT * FROM public.profile_verification_requests WHERE id = $1 FOR UPDATE;`,
-        [requestId]
-      );
-      const request = locked.rows[0];
-      if (!request) {
-        const err = new Error("Request not found");
-        err.status = 404;
-        throw err;
-      }
-      if (request.status !== "pending") {
-        const err = new Error("Request is no longer pending");
-        err.status = 409;
-        throw err;
-      }
-
-      // Scope check
-      if (norm === "departmentadmin") {
-        if (!req.profile?.department_id) {
-          const err = new Error("Your account has no department assigned");
-          err.status = 403;
-          throw err;
-        }
-        if (request.department_id !== req.profile.department_id) {
-          const err = new Error("Forbidden: request is outside your department");
-          err.status = 403;
-          throw err;
-        }
-      }
-
-      // Re-validate catalog (same as approve)
-      const dept = await departmentModel.getActiveDepartmentById(request.department_id);
-      if (!dept) {
-        const err = new Error("That department or course is no longer available. Ask the student to resubmit.");
-        err.status = 409;
-        throw err;
-      }
-      const course = await departmentModel.getActiveCourseById(request.course_id);
-      if (!course || course.department_id !== request.department_id) {
-        const err = new Error("That department or course is no longer available. Ask the student to resubmit.");
-        err.status = 409;
-        throw err;
-      }
-
-      // Mark declined
-      const updated = await client.query(
-        `UPDATE public.profile_verification_requests
-            SET status = 'declined',
-                reviewed_by = $2,
-                reviewed_at = NOW(),
-                review_note = $3
-          WHERE id = $1
-          RETURNING *;`,
-        [requestId, req.user.id, note]
-      );
-
-      // Reset profile to unverified so student can resubmit
-      await client.query(
-        `UPDATE public.profiles
-            SET verification_status = 'unverified'
-          WHERE id = $1;`,
-        [request.user_id]
-      );
-
-      return { request: updated.rows[0], userId: request.user_id };
-    });
-
-    // Audit
     await auditService.recordRequest(req, {
-      action: auditService.ACTIONS.VERIFICATION_DECLINE,
+      action: ACTIONS.VERIFICATION_DECLINE,
       targetType: "verification_request",
-      targetId: result.request.id,
-      targetLabel: `${result.request.full_name} (${result.request.student_id})`,
+      targetId: updated.id,
+      targetLabel: `${updated.full_name} (${updated.student_id})`,
       reason: note,
+      metadata: { role: updated.role },
     });
 
-    // Notify the student with the reason
-    await notificationService.notifyUser(
-      {
-        userId: result.userId,
-        type: "verification_declined",
-        message: `Your verification was declined: ${note}`,
-      },
-      db
-    );
+    await notificationService.notifyUser({
+      userId: updated.user_id,
+      type: "verification_declined",
+      message: `Your verification was declined: ${note}`,
+    });
 
-    res.status(200).json(result.request);
+    res.json(updated);
   } catch (err) {
-    // Unique student_id conflict (23505) from approval path
-    if (err?.code === "23505") {
-      return res
-        .status(409)
-        .json({ error: "That student ID is already verified to another account" });
-    }
     next(err);
   }
 };
 
 module.exports = {
+  sendOtp,
   submit,
   updateMine,
   getMine,
   queue,
   approve,
   decline,
+  // exported for unit tests
+  snapshotFor,
+  identityComplete,
 };
