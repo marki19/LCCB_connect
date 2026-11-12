@@ -1,6 +1,12 @@
 import { apiJson } from "./api";
 import type { CanonicalRole } from "./roles";
 
+/** Content types used in moderation. */
+export type ContentType = "post" | "thesis" | "comment";
+
+/** Moderation actions available for content. */
+export type ModerationAction = "approve" | "hide" | "delete" | "restore";
+
 export type AdminUser = {
   id: string;
   username: string | null;
@@ -24,6 +30,14 @@ export type AdminUser = {
   status: "active" | "suspended";
 };
 
+export type AttentionItem = {
+  kind: string;
+  id: string;
+  label: string;
+  author: string | null;
+  created_at: string;
+};
+
 export type AdminOverview = {
   users: {
     total: number;
@@ -40,74 +54,60 @@ export type AdminOverview = {
     posts: number;
     theses: number;
     comments: number;
+    reposts: number;
     hidden: number;
     flagged: number;
+    reports: {
+      message_reports: number;
+      flagged_posts: number;
+      flagged_comments: number;
+      flagged_theses: number;
+    };
   };
+  messaging: {
+    conversations: number;
+    messages_7d: number;
+  };
+  verification: {
+    pending: number;
+    approved_30d: number;
+    declined_30d: number;
+  };
+  announcements: {
+    sent_30d: number;
+    recipients_30d: number;
+  };
+  generated_at: string;
+  needs_attention: AttentionItem[];
   reports: {
     message_reports: number;
     flagged_posts: number;
     flagged_comments: number;
     flagged_theses: number;
   };
-  announcements: { sent_30d: number; recipients_30d: number };
-  needs_attention: {
-    kind: string;
-    id: string;
-    label: string;
-    author: string | null;
-    created_at: string;
-  }[];
   recent_actions?: AuditEntry[];
-  generated_at: string;
 };
 
-export type AdminContentItem = {
-  type: "post" | "comment" | "thesis";
-  id: string;
-  title: string;
-  excerpt: string;
-  author: {
-    id: string | null;
-    username: string | null;
-    full_name: string | null;
-  };
-  department_id: string | null;
-  department_name: string | null;
-  status: string;
-  moderation_reason: string | null;
-  created_at: string;
-  app_path: string | null;
-  parent_id: string | null;
-};
-
-export type ContentType = AdminContentItem["type"];
-export type ModerationAction = "restore" | "hide" | "delete";
-
-export type AuditEntry = {
-  id: string;
-  actor_id: string;
-  actor_username: string | null;
-  actor_role: string | null;
-  action: string;
-  target_type: string;
-  target_id: string | null;
-  target_label: string | null;
-  reason: string | null;
-  metadata: Record<string, any> | null;
-  created_at: string;
-};
+/** Who the announcement reaches. Mirrors the server's discriminated union. */
+export type AnnouncementAudience =
+  | { type: "all" }
+  | { type: "role"; role: CanonicalRole }
+  | { type: "department"; department_id: string }
+  | { type: "course"; course_id: string }
+  | { type: "year_level"; year_level: string };
 
 export type Announcement = {
   id: string;
   title: string;
   body: string;
-  audience:
-    | { type: "all" }
-    | { type: "role"; role: CanonicalRole }
-    | { type: "department"; department_id: string };
+  audience: AnnouncementAudience;
+  pinned: boolean;
+  expires_at: string | null;
   recipients: number;
   actor_username: string | null;
   created_at: string;
+  author_name?: string | null;
+  author_department_name?: string | null;
 };
 
 export type AdminDossier = AdminUser & {
@@ -130,15 +130,41 @@ export type AdminDossier = AdminUser & {
   sanctions: AuditEntry[];
 };
 
+export type AdminContentItem = {
+  id: string;
+  type: "post" | "thesis" | "comment";
+  title: string;
+  excerpt?: string;
+  status: string;
+  author_id: string;
+  author_name: string | null;
+  author_username: string | null;
+  author?: string | null;
+  department_name: string | null;
+  created_at: string;
+};
+
+export type AuditEntry = {
+  id: string;
+  actor_id: string;
+  actor_name: string | null;
+  actor_username: string | null;
+  actor_role: string | null;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  target_label: string | null;
+  reason: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string;
+};
+
 type Paged<T> = { items: T[]; total: number; next_cursor: string | null };
 
 function queryString(params: Record<string, string | number | null | undefined>) {
   const pairs = Object.entries(params)
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
-    .map(
-      ([key, value]) =>
-        `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`
-    );
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
   return pairs.length ? `?${pairs.join("&")}` : "";
 }
 
@@ -169,11 +195,7 @@ export function getAdminUser(id: string): Promise<AdminDossier> {
   return apiJson<AdminDossier>(`/admin/users/${encodeURIComponent(id)}`);
 }
 
-export function changeUserRole(
-  id: string,
-  role: CanonicalRole,
-  reason: string
-): Promise<void> {
+export function changeUserRole(id: string, role: CanonicalRole, reason: string): Promise<void> {
   return apiJson(`/admin/users/${encodeURIComponent(id)}/role`, {
     method: "PATCH",
     body: JSON.stringify({ role, reason: validateNonEmptyReason(reason, "changeUserRole") }),
@@ -193,10 +215,7 @@ export function suspendUser(
   }
   return apiJson(`/admin/users/${encodeURIComponent(id)}/suspend`, {
     method: "POST",
-    body: JSON.stringify({
-      reason: validateNonEmptyReason(reason, "suspendUser"),
-      until: until || null,
-    }),
+    body: JSON.stringify({ reason: validateNonEmptyReason(reason, "suspendUser"), until: until || null }),
   });
 }
 
@@ -230,7 +249,7 @@ export function listAdminContent(params: {
 }
 
 export function moderateContent(
-  type: ContentType,
+  type: "post" | "thesis" | "comment",
   id: string,
   action: ModerationAction,
   reason: string
@@ -267,29 +286,18 @@ export function listAdminAudit(params: {
   return apiJson<Paged<AuditEntry>>(`/admin/audit${queryString(params)}`);
 }
 
-export function getAudienceCount(audience: {
-  type: "all" | "role" | "department";
-  role?: string;
-  department_id?: string;
-}): Promise<{ count: number }> {
-  return apiJson<{ count: number }>(
-    `/admin/announcements/audience-count${queryString({
-      type: audience.type,
-      role: audience.role,
-      department_id: audience.department_id,
-    })}`
-  );
+export function getAudienceCount(audience: AnnouncementAudience): Promise<{ count: number }> {
+  return apiJson<{ count: number }>(`/api/announcements/audience-count${queryString(audience as any)}`);
 }
 
 export function sendAnnouncement(input: {
   title: string;
   body: string;
-  audience:
-    | { type: "all" }
-    | { type: "role"; role: CanonicalRole }
-    | { type: "department"; department_id: string };
+  audience: AnnouncementAudience;
+  pinned?: boolean;
+  expires_at?: string | null;
 }): Promise<{ id: string; recipients: number }> {
-  return apiJson<{ id: string; recipients: number }>("/admin/announcements", {
+  return apiJson<{ id: string; recipients: number }>("/api/announcements", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -299,7 +307,26 @@ export function listAnnouncements(params: {
   limit?: number;
   cursor?: string | null;
 }): Promise<Paged<Announcement>> {
-  return apiJson<Paged<Announcement>>(
-    `/admin/announcements${queryString(params)}`
-  );
+  return apiJson<Paged<Announcement>>(`/api/announcements${queryString(params)}`);
+}
+
+export function updateAnnouncement(
+  id: string,
+  input: {
+    title?: string;
+    body?: string;
+    pinned?: boolean;
+    expires_at?: string | null;
+  }
+): Promise<Announcement | null> {
+  return apiJson<Announcement | null>(`/api/announcements/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteAnnouncement(id: string): Promise<void> {
+  return apiJson(`/api/announcements/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }

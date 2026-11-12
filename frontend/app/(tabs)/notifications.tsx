@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   ShieldCheck,
   Bell,
+  Megaphone,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/contexts/ThemeContext";
@@ -142,6 +143,8 @@ export default function NotificationsScreen() {
       router.push(`/post/${item.entity_id}` as any);
     } else if (item.type === "flagged_post" || item.type === "flagged_comment") {
       router.push("/(admin)/content" as any);
+    } else if (item.type === "announcement" && item.entity_type === "post" && item.entity_id) {
+      router.push(`/post/${item.entity_id}` as any);
     }
   };
 
@@ -176,6 +179,8 @@ export default function NotificationsScreen() {
         return { Icon: ShieldCheck, tone: "warning" };
       case "new_thesis":
         return { Icon: BookOpen, tone: "accent" };
+      case "announcement":
+        return { Icon: Megaphone, tone: "brand" };
       case "new_post":
       default:
         return { Icon: FileText, tone: "brand" };

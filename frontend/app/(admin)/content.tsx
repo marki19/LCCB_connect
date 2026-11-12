@@ -294,6 +294,7 @@ export default function AdminContentScreen() {
     action: ModerationAction
   ) => {
     const verbs: Record<ModerationAction, string> = {
+      approve: "Approve",
       restore: "Restore",
       hide: "Hide",
       delete: "Delete",
@@ -354,7 +355,7 @@ export default function AdminContentScreen() {
           input.reason
         );
         setNotice(
-          `${pending.type[0].toUpperCase()}${pending.type.slice(1)} ${pending.action === "restore" ? "restored" : pending.action === "hide" ? "hidden" : "deleted"
+          `${pending.type[0].toUpperCase()}${pending.type.slice(1)} ${pending.action === "restore" ? "restored" : pending.action === "hide" ? "hidden" : pending.action === "approve" ? "approved" : "deleted"
           }.`
         );
       }
@@ -913,7 +914,7 @@ export default function AdminContentScreen() {
                       </Text>
                     </View>
                     <Text style={{ flex: 1, paddingRight: 8, fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
-                      {item.author.full_name || item.author.username || "Unknown"}
+                      {item.author_name || item.author_username || item.author || "Unknown"}
                     </Text>
                     <Text style={{ flex: 1, paddingRight: 8, fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
                       {item.department_name || "—"}
@@ -941,7 +942,7 @@ export default function AdminContentScreen() {
                         onPress={() =>
                           openContentAction(
                             { id: item.id, type: item.type, title: item.title },
-                            item.status === "approved" ? "hide" : "restore"
+                            (item.status === "approved" ? "hide" : "restore") as ModerationAction
                           )
                         }
                         style={{

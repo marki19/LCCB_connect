@@ -1,41 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { ScrollView, View, Text, SafeAreaView, Platform } from "react-native";
 import { useRouter } from "expo-router";
-import {
-  CheckCircle2,
-  Clock3,
-  ShieldCheck,
-  User,
-  IdCard,
-  Building2,
-  GraduationCap,
-  Calendar,
-  AlertTriangle,
-} from "lucide-react-native";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
-import { fetchDepartments, fetchCourses } from "../src/lib/catalog";
-import SelectField, { SelectOption } from "../src/components/SelectField";
 import { apiJson, ApiError } from "../src/lib/api";
 import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
 import Button from "../src/components/ui/Button";
 import Card from "../src/components/ui/Card";
 import Modal from "../src/components/ui/Modal";
 import Reveal from "../src/components/ui/Reveal";
-import TextField from "../src/components/ui/TextField";
+import VerificationForm, { DEFAULT_ACADEMIC_LEVELS } from "../src/components/verification/VerificationForm";
+import { fetchDepartments, fetchCourses } from "../src/lib/catalog";
 
 type VerificationStatus = "unverified" | "pending" | "approved" | "declined";
 
 interface VerificationRequest {
-  status: VerificationStatus;
+  id: string;
+  user_id: string;
+  role: string;
   full_name?: string;
   student_id?: string;
   department_id?: string;
@@ -44,328 +26,144 @@ interface VerificationRequest {
   course_name?: string;
   year_level?: string;
   birthdate?: string;
-  note?: string;
+  status: VerificationStatus;
+  note?: string | null;
   submitted_at?: string;
-  decided_at?: string;
-  decided_by_name?: string;
+  reviewed_at?: string;
+  reviewed_by_name?: string;
 }
 
 interface MineResponse {
   request: VerificationRequest | null;
   can_resubmit: boolean;
+  fields: { department: boolean; course: boolean; yearLevel: boolean } | null;
+  school_account: boolean;
 }
 
 type Notice = { title: string; message: string };
-
-const DEFAULT_ACADEMIC_LEVELS: SelectOption[] = [
-  { value: "1st Year", label: "1st Year" },
-  { value: "2nd Year", label: "2nd Year" },
-  { value: "3rd Year", label: "3rd Year" },
-  { value: "4th Year", label: "4th Year" },
-  { value: "5th Year", label: "5th Year" },
-  { value: "IBED", label: "IBED" },
-  { value: "Integrated Studies", label: "Integrated Studies" },
-];
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const { refreshProfile, profile } = useAuth();
   const { colors } = useTheme();
 
-  const [verification, setVerification] = useState<VerificationRequest | null>(null);
-  const [loadingVerification, setLoadingVerification] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [departments, setDepartments] = useState<SelectOption[]>([]);
-  const [courses, setCourses] = useState<SelectOption[]>([]);
-  const [academicLevels, setAcademicLevels] = useState<SelectOption[]>(DEFAULT_ACADEMIC_LEVELS);
-  const [loadingDepartments, setLoadingDepartments] = useState(false);
-  const [loadingCourses, setLoadingCourses] = useState(false);
-  const [loadingAcademicLevels, setLoadingAcademicLevels] = useState(false);
-
-  const [form, setForm] = useState({
-    full_name: "",
-    student_id: "",
-    department_id: "",
-    course_id: "",
-    year_level: "",
-    birthdate: "",
-  });
-
-  const [errors, setErrors] = useState<Partial<typeof form>>({});
-  const [touched, setTouched] = useState<Partial<Record<keyof typeof form, boolean>>>({});
+  const [mine, setMine] = useState<MineResponse | null>(null);
+  const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
 
-  const isPending = verification?.status === "pending";
-  const isDeclined = verification?.status === "declined";
-  const isApproved = verification?.status === "approved";
-  const hasProfileName = !!profile?.full_name;
-  const canEditName = !hasProfileName;
-  const canEdit = isDeclined || !verification || verification.status === "unverified";
-
-  const loadVerification = useCallback(async () => {
+  const loadMine = useCallback(async () => {
     try {
-      setLoadingVerification(true);
       const data = await apiJson<MineResponse>("/verification/mine");
-      const request = data.request;
-      setVerification(request);
-      // Prefill form from latest request (declined or pending)
-      if (request) {
-        setForm((f) => ({
-          ...f,
-          full_name: request.full_name ?? f.full_name,
-          student_id: request.student_id ?? f.student_id,
-          department_id: request.department_id ?? f.department_id,
-          course_id: request.course_id ?? f.course_id,
-          year_level: request.year_level ?? f.year_level,
-          birthdate: request.birthdate ?? f.birthdate,
-        }));
-      } else if (profile) {
-        // Prefill from profile if no request exists
-        setForm((f) => ({
-          ...f,
-          full_name: profile.full_name ?? f.full_name,
-          student_id: profile.student_id ?? f.student_id,
-          department_id: profile.department_id ?? f.department_id,
-          course_id: profile.course_id ?? f.course_id,
-          year_level: profile.year_level ?? f.year_level,
-        }));
-      }
+      setMine(data);
     } catch (error: any) {
-      if (error instanceof ApiError && error.status === 404) {
-        setVerification({ status: "unverified" });
-        if (profile) {
-          setForm((f) => ({
-            ...f,
-            full_name: profile.full_name ?? f.full_name,
-            student_id: profile.student_id ?? f.student_id,
-            department_id: profile.department_id ?? f.department_id,
-            course_id: profile.course_id ?? f.course_id,
-            year_level: profile.year_level ?? f.year_level,
-          }));
-        }
+      if (error instanceof ApiError && error.status === 403) {
+        // Non-school account or superadmin — the form will handle it
+        setMine({
+          request: null,
+          can_resubmit: true,
+          fields: null,
+          school_account: false,
+        });
+      } else if (error instanceof ApiError && error.status === 404) {
+        setMine({
+          request: null,
+          can_resubmit: true,
+          fields: null,
+          school_account: profile?.email?.endsWith("@lccbonline.edu.ph") ?? false,
+        });
       } else {
         console.error("Failed to load verification:", error);
         setNotice({
           title: "Could not load your status",
-          message: "We couldn't check your verification status. Pull the screen up again in a moment.",
+          message: "We couldn't check your verification status. Pull to refresh.",
         });
       }
     } finally {
-      setLoadingVerification(false);
+      setLoading(false);
     }
-  }, [profile]);
-
-  const loadDepartments = useCallback(async () => {
-    try {
-      setLoadingDepartments(true);
-      const data = await fetchDepartments();
-      setDepartments(data.map((d) => ({ label: d.name, value: d.id })));
-    } catch (error) {
-      console.error("Failed to load departments:", error);
-    } finally {
-      setLoadingDepartments(false);
-    }
-  }, []);
-
-  const loadCourses = useCallback(async (departmentId: string) => {
-    try {
-      setLoadingCourses(true);
-      const data = await fetchCourses(departmentId);
-      setCourses(data.map((c) => ({ label: c.name, value: c.id })));
-    } catch (error) {
-      console.error("Failed to load courses:", error);
-    } finally {
-      setLoadingCourses(false);
-    }
-  }, []);
-
-  const loadAcademicLevels = useCallback(async () => {
-    try {
-      setLoadingAcademicLevels(true);
-      const data = await apiJson<{ id: string; name: string }[]>("/public/academic-levels");
-      if (Array.isArray(data) && data.length > 0) {
-        setAcademicLevels(data.map((lvl) => ({ value: lvl.name, label: lvl.name })));
-      }
-    } catch {
-      // Keep defaults
-    } finally {
-      setLoadingAcademicLevels(false);
-    }
-  }, []);
-
-  const initializedRef = useRef(false);
-  const loadInitialData = useCallback(async () => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-    await Promise.all([loadVerification(), loadDepartments(), loadAcademicLevels()]);
-  }, [loadVerification, loadDepartments, loadAcademicLevels]);
+  }, [profile?.email]);
 
   useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
+    loadMine();
+  }, [loadMine]);
 
-  const loadCoursesForDepartment = useCallback(
-    async (departmentId: string) => {
-      if (departmentId) {
-        await loadCourses(departmentId);
-      } else {
-        setCourses([]);
-        setForm((f) => ({ ...f, course_id: "" }));
+  const role = profile?.role ?? "student";
+  const isSuperadmin = role === "superadmin";
+  const fullNameLocked = !!profile?.full_name;
+
+  // Build initial values from latest request or profile
+  const initialValues = mine?.request
+    ? {
+        full_name: mine.request.full_name ?? "",
+        student_id: mine.request.student_id ?? "",
+        department_id: mine.request.department_id ?? "",
+        course_id: mine.request.course_id ?? "",
+        year_level: mine.request.year_level ?? "",
+        birthdate: mine.request.birthdate ?? "",
       }
-    },
-    [loadCourses]
-  );
-
-  const lastDepartmentIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (form.department_id !== lastDepartmentIdRef.current) {
-      lastDepartmentIdRef.current = form.department_id;
-      loadCoursesForDepartment(form.department_id);
-    }
-  }, [form.department_id, loadCoursesForDepartment]);
-
-  const validateField = (name: keyof typeof form, value: string): string | null => {
-    const trimmed = value.trim();
-    switch (name) {
-      case "full_name":
-        if (!trimmed) return "Full name is required";
-        if (trimmed.length < 2) return "Full name must be at least 2 characters";
-        if (trimmed.length > 200) return "Full name is too long";
-        break;
-      case "student_id":
-        if (!trimmed) return "Student ID is required";
-        if (trimmed.length < 4) return "Student ID must be at least 4 characters";
-        if (trimmed.length > 20) return "Student ID must be at most 20 characters";
-        if (!/^[A-Za-z0-9-]+$/.test(trimmed))
-          return "Student ID may only contain letters, numbers, and hyphens";
-        break;
-      case "department_id":
-        if (!trimmed) return "Department is required";
-        break;
-      case "course_id":
-        if (!trimmed) return "Course is required";
-        break;
-      case "year_level":
-        if (!trimmed) return "Year level is required";
-        break;
-      case "birthdate": {
-        if (!trimmed) return "Birthdate is required";
-        const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!match) return "Birthdate must be YYYY-MM-DD";
-        const year = parseInt(match[1], 10);
-        const month = parseInt(match[2], 10);
-        const day = parseInt(match[3], 10);
-        if (month < 1 || month > 12) return "Invalid month in birthdate (must be 01-12)";
-        if (day < 1 || day > 31) return "Invalid day in birthdate (must be 01-31)";
-        const currentYear = new Date().getFullYear();
-        if (year < 1900 || year > currentYear - 5) return `Year must be between 1900 and ${currentYear - 5}`;
-        const testDate = new Date(year, month - 1, day);
-        if (
-          testDate.getFullYear() !== year ||
-          testDate.getMonth() !== month - 1 ||
-          testDate.getDate() !== day
-        ) {
-          return "Invalid calendar date (e.g. Feb 30 does not exist)";
-        }
-        break;
-      }
-    }
-    return null;
-  };
-
-  const handleChange = (name: keyof typeof form, value: string) => {
-    setForm((f) => ({ ...f, [name]: value }));
-    const error = validateField(name, value);
-    setErrors((e) => ({ ...e, [name]: error }));
-  };
-
-  const handleBlur = (name: keyof typeof form) => {
-    setTouched((t) => ({ ...t, [name]: true }));
-    const error = validateField(name, form[name]);
-    setErrors((e) => ({ ...e, [name]: error }));
-  };
-
-  const validateAll = () => {
-    const newErrors: Partial<typeof form> = {};
-    let valid = true;
-    (Object.keys(form) as (keyof typeof form)[]).forEach((key) => {
-      const error = validateField(key, form[key]);
-      if (error) {
-        newErrors[key] = error;
-        valid = false;
-      }
-    });
-    setErrors(newErrors);
-    setTouched({
-      full_name: true,
-      student_id: true,
-      department_id: true,
-      course_id: true,
-      year_level: true,
-      birthdate: true,
-    });
-    return valid;
-  };
-
-  const handleSubmit = async () => {
-    if (!validateAll()) return;
-
-    setSubmitting(true);
-    try {
-      const payload = {
-        full_name: form.full_name.trim(),
-        student_id: form.student_id.trim().toUpperCase(),
-        department_id: form.department_id,
-        course_id: form.course_id,
-        year_level: form.year_level.trim(),
-        birthdate: form.birthdate.trim(),
+    : {
+        full_name: profile?.full_name ?? "",
+        student_id: profile?.student_id ?? "",
+        department_id: profile?.department_id ?? "",
+        course_id: profile?.course_id ?? "",
+        year_level: profile?.year_level ?? "",
+        birthdate: "",
       };
 
-      // Always POST to /verification (creates new or upserts pending)
-      await apiJson("/verification", { method: "POST", body: JSON.stringify(payload) });
-
-      await refreshProfile();
-      router.replace("/(tabs)/");
+  const handleSendOtp = useCallback(async () => {
+    try {
+      await apiJson("/verification/otp", { method: "POST", body: "{}" });
+      return { ok: true };
     } catch (error: any) {
       if (error instanceof ApiError) {
-        if (error.status === 400 && (error as any).response?.data?.issues) {
-          const fieldErrors: Partial<typeof form> = {};
-          (error as any).response.data.issues.forEach((issue: any) => {
-            const path = issue.path?.[0];
-            if (path && path in form) {
-              fieldErrors[path as keyof typeof form] = issue.message;
-            }
-          });
-          setErrors(fieldErrors);
-          setTouched({
-            full_name: true,
-            student_id: true,
-            department_id: true,
-            course_id: true,
-            year_level: true,
-            birthdate: true,
+        return { ok: false, error: error.message };
+      }
+      return { ok: false, error: "Could not send code" };
+    }
+  }, []);
+
+  const handleSubmit = useCallback(
+    async (payload: {
+      full_name: string;
+      student_id: string;
+      department_id: string | null;
+      course_id: string | null;
+      year_level: string | null;
+      birthdate: string;
+      otp_code: string;
+    }) => {
+      try {
+        if (mine?.request?.status === "pending") {
+          await apiJson("/verification/mine", {
+            method: "PUT",
+            body: JSON.stringify(payload),
           });
         } else {
-          setNotice({
-            title: "Submission failed",
-            message: error.message || "We couldn't submit your verification request. Try again.",
+          await apiJson("/verification", {
+            method: "POST",
+            body: JSON.stringify(payload),
           });
         }
-      } else {
-        setNotice({
-          title: "Something went wrong",
-          message: "We couldn't submit your verification request. Please try again.",
-        });
+        return { ok: true };
+      } catch (error: any) {
+        if (error instanceof ApiError) {
+          if (error.status === 400 && error.body?.fields) {
+            return { ok: false, fields: error.body.fields };
+          }
+          return { ok: false, error: error.message };
+        }
+        return { ok: false, error: "Submission failed" };
       }
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    },
+    [mine?.request?.status]
+  );
 
-  const fieldError = (name: keyof typeof form) =>
-    touched[name] && errors[name] ? errors[name] : undefined;
+  const handleSuccess = useCallback(async () => {
+    await refreshProfile();
+    router.replace("/(tabs)/");
+  }, [refreshProfile, router]);
 
-  if (loadingVerification) {
+  if (loading) {
     return (
       <SafeAreaView
         style={{
@@ -375,14 +173,63 @@ export default function OnboardingScreen() {
           backgroundColor: colors.surfacePage,
         }}
       >
-        <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.brand} />
+        <Reveal style={{ width: "100%", maxWidth: 540, alignSelf: "center" }}>
+          <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
+            <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center", marginBottom: SPACE.x4 }}>
+              {isSuperadmin ? "Superadmin access" : "Verify your identity"}
+            </Text>
+            <Text style={{ ...TYPE.body, color: colors.inkSoft, textAlign: "center" }}>
+              Loading your verification status…
+            </Text>
+          </Card>
+        </Reveal>
       </SafeAreaView>
     );
   }
 
+  // Superadmin — no verification needed
+  if (isSuperadmin) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
+          <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
+            <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: RADIUS.xl,
+                  backgroundColor: colors.brandWash,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: SPACE.x5,
+                }}
+              >
+                <Text style={{ fontSize: 28 }}>🛡️</Text>
+              </View>
+              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>Superadmin access</Text>
+              <Text style={{ ...TYPE.body, color: colors.inkSoft, textAlign: "center" }}>
+                Superadmin accounts do not require verification. You have full access already.
+              </Text>
+              <View style={{ marginTop: SPACE.x6, alignSelf: "stretch" }}>
+                <Button label="Continue to app" fullWidth size="lg" onPress={() => router.replace("/(tabs)/")} />
+              </View>
+            </Card>
+          </Reveal>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Pending — read-only summary
+  const isPending = mine?.request?.status === "pending";
+  const isApproved = mine?.request?.status === "approved";
+  const isDeclined = mine?.request?.status === "declined";
+  const requestStatus = mine?.request?.status ?? "unverified";
+
   if (isPending) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
           <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
             <Card style={{ padding: SPACE.x8 }}>
@@ -395,14 +242,14 @@ export default function OnboardingScreen() {
                   alignItems: "center",
                   justifyContent: "center",
                   marginBottom: SPACE.x5,
+                  alignSelf: "center",
                 }}
               >
-                <Clock3 size={26} color={colors.accentText} />
+                <Text style={{ fontSize: 24 }}>⏳</Text>
               </View>
-              <Text style={{ ...TYPE.h1, color: colors.ink }}>Verification under review</Text>
-              <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
-                Your request has been submitted. A department admin will review your details and
-                get back to you soon.
+              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>Verification under review</Text>
+              <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2, textAlign: "center" }}>
+                Your request has been submitted. A reviewer will check your details and get back to you soon.
               </Text>
 
               <View
@@ -415,23 +262,40 @@ export default function OnboardingScreen() {
                   padding: SPACE.x4,
                 }}
               >
-                <Text style={{ ...TYPE.micro, color: colors.inkFaint, marginBottom: SPACE.x3 }}>
-                  Submitted details
-                </Text>
-                <SubmittedRow label="Full name" value={verification?.full_name} />
-                <SubmittedRow label="Student ID" value={verification?.student_id} />
-                <SubmittedRow label="Department" value={verification?.department_name} />
-                <SubmittedRow label="Course" value={verification?.course_name} />
-                <SubmittedRow label="Year level" value={verification?.year_level} last />
+                <Text style={{ ...TYPE.micro, color: colors.inkFaint, marginBottom: SPACE.x3 }}>Submitted details</Text>
+                {[
+                  { label: "Full name", value: mine.request?.full_name },
+                  { label: "Student ID", value: mine.request?.student_id },
+                  { label: "Department", value: mine.request?.department_name },
+                  { label: "Course", value: mine.request?.course_name },
+                  { label: "Year level", value: mine.request?.year_level },
+                  { label: "Birthdate", value: mine.request?.birthdate },
+                ].map((row) => (
+                  <View
+                    key={row.label}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: SPACE.x4,
+                      paddingVertical: SPACE.x2,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.line,
+                    }}
+                  >
+                    <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>{row.label}</Text>
+                    <Text
+                      style={{ ...TYPE.caption, fontWeight: "600", color: colors.ink, flexShrink: 1, textAlign: "right" }}
+                      numberOfLines={1}
+                    >
+                      {row.value || "—"}
+                    </Text>
+                  </View>
+                ))}
               </View>
 
               <View style={{ marginTop: SPACE.x6 }}>
-                <Button
-                  label="Back to app"
-                  variant="secondary"
-                  fullWidth
-                  onPress={() => router.back()}
-                />
+                <Button label="Back to app" variant="secondary" fullWidth onPress={() => router.back()} />
               </View>
             </Card>
           </Reveal>
@@ -442,7 +306,7 @@ export default function OnboardingScreen() {
 
   if (isApproved) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
           <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
             <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
@@ -457,11 +321,9 @@ export default function OnboardingScreen() {
                   marginBottom: SPACE.x5,
                 }}
               >
-                <CheckCircle2 size={32} color={colors.jadeText} />
+                <Text style={{ fontSize: 28 }}>✅</Text>
               </View>
-              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>
-                {"You're verified"}
-              </Text>
+              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>You're verified</Text>
               <Text
                 style={{
                   ...TYPE.body,
@@ -471,16 +333,10 @@ export default function OnboardingScreen() {
                   maxWidth: 380,
                 }}
               >
-                Your identity has been verified. You now have full access to post, message, and
-                connect.
+                Your identity has been verified. You now have full access to post, message, and connect.
               </Text>
               <View style={{ marginTop: SPACE.x6, alignSelf: "stretch" }}>
-                <Button
-                  label="Continue to app"
-                  fullWidth
-                  size="lg"
-                  onPress={() => router.replace("/(tabs)/")}
-                />
+                <Button label="Continue to app" fullWidth size="lg" onPress={() => router.replace("/(tabs)/")} />
               </View>
             </Card>
           </Reveal>
@@ -489,283 +345,30 @@ export default function OnboardingScreen() {
     );
   }
 
-  // unverified or declined
+  // Unverified or declined — show the form
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }} edges={["top"]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingVertical: SPACE.x8 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View
-            style={{
-              width: "100%",
-              maxWidth: 540,
-              alignSelf: "center",
-              paddingHorizontal: SPACE.x4,
-            }}
-          >
-            <Reveal>
-              <View style={{ alignItems: "center", marginBottom: SPACE.x6 }}>
-                <View
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: RADIUS.lg,
-                    backgroundColor: colors.brandWash,
-                    borderWidth: 1,
-                    borderColor: colors.line,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginBottom: SPACE.x4,
-                  }}
-                >
-                  <ShieldCheck size={26} color={colors.brand} />
-                </View>
-                <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>
-                  {isDeclined ? "Resubmit verification" : "Verify your identity"}
-                </Text>
-                <Text
-                  style={{
-                    ...TYPE.body,
-                    color: colors.inkSoft,
-                    textAlign: "center",
-                    marginTop: SPACE.x2,
-                    maxWidth: 400,
-                  }}
-                >
-                  {isDeclined
-                    ? "Correct the information below and resubmit for review."
-                    : "Enter your student details so a department admin can verify your identity."}
-                </Text>
-              </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <VerificationForm
+        role={role}
+        fields={mine?.fields ?? null}
+        schoolAccount={mine?.school_account ?? false}
+        initialValues={initialValues}
+        fullNameLocked={fullNameLocked}
+        requestStatus={requestStatus}
+        declineNote={mine?.request?.note ?? null}
+        onSendOtp={handleSendOtp}
+        onSubmit={handleSubmit}
+      />
 
-              <Card style={{ padding: SPACE.x6 }}>
-                {isDeclined && verification?.note ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: SPACE.x3,
-                      padding: SPACE.x3,
-                      borderRadius: RADIUS.md,
-                      borderWidth: 1,
-                      borderColor: colors.accent,
-                      backgroundColor: colors.accentWash,
-                      marginBottom: SPACE.x5,
-                    }}
-                  >
-                    <AlertTriangle size={16} color={colors.accentText} style={{ marginTop: 2 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ ...TYPE.micro, color: colors.accentText, marginBottom: 2 }}>
-                        Reviewer note
-                      </Text>
-                      <Text style={{ ...TYPE.caption, color: colors.ink, lineHeight: 18 }}>
-                        {verification.note}
-                      </Text>
-                    </View>
-                  </View>
-                ) : null}
-
-                <TextField
-                  label="Full name"
-                  value={form.full_name}
-                  onChangeText={(v) => handleChange("full_name", v)}
-                  onBlur={() => handleBlur("full_name")}
-                  placeholder="Juan Dela Cruz"
-                  autoCapitalize="words"
-                  editable={canEditName}
-                  error={fieldError("full_name")}
-                  hint={!canEditName ? "Locked to the name on your student record." : undefined}
-                  leadingIcon={(props) => <User {...props} />}
-                />
-
-                <TextField
-                  label="Student ID"
-                  value={form.student_id}
-                  onChangeText={(v) => handleChange("student_id", v)}
-                  onBlur={() => handleBlur("student_id")}
-                  placeholder="2023-12345"
-                  autoCapitalize="characters"
-                  editable={canEdit}
-                  error={fieldError("student_id")}
-                  leadingIcon={(props) => <IdCard {...props} />}
-                />
-
-                <View style={{ marginBottom: SPACE.x4 }}>
-                  <FieldLabel icon={Building2} label="Department" />
-                  <SelectField
-                    value={form.department_id || null}
-                    options={departments}
-                    onChange={(v) => handleChange("department_id", v)}
-                    placeholder="Select department"
-                    disabled={!canEdit || loadingDepartments}
-                    loading={loadingDepartments}
-                    error={touched.department_id && !!errors.department_id}
-                    emptyText="No departments available"
-                  />
-                  {fieldError("department_id") ? (
-                    <Text
-                      style={{
-                        ...TYPE.caption,
-                        color: colors.destructiveText,
-                        marginTop: SPACE.x2,
-                      }}
-                    >
-                      {fieldError("department_id")}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View style={{ marginBottom: SPACE.x4 }}>
-                  <FieldLabel icon={GraduationCap} label="Course" />
-                  <SelectField
-                    value={form.course_id || null}
-                    options={courses}
-                    onChange={(v) => handleChange("course_id", v)}
-                    placeholder={form.department_id ? "Select course" : "Select department first"}
-                    disabled={!canEdit || loadingCourses || !form.department_id}
-                    loading={loadingCourses}
-                    error={touched.course_id && !!errors.course_id}
-                    emptyText="No courses available for this department"
-                  />
-                  {fieldError("course_id") ? (
-                    <Text
-                      style={{
-                        ...TYPE.caption,
-                        color: colors.destructiveText,
-                        marginTop: SPACE.x2,
-                      }}
-                    >
-                      {fieldError("course_id")}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View style={{ marginBottom: SPACE.x4 }}>
-                  <FieldLabel icon={Calendar} label="Year level" />
-                  <SelectField
-                    value={form.year_level || null}
-                    options={academicLevels}
-                    onChange={(v) => handleChange("year_level", v)}
-                    placeholder="Select year level"
-                    disabled={!canEdit || loadingAcademicLevels}
-                    loading={loadingAcademicLevels}
-                    error={touched.year_level && !!errors.year_level}
-                  />
-                  {fieldError("year_level") ? (
-                    <Text
-                      style={{
-                        ...TYPE.caption,
-                        color: colors.destructiveText,
-                        marginTop: SPACE.x2,
-                      }}
-                    >
-                      {fieldError("year_level")}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <TextField
-                  label="Birthdate"
-                  value={form.birthdate}
-                  onChangeText={(v) => handleChange("birthdate", v)}
-                  onBlur={() => handleBlur("birthdate")}
-                  placeholder="2000-01-15"
-                  keyboardType="numbers-and-punctuation"
-                  editable={canEdit}
-                  error={fieldError("birthdate")}
-                  hint="Format: YYYY-MM-DD"
-                  leadingIcon={(props) => <Calendar {...props} />}
-                />
-
-                <View style={{ marginTop: SPACE.x2 }}>
-                  <Button
-                    label={isDeclined ? "Resubmit for verification" : "Submit for verification"}
-                    size="lg"
-                    fullWidth
-                    loading={submitting}
-                    disabled={!canEdit || submitting}
-                    onPress={() => void handleSubmit()}
-                  />
-                </View>
-              </Card>
-            </Reveal>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      <Modal
-        visible={!!notice}
-        onClose={() => setNotice(null)}
-        maxWidth={440}
-        accessibilityLabel={notice?.title ?? "Notice"}
-      >
+      <Modal visible={!!notice} onClose={() => setNotice(null)} maxWidth={440} accessibilityLabel={notice?.title ?? "Notice"}>
         <View style={{ padding: SPACE.x6 }}>
           <Text style={{ ...TYPE.h2, color: colors.ink }}>{notice?.title}</Text>
-          <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
-            {notice?.message}
-          </Text>
+          <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>{notice?.message}</Text>
           <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: SPACE.x5 }}>
             <Button label="Got it" onPress={() => setNotice(null)} />
           </View>
         </View>
       </Modal>
     </SafeAreaView>
-  );
-}
-
-function FieldLabel({ icon: Icon, label }: { icon: any; label: string }) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: SPACE.x2,
-        marginBottom: SPACE.x2,
-      }}
-    >
-      <Icon size={14} color={colors.textTertiary} />
-      <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: "600", color: colors.textSecondary }}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function SubmittedRow({
-  label,
-  value,
-  last = false,
-}: {
-  label: string;
-  value?: string;
-  last?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: SPACE.x4,
-        paddingVertical: SPACE.x2,
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: colors.line,
-      }}
-    >
-      <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>{label}</Text>
-      <Text
-        style={{ ...TYPE.caption, fontWeight: "600", color: colors.ink, flexShrink: 1, textAlign: "right" }}
-        numberOfLines={1}
-      >
-        {value || "—"}
-      </Text>
-    </View>
   );
 }

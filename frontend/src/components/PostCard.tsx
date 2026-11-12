@@ -6,7 +6,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical, Building2 } from "lucide-react-native";
+import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical, Building2, Megaphone } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
@@ -31,6 +31,7 @@ function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: 
     text:     { label: "Update",   bg: colors.badgeUpdateBg,   text: colors.badgeUpdateText },
     image:    { label: "Image",    bg: colors.badgeImageBg,    text: colors.badgeImageText },
     discussion: { label: "Discussion", bg: colors.badgeDiscussionBg, text: colors.badgeDiscussionText },
+    announcement: { label: "Announcement", bg: colors.badgeAnnouncementBg, text: colors.badgeAnnouncementText },
   };
   return configs[type] || configs["text"];
 }
@@ -42,6 +43,7 @@ function getVisibilityLabel(visibility: string): string {
     case "friends": return "Friends";
     case "custom": return "Custom";
     case "private": return "Private";
+    case "announcement": return "Announcement";
     default: return "Public";
   }
 }
@@ -53,6 +55,7 @@ function getVisibilityColors(visibility: string, colors: ThemeTokens): { bg: str
     case "friends": return { bg: colors.badgeFriendsBg, text: colors.badgeFriendsText, iconColor: colors.badgeFriendsText };
     case "custom": return { bg: colors.badgeCustomBg, text: colors.badgeCustomText, iconColor: colors.badgeCustomText };
     case "private": return { bg: colors.badgePrivateBg, text: colors.badgePrivateText, iconColor: colors.badgePrivateText };
+    case "announcement": return { bg: colors.badgeAnnouncementBg, text: colors.badgeAnnouncementText, iconColor: colors.badgeAnnouncementText };
     default: return { bg: colors.surfaceSunken, text: colors.textTertiary, iconColor: colors.textTertiary };
   }
 }
@@ -72,6 +75,7 @@ function VisibilityBadge({ visibility }: { visibility: string }) {
           case "friends": return <Users size={12} color={iconColor} />;
           case "custom": return <UserCheck size={12} color={iconColor} />;
           case "private": return <Lock size={12} color={iconColor} />;
+          case "announcement": return <Megaphone size={12} color={iconColor} />;
           default: return <Globe size={12} color={iconColor} />;
         }
       })()}

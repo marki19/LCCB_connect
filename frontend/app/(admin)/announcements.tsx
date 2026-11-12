@@ -1,34 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import {
-  Building2,
-  CheckCircle2,
-  Megaphone,
-  Send,
-  ShieldCheck,
-  Users,
-} from "lucide-react-native";
+import { ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Building2, Calendar, CheckCircle2, Megaphone, Send, ShieldCheck, Users, GraduationCap, Pin, Bell } from "lucide-react-native";
 import {
   getAudienceCount,
   listAnnouncements,
   sendAnnouncement,
   type Announcement,
+  type AnnouncementAudience,
+  updateAnnouncement,
+  deleteAnnouncement,
 } from "../../src/lib/adminApi";
-import { fetchDepartments } from "../../src/lib/catalog";
+import { fetchDepartments, fetchCourses } from "../../src/lib/catalog";
+import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { ThemeTokens } from "../../src/lib/tokens";
 import type { Department } from "../../src/types";
 import ActionDialog from "../../src/components/admin/ActionDialog";
 import PageHeader from "../../src/components/admin/PageHeader";
 
-type AudienceType = "all" | "role" | "department";
+type AudienceType = "all" | "role" | "department" | "course" | "year_level";
 
 const ROLE_OPTIONS = [
   { value: "student", label: "Students" },
@@ -36,6 +26,16 @@ const ROLE_OPTIONS = [
   { value: "departmentAdmin", label: "Dept. admins" },
   { value: "admin", label: "Admins" },
   { value: "superadmin", label: "Superadmins" },
+] as const;
+
+const ACADEMIC_LEVELS = [
+  "1st Year",
+  "2nd Year",
+  "3rd Year",
+  "4th Year",
+  "5th Year",
+  "IBED",
+  "Integrated Studies",
 ] as const;
 
 function formatDate(value?: string | null) {
@@ -89,14 +89,34 @@ function Chip({
   );
 }
 
+function SectionLabel({ children, colors }: { children: React.ReactNode; colors: ThemeTokens }) {
+  return (
+    <Text style={{ marginBottom: 6, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
+      {children}
+    </Text>
+  );
+}
+
 export default function AdminAnnouncementsScreen() {
   const { colors } = useTheme();
+  const { profile } = useAuth();
+  const isCampusAdmin = profile?.role === "admin" || profile?.role === "superadmin";
+  const myDeptId = profile?.department_id;
+
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audienceType, setAudienceType] = useState<AudienceType>("all");
   const [role, setRole] = useState("student");
   const [departmentId, setDepartmentId] = useState("");
+  const [courseId, setCourseId] = useState("");
+  const [yearLevel, setYearLevel] = useState("");
+  const [pinned, setPinned] = useState(false);
+  const [expiresAt, setExpiresAt] = useState("");
+
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [courses, setCourses] = useState<{ id: string; name: string; department_id: string }[]>([]);
+  const [filteredCourses, setFilteredCourses] = useState<{ id: string; name: string; department_id: string }[]>([]);
+
   const [count, setCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(false);
   const [history, setHistory] = useState<Announcement[]>([]);
@@ -108,52 +128,104 @@ export default function AdminAnnouncementsScreen() {
   const [notice, setNotice] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [editPinned, setEditPinned] = useState(false);
+  const [editExpiresAt, setEditExpiresAt] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Load departments on mount
   useEffect(() => {
     let cancelled = false;
-    void fetchDepartments()
+    fetchDepartments()
       .then((rows) => {
         if (cancelled) return;
         setDepartments(rows);
-        if (rows[0]?.id) setDepartmentId((current) => current || rows[0].id);
+        if (rows[0]?.id && !isCampusAdmin) setDepartmentId(rows[0].id);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isCampusAdmin]);
 
-  const audience = useMemo(() => {
-    if (audienceType === "role") return { type: "role" as const, role };
-    if (audienceType === "department") {
-      return { type: "department" as const, department_id: departmentId };
+  // Load courses when department changes
+  useEffect(() => {
+    if (!departmentId) {
+      setCourses([]);
+      setFilteredCourses([]);
+      setCourseId("");
+      return;
     }
-    return { type: "all" as const };
-  }, [audienceType, role, departmentId]);
+    let cancelled = false;
+    fetchCourses(departmentId)
+      .then((rows) => {
+        if (cancelled) return;
+        setCourses(rows);
+        setFilteredCourses(rows);
+        if (rows[0]?.id) setCourseId(rows[0].id);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [departmentId]);
+
+  // Build audience object for API
+  const audience = useMemo((): AnnouncementAudience => {
+    switch (audienceType) {
+      case "role":
+        return { type: "role", role: role as any };
+      case "department":
+        return { type: "department", department_id: departmentId };
+      case "course":
+        return { type: "course", course_id: courseId };
+      case "year_level":
+        return { type: "year_level", year_level: yearLevel };
+      default:
+        return { type: "all" };
+    }
+  }, [audienceType, role, departmentId, courseId, yearLevel]);
 
   const audienceLabel = useMemo(() => {
-    if (audience.type === "all") return "Everyone";
-    if (audience.type === "role") {
-      return ROLE_OPTIONS.find((option) => option.value === audience.role)?.label || audience.role;
+    switch (audience.type) {
+      case "all":
+        return "Everyone";
+      case "role":
+        return ROLE_OPTIONS.find((option) => option.value === audience.role)?.label || audience.role;
+      case "department":
+        return departments.find((d) => d.id === audience.department_id)?.name || "Selected department";
+      case "course": {
+        const c = courses.find((c) => c.id === audience.course_id);
+        return c?.name || "Selected course";
+      }
+      case "year_level":
+        return `Year: ${audience.year_level}`;
+      default:
+        return "Unknown";
     }
-    return (
-      departments.find((department) => department.id === audience.department_id)?.name ||
-      "Selected department"
-    );
-  }, [audience, departments]);
+  }, [audience, departments, courses]);
 
+  // Audience count
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      await Promise.resolve();
-      if (cancelled) return;
       if (audienceType === "department" && !departmentId) {
+        setCount(null);
+        return;
+      }
+      if (audienceType === "course" && !courseId) {
+        setCount(null);
+        return;
+      }
+      if (audienceType === "year_level" && !yearLevel) {
         setCount(null);
         return;
       }
       setCountLoading(true);
       try {
-        const result = await getAudienceCount(audience as any);
+        const result = await getAudienceCount(audience);
         if (!cancelled) setCount(result.count);
       } catch {
         if (!cancelled) setCount(null);
@@ -165,11 +237,11 @@ export default function AdminAnnouncementsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [audience, audienceType, departmentId]);
+  }, [audience, audienceType, departmentId, courseId, yearLevel]);
 
+  // Load history
   const loadHistory = useCallback(
     async (cursor: string | null, append: boolean) => {
-      await Promise.resolve();
       if (append) setHistoryMore(true);
       else {
         setHistoryLoading(true);
@@ -200,6 +272,8 @@ export default function AdminAnnouncementsScreen() {
     title.trim().length > 0 &&
     body.trim().length > 0 &&
     (audienceType !== "department" || !!departmentId) &&
+    (audienceType !== "course" || !!courseId) &&
+    (audienceType !== "year_level" || !!yearLevel) &&
     (count ?? 0) > 0;
 
   const send = async () => {
@@ -210,15 +284,16 @@ export default function AdminAnnouncementsScreen() {
       const result = await sendAnnouncement({
         title: title.trim(),
         body: body.trim(),
-        audience: audience as any,
+        audience,
+        pinned,
+        expires_at: expiresAt || null,
       });
       setConfirming(false);
       setTitle("");
       setBody("");
-      setNotice(
-        `Announcement sent to ${result.recipients} recipient${result.recipients === 1 ? "" : "s"
-        }.`
-      );
+      setPinned(false);
+      setExpiresAt("");
+      setNotice(`Announcement sent to ${result.recipients} recipient${result.recipients === 1 ? "" : "s"}.`);
       await loadHistory(null, false);
     } catch (e: any) {
       setError(e?.message || "Could not send the announcement.");
@@ -227,6 +302,59 @@ export default function AdminAnnouncementsScreen() {
       setBusy(false);
     }
   };
+
+  const startEdit = (item: Announcement) => {
+    setEditingId(item.id);
+    setEditTitle(item.title);
+    setEditBody(item.body);
+    setEditPinned(item.pinned ?? false);
+    setEditExpiresAt(item.expires_at ? new Date(item.expires_at).toISOString().slice(0, 16) : "");
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    setBusy(true);
+    try {
+      await updateAnnouncement(editingId, {
+        title: editTitle.trim() || undefined,
+        body: editBody.trim() || undefined,
+        pinned: editPinned,
+        expires_at: editExpiresAt || null,
+      });
+      setEditingId(null);
+      setNotice("Announcement updated.");
+      await loadHistory(null, false);
+    } catch (e: any) {
+      setError(e?.message || "Could not update announcement.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmDelete = (id: string) => setDeletingId(id);
+
+  const doDelete = async () => {
+    if (!deletingId) return;
+    setBusy(true);
+    try {
+      await deleteAnnouncement(deletingId);
+      setDeletingId(null);
+      setNotice("Announcement deleted.");
+      await loadHistory(null, false);
+    } catch (e: any) {
+      setError(e?.message || "Could not delete announcement.");
+      setDeletingId(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Available audience types based on role
+  const allowedAudienceTypes = useMemo((): AudienceType[] => {
+    if (isCampusAdmin) return ["all", "role", "department", "course", "year_level"];
+    // Department admins: department, course, year_level
+    return ["department", "course", "year_level"];
+  }, [isCampusAdmin]);
 
   return (
     <ScrollView
@@ -270,13 +398,12 @@ export default function AdminAnnouncementsScreen() {
           }}
         >
           <CheckCircle2 size={18} color={colors.success} />
-          <Text style={{ marginLeft: 8, flex: 1, fontWeight: "600", color: colors.successText }}>
-            {notice}
-          </Text>
+          <Text style={{ marginLeft: 8, flex: 1, fontWeight: "600", color: colors.successText }}>{notice}</Text>
         </View>
       ) : null}
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 24 }}>
+        {/* Compose panel */}
         <View
           style={{
             minWidth: 420,
@@ -303,18 +430,12 @@ export default function AdminAnnouncementsScreen() {
               <Megaphone size={19} color={colors.primary} />
             </View>
             <View>
-              <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary }}>
-                New announcement
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.textTertiary }}>
-                Title and body are required.
-              </Text>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary }}>New announcement</Text>
+              <Text style={{ fontSize: 12, color: colors.textTertiary }}>Title and body are required.</Text>
             </View>
           </View>
 
-          <Text style={{ marginBottom: 6, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
-            Title
-          </Text>
+          <SectionLabel colors={colors}>Title</SectionLabel>
           <TextInput
             value={title}
             onChangeText={setTitle}
@@ -334,9 +455,7 @@ export default function AdminAnnouncementsScreen() {
             }}
           />
 
-          <Text style={{ marginBottom: 6, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
-            Body
-          </Text>
+          <SectionLabel colors={colors}>Body</SectionLabel>
           <TextInput
             value={body}
             onChangeText={setBody}
@@ -360,31 +479,30 @@ export default function AdminAnnouncementsScreen() {
             }}
           />
 
-          <Text style={{ marginBottom: 8, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
-            Audience
-          </Text>
+          <SectionLabel colors={colors}>Audience</SectionLabel>
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-            <Chip
-              label="Everyone"
-              active={audienceType === "all"}
-              onPress={() => setAudienceType("all")}
-              colors={colors}
-            />
-            <Chip
-              label="By role"
-              active={audienceType === "role"}
-              onPress={() => setAudienceType("role")}
-              colors={colors}
-            />
-            <Chip
-              label="By department"
-              active={audienceType === "department"}
-              onPress={() => setAudienceType("department")}
-              colors={colors}
-            />
+            {allowedAudienceTypes.map((type) => (
+              <Chip
+                key={type}
+                label={
+                  type === "all"
+                    ? "Everyone"
+                    : type === "role"
+                    ? "By role"
+                    : type === "department"
+                    ? "By department"
+                    : type === "course"
+                    ? "By course"
+                    : "By year level"
+                }
+                active={audienceType === type}
+                onPress={() => setAudienceType(type)}
+                colors={colors}
+              />
+            ))}
           </View>
 
-          {audienceType === "role" ? (
+          {audienceType === "role" && allowedAudienceTypes.includes("role") ? (
             <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap" }}>
               {ROLE_OPTIONS.map((option) => (
                 <Chip
@@ -412,6 +530,79 @@ export default function AdminAnnouncementsScreen() {
             </View>
           ) : null}
 
+          {audienceType === "course" ? (
+            <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap" }}>
+              {filteredCourses.map((course) => (
+                <Chip
+                  key={course.id}
+                  label={course.name}
+                  active={courseId === course.id}
+                  onPress={() => setCourseId(course.id)}
+                  colors={colors}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          {audienceType === "year_level" ? (
+            <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap" }}>
+              {ACADEMIC_LEVELS.map((level) => (
+                <Chip
+                  key={level}
+                  label={level}
+                  active={yearLevel === level}
+                  onPress={() => setYearLevel(level)}
+                  colors={colors}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          {/* Pin + Expiry */}
+          <View style={{ marginTop: 16, flexDirection: "row", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+            <TouchableOpacity
+              onPress={() => setPinned(!pinned)}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: pinned ? colors.primary : colors.border,
+                backgroundColor: pinned ? colors.primarySurface : colors.surface,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+              }}
+            >
+              <Pin size={16} color={pinned ? colors.primary : colors.textTertiary} />
+              <Text style={{ fontSize: 13, fontWeight: "600", color: pinned ? colors.primary : colors.textSecondary }}>
+                Pin to top of feed
+              </Text>
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Bell size={16} color={colors.textTertiary} />
+              <Text style={{ fontSize: 12, color: colors.textTertiary }}>Expires</Text>
+              <TextInput
+                value={expiresAt}
+                onChangeText={setExpiresAt}
+                placeholder="YYYY-MM-DDTHH:MM"
+                placeholderTextColor={colors.textMuted}
+                style={{
+                  width: 160,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: colors.inputBorder,
+                  backgroundColor: colors.inputBg,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  fontSize: 12,
+                  color: colors.textPrimary,
+                }}
+              />
+            </View>
+          </View>
+
           <View
             style={{
               marginTop: 20,
@@ -427,14 +618,16 @@ export default function AdminAnnouncementsScreen() {
           >
             {audienceType === "department" ? (
               <Building2 size={17} color={colors.textTertiary} />
+            ) : audienceType === "course" ? (
+              <GraduationCap size={17} color={colors.textTertiary} />
+            ) : audienceType === "year_level" ? (
+              <Calendar size={17} color={colors.textTertiary} />
             ) : audienceType === "role" ? (
               <Users size={17} color={colors.textTertiary} />
             ) : (
               <ShieldCheck size={17} color={colors.textTertiary} />
             )}
-            <Text style={{ marginLeft: 8, flex: 1, fontSize: 13, color: colors.textSecondary }}>
-              {audienceLabel}
-            </Text>
+            <Text style={{ marginLeft: 8, flex: 1, fontSize: 13, color: colors.textSecondary }}>{audienceLabel}</Text>
             {countLoading ? (
               <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.primary} />
             ) : (
@@ -471,6 +664,7 @@ export default function AdminAnnouncementsScreen() {
           ) : null}
         </View>
 
+        {/* History panel */}
         <View
           style={{
             minWidth: 360,
@@ -498,33 +692,230 @@ export default function AdminAnnouncementsScreen() {
               No announcements sent yet.
             </Text>
           ) : (
-            history.map((item) => (
-              <View
-                key={item.id}
-                style={{
-                  marginBottom: 14,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.divider,
-                  paddingBottom: 14,
-                }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }}>{item.title}</Text>
-                <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: colors.textSecondary }} numberOfLines={3}>
-                  {item.body}
-                </Text>
-                <Text style={{ marginTop: 8, fontSize: 12, color: colors.textTertiary }}>
-                  {item.recipients} recipient{item.recipients === 1 ? "" : "s"} ·{" "}
-                  {formatDate(item.created_at)} · {item.actor_username || "system"}
-                </Text>
-                <Text style={{ marginTop: 2, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, color: colors.textTertiary }}>
-                  {item.audience?.type === "role"
-                    ? `Role: ${item.audience.role}`
-                    : item.audience?.type === "department"
-                    ? "Department audience"
-                    : "Everyone"}
-                </Text>
-              </View>
-            ))
+            history.map((item) => {
+              const isEditing = editingId === item.id;
+              return (
+                <View
+                  key={item.id}
+                  style={{
+                    marginBottom: 14,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.divider,
+                    paddingBottom: 14,
+                  }}
+                >
+                  {isEditing ? (
+                    <View style={{ gap: 12 }}>
+                      <TextInput
+                        value={editTitle}
+                        onChangeText={setEditTitle}
+                        maxLength={120}
+                        style={{
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: colors.inputBorder,
+                          backgroundColor: colors.inputBg,
+                          paddingHorizontal: 10,
+                          paddingVertical: 8,
+                          fontSize: 14,
+                          color: colors.textPrimary,
+                          fontWeight: "700",
+                        }}
+                      />
+                      <TextInput
+                        value={editBody}
+                        onChangeText={setEditBody}
+                        multiline
+                        numberOfLines={4}
+                        maxLength={2000}
+                        style={{
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: colors.inputBorder,
+                          backgroundColor: colors.inputBg,
+                          paddingHorizontal: 10,
+                          paddingVertical: 8,
+                          fontSize: 13,
+                          color: colors.textPrimary,
+                        }}
+                      />
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                        <TouchableOpacity
+                          onPress={() => setEditPinned(!editPinned)}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: editPinned ? colors.primary : colors.border,
+                            backgroundColor: editPinned ? colors.primarySurface : colors.surface,
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                          }}
+                        >
+                          <Pin size={14} color={editPinned ? colors.primary : colors.textTertiary} />
+                          <Text style={{ fontSize: 12, fontWeight: "600", color: editPinned ? colors.primary : colors.textSecondary }}>
+                            Pinned
+                          </Text>
+                        </TouchableOpacity>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Calendar size={14} color={colors.textTertiary} />
+                          <Text style={{ fontSize: 11, color: colors.textTertiary }}>Expires</Text>
+                          <TextInput
+                            value={editExpiresAt}
+                            onChangeText={setEditExpiresAt}
+                            placeholder="YYYY-MM-DDTHH:MM"
+                            placeholderTextColor={colors.textMuted}
+                            style={{
+                              width: 140,
+                              borderRadius: 8,
+                              borderWidth: 1,
+                              borderColor: colors.inputBorder,
+                              backgroundColor: colors.inputBg,
+                              paddingHorizontal: 8,
+                              paddingVertical: 6,
+                              fontSize: 11,
+                              color: colors.textPrimary,
+                            }}
+                          />
+                        </View>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <TouchableOpacity
+                          onPress={saveEdit}
+                          disabled={busy}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderRadius: 8,
+                            backgroundColor: colors.primary,
+                            paddingHorizontal: 16,
+                            paddingVertical: 8,
+                            opacity: busy ? 0.5 : 1,
+                          }}
+                        >
+                          <CheckCircle2 size={14} color={colors.textOnPrimary} />
+                          <Text style={{ marginLeft: 6, fontSize: 12, fontWeight: "700", color: colors.textOnPrimary }}>
+                            Save
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setEditingId(null)}
+                          disabled={busy}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            backgroundColor: colors.surface,
+                            paddingHorizontal: 16,
+                            paddingVertical: 8,
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary }}>Cancel</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }}>
+                        {item.pinned ? "📌 " : ""}{item.title}
+                      </Text>
+                      <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: colors.textSecondary }} numberOfLines={3}>
+                        {item.body}
+                      </Text>
+                      <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                        <Text style={{ fontSize: 12, color: colors.textTertiary }}>
+                          {item.recipients} recipient{item.recipients === 1 ? "" : "s"} ·{" "}
+                          {formatDate(item.created_at)} · {item.actor_username || "system"}
+                        </Text>
+                        <Text style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, color: colors.textTertiary }}>
+                          {item.audience?.type === "role"
+                            ? `Role: ${item.audience.role}`
+                            : item.audience?.type === "department"
+                            ? "Department"
+                            : item.audience?.type === "course"
+                            ? "Course"
+                            : item.audience?.type === "year_level"
+                            ? `Year: ${item.audience.year_level}`
+                            : "Everyone"}
+                        </Text>
+                        {item.pinned && (
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              textTransform: "uppercase",
+                              letterSpacing: 0.6,
+                              color: colors.primary,
+                              backgroundColor: colors.primarySurface,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderRadius: 4,
+                            }}
+                          >
+                            Pinned
+                          </Text>
+                        )}
+                        {item.expires_at && (
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              textTransform: "uppercase",
+                              letterSpacing: 0.6,
+                              color: colors.accentText,
+                              backgroundColor: colors.accentWash,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderRadius: 4,
+                            }}
+                          >
+                            Expires {formatDate(item.expires_at)}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={{ marginTop: 10, flexDirection: "row", gap: 8 }}>
+                        <TouchableOpacity
+                          onPress={() => startEdit(item)}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            backgroundColor: colors.surface,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary }}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => confirmDelete(item.id)}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: colors.destructive,
+                            backgroundColor: colors.destructiveSurface,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.destructiveText }}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </View>
+              );
+            })
           )}
 
           {historyCursor ? (
@@ -557,15 +948,36 @@ export default function AdminAnnouncementsScreen() {
         key={confirming ? "open" : "closed"}
         visible={confirming}
         title="Send announcement?"
-        description={`“${title.trim() || "Untitled"}” will be delivered in-app to ${count ?? 0} recipient${
-          count === 1 ? "" : "s"
-        } in ${audienceLabel}.`}
+        description={`“${title.trim() || "Untitled"}” will be delivered in-app to ${count ?? 0} recipient${count === 1 ? "" : "s"} in ${audienceLabel}.`}
         confirmLabel="Send now"
         showReason={false}
         busy={busy}
         onCancel={() => setConfirming(false)}
         onConfirm={() => void send()}
       />
+
+      {deletingId ? (
+        <ActionDialog
+          key="delete"
+          visible={true}
+          title="Delete announcement?"
+          description="This removes the post and its notification from every recipient's bell. It cannot be undone."
+          confirmLabel="Delete"
+          destructive={true}
+          showReason={false}
+          busy={busy}
+          onCancel={() => setDeletingId(null)}
+          onConfirm={() => void doDelete()}
+        />
+      ) : null}
     </ScrollView>
+  );
+}
+
+function ActivityIndicator({ accessibilityLabel, size, color }: { accessibilityLabel: string; size: "small" | "large"; color: string }) {
+  return (
+    <View style={{ alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ color, fontSize: size === "large" ? 16 : 12 }}>{accessibilityLabel}</Text>
+    </View>
   );
 }
