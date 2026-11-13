@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, Easing } from "react-native";
 import { UserX, Check, Undo2 } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
+import { useToast } from "../contexts/ToastContext";
 import { RADIUS, SPACE } from "../lib/tokens";
 import { blockUser, unblockUser } from "../lib/api";
 
@@ -145,6 +146,7 @@ export default function BlockConfirmDialog({
   initiallyBlocked = false,
 }: BlockConfirmDialogProps) {
   const { colors } = useTheme();
+  const toast = useToast();
   const styles = createStyles(colors);
 
   const [isBlocked, setIsBlocked] = useState(initiallyBlocked);
@@ -192,11 +194,13 @@ export default function BlockConfirmDialog({
       if (isBlocked) {
         await unblockUser(targetUserId);
         setIsBlocked(false);
+        toast.showToast({ message: "User unblocked.", tone: "success" });
         showToastMessage("unblocked");
         onUnblocked?.();
       } else {
         await blockUser(targetUserId);
         setIsBlocked(true);
+        toast.showToast({ message: "User blocked.", tone: "error" });
         showToastMessage("blocked");
         onBlocked?.();
       }

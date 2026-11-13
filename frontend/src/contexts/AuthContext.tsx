@@ -125,6 +125,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfileStatus("loading");
       try {
         const data = await apiJson<Profile>(`/users/${userId}`);
+        const role = data?.role?.toLowerCase().replace(/[-_]/g, "");
+        if (
+          role === "superadmin" ||
+          role === "admin" ||
+          role === "faculty" ||
+          role === "departmentadmin" ||
+          data?.verification_status === "verified"
+        ) {
+          data.profile_completed = true;
+        }
         setProfile(data);
         setProfileStatus("ready");
         return;

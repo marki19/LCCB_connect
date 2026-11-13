@@ -1,5 +1,10 @@
 const db = require("../db");
 const { normalizeRole } = require("../middleware/auth");
+const {
+  SUSPENDED_SQL,
+  ACTIVE_SQL,
+  ROLE_NORMALIZED_SQL,
+} = require("./sqlFragments");
 
 /**
  * Read/write queries for the superadmin console. Every query is parameterized.
@@ -22,10 +27,6 @@ function splitCursor(cursor) {
   if (!createdAt || !id) return null;
   return { createdAt, id };
 }
-
-const SUSPENDED_SQL = `(p.suspended_at IS NOT NULL AND (p.suspended_until IS NULL OR p.suspended_until > NOW()))`;
-const ACTIVE_SQL = `(p.suspended_at IS NULL OR (p.suspended_until IS NOT NULL AND p.suspended_until <= NOW()))`;
-const ROLE_NORMALIZED_SQL = `LOWER(REPLACE(REPLACE(p.role, '_', ''), '-', ''))`;
 
 function shapeUser(row) {
   if (!row) return null;
@@ -525,74 +526,6 @@ async function getOverview() {
   };
 }
 
-/**
- * Resolves an announcement audience to active, non-suspended recipients,
- * excluding the sender. Both filters are nullable; passing neither means all.
- */
-async function getAnnouncementRecipients({ actorId, role = null, departmentId = null }) {
-  const roleNorm = role ? normalizeRole(role) : null;
-  const result = await db.query(
-    `SELECT p.id, p.full_name, p.username, d.name AS department_name
-       FROM public.profiles p
-       LEFT JOIN public.departments d ON d.id = p.department_id
-      WHERE p.id <> $1
-        AND NOT (${SUSPENDED_SQL})
-        AND ($2::text IS NULL OR ${ROLE_NORMALIZED_SQL} = $2)
-        AND ($3::uuid IS NULL OR p.department_id = $3::uuid)
-      ORDER BY p.id;`,
-    [actorId, roleNorm, departmentId || null]
-  );
-  return result.rows;
-}
-
-async function createAnnouncementNotifications({
-  recipients,
-  actorId,
-  announcementId,
-  departmentId = null,
-  departmentName = null,
-  message,
-}) {
-  if (!recipients || recipients.length === 0) return 0;
-  const result = await db.query(
-    `INSERT INTO public.notifications
-       (user_id, actor_id, type, target_id, department_id, department, message)
-     SELECT recipient, $2, 'announcement', $3::uuid, $4::uuid, $5, $6
-       FROM UNNEST($1::text[]) AS recipient;`,
-    [recipients, actorId, announcementId, departmentId || null, departmentName, message]
-  );
-  return result.rowCount || 0;
-}
-
-async function getDepartmentName(id) {
-  if (!id) return null;
-  const result = await db.query(
-    "SELECT name FROM public.departments WHERE id = $1::uuid;",
-    [id]
-  );
-  return result.rows[0]?.name || null;
-}
-
-async function listAnnouncementHistory({ limit = 25, cursor = null } = {}) {
-  const audit = await listAudit({
-    action: "announcement.send",
-    limit,
-    cursor,
-  });
-  return {
-    items: audit.items.map((row) => ({
-      id: row.target_id || row.id,
-      title: row.metadata?.title || row.target_label || "Announcement",
-      body: row.metadata?.body || "",
-      audience: row.metadata?.audience || { type: "all" },
-      recipients: row.metadata?.recipients || 0,
-      actor_username: row.actor_username,
-      created_at: row.created_at,
-    })),
-    total: audit.total,
-    next_cursor: audit.next_cursor,
-  };
-}
 
 module.exports = {
   DEFAULT_LIMIT,
@@ -606,8 +539,4 @@ module.exports = {
   listContent,
   listAudit,
   getOverview,
-  getAnnouncementRecipients,
-  createAnnouncementNotifications,
-  getDepartmentName,
-  listAnnouncementHistory,
 };

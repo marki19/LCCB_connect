@@ -45,7 +45,9 @@ async function deliver({ to, subject, text, html, devNote }) {
   const tx = getTransporter();
 
   if (!tx) {
-    console.log(`\n[DEV EMAIL] To: ${to}\n${devNote}\n`);
+    if (!isProduction()) {
+      console.log(`\n[DEV EMAIL] To: ${to}\n${devNote}\n`);
+    }
     return { dev: true };
   }
 

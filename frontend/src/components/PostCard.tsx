@@ -1,16 +1,11 @@
-import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Pressable, Linking, Image, Alert } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
-import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical, Building2 } from "lucide-react-native";
+import { useState, useEffect, useRef } from "react";
+import { View, Text, TouchableOpacity, Pressable, Linking, Image, Alert, Animated, Platform } from "react-native";
+import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical, Building2, Megaphone } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { useToast } from "../contexts/ToastContext";
 import { ThemeTokens, elevation, RADIUS, SPACE, TYPE } from "../lib/tokens";
 import { apiJson, deletePost, deleteThesis, getThesisFileUrl, getPostImageUrl, getPostImageUrls, savePost, unsavePost } from "../lib/api";
 import PostMenu from "./PostMenu";
@@ -31,6 +26,7 @@ function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: 
     text:     { label: "Update",   bg: colors.badgeUpdateBg,   text: colors.badgeUpdateText },
     image:    { label: "Image",    bg: colors.badgeImageBg,    text: colors.badgeImageText },
     discussion: { label: "Discussion", bg: colors.badgeDiscussionBg, text: colors.badgeDiscussionText },
+    announcement: { label: "Announcement", bg: colors.badgeAnnouncementBg, text: colors.badgeAnnouncementText },
   };
   return configs[type] || configs["text"];
 }
@@ -42,6 +38,7 @@ function getVisibilityLabel(visibility: string): string {
     case "friends": return "Friends";
     case "custom": return "Custom";
     case "private": return "Private";
+    case "announcement": return "Announcement";
     default: return "Public";
   }
 }
@@ -53,6 +50,7 @@ function getVisibilityColors(visibility: string, colors: ThemeTokens): { bg: str
     case "friends": return { bg: colors.badgeFriendsBg, text: colors.badgeFriendsText, iconColor: colors.badgeFriendsText };
     case "custom": return { bg: colors.badgeCustomBg, text: colors.badgeCustomText, iconColor: colors.badgeCustomText };
     case "private": return { bg: colors.badgePrivateBg, text: colors.badgePrivateText, iconColor: colors.badgePrivateText };
+    case "announcement": return { bg: colors.badgeAnnouncementBg, text: colors.badgeAnnouncementText, iconColor: colors.badgeAnnouncementText };
     default: return { bg: colors.surfaceSunken, text: colors.textTertiary, iconColor: colors.textTertiary };
   }
 }
@@ -72,6 +70,7 @@ function VisibilityBadge({ visibility }: { visibility: string }) {
           case "friends": return <Users size={12} color={iconColor} />;
           case "custom": return <UserCheck size={12} color={iconColor} />;
           case "private": return <Lock size={12} color={iconColor} />;
+          case "announcement": return <Megaphone size={12} color={iconColor} />;
           default: return <Globe size={12} color={iconColor} />;
         }
       })()}
@@ -82,6 +81,7 @@ function VisibilityBadge({ visibility }: { visibility: string }) {
 
 export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: (id: string | number) => void }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [imageUrls, setImageUrls] = useState<string[]>(
@@ -102,11 +102,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const { profile } = useAuth();
   const { colors } = useTheme();
@@ -169,6 +165,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         await deletePost(post.id);
       }
       setConfirmDelete(false);
+      showToast({ message: isThesis ? "Thesis deleted." : "Post deleted.", tone: "info" });
       onDeleted?.(post.id);
     } catch (e: any) {
       setConfirmDelete(false);
@@ -208,6 +205,10 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
       } else {
         await unsavePost(post.id);
       }
+      showToast({
+        message: next ? "Post saved to bookmarks." : "Post removed from bookmarks.",
+        tone: "success",
+      });
     } catch (e: any) {
       setIsSaved(!next);
       Alert.alert("Error", e.message || "Failed to update saved post");
@@ -220,14 +221,11 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
       return;
     }
 
-    // Reanimated starts animations by mutating the shared value; the new
-    // eslint react-hooks/immutability rule flags this documented API pattern.
-    // eslint-disable-next-line react-hooks/immutability
-    scale.value = withSequence(
-      withTiming(1.35, { duration: 110 }),
-      withTiming(0.88, { duration: 80 }),
-      withTiming(1, { duration: 110 })
-    );
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 1.35, duration: 110, useNativeDriver: Platform.OS !== "web" }),
+      Animated.timing(scaleAnim, { toValue: 0.88, duration: 80, useNativeDriver: Platform.OS !== "web" }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 110, useNativeDriver: Platform.OS !== "web" }),
+    ]).start();
 
     const newLiked = !liked;
     setLiked(newLiked);
@@ -401,7 +399,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 6, paddingVertical: 6 }}>
         {post.type !== "thesis" && (
           <>
-            <Animated.View style={animatedStyle}>
+            <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
               <TouchableOpacity
                 onPress={(e) => { e.stopPropagation?.(); handleLike(); }}
                 activeOpacity={0.7}

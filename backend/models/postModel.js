@@ -49,12 +49,35 @@ const getAllPosts = async ({
   }
 
   if (cursor) {
-    const [createdAt, id] = String(cursor).split("|");
+    const parts = String(cursor).split("|");
+    let isPinned = false;
+    let createdAt = null;
+    let id = null;
+
+    if (parts.length >= 3) {
+      isPinned = parts[0] === "true" || parts[0] === "1";
+      createdAt = parts[1];
+      id = parts[2];
+    } else if (parts.length === 2) {
+      isPinned = false;
+      createdAt = parts[0];
+      id = parts[1];
+    }
+
     if (createdAt && id) {
-      params.push(createdAt, id);
+      params.push(isPinned, createdAt, id);
+      const pinnedParam = `$${params.length - 2}::boolean`;
+      const createdParam = `$${params.length - 1}::timestamptz`;
+      const idParam = `$${params.length}::uuid`;
       conditions.push(`(
-        p.created_at < $${params.length - 1}::timestamptz
-        OR (p.created_at = $${params.length - 1}::timestamptz AND p.id < $${params.length}::uuid)
+        (COALESCE(p.pinned, false) = false AND ${pinnedParam} = true)
+        OR (
+          COALESCE(p.pinned, false) = ${pinnedParam}
+          AND (
+            p.created_at < ${createdParam}
+            OR (p.created_at = ${createdParam} AND p.id < ${idParam})
+          )
+        )
       )`);
     }
   }
@@ -84,8 +107,8 @@ const getAllPosts = async ({
       p.title,
       p.technologies,
       p.github_url,
+      p.pinned,
       p.image_url,
-      p.image_urls,
       p.image_urls,
       p.preview_metadata,
       p.visibility,
@@ -109,7 +132,7 @@ const getAllPosts = async ({
     LEFT JOIN profiles pr ON p.author_id = pr.id
     LEFT JOIN public.departments d ON d.id = pr.department_id
     ${whereClause}
-    ORDER BY p.created_at DESC, p.id DESC
+    ORDER BY p.pinned DESC, p.created_at DESC, p.id DESC
     LIMIT $${params.length};
   `;
   
@@ -144,8 +167,8 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
       p.title,
       p.technologies,
       p.github_url,
+      p.pinned,
       p.image_url,
-      p.image_urls,
       p.image_urls,
       p.preview_metadata,
       p.visibility,
@@ -202,8 +225,8 @@ const buildPostSelect = (paramsLength, viewerId) => {
       p.title,
       p.technologies,
       p.github_url,
+      p.pinned,
       p.image_url,
-      p.image_urls,
       p.image_urls,
       p.preview_metadata,
       p.visibility,
@@ -252,8 +275,8 @@ const buildRepostSelect = (paramsLength, viewerId) => {
       p.title,
       p.technologies,
       p.github_url,
+      p.pinned,
       p.image_url,
-      p.image_urls,
       p.image_urls,
       p.preview_metadata,
       p.visibility,
@@ -353,12 +376,35 @@ const visiblePostsFor = async ({
     }
 
     if (cursor) {
-    const [createdAt, id] = String(cursor).split("|");
+    const parts = String(cursor).split("|");
+    let isPinned = false;
+    let createdAt = null;
+    let id = null;
+
+    if (parts.length >= 3) {
+      isPinned = parts[0] === "true" || parts[0] === "1";
+      createdAt = parts[1];
+      id = parts[2];
+    } else if (parts.length === 2) {
+      isPinned = false;
+      createdAt = parts[0];
+      id = parts[1];
+    }
+
     if (createdAt && id) {
-      params.push(createdAt, id);
+      params.push(isPinned, createdAt, id);
+      const pinnedParam = `$${params.length - 2}::boolean`;
+      const createdParam = `$${params.length - 1}::timestamptz`;
+      const idParam = `$${params.length}::uuid`;
       conditions.push(`(
-        p.created_at < $${params.length - 1}::timestamptz
-        OR (p.created_at = $${params.length - 1}::timestamptz AND p.id < $${params.length}::uuid)
+        (COALESCE(p.pinned, false) = false AND ${pinnedParam} = true)
+        OR (
+          COALESCE(p.pinned, false) = ${pinnedParam}
+          AND (
+            p.created_at < ${createdParam}
+            OR (p.created_at = ${createdParam} AND p.id < ${idParam})
+          )
+        )
       )`);
     }
   }
@@ -381,7 +427,7 @@ const visiblePostsFor = async ({
     LEFT JOIN profiles pr ON p.author_id = pr.id
     LEFT JOIN public.departments d ON d.id = pr.department_id
     ${whereClause}
-    ORDER BY p.created_at DESC, p.id DESC
+    ORDER BY p.pinned DESC, p.created_at DESC, p.id DESC
     LIMIT $${postParams.length};
   `;
 
@@ -470,7 +516,16 @@ const visiblePostsFor = async ({
     new Date(b.created_at) - new Date(a.created_at)
   );
 
-  return { posts: allItems };
+  // The cursor is built here, beside the ORDER BY it mirrors, so clients never
+  // have to know the keyset format. Ordering is `pinned DESC, created_at DESC,
+  // id DESC`, so the marker carries all three columns.
+  const lastRow = postsResult.rows[postsResult.rows.length - 1];
+  const next_cursor =
+    postsResult.rows.length === limit && lastRow
+      ? `${lastRow.pinned ? "true" : "false"}|${new Date(lastRow.created_at).toISOString()}|${lastRow.id}`
+      : null;
+
+  return { posts: allItems, next_cursor };
 };
 
 // ---- visibility + audience -------------------------------------------------
@@ -763,6 +818,7 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
       p.title,
       p.technologies,
       p.github_url,
+      p.pinned,
       p.image_url,
       p.image_urls,
       p.visibility,

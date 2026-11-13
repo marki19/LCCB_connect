@@ -14,6 +14,7 @@ const {
   withStorageUrlsSync,
   withStorageUrls,
   __setAdminFactory,
+  __clearStorageCache,
 } = require("../services/storageService");
 
 const BASE = "https://test-project.supabase.co/storage/v1/object/public";
@@ -133,15 +134,26 @@ describe("withStorageUrlsSync", () => {
 });
 
 describe("withStorageUrls (async, private buckets)", () => {
-  let signedUrlCalls;
+  let bulkCalls;
 
   beforeEach(() => {
-    signedUrlCalls = [];
+    __clearStorageCache();
+    bulkCalls = [];
     __setAdminFactory(() => ({
       storage: {
         from: (bucket) => ({
+          createSignedUrls: async (paths) => {
+            bulkCalls.push({ bucket, paths });
+            return {
+              data: paths.map((p) => ({
+                path: p,
+                signedUrl: `https://signed/${bucket}/${p}`,
+                error: null,
+              })),
+              error: null,
+            };
+          },
           createSignedUrl: async (key) => {
-            signedUrlCalls.push({ bucket, key });
             return {
               data: { signedUrl: `https://signed/${bucket}/${key}` },
               error: null,
@@ -155,26 +167,58 @@ describe("withStorageUrls (async, private buckets)", () => {
   it("resolves a private assets key to a signed URL", async () => {
     const out = await withStorageUrls({ id: "p1", image_url: "posts/1/2.jpg" });
     assert.deepEqual(out, { id: "p1", image_url: "https://signed/assets/posts/1/2.jpg" });
-    assert.deepEqual(signedUrlCalls, [{ bucket: "assets", key: "posts/1/2.jpg" }]);
+    assert.deepEqual(bulkCalls, [{ bucket: "assets", paths: ["posts/1/2.jpg"] }]);
   });
 
   it("resolves a private theses key to a signed URL", async () => {
     const out = await withStorageUrls({ id: "t1", pdf_url: "1/2.pdf" });
     assert.deepEqual(out, { id: "t1", pdf_url: "https://signed/theses/1/2.pdf" });
+    assert.deepEqual(bulkCalls, [{ bucket: "theses", paths: ["1/2.pdf"] }]);
   });
 
   it("leaves public avatars keys as plain URLs (no admin call)", async () => {
     const out = await withStorageUrls({ id: "u1", avatar_url: "avatars/1/2.jpg" });
     assert.equal(out.avatar_url, `${BASE}/avatars/avatars/1/2.jpg`);
-    assert.deepEqual(signedUrlCalls, []);
+    assert.deepEqual(bulkCalls, []);
   });
 
-  it("resolves arrays in parallel", async () => {
+  it("batches multiple keys in the same bucket into a single bulk call", async () => {
     const out = await withStorageUrls([
       { id: "a", image_url: "a/1.jpg" },
-      { id: "b", image_url: "b/2.jpg" },
+      { id: "b", image_url: "b/2.jpg", image_urls: ["b/3.jpg", "b/4.jpg"] },
+      { id: "c", image_url: "c/5.jpg" },
     ]);
     assert.equal(out[0].image_url, "https://signed/assets/a/1.jpg");
-    assert.equal(out[1].image_url, "https://signed/assets/b/2.jpg");
+    assert.equal(out[1].image_urls[0], "https://signed/assets/b/3.jpg");
+    assert.equal(out[1].image_urls[1], "https://signed/assets/b/4.jpg");
+    // All 5 distinct assets keys batched into 1 call for bucket 'assets'
+    assert.equal(bulkCalls.length, 1);
+    assert.equal(bulkCalls[0].bucket, "assets");
+    assert.equal(bulkCalls[0].paths.length, 5);
+  });
+
+  it("uses the LRU cache on repeat resolution without hitting storage again", async () => {
+    await withStorageUrls({ id: "p1", image_url: "posts/cached/1.jpg" });
+    assert.equal(bulkCalls.length, 1);
+
+    // Second call with same key should hit cache
+    const out2 = await withStorageUrls({ id: "p2", image_url: "posts/cached/1.jpg" });
+    assert.equal(out2.image_url, "https://signed/assets/posts/cached/1.jpg");
+    assert.equal(bulkCalls.length, 1, "Cache hit must not invoke bulk signing again");
+  });
+
+  it("never throws and returns raw keys when storage fails or times out", async () => {
+    __setAdminFactory(() => ({
+      storage: {
+        from: () => ({
+          createSignedUrls: async () => {
+            throw new Error("Supabase storage down");
+          },
+        }),
+      },
+    }));
+
+    const out = await withStorageUrls({ id: "err1", image_url: "failed/key.jpg" });
+    assert.equal(out.image_url, "failed/key.jpg");
   });
 });

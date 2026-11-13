@@ -1,5 +1,4 @@
 const db = require("../db");
-const notificationService = require("../services/notificationService");
 const { DEFAULT_LIMIT } = require("./pagination");
 
 /**
@@ -342,11 +341,15 @@ const getMessageById = async (id) => {
  *   2. re-evaluate the permission engine (block is a hard stop, always)
  *   3. a recipient replying to a request implicitly accepts it
  *   4. INSERT the message idempotently on (sender_id, client_msg_id)
- *   5. bump the conversation and record the notification
+ *   5. bump the conversation and seed read markers
+ *
+ * No notification row is written: messages belong to the Messages surface, and
+ * the OS push (pushService.notifyNewMessage) already carries them to the status
+ * bar and lock screen. See the notifications query for the matching exclusion.
  *
  * Returns `{ message, status, deduped }`; throws a 403/404 as appropriate.
  */
-const sendMessage = async ({ conversationId, senderId, body, clientMsgId, senderName }) => {
+const sendMessage = async ({ conversationId, senderId, body, clientMsgId }) => {
   return db.withTransaction(async (client) => {
     const convo = (
       await client.query(
@@ -418,21 +421,6 @@ const sendMessage = async ({ conversationId, senderId, body, clientMsgId, sender
        VALUES ($1, $2), ($1, $3)
        ON CONFLICT (conversation_id, user_id) DO NOTHING;`,
       [conversationId, senderId, recipientId]
-    );
-
-    // Row is always written (guaranteed); mute only affects push (§10).
-    await notificationService.notifyUser(
-      {
-        userId: recipientId,
-        actorId: senderId,
-        type: status === "requested" ? "message_request" : "new_message",
-        targetId: conversationId,
-        message:
-          status === "requested"
-            ? `${senderName} sent you a message request.`
-            : `${senderName}: ${body.slice(0, 80)}`,
-      },
-      client
     );
 
     return { message, status, deduped: false };

@@ -34,6 +34,8 @@ process.env.RATE_LIMIT_COMMENT_DAILY_MAX = process.env.RATE_LIMIT_COMMENT_DAILY_
 process.env.RATE_LIMIT_THESIS_MAX = process.env.RATE_LIMIT_THESIS_MAX || "1000000";
 process.env.RATE_LIMIT_PREVIEW_MAX = process.env.RATE_LIMIT_PREVIEW_MAX || "1000000";
 process.env.RATE_LIMIT_LIKE_MAX = process.env.RATE_LIMIT_LIKE_MAX || "1000000";
+process.env.RATE_LIMIT_VERIFICATION_OTP_MAX =
+  process.env.RATE_LIMIT_VERIFICATION_OTP_MAX || "1000000";
 
 // Push is best-effort and would otherwise try to reach Postgres/Expo; the
 // service short-circuits when disabled. push.test.js re-enables it locally.

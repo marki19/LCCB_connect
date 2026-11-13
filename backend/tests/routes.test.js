@@ -680,7 +680,8 @@ describe("errors and pagination limits", () => {
       const res = await request(app).post("/api/posts").set(AUTH).send({ content: "x" });
 
       assert.equal(res.status, 500);
-      assert.deepEqual(res.body, { error: "Internal server error" });
+      assert.equal(res.body.error, "Internal server error");
+      assert.ok(res.body.requestId);
       assert.ok(!JSON.stringify(res.body).includes("secret_table"));
     } finally {
       console.error = originalError;
@@ -736,7 +737,7 @@ describe("errors and pagination limits", () => {
     ]);
 
     await request(app).get("/api/users?limit=0").set(AUTH);
-    assert.deepEqual(m.getAllUsers.calls.at(-1), [{ limit: 100, cursor: null }]);
+    assert.deepEqual(m.getAllUsers.calls.at(-1), [{ limit: 25, cursor: null }]);
   });
 });
 

@@ -18,7 +18,13 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { listFriendRequests } from "../../lib/messages";
+import { checkAdminSessionStatus } from "../../lib/adminApi";
 import Avatar from "../Avatar";
+<<<<<<< HEAD
+=======
+import AdminMfaPromptModal from "../admin/AdminMfaPromptModal";
+import { useSettingsSidebar } from "../../contexts/SettingsSidebarContext";
+>>>>>>> 1b3ad26d1c7aca605347d1ca453d8df3ba988e6e
 
 export default function DesktopLeftRail() {
   const router = useRouter();
@@ -27,6 +33,14 @@ export default function DesktopLeftRail() {
   const { colors } = useTheme();
 
   const [friendRequestCount, setFriendRequestCount] = useState(0);
+<<<<<<< HEAD
+=======
+  const [showMoreShortcuts, setShowMoreShortcuts] = useState(false);
+  const [mfaModalVisible, setMfaModalVisible] = useState(false);
+
+  const adminUser = isAdminRole(profile?.role);
+  const departmentAdmin = isDepartmentAdminRole(profile?.role);
+>>>>>>> 1b3ad26d1c7aca605347d1ca453d8df3ba988e6e
 
   // Fetch incoming friend requests count for live badge
   useEffect(() => {
@@ -184,6 +198,50 @@ export default function DesktopLeftRail() {
               </Text>
             </Pressable>
           )}
+<<<<<<< HEAD
+=======
+
+          {/* Admin / Moderation Console */}
+          {(adminUser || departmentAdmin) && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={adminUser ? "Admin Console" : "Moderation Console"}
+              onPress={async () => {
+                if (adminUser) {
+                  try {
+                    const status = await checkAdminSessionStatus();
+                    if (status.isAdmin && !status.valid) {
+                      setMfaModalVisible(true);
+                      return;
+                    }
+                  } catch {
+                    // Non-blocking fallback
+                  }
+                  setAdminAppPreview(false);
+                  router.push("/(admin)");
+                } else {
+                  router.push("/(moderation)" as any);
+                }
+              }}
+              style={({ pressed }) => [
+                styles.itemRow,
+                pressed && { backgroundColor: colors.surfaceSunken },
+              ]}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: "#F43F5E" }]}>
+                <Shield size={20} color="#FFFFFF" />
+              </View>
+              <Text
+                style={[
+                  styles.itemLabel,
+                  { color: adminUser ? colors.brand : colors.action, fontWeight: "700" },
+                ]}
+              >
+                {adminUser ? "Admin Console" : "Moderation"}
+              </Text>
+            </Pressable>
+          )}
+>>>>>>> 1b3ad26d1c7aca605347d1ca453d8df3ba988e6e
         </View>
 
         {/* Divider */}
@@ -233,6 +291,7 @@ export default function DesktopLeftRail() {
         </View>
       </ScrollView>
 
+<<<<<<< HEAD
       {/* Meta footer — pinned to the bottom of the rail */}
       <View style={[styles.footerContainer, { borderTopColor: colors.border }]}>
         <Text style={[styles.footerText, { color: colors.textTertiary }]}>
@@ -242,6 +301,17 @@ export default function DesktopLeftRail() {
           LCCB Connect © 2026
         </Text>
       </View>
+=======
+      <AdminMfaPromptModal
+        visible={mfaModalVisible}
+        onClose={() => setMfaModalVisible(false)}
+        onSuccess={() => {
+          setMfaModalVisible(false);
+          setAdminAppPreview(false);
+          router.push("/(admin)");
+        }}
+      />
+>>>>>>> 1b3ad26d1c7aca605347d1ca453d8df3ba988e6e
     </View>
   );
 }

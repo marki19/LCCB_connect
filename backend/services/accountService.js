@@ -74,6 +74,83 @@ async function revokeSessions(userId) {
   return { sessions, refresh_tokens: refresh.rowCount || 0 };
 }
 
+/**
+ * Limits concurrent active sessions per user account.
+ * When the count exceeds maxSessions, the oldest sessions are evicted (FIFO).
+ */
+async function enforceSessionCap(userId, { maxSessions, role } = {}) {
+  if (!UUID_RE.test(userId)) {
+    return { evicted: 0, sessionIds: [] };
+  }
+
+  // Determine cap: env override or role-based default (3 for admin/superadmin, 5 for others)
+  let cap = maxSessions;
+  if (!cap) {
+    const isPrivileged = role === "admin" || role === "superadmin";
+    const envCap = parseInt(process.env.MAX_CONCURRENT_SESSIONS, 10);
+    cap = Number.isInteger(envCap) && envCap > 0
+      ? envCap
+      : (isPrivileged ? 3 : 5);
+  }
+
+  try {
+    // Find all sessions for user ordered by newest first
+    const res = await db.query(
+      `SELECT id FROM auth.sessions 
+       WHERE user_id = $1::uuid 
+       ORDER BY created_at DESC 
+       OFFSET $2`,
+      [userId, cap]
+    );
+
+    if (!res.rows || res.rows.length === 0) {
+      return { evicted: 0, sessionIds: [] };
+    }
+
+    const excessIds = res.rows.map((r) => r.id);
+
+    // Delete corresponding refresh tokens
+    await db.query(
+      `DELETE FROM auth.refresh_tokens WHERE session_id = ANY($1::uuid[])`,
+      [excessIds]
+    );
+
+    // Delete excess sessions
+    const deleted = await db.query(
+      `DELETE FROM auth.sessions WHERE id = ANY($1::uuid[]) RETURNING id`,
+      [excessIds]
+    );
+
+    // Audit force_signout in session_events
+    try {
+      await db.query(
+        `INSERT INTO public.session_events (user_id, event_type, metadata)
+         VALUES ($1::uuid, 'force_signout', $2::jsonb)`,
+        [
+          userId,
+          JSON.stringify({
+            reason: "session_cap_exceeded",
+            cap,
+            evicted_count: deleted.rowCount || 0,
+            evicted_session_ids: excessIds,
+          }),
+        ]
+      );
+    } catch {
+      // non-critical audit log
+    }
+
+    return {
+      evicted: deleted.rowCount || 0,
+      sessionIds: excessIds,
+    };
+  } catch (err) {
+    // Do not fail login if session cap query encounters an error
+    console.error("[account] Failed to enforce session cap:", err.message);
+    return { evicted: 0, sessionIds: [] };
+  }
+}
+
 async function deleteAuthUser(userId) {
   const supabase = getSupabaseAdmin();
   const { error } = await supabase.auth.admin.deleteUser(userId);
@@ -152,6 +229,7 @@ module.exports = {
   banUser,
   unbanUser,
   revokeSessions,
+  enforceSessionCap,
   deleteAuthUser,
   getAuthUser,
   generateImpersonationLink,

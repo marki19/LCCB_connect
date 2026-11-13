@@ -146,17 +146,29 @@ export function observeTokenRefresh(): () => void {
  */
 let lastResponseHandled = false;
 
+export type NotificationTapData = {
+  conversationId?: string | null;
+  targetId?: string | null;
+  type?: string | null;
+  [key: string]: unknown;
+};
+
 export function observeNotificationTaps(
-  onTap: (conversationId: string) => void
+  onTap: (conversationIdOrPayload: string | NotificationTapData, rawData?: NotificationTapData) => void
 ): () => void {
   if (Platform.OS === "web") return () => {};
 
   const redirect = (response: Notifications.NotificationResponse | null) => {
-    const conversationId = conversationIdOf(dataOf(response));
-    if (conversationId) onTap(conversationId);
+    const data = dataOf(response) as NotificationTapData | undefined;
+    const conversationId = conversationIdOf(data);
+    if (conversationId) {
+      onTap(conversationId, data);
+    } else if (data) {
+      onTap(data, data);
+    }
   };
 
-  // The tap that launched the app (if any) â€” handled at most once.
+  // The tap that launched the app (if any) — handled at most once.
   if (!lastResponseHandled) {
     lastResponseHandled = true;
     redirect(Notifications.getLastNotificationResponse());
@@ -164,4 +176,33 @@ export function observeNotificationTaps(
 
   const subscription = Notifications.addNotificationResponseReceivedListener(redirect);
   return () => subscription.remove();
+}
+
+/**
+ * Triggers a real native device notification banner (heads-up) and status-bar
+ * entry on iOS / Android. Used when real-time events arrive in-app on mobile devices.
+ */
+export async function presentLocalNotification({
+  title,
+  body,
+  data = {},
+}: {
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+}): Promise<void> {
+  if (Platform.OS === "web") return;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data,
+        sound: "default",
+      },
+      trigger: null,
+    });
+  } catch {
+    // Best-effort: swallow if notification permissions aren't granted
+  }
 }

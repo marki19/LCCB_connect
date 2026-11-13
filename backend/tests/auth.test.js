@@ -129,6 +129,33 @@ describe("requireAuth", () => {
       assert.deepEqual(getUser.calls, [["good"]]);
     });
 
+  it("ignores user_metadata.role so a student cannot self-promote", async () => {
+    // Supabase lets the account owner rewrite user_metadata, so the JWT's
+    // metadata role must never be trusted for authorization. Only profiles.role
+    // may grant privileges.
+    getUser.setImpl(async () => ({
+      data: {
+        user: {
+          id: "u1",
+          email: "a@b.c",
+          user_metadata: { role: "superadmin" },
+        },
+      },
+      error: null,
+    }));
+    getProfile.setImpl(async () => ({ id: "u1", role: "student" }));
+
+    try {
+      const res = await request(app)
+        .get("/api/admin/overview")
+        .set("Authorization", "Bearer escalated");
+
+      assert.equal(res.status, 403, "metadata role must not grant admin access");
+    } finally {
+      getProfile.setImpl(async (id) => ({ id, role: "student", profile_completed: true }));
+    }
+  });
+
   it("protects mutating actions across all API mounts", async () => {
     const paths = [
       ["post", "/api/posts"],
@@ -173,6 +200,7 @@ describe("requireAuth", () => {
 
     const missing = await request(app).get("/definitely-not-a-route");
     assert.equal(missing.status, 404);
-    assert.deepEqual(missing.body, { error: "Not found" });
+    assert.equal(missing.body.error, "Not found");
+    assert.ok(missing.body.requestId);
   });
 });

@@ -36,7 +36,7 @@ async function main() {
 
   const client = new Client({
     connectionString,
-    ssl: isLocalhost ? false : ca ? { ca, rejectUnauthorized: true } : false,
+    ssl: isLocalhost ? false : ca ? { ca, rejectUnauthorized: true } : { rejectUnauthorized: false },
   });
 
   await client.connect();

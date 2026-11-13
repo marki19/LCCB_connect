@@ -156,6 +156,34 @@ describe("MFA & Session Security", () => {
       mfaService.clearSessionAgeCache(userId);
       assert.equal(cache.has(userId), false);
     });
+
+    it("should prune expired entries when cache exceeds 1000 items", async () => {
+      const cache = mfaService.checkSessionAge.cache || (mfaService.checkSessionAge.cache = new Map());
+      cache.clear();
+
+      // Populate 1005 items, some expired (>60s old)
+      const now = Date.now();
+      for (let i = 0; i < 1005; i++) {
+        cache.set(`user-${i}`, {
+          valid: true,
+          ts: i < 10 ? now - 70000 : now, // First 10 are expired
+          aal: "aal1",
+        });
+      }
+
+      assert.equal(cache.size, 1005);
+
+      const req = { user: { id: "user-active" }, profile: { role: "student" } };
+      let nextCalled = false;
+      await mfaService.checkSessionAge(req, {}, () => {
+        nextCalled = true;
+      });
+
+      // The 10 expired entries should have been pruned, bringing size <= 1000
+      assert.ok(cache.size <= 1000);
+      assert.equal(cache.has("user-0"), false);
+      assert.equal(cache.has("user-1"), false);
+    });
   });
 });
 

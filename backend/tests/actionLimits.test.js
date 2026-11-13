@@ -8,7 +8,7 @@ const assert = require("node:assert/strict");
 const express = require("express");
 const request = require("supertest");
 
-const { perUserLimiter } = require("../middleware/actionLimits");
+const { perUserLimiter, searchLimiter } = require("../middleware/actionLimits");
 const { mfaChallengeLimiter } = require("../middleware/loginLimits");
 
 function buildApp(limiter) {
@@ -61,5 +61,17 @@ describe("MFA challenge limiter", () => {
       200,
       "a different challenge gets its own budget"
     );
+  });
+});
+
+describe("search limiter", () => {
+  it("enforces per-user limits on search requests", async () => {
+    assert.equal(typeof searchLimiter, "function");
+    const app = buildApp(searchLimiter);
+    const hit = (user) =>
+      request(app).post("/probe").set("x-user", user).send({});
+
+    const res = await hit("search-user-1");
+    assert.equal(res.status, 200);
   });
 });

@@ -1,6 +1,7 @@
 const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
 const { escapeLike } = require("../utils/queryFilters");
+const { normalizeRole } = require("../utils/roles");
 
 // RAW SQL QUERIES ONLY (NO ORM METHODS)
 
@@ -131,7 +132,19 @@ const getAllUsers = async ({
     WHERE p.id = $1;
   `;
   const result = await db.query(sql, [id]);
-  return result.rows[0];
+  const row = result.rows[0];
+  if (!row) return null;
+  const role = normalizeRole(row.role);
+  if (
+    role === "superadmin" ||
+    role === "admin" ||
+    role === "faculty" ||
+    role === "departmentadmin" ||
+    row.verification_status === "verified"
+  ) {
+    row.profile_completed = true;
+  }
+  return row;
 };
 
 const getPublicProfile = async (targetId, viewerId = null) => {

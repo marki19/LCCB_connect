@@ -9,6 +9,7 @@ import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { FloatingChatProvider } from "../src/contexts/FloatingChatContext";
 import { SettingsSidebarProvider } from "../src/contexts/SettingsSidebarContext";
 import { FeedFilterProvider } from "../src/contexts/FeedFilterContext";
+import { ToastProvider } from "../src/contexts/ToastContext";
 import SettingsSidebar from "../src/components/SettingsSidebar";
 import {
   isAdminRole,
@@ -56,12 +57,21 @@ function RouteGuard() {
     return () => offTokenRefresh();
   }, [userId, isGuest]);
 
-  // Deep-link a tapped push to its thread. Waits for auth so a cold-start tap
-  // isn't dropped (the last response is consumed once, in `push.ts`).
+  // Deep-link a tapped push or local notification to its destination.
   useEffect(() => {
     if (!initialized || !userId || isGuest) return;
-    const offTap = observeNotificationTaps((conversationId) => {
-      router.push(`/messages/${conversationId}`);
+    const offTap = observeNotificationTaps((payload) => {
+      if (typeof payload === "string") {
+        router.push(`/messages/${payload}`);
+      } else if (payload?.conversationId) {
+        router.push(`/messages/${payload.conversationId}`);
+      } else if (payload?.type === "announcement" && payload?.targetId) {
+        router.push(`/post/${payload.targetId}`);
+      } else if (payload?.type === "friend_request" || payload?.type === "friend_accepted") {
+        router.push("/friends");
+      } else {
+        router.push("/(tabs)/notifications");
+      }
     });
     return () => offTap();
   }, [initialized, userId, isGuest, router]);
@@ -185,7 +195,9 @@ export default function RootLayout() {
             <FloatingChatProvider>
               <SettingsSidebarProvider>
                 <FeedFilterProvider>
-                  <RouteGuard />
+                  <ToastProvider>
+                    <RouteGuard />
+                  </ToastProvider>
                 </FeedFilterProvider>
               </SettingsSidebarProvider>
             </FloatingChatProvider>

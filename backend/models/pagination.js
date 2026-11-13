@@ -5,7 +5,7 @@
 // exact meaning is per-model (see the models that consume it).
 
 const MAX_LIMIT = 100;
-const DEFAULT_LIMIT = 100;
+const DEFAULT_LIMIT = 25;
 
 /** Clamp a client-supplied `limit` into [1, MAX_LIMIT]. */
 function clampLimit(raw) {

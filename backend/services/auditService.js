@@ -18,6 +18,8 @@ const ACTIONS = Object.freeze({
   REPORT_REVIEW: "report.review",
   REPORT_DISMISS: "report.dismiss",
   ANNOUNCEMENT_SEND: "announcement.send",
+  ANNOUNCEMENT_UPDATE: "announcement.update",
+  ANNOUNCEMENT_DELETE: "announcement.delete",
   CATALOG_CREATE: "catalog.create",
   CATALOG_UPDATE: "catalog.update",
   CATALOG_ACTIVATE: "catalog.activate",

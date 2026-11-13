@@ -13,6 +13,7 @@ import { sendFriendRequest } from "../lib/messages";
 import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { useToast } from "../contexts/ToastContext";
 import { usePresence } from "../contexts/PresenceContext";
 import Avatar from "./Avatar";
 import Modal from "./ui/Modal";
@@ -64,6 +65,7 @@ export default function PeerPicker({ visible, onClose, onOpened, mode = "message
   const { profile } = useAuth();
   const { colors } = useTheme();
   const { modeOf } = usePresence();
+  const { showToast } = useToast();
   const router = useRouter();
   const [sections, setSections] = useState<{ title: string; data: Peer[] }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -128,9 +130,9 @@ export default function PeerPicker({ visible, onClose, onOpened, mode = "message
   };
 
   const openThread = async (peer: Peer, label: string) => {
-    // Check profile completion before attempting to start a conversation
+    // Check profile completion before attempting to start a conversation (students only)
     // Banner dismissal does NOT bypass this - profile must be complete to post/message
-    if (profile?.profile_completed === false) {
+    if (profile?.role === "student" && profile?.profile_completed === false && profile?.verification_status !== "verified") {
       Alert.alert(
         "Complete Your Profile",
         "You need to complete your profile (full name, student ID, department, and course) before you can post or message.",
@@ -174,6 +176,7 @@ export default function PeerPicker({ visible, onClose, onOpened, mode = "message
     setError(null);
     try {
       await sendFriendRequest(peer.id);
+      showToast({ message: "Friend request sent.", tone: "success" });
       setSections((prev) =>
         prev.map((section) => ({
           ...section,

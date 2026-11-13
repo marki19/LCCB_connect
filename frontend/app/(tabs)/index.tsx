@@ -176,7 +176,7 @@ export default function HomeScreen() {
                 course: row.author?.department_name || "—",
                 yearLevel: row.author?.year_level || "—",
               },
-              title: row.title || "Post Update",
+              title: row.title || "",
               description: row.content || row.description || "",
               content: row.content || undefined,
               type: row.type || "text",

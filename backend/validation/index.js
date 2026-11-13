@@ -1,4 +1,5 @@
 const { z } = require("zod");
+const { normalizeRole } = require("../utils/roles");
 
 /**
  * Request body schemas + a `validate` middleware.
@@ -102,7 +103,23 @@ const postFields = {
   allow_reposts: z.boolean().optional(),
 };
 
-const createPostSchema = withCustomAudienceRule(z.object(postFields).strict());
+const withPostContentRule = (schema) =>
+  schema.superRefine((data, ctx) => {
+    const hasContent = Boolean(data.content && data.content.trim().length > 0);
+    const hasTitle = Boolean(data.title && data.title.trim().length > 0);
+    const hasImage = Boolean(data.image_url || (Array.isArray(data.image_urls) && data.image_urls.length > 0));
+    const hasPreview = Boolean(data.preview_metadata || data.github_url);
+
+    if (!hasContent && !hasTitle && !hasImage && !hasPreview) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["content"],
+        message: "A post must have at least content, an image, a title, or a link",
+      });
+    }
+  });
+
+const createPostSchema = withPostContentRule(withCustomAudienceRule(z.object(postFields).strict()));
 const updatePostSchema = withCustomAudienceRule(z.object(postFields).strict());
 
 // ---- comments --------------------------------------------------------------
@@ -163,7 +180,7 @@ const updateCourseSchema = z
   })
   .strict();
 
-// ---- identity verification (migration 016) ----------------------------------
+// ---- identity verification (migrations 016, 042) -----------------------------
 // Student ID: 4-20 chars of [A-Za-z0-9-], stored uppercased. No roster exists
 // to validate against, so the admin review *is* the identity check.
 const studentIdSchema = z
@@ -174,13 +191,29 @@ const studentIdSchema = z
   .regex(/^[A-Za-z0-9-]+$/, "Student ID may only contain letters, numbers, and hyphens")
   .transform((v) => v.toUpperCase());
 
+// Staff ID format is temporary — one constant to change when the real format
+// arrives. Kept separate from the student shape so the two can diverge.
+const STAFF_ID_RE = /^[A-Z]{2,4}-\d{4,8}$/;
+const STAFF_ID_MESSAGE = "Staff ID must look like ADM-00123";
+const staffIdSchema = z
+  .string()
+  .trim()
+  .transform((v) => v.toUpperCase())
+  .refine((v) => STAFF_ID_RE.test(v), STAFF_ID_MESSAGE);
+
+/**
+ * The submitted fields are the union of every role's form; which ones are
+ * required depends on the caller's role, so that split lives in the controller
+ * (it is the layer that knows the role). `verification_otp` must have been
+ * issued to the same school account and is single-use.
+ */
 const verificationSubmitSchema = z
   .object({
     full_name: z.string().trim().min(2, "Full name must be at least 2 characters").max(200),
     student_id: studentIdSchema,
-    department_id: requiredUuid(),
-    course_id: requiredUuid(),
-    year_level: z.string().trim().min(1, "Year level is required").max(50),
+    department_id: requiredUuid().optional(),
+    course_id: requiredUuid().optional(),
+    year_level: z.string().trim().min(1).max(50).optional(),
     birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Birthdate must be YYYY-MM-DD").refine((d) => {
       const [yearStr, monthStr, dayStr] = d.split("-");
       const year = parseInt(yearStr, 10);
@@ -192,8 +225,13 @@ const verificationSubmitSchema = z
       const today = new Date();
       return date < today && date > new Date("1900-01-01");
     }, "Birthdate must be a valid calendar date in the past"),
+    otp_code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code we emailed you"),
   })
   .strict();
+
+// Sending a verification code takes no body: the address is the caller's own
+// school account, never a value from the client.
+const verificationOtpSchema = z.object({}).strict();
 
 // Used by the decline endpoint only: the note is optional but, when present,
 // must explain why so the student can fix and resubmit.
@@ -443,6 +481,13 @@ const announcementAudienceSchema = z.discriminatedUnion("type", [
   z
     .object({ type: z.literal("department"), department_id: requiredUuid() })
     .strict(),
+  z.object({ type: z.literal("course"), course_id: requiredUuid() }).strict(),
+  z
+    .object({
+      type: z.literal("year_level"),
+      year_level: z.string().trim().min(1).max(50),
+    })
+    .strict(),
 ]);
 
 const announcementSchema = z
@@ -450,6 +495,28 @@ const announcementSchema = z
     title: z.string().trim().min(3).max(120),
     body: z.string().trim().min(3).max(2000),
     audience: announcementAudienceSchema,
+    pinned: z.boolean().optional().default(false),
+    expires_at: z
+      .string()
+      .trim()
+      .datetime({ offset: true })
+      .nullable()
+      .optional()
+      .default(null),
+  })
+  .strict();
+
+/**
+ * Editing an announcement after it was sent. Every field is optional; the
+ * audience is absent on purpose — the notification fan-out is a snapshot, so
+ * changing who it was for is a delete-and-repost, not an edit.
+ */
+const announcementUpdateSchema = z
+  .object({
+    title: z.string().trim().min(3).max(120).optional(),
+    body: z.string().trim().min(3).max(2000).optional(),
+    pinned: z.boolean().optional(),
+    expires_at: z.string().trim().datetime({ offset: true }).nullable().optional(),
   })
   .strict();
 
@@ -458,8 +525,41 @@ const announcementSchema = z
  * value replaces `req.body`. On failure returns 400 with per-field messages and
  * never touches the database.
  */
+// Schemas whose forms are driven by the admin console, which sends a few extra
+// UI-only keys. Those keys are stripped and the remaining body is still
+// validated against the schema — the schema itself is never bypassed.
+const ADMIN_LENIENT_SCHEMAS = new Set([
+  createPostSchema,
+  updatePostSchema,
+  createCommentSchema,
+  updateCommentSchema,
+]);
+
 const validate = (schema) => (req, res, next) => {
-  const result = schema.safeParse(req.body ?? {});
+  let result = schema.safeParse(req.body ?? {});
+
+  // Tolerate unknown keys from admin forms without weakening field validation.
+  // An earlier version called next() on any failure that carried content or a
+  // title, which let an admin request send an invalid `visibility`,
+  // `image_urls`, or `department_id` straight into the model.
+  if (!result.success && ADMIN_LENIENT_SCHEMAS.has(schema)) {
+    const role = normalizeRole(req.profile?.role);
+    const isAdmin = role === "superadmin" || role === "admin";
+    const issues = result.error.issues;
+
+    if (
+      isAdmin &&
+      issues.length > 0 &&
+      issues.every((issue) => issue.code === "unrecognized_keys")
+    ) {
+      const body = { ...(req.body ?? {}) };
+      for (const issue of issues) {
+        for (const key of issue.keys ?? []) delete body[key];
+      }
+      result = schema.safeParse(body);
+    }
+  }
+
   if (!result.success) {
     // `unrecognized_keys` carries an empty path, so expand it into one entry per
     // rejected key — the caller needs to know exactly which key was refused.
@@ -523,8 +623,12 @@ const validate = (schema) => (req, res, next) => {
   suspendUserSchema,
   reasonBodySchema,
   announcementSchema,
+  announcementAudienceSchema,
+  announcementUpdateSchema,
   studentIdSchema,
+  staffIdSchema,
   verificationSubmitSchema,
+  verificationOtpSchema,
   verificationDecisionSchema,
   loginIdentifierSchema,
   verifySignupSchema,
