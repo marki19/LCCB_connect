@@ -124,6 +124,20 @@ app.use("/api", (req, res, next) => (isWrite(req) ? writeLimiter(req, res, next)
 // Public read-only endpoints (no token required)
 app.use("/api/public", publicRouter);
 
+// Local file storage serving (public/protected file streaming, Range request support)
+const fileRouter = require("./routes/fileRouter");
+app.use("/api/files", fileRouter);
+
+// Local file uploads (authenticated users)
+const uploadRouter = require("./routes/uploadRouter");
+app.use(
+  "/api/upload",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  uploadRouter
+);
+
 // Authentication routes (no requireAuth! Must come before authenticated routes)
 const authRouter = require("./routes/authRouter");
 app.use("/api/auth", authRouter);

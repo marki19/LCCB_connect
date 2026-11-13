@@ -14,6 +14,7 @@
  */
 
 const { getSupabaseAdmin, AdminAuthUnavailableError } = require("./supabaseAdmin");
+const { getLocalFilePath, CATEGORIES } = require("./localStorage");
 
 /**
  * Injectable admin-client factory. Tests swap this out so the async URL
@@ -44,6 +45,18 @@ const PUBLIC_BUCKETS = new Set(["avatars"]);
 /** True when a string already looks like an absolute URL. */
 function isAbsoluteUrl(value) {
   return /^https?:\/\//i.test(value);
+}
+
+/** True when a string points to a local file in backend/uploads. */
+function isLocalKey(key) {
+  if (!key || typeof key !== "string") return false;
+  if (key.startsWith("/api/files/")) return true;
+  const parts = key.split("/");
+  if (parts.length === 2 && CATEGORIES.includes(parts[0])) {
+    if (/^[0-9a-f]{16,64}\.[a-z0-9]+$/i.test(parts[1])) return true;
+    return Boolean(getLocalFilePath(parts[0], parts[1]));
+  }
+  return false;
 }
 
 /**
@@ -91,7 +104,8 @@ function setCachedUrl(bucket, key, url, ttlMs) {
  */
 function publicStorageUrl(bucket, key) {
   if (!key) return null;
-  if (isAbsoluteUrl(key)) return key;
+  if (isAbsoluteUrl(key) || key.startsWith("/api/files/")) return key;
+  if (isLocalKey(key)) return `/api/files/${key}`;
   return `${PUBLIC_OBJECT_ROOT}/${bucket}/${key}`;
 }
 
@@ -100,6 +114,7 @@ function publicStorageUrl(bucket, key) {
  *
  * `avatars` is public, so callers asking for one get the plain URL instead —
  * that path never touches Supabase and stays cheap.
+ * Local files resolve immediately to `/api/files/<category>/<filename>`.
  *
  * @param {string} bucket
  * @param {string} key
@@ -109,6 +124,9 @@ function publicStorageUrl(bucket, key) {
  */
 async function signedStorageUrl(bucket, key, { expiresIn = DEFAULT_SIGNED_URL_EXPIRES } = {}) {
   if (!key) return { url: null };
+  if (isLocalKey(key)) {
+    return { url: key.startsWith("/api/files/") ? key : `/api/files/${key}` };
+  }
   if (PUBLIC_BUCKETS.has(bucket)) return { url: publicStorageUrl(bucket, key) };
 
   const cached = getCachedUrl(bucket, key);
@@ -167,9 +185,13 @@ async function bulkSignBucket(bucket, keys, { expiresIn = DEFAULT_SIGNED_URL_EXP
     return resultMap;
   }
 
-  // Check cache first
+  // Check local keys and cache first
   const uncached = [];
   for (const key of keys) {
+    if (isLocalKey(key)) {
+      resultMap.set(key, key.startsWith("/api/files/") ? key : `/api/files/${key}`);
+      continue;
+    }
     const cached = getCachedUrl(bucket, key);
     if (cached) {
       resultMap.set(key, cached);
@@ -395,6 +417,7 @@ async function withStorageUrls(value) {
 }
 
 module.exports = {
+  isLocalKey,
   publicStorageUrl,
   signedStorageUrl,
   resolveStorageUrl,
