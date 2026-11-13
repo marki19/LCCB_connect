@@ -186,7 +186,7 @@ export default function FriendsScreen() {
                 Friends
               </Text>
               <TouchableOpacity
-                onPress={() => setPickerOpen(true)}
+                onPress={() => router.push("/find-friends")}
                 style={[styles.findFriendsBtn, { backgroundColor: colors.actionSurface }]}
                 accessibilityRole="button"
                 accessibilityLabel="Find Friends"
@@ -509,9 +509,9 @@ export default function FriendsScreen() {
         </View>
         <IconButton
                   icon={UserPlus}
-                  label="Add a friend"
+                  label="Find friends"
                   variant="subtle"
-                  onPress={() => setPickerOpen(true)}
+                  onPress={() => router.push("/find-friends")}
                   style={[styles.findFriendsBtn, { backgroundColor: colors.actionSurface }]}
                 />
       </View>

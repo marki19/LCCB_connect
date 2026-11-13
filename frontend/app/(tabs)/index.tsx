@@ -43,6 +43,7 @@ import StatusBadge from "../../src/components/admin/StatusBadge";
 import EmptyState from "../../src/components/admin/EmptyState";
 import { Skeleton } from "../../src/components/ui/Skeleton";
 import IdentityBanner from "../../src/components/IdentityBanner";
+import SuggestionCarousel from "../../src/components/SuggestionCarousel";
 import { useFeedFilter, type FeedCategory } from "../../src/contexts/FeedFilterContext";
 
 type FilterValue = FeedCategory;
@@ -535,6 +536,8 @@ export default function HomeScreen() {
                     </View>
                   </View>
                 )}
+
+                {!isGuest && <SuggestionCarousel />}
               </View>
             }
             ListEmptyComponent={

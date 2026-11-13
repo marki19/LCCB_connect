@@ -164,7 +164,6 @@ function RouteGuard() {
         <Stack.Screen name="(moderation)" />
         <Stack.Screen name="suspended" />
         <Stack.Screen name="onboarding" />
-        <Stack.Screen name="verify-requests" />
         <Stack.Screen
           name="create"
           options={{
@@ -178,6 +177,7 @@ function RouteGuard() {
         <Stack.Screen name="messages/index" />
         <Stack.Screen name="messages/[id]" />
         <Stack.Screen name="friends" />
+        <Stack.Screen name="find-friends" />
         <Stack.Screen name="saved" />
         <Stack.Screen name="settings" options={{ presentation: "modal" }} />
       </Stack>

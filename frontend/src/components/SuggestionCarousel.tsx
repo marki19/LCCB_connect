@@ -5,7 +5,6 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
-  useWindowDimensions,
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -31,7 +30,6 @@ const CARD_GAP = SPACE.x2;
 
 export default function SuggestionCarousel() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
   const { colors } = useTheme();
   const { user, isGuest } = useAuth();
   const [suggestions, setSuggestions] = useState<FriendSuggestion[]>([]);
@@ -40,13 +38,10 @@ export default function SuggestionCarousel() {
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    // Guests and signed-out states are hidden by the render gate below; no
+    // synchronous setState here (react-hooks/set-state-in-effect).
+    if (!user || isGuest) return;
     let cancelled = false;
-    if (!user || isGuest) {
-      setSuggestions([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
     listFriendSuggestions(8)
       .then((rows: any) => {
         if (!cancelled) setSuggestions(Array.isArray(rows) ? rows : []);
