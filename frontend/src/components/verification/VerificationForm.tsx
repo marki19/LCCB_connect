@@ -137,14 +137,9 @@ export default function VerificationForm({
     []
   );
 
-  const loadLevels = useCallback(async () => {
-    setLoadingCatalog((l) => ({ ...l, levels: true }));
-    try {
-      // No server endpoint for academic levels yet; keep defaults
-      await fetchCourses(""); // fetchCourses without department_id won't work, so we skip
-    } finally {
-      setLoadingCatalog((l) => ({ ...l, levels: false }));
-    }
+  const loadLevels = useCallback(() => {
+    // Academic levels are statically configured in DEFAULT_ACADEMIC_LEVELS
+    setLoadingCatalog((l) => ({ ...l, levels: false }));
   }, []);
 
   // Initial catalog load
