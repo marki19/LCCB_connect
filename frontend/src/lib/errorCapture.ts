@@ -32,7 +32,9 @@ function captureError(error: CapturedError): void {
     errorQueue.shift();
   }
   errorListeners.forEach(listener => listener(fullError));
-  console.log('[Error captured]', fullError);
+  if (__DEV__) {
+    console.log('[Error captured]', fullError);
+  }
 }
 
 export function useErrorCapture() {

@@ -421,7 +421,7 @@ async function requireAal2(req, res, next) {
               aal = "aal2";
             }
           } catch (err) {
-            console.error("[mfa] Failed to check AAL from session events:", err.message);
+            console.error(`[mfa][${req.id?.slice(0, 8) ?? "no-req"}] Failed to check AAL from session events:`, err.message);
           }
         }
     }
@@ -446,9 +446,21 @@ async function requireAal2(req, res, next) {
 async function checkSessionAge(req, res, next) {
   if (!req.user?.id) return next();
 
-  // Cache session lookup in memory for 60s per user
+  // Cache session lookup in memory for 60s per user (bounded to 1000 active entries)
   const now = Date.now();
   const cache = checkSessionAge.cache || (checkSessionAge.cache = new Map());
+  if (cache.size > 1000) {
+    for (const [uid, item] of cache) {
+      if (now - item.ts >= 60000) {
+        cache.delete(uid);
+      }
+    }
+    if (cache.size > 1000) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey) cache.delete(oldestKey);
+    }
+  }
+
   const cached = cache.get(req.user.id);
   if (cached && now - cached.ts < 60000) {
     if (!cached.valid) {
@@ -518,7 +530,7 @@ async function checkSessionAge(req, res, next) {
     next();
   } catch (err) {
     // On error, allow through but log
-    console.error("[session-age] Check failed:", err.message);
+    console.error(`[session-age][${req.id?.slice(0, 8) ?? "no-req"}] Check failed:`, err.message);
     next();
   }
 }
