@@ -1,12 +1,18 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const compression = require("compression");
 const rateLimit = require("express-rate-limit");
 
 // Read the middleware off the module object (rather than destructuring) so the
 // test suite can install spies before this app is built.
 const auth = require("./middleware/auth");
 const attachStorageUrls = require("./middleware/storageUrls");
+const requestId = require("./middleware/requestId");
+const { installConsoleRedactor, sanitizeUrl } = require("./utils/redact");
+
+// Transparently redact credentials, tokens, and PII from console output
+installConsoleRedactor();
 
 // Route modules
 const userRouter = require("./routes/userRouter");
@@ -47,30 +53,10 @@ if (trustProxy === "true") {
 }
 
 // --- CORS -------------------------------------------------------------------
-// Native (iOS/Android) requests send no Origin header; browsers do. Only the
-// configured origins are allowed. Override with a comma-separated CORS_ORIGINS.
-const DEFAULT_ORIGINS = [
-  "http://localhost:8081",
-  "http://127.0.0.1:8081",
-  "http://localhost:19000",
-  "http://127.0.0.1:19000",
-  "http://localhost:19006",
-  "http://127.0.0.1:19006",
-  "http://localhost:3000",
-];
-const allowedOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
-  : DEFAULT_ORIGINS;
-
-const corsOptions = {
-  origin(origin, callback) {
-    // No Origin (native app, curl, same-origin) is allowed; unknown web origins
-    // get no CORS headers, so the browser blocks the response.
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(null, false);
-  },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-};
+// Native (iOS/Android) requests send no Origin header; browsers do.
+// Production strictly enforces HTTPS origins. Override with CORS_ORIGINS.
+const { createCorsOptions } = require("./utils/corsConfig");
+const corsOptions = createCorsOptions();
 
 // --- rate limiting ----------------------------------------------------------
 // Env-tunable so load runs and the test suite can raise the ceiling.
@@ -100,8 +86,10 @@ const isWrite = (req) => ["POST", "PUT", "PATCH", "DELETE"].includes(req.method)
 
 // --- global middleware ------------------------------------------------------
 app.disable("x-powered-by");
+app.use(compression());
 app.use(helmet());
 app.use(cors(corsOptions));
+app.use(requestId);
 
 // Capture raw body for Brevo webhook BEFORE express.json() parses it.
 // Brevo signs the raw request body, so we need the bytes for HMAC verification.
@@ -119,9 +107,10 @@ const logRequests = process.env.NODE_ENV !== "test";
 app.use((req, res, next) => {
   if (!logRequests) return next();
   const startedAt = Date.now();
+  const short = req.id ? req.id.slice(0, 8) : "no-id";
   res.on("finish", () => {
     console.log(
-      `[api] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now() - startedAt}ms)`
+      `[api][${short}] ${req.method} ${sanitizeUrl(req.originalUrl)} -> ${res.statusCode} (${Date.now() - startedAt}ms)`
     );
   });
   return next();
@@ -275,27 +264,28 @@ app.get("/", (req, res) => {
 
 // 404 fallback
 app.use((req, res) => {
-  res.status(404).json({ error: "Not found" });
+  res.status(404).json({ error: "Not found", requestId: req.id });
 });
 
 // Centralized error handler — never leak internal/database error details.
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
+  const short = req.id ? req.id.slice(0, 8) : "no-id";
   if (status >= 500) {
-    console.error("[api] Unhandled error:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error(`[api][${short}] Unhandled error:`, err);
+    return res.status(500).json({ error: "Internal server error", requestId: req.id });
   }
   // body-parser errors carry parser internals in `err.message`; return a
   // generic message instead of echoing them.
   if (err.type === "entity.parse.failed") {
-    return res.status(400).json({ error: "Invalid JSON body" });
+    return res.status(400).json({ error: "Invalid JSON body", requestId: req.id });
   }
   if (err.type === "entity.too.large") {
-    return res.status(413).json({ error: "Request body too large" });
+    return res.status(413).json({ error: "Request body too large", requestId: req.id });
   }
   // Expected client errors (401/403/404/409…) surface their message as-is.
-  return res.status(status).json({ error: err.message });
+  return res.status(status).json({ error: err.message, requestId: req.id });
 });
 
 module.exports = app;

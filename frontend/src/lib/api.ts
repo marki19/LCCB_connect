@@ -8,11 +8,19 @@ const API_URL = (
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
 // One shared instance so the interceptor is registered once.
-const client = create({ baseURL: API_URL });
+// Default timeout is 15s to fail fast on stalled backends; uploads extend to 60s.
+const client = create({ baseURL: API_URL, timeout: 15000 });
 
 // Attach the Supabase Bearer token before every request and rewrite
 // guest GET paths to the public read-only endpoints.
 client.interceptors.request.use(async (config) => {
+  // Allow uploads / FormData to take up to 60s
+  const isUpload =
+    (typeof FormData !== "undefined" && config.data instanceof FormData) ||
+    (typeof config.url === "string" && config.url.includes("/upload"));
+  if (isUpload && (config.timeout === undefined || config.timeout === 15000)) {
+    config.timeout = 60000;
+  }
   let {
     data: { session },
   } = await supabase.auth.getSession();
@@ -123,11 +131,15 @@ export async function apiFetch(
   path: string,
   init: RequestInit = {}
 ): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
+  const headers = { ...((init.headers || {}) as Record<string, string>) };
+  if (typeof init.body === "string" && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   const res = await client.request({
     url: path,
     method: (init.method as any) || "GET",
     data: init.body,
-    headers: init.headers as any,
+    headers: headers as any,
     // Never throw on non-2xx — mirror native fetch behaviour for this shim so
     // callers that check `.ok` keep working as expected.
     validateStatus: () => true,
@@ -429,7 +441,7 @@ export function adaptPost(row: any): any {
       yearLevel: row.author?.year_level || "—",
       username: row.author?.username,
     },
-    title: row.title || "Post Update",
+    title: row.title || "",
     description: row.content || row.description || "",
     content: row.content || undefined,
     type: row.type || "text",
