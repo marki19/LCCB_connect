@@ -9,3 +9,4 @@ ALTER TABLE public.profiles
 
 -- Index on email is already present or reinforced for fast login lookup
 CREATE INDEX IF NOT EXISTS idx_profiles_email_lower ON public.profiles (LOWER(email));
+

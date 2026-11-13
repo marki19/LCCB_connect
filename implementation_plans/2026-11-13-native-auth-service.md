@@ -52,3 +52,4 @@ flowchart TD
    - Test native registration, login, token verification, wrong password rejection, and lockout.
 7. **Task 7: Verification & Local Git Commit**
    - Run full test suite to guarantee 0 regressions across existing suites.
+

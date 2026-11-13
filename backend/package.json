@@ -4,7 +4,10 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test \"tests/**/*.test.js\""
+    "test": "node --test \"tests/**/*.test.js\"",
+    "db:init": "node scripts/run-sql.js init-schema.sql",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed-data.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
