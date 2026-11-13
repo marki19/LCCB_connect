@@ -143,6 +143,16 @@ async function loadProfile(req, res, next) {
       return next();
     }
     req.profile = (await userModel.getUserById(req.user.id)) || null;
+
+    // Role comes ONLY from the profiles row. `user_metadata` is writable by the
+    // account owner in Supabase, so trusting it would let any student promote
+    // themselves to admin/superadmin.
+    if (req.profile) {
+      const r = normalizeRole(req.profile.role);
+      if (r === "superadmin" || r === "admin" || req.profile.verification_status === "verified") {
+        req.profile.profile_completed = true;
+      }
+    }
     return next();
   } catch (err) {
     return next(err);
