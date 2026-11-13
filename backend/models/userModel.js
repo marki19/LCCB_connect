@@ -254,14 +254,15 @@ const getPublicProfile = async (targetId, viewerId = null) => {
 const createUser = async (userData) => {
   const {
     id, username, full_name, avatar_url, bio, course, year_level, role,
-    department_id, course_id, email, student_id, verification_status,
+    department_id, course_id, email, student_id, verification_status, password_hash,
   } = userData;
   const sql = `
-    INSERT INTO profiles (id, username, full_name, avatar_url, bio, course, year_level, role, department_id, course_id, email, student_id, verification_status)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    INSERT INTO profiles (id, username, full_name, avatar_url, bio, course, year_level, role, department_id, course_id, email, student_id, verification_status, password_hash)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     ON CONFLICT (id) DO UPDATE SET
       full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
       username = COALESCE(EXCLUDED.username, profiles.username),
+      password_hash = COALESCE(EXCLUDED.password_hash, profiles.password_hash),
       -- Department/course are CLAIM-ONCE: fill them only while still unset, so a
       -- repeat POST can never move a user into a different department.
       department_id = COALESCE(profiles.department_id, EXCLUDED.department_id),
@@ -276,6 +277,7 @@ const createUser = async (userData) => {
   const values = [
     id, username, full_name, avatar_url, bio, course, year_level, role || 'student',
     department_id || null, course_id || null, email || null, student_id || null, verification_status || 'unverified',
+    password_hash || null,
   ];
   const result = await db.query(sql, values);
   return result.rows[0];
@@ -550,6 +552,59 @@ const updateBouncedEmail = async (email, bounceReason, bouncedAt) => {
   return result.rows[0] || null;
 };
 
+/**
+ * Resolves full auth credentials (including password_hash) by email, student_id, or username.
+ */
+const getUserAuthByIdentifier = async (identifier) => {
+  if (!identifier || typeof identifier !== "string") return null;
+  const clean = identifier.trim();
+  const isEmail = clean.includes("@");
+  const isStudentId = /^\d{4}-\d{4,}$/.test(clean);
+
+  let sql;
+  let params;
+  if (isEmail) {
+    sql = `
+      SELECT p.*, d.name AS department_name, c.name AS course_name
+      FROM public.profiles p
+      LEFT JOIN public.departments d ON d.id = p.department_id
+      LEFT JOIN public.courses c ON c.id = p.course_id
+      WHERE lower(p.email) = $1
+      LIMIT 1;
+    `;
+    params = [clean.toLowerCase()];
+  } else if (isStudentId) {
+    sql = `
+      SELECT p.*, d.name AS department_name, c.name AS course_name
+      FROM public.profiles p
+      LEFT JOIN public.departments d ON d.id = p.department_id
+      LEFT JOIN public.courses c ON c.id = p.course_id
+      WHERE upper(p.student_id) = $1
+      LIMIT 1;
+    `;
+    params = [clean.toUpperCase()];
+  } else {
+    sql = `
+      SELECT p.*, d.name AS department_name, c.name AS course_name
+      FROM public.profiles p
+      LEFT JOIN public.departments d ON d.id = p.department_id
+      LEFT JOIN public.courses c ON c.id = p.course_id
+      WHERE lower(p.username) = $1
+      LIMIT 1;
+    `;
+    params = [clean.toLowerCase()];
+  }
+
+  const result = await db.query(sql, params);
+  return result.rows[0] || null;
+};
+
+const updatePasswordHash = async (userId, passwordHash) => {
+  const sql = `UPDATE public.profiles SET password_hash = $1 WHERE id = $2 RETURNING id;`;
+  const result = await db.query(sql, [passwordHash, userId]);
+  return (result.rowCount ?? 0) > 0;
+};
+
 module.exports = {
   getAllUsers,
   getUserById,
@@ -561,6 +616,8 @@ module.exports = {
   getLoginEmailByStudentId,
   getLoginEmailByUsername,
   getUserByEmailForLockout,
+  getUserAuthByIdentifier,
+  updatePasswordHash,
   findProfileIdByEmail,
   createPendingSignup,
   getPendingSignupByEmail,
@@ -570,8 +627,8 @@ module.exports = {
   deleteExpiredPendingSignups,
   incrementFailedLogins,
   resetFailedLogins,
-    isLocked,
-    lockAccount,
-    unlockAccount,
-    updateBouncedEmail,
-  };
+  isLocked,
+  lockAccount,
+  unlockAccount,
+  updateBouncedEmail,
+};

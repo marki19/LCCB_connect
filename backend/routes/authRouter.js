@@ -14,6 +14,7 @@ const {
   mfaUnenroll,
   mfaList,
   logout,
+  refreshSession,
   requestPasswordReset,
   verifyPasswordReset,
 } = require("../controllers/authController");
@@ -185,6 +186,12 @@ router.post("/mfa/step-up", mfaStepUp);
  * Checks whether the current admin's 24h console session is valid.
  */
 router.get("/mfa/admin-session", checkAdminSession);
+
+/**
+ * POST /api/auth/refresh
+ * Refreshes an expired access token using a valid refresh token.
+ */
+router.post("/refresh", refreshSession);
 
 /**
  * POST /api/auth/logout

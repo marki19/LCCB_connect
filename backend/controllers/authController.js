@@ -1,7 +1,9 @@
+const crypto = require("crypto");
 const bcrypt = require("bcrypt");
 const db = require("../db");
 const userModel = require("../models/userModel");
 const accountService = require("../services/accountService");
+const nativeAuth = require("../services/nativeAuth");
 const { getSupabaseAdmin } = require("../services/supabaseAdmin");
 const { sendOtpEmail, sendAccountExistsEmail, sendPasswordResetOtpEmail } = require("../services/emailService");
 const { generateOtp, hashOtp, verifyOtpHash, MAX_OTP_ATTEMPTS } = require("../utils/otp");
@@ -62,57 +64,129 @@ async function login(req, res, next) {
     const { identifier, password } = req.body;
 
     const isEmail = identifier.includes("@");
-        const isStudentId = /^\d{4}-\d{4,}$/.test(identifier); // 2023-12345 or 2023-00123 format
-        const isUsername = !isEmail && !isStudentId; // alphanumeric username
+    const isStudentId = /^\d{4}-\d{4,}$/.test(identifier);
+    const identifierType = isEmail ? "email" : isStudentId ? "student_id" : "username";
 
-        let email = null;
-        let profile = null;
-        let identifierType = isEmail ? "email" : isStudentId ? "student_id" : "username";
+    // 1. Resolve full auth user profile from PostgreSQL
+    const user = await userModel.getUserAuthByIdentifier(identifier);
 
-        if (isEmail) {
-          email = identifier.toLowerCase();
+    // 2. Account lockout check
+    if (user && (await userModel.isLocked(user.id))) {
+      return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+    }
 
-          // Email login: check lockout early by looking up profile by email.
-          // Same generic response for locked AND unknown accounts to prevent enumeration.
-          const existing = await userModel.getUserByEmailForLockout(email);
-          if (existing && (await userModel.isLocked(existing.id))) {
-            return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
-          }
-        } else if (isStudentId) {
-          // Student ID login: resolve to email and get profile
-          const resolved = await userModel.getLoginEmailByStudentId(
-            identifier.toUpperCase()
-          );
-          if (!resolved?.email) {
-            return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
-          }
-          email = resolved.email;
-          // Get profile for lockout check (getLoginEmailByStudentId only returns id, email)
-          profile = await userModel.getUserById(resolved.id);
-
-          // Check lockout before Supabase auth
-          // Same generic response for locked AND unknown accounts to prevent enumeration.
-          if (await userModel.isLocked(resolved.id)) {
-            return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
-          }
-        } else if (isUsername) {
-          // Username login: resolve to email and get profile
-          const resolved = await userModel.getLoginEmailByUsername(identifier);
-          if (!resolved?.email) {
-            return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
-          }
-          email = resolved.email;
-          // Get profile for lockout check (getLoginEmailByUsername only returns id, email)
-          profile = await userModel.getUserById(resolved.id);
-
-          // Check lockout before Supabase auth
-          // Same generic response for locked AND unknown accounts to prevent enumeration.
-          if (await userModel.isLocked(resolved.id)) {
-            return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
-          }
+    // 3. Native authentication path (self-hosted bcrypt password)
+    if (user && user.password_hash) {
+      const passwordMatches = await nativeAuth.verifyPassword(password, user.password_hash);
+      if (!passwordMatches) {
+        const attempts = await userModel.incrementFailedLogins(user.id);
+        const interval = lockoutIntervalFor(attempts);
+        if (interval) {
+          await userModel.lockAccount(user.id, interval);
+          await record({
+            actor: { id: user.id, role: user.role },
+            action: ACTIONS.LOGIN_FAILED_LOCKOUT,
+            targetType: "user",
+            targetId: user.id,
+            metadata: {
+              ip: req.ip,
+              identifier_type: identifierType,
+              attempts,
+              lock_interval: interval,
+            },
+          });
         }
+        return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+      }
 
-        const supabase = adminClientOr503(res);
+      if (isSuspendedProfile(user)) {
+        return res.status(403).json({
+          error: "Account suspended",
+          code: "account_suspended",
+          suspended_until: user.suspended_until || null,
+          reason: user.suspension_reason || null,
+        });
+      }
+
+      await userModel.resetFailedLogins(user.id);
+      const hasMfa = await mfaService.hasVerifiedTotp(user.id);
+      const role = user.role?.toLowerCase().replace(/[-_]/g, "");
+      const isAdmin = role === "admin" || role === "superadmin";
+
+      if (isAdmin && !hasMfa) {
+        await mfaService.recordLogin({
+          userId: user.id,
+          req,
+          aal: "aal1",
+          mfaChallenged: false,
+        });
+        const session = nativeAuth.signTokens(user, { aal: "aal1" });
+        return sendTokens(res, session, 200, {
+          mfa_enrollment_required: true,
+          message: "Admin accounts require MFA. Please complete MFA enrollment.",
+        });
+      }
+
+      if (hasMfa) {
+        const session = nativeAuth.signTokens(user, { aal: "aal1" });
+        const challengeToken = mfaService.createMfaChallenge(user.id, session);
+        await mfaService.recordSessionEvent({
+          userId: user.id,
+          eventType: "mfa_challenge",
+          aal: "aal1",
+          ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+          userAgent: req.headers["user-agent"] || null,
+          metadata: { mfa_challenged: true },
+        });
+        return res.status(200).json({
+          mfa_required: true,
+          challenge_token: challengeToken,
+          message: "Multi-factor authentication required",
+        });
+      }
+
+      await mfaService.recordLogin({
+        userId: user.id,
+        req,
+        aal: "aal1",
+        mfaChallenged: false,
+      });
+      await accountService.enforceSessionCap(user.id, { role: user.role }).catch(() => undefined);
+      const session = nativeAuth.signTokens(user, { aal: "aal1" });
+      return sendTokens(res, session, 200);
+    }
+
+    // 4. Fallback for legacy users without password_hash (Supabase GoTrue)
+    let email = user?.email;
+    let profile = user;
+
+    if (!email) {
+      if (isEmail) {
+        email = identifier.toLowerCase();
+        const existing = await userModel.getUserByEmailForLockout(email);
+        if (existing && (await userModel.isLocked(existing.id))) {
+          return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+        }
+      } else if (isStudentId) {
+        const resolved = await userModel.getLoginEmailByStudentId(identifier.toUpperCase());
+        if (!resolved?.email) return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+        email = resolved.email;
+        profile = await userModel.getUserById(resolved.id);
+        if (await userModel.isLocked(resolved.id)) {
+          return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+        }
+      } else {
+        const resolved = await userModel.getLoginEmailByUsername(identifier);
+        if (!resolved?.email) return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+        email = resolved.email;
+        profile = await userModel.getUserById(resolved.id);
+        if (await userModel.isLocked(resolved.id)) {
+          return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+        }
+      }
+    }
+
+    const supabase = adminClientOr503(res);
     if (!supabase) return;
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -121,50 +195,24 @@ async function login(req, res, next) {
     });
 
     if (error) {
-      // On auth failure (wrong password), check if user exists and increment failed attempts
-      if (!/not confirmed|not_confirmed/i.test(error.message)) {
-        if (!profile) {
-          // For email login, look up profile by email to increment failed attempts
-          // We still return the same generic error to prevent enumeration
-          const existing = await userModel.getUserByEmailForLockout(email);
-          if (existing) {
-            const attempts = await userModel.incrementFailedLogins(existing.id);
-            const interval = lockoutIntervalFor(attempts);
-            if (interval) {
-              await userModel.lockAccount(existing.id, interval);
-              await record({
-                actor: { id: existing.id, role: existing.role },
-                action: ACTIONS.LOGIN_FAILED_LOCKOUT,
-                targetType: "user",
-                targetId: existing.id,
-                metadata: {
-                  ip: req.ip,
-                  identifier_type: identifierType,
-                  attempts,
-                  lock_interval: interval,
-                },
-              });
-            }
-          }
-        } else {
-          // For student ID/username login, we already have profile
-          const attempts = await userModel.incrementFailedLogins(profile.id);
-          const interval = lockoutIntervalFor(attempts);
-          if (interval) {
-            await userModel.lockAccount(profile.id, interval);
-            await record({
-              actor: { id: profile.id, role: profile.role },
-              action: ACTIONS.LOGIN_FAILED_LOCKOUT,
-              targetType: "user",
-              targetId: profile.id,
-              metadata: {
-                ip: req.ip,
-                identifier_type: identifierType,
-                attempts,
-                lock_interval: interval,
-              },
-            });
-          }
+      const existing = profile || (await userModel.getUserByEmailForLockout(email));
+      if (existing && !/not confirmed|not_confirmed/i.test(error.message)) {
+        const attempts = await userModel.incrementFailedLogins(existing.id);
+        const interval = lockoutIntervalFor(attempts);
+        if (interval) {
+          await userModel.lockAccount(existing.id, interval);
+          await record({
+            actor: { id: existing.id, role: existing.role },
+            action: ACTIONS.LOGIN_FAILED_LOCKOUT,
+            targetType: "user",
+            targetId: existing.id,
+            metadata: {
+              ip: req.ip,
+              identifier_type: identifierType,
+              attempts,
+              lock_interval: interval,
+            },
+          });
         }
       }
       if (/not confirmed|not_confirmed/i.test(error.message)) {
@@ -176,13 +224,10 @@ async function login(req, res, next) {
       return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
     }
 
-    // Get profile if we don't have it yet (email login path)
     if (!profile) {
       profile = await userModel.getUserById(data.user.id);
     }
     if (!profile) {
-      // The Auth user outlived its profile: this account was deleted. Drop the
-      // session we just minted so it cannot be used elsewhere.
       await accountService.revokeSessions(data.user.id).catch(() => undefined);
       return res.status(403).json({
         error: "This account has been deleted. Contact the administrator if you think this is a mistake.",
@@ -190,35 +235,29 @@ async function login(req, res, next) {
       });
     }
 
-    // A lock that is still active must look identical to a wrong password, or
-    // the endpoint becomes an account-existence oracle. Revoke the session we
-    // just minted so a locked account never holds a usable token.
     if (await userModel.isLocked(data.user.id)) {
       await accountService.revokeSessions(data.user.id).catch(() => undefined);
       return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
     }
 
     if (isSuspendedProfile(profile)) {
-          return res.status(403).json({
-            error: "Account suspended",
-            code: "account_suspended",
-            suspended_until: profile.suspended_until || null,
-            reason: profile.suspension_reason || null,
-          });
-        }
+      return res.status(403).json({
+        error: "Account suspended",
+        code: "account_suspended",
+        suspended_until: profile.suspended_until || null,
+        reason: profile.suspension_reason || null,
+      });
+    }
 
-    // Check if user has verified MFA
+    // Auto-migrate legacy user password_hash to PostgreSQL
+    const newHash = await nativeAuth.hashPassword(password);
+    await userModel.updatePasswordHash(profile.id, newHash).catch(() => {});
+
+    await userModel.resetFailedLogins(data.user.id);
     const hasMfa = await mfaService.hasVerifiedTotp(data.user.id);
-
-    // Admin/superadmin must have MFA enrolled
     const role = profile?.role?.toLowerCase().replace(/[-_]/g, "");
     const isAdmin = role === "admin" || role === "superadmin";
 
-    // Reset failed login attempts on successful login
-    await userModel.resetFailedLogins(data.user.id);
-
-    // Admin without MFA gets an initial session with mfa_enrollment_required: true
-    // so they can authenticate to /api/auth/mfa/enroll while /api/admin/* remains locked
     if (isAdmin && !hasMfa) {
       await mfaService.recordLogin({
         userId: data.user.id,
@@ -226,7 +265,6 @@ async function login(req, res, next) {
         aal: "aal1",
         mfaChallenged: false,
       });
-
       return sendTokens(res, data.session, 200, {
         mfa_enrollment_required: true,
         message: "Admin accounts require MFA. Please complete MFA enrollment.",
@@ -234,11 +272,7 @@ async function login(req, res, next) {
     }
 
     if (hasMfa) {
-      // User has MFA enrolled - hand back a signed challenge token bound to
-      // the first-factor session.
       const challengeToken = mfaService.createMfaChallenge(data.user.id, data.session);
-
-      // Record the MFA challenge initiation
       await mfaService.recordSessionEvent({
         userId: data.user.id,
         eventType: "mfa_challenge",
@@ -247,7 +281,6 @@ async function login(req, res, next) {
         userAgent: req.headers["user-agent"] || null,
         metadata: { mfa_challenged: true },
       });
-
       return res.status(200).json({
         mfa_required: true,
         challenge_token: challengeToken,
@@ -255,7 +288,6 @@ async function login(req, res, next) {
       });
     }
 
-    // No MFA - return tokens directly
     await mfaService.recordLogin({
       userId: data.user.id,
       req,
@@ -263,7 +295,6 @@ async function login(req, res, next) {
       mfaChallenged: false,
     });
     await accountService.enforceSessionCap(data.user.id, { role: profile?.role }).catch(() => undefined);
-
     return sendTokens(res, data.session);
   } catch (err) {
     next(err);
@@ -450,65 +481,64 @@ async function verifySignup(req, res, next) {
       return invalidCode();
     }
 
-    const supabase = adminClientOr503(res);
-    if (!supabase) return;
-
     // The password captured at request time is only a bcrypt hash. Compare the
-    // re-submitted value against it, then hand the plaintext straight to
-    // Supabase — nothing recoverable was ever stored.
+    // re-submitted value against it.
     const passwordMatches = await bcrypt.compare(password, pending.password_hash);
     if (!passwordMatches) {
       return invalidCode();
     }
 
-    // Create Auth user with the real password
-    const { data, error } = await supabase.auth.admin.createUser({
-      email: normalizedEmail,
-      password,
-      email_confirm: true, // OTP verified, so confirm immediately
-      user_metadata: {
-        full_name: pending.full_name,
-      },
-    });
+    const newUserId = crypto.randomUUID();
+    let userId = newUserId;
+    let session = null;
 
-    if (error || !data?.user) {
-      console.error("[auth] Create user after OTP failed:", error?.message);
-      return res.status(500).json({
-        error: "Could not complete signup. Try again in a moment.",
-        code: "creation_failed",
-      });
+    // Optional non-blocking sync with Supabase if configured (for hybrid cloud / test harness)
+    try {
+      const supabase = getSupabaseAdmin();
+      if (supabase && typeof supabase.auth?.admin?.createUser === "function") {
+        const { data: supaUser } = await supabase.auth.admin.createUser({
+          email: normalizedEmail,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            full_name: pending.full_name,
+          },
+        });
+        if (supaUser?.user?.id) {
+          userId = supaUser.user.id;
+        }
+
+        const { data: sessionData } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
+        if (sessionData?.session) {
+          session = sessionData.session;
+        }
+      }
+    } catch {
+      // Standalone on-premise execution
     }
 
-    const user = data.user;
-
-    // Create profile
-    await userModel.createUser({
-      id: user.id,
-      email: user.email,
+    // Create profile with password_hash directly in PostgreSQL
+    const createdProfile = await userModel.createUser({
+      id: userId,
+      email: normalizedEmail,
       full_name: pending.full_name,
       role: "student",
+      password_hash: pending.password_hash,
+      verification_status: "unverified",
     });
 
     // Delete pending record
     await userModel.deletePendingSignup(normalizedEmail);
 
-    // Create session for the new user
-    const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
-      email: normalizedEmail,
-      password,
-    });
-
-    if (sessionError || !sessionData?.session) {
-      console.error("[auth] Session creation after signup failed:", sessionError?.message);
-      // User is created, they can log in manually
-      return res.status(201).json({
-        message: "Account created successfully. Please log in.",
-        code: "signup_complete_manual_login",
-      });
+    // If Supabase session is not present, mint native self-hosted session (0ms, no cloud dependencies)
+    if (!session) {
+      session = nativeAuth.signTokens(createdProfile, { aal: "aal1" });
     }
-
-    await accountService.enforceSessionCap(user.id, { role: pending.role }).catch(() => undefined);
-    return sendTokens(res, sessionData.session, 201);
+    await accountService.enforceSessionCap(userId, { role: "student" }).catch(() => undefined);
+    return sendTokens(res, session, 201);
   } catch (err) {
     next(err);
   }
@@ -1207,18 +1237,15 @@ async function verifyPasswordReset(req, res, next) {
       return invalidCode();
     }
 
-    const supabase = adminClientOr503(res);
-    if (!supabase) return;
+    // Apply the new password directly to PostgreSQL
+    const newHash = await nativeAuth.hashPassword(password);
+    await userModel.updatePasswordHash(reset.user_id, newHash);
 
-    // Apply the new password to the auth user.
+    // Also update Supabase if available (non-blocking fallback)
     try {
       await passwordResetModel.updateUserPassword(reset.user_id, password);
-    } catch (err) {
-      console.error("[auth] Password reset update failed:", err.message);
-      return res.status(500).json({
-        error: "Could not update the password. Try again in a moment.",
-        code: "update_failed",
-      });
+    } catch {
+      // Standalone on-premise execution
     }
 
     // Mark the reset row used and clean up any expired rows.
@@ -1228,6 +1255,56 @@ async function verifyPasswordReset(req, res, next) {
     return res.status(200).json({
       message: "Password updated. Sign in with your new password.",
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/refresh
+ * Refreshes an access token using a valid refresh token.
+ */
+async function refreshSession(req, res, next) {
+  try {
+    const { refresh_token } = req.body;
+    if (!refresh_token) {
+      return res.status(400).json({ error: "Refresh token is required" });
+    }
+
+    // 1. Verify native refresh token
+    const decoded = nativeAuth.verifyRefreshToken(refresh_token);
+    if (decoded?.sub) {
+      const profile = await userModel.getUserById(decoded.sub);
+      if (!profile) {
+        return res.status(401).json({ error: "User not found" });
+      }
+      if (await userModel.isLocked(profile.id)) {
+        return res.status(401).json({ error: "Account locked" });
+      }
+      if (isSuspendedProfile(profile)) {
+        return res.status(403).json({ error: "Account suspended" });
+      }
+
+      const session = nativeAuth.signTokens(profile, { aal: "aal1" });
+      return sendTokens(res, session);
+    }
+
+    // 2. Legacy fallback: Supabase refresh
+    try {
+      const supabase = getSupabaseAdmin();
+      if (supabase) {
+        const { data, error } = await supabase.auth.refreshSession({
+          refresh_token,
+        });
+        if (!error && data?.session) {
+          return sendTokens(res, data.session);
+        }
+      }
+    } catch {
+      // Fall through to 401
+    }
+
+    return res.status(401).json({ error: "Invalid or expired refresh token" });
   } catch (err) {
     next(err);
   }
@@ -1250,6 +1327,7 @@ module.exports = {
   mfaList,
   // Session endpoints
   logout,
+  refreshSession,
   // Password reset (Option B)
   requestPasswordReset,
   verifyPasswordReset,
