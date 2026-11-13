@@ -446,23 +446,30 @@ async function requireAal2(req, res, next) {
 async function checkSessionAge(req, res, next) {
   if (!req.user?.id) return next();
 
-  // Cache session lookup in memory for 60s per user (bounded to 1000 active entries)
+  // Cache session lookup in memory for 60s per user, bounded to 1000 entries.
+  // Expired entries are swept at most once per TTL window; doing a full scan on
+  // every request once the cache is full would add O(n) work to each request.
   const now = Date.now();
   const cache = checkSessionAge.cache || (checkSessionAge.cache = new Map());
-  if (cache.size > 1000) {
-    for (const [uid, item] of cache) {
-      if (now - item.ts >= 60000) {
-        cache.delete(uid);
+  const CACHE_MAX = 1000;
+  const CACHE_TTL = 60000;
+
+  if (cache.size > CACHE_MAX) {
+    if (now - (checkSessionAge.lastSweep || 0) >= CACHE_TTL) {
+      checkSessionAge.lastSweep = now;
+      for (const [uid, item] of cache) {
+        if (now - item.ts >= CACHE_TTL) cache.delete(uid);
       }
     }
-    if (cache.size > 1000) {
+    // Still full after the sweep (or the sweep was skipped): drop the oldest.
+    if (cache.size > CACHE_MAX) {
       const oldestKey = cache.keys().next().value;
       if (oldestKey) cache.delete(oldestKey);
     }
   }
 
   const cached = cache.get(req.user.id);
-  if (cached && now - cached.ts < 60000) {
+  if (cached && now - cached.ts < CACHE_TTL) {
     if (!cached.valid) {
       return res.status(401).json({
         error: cached.error || "Session expired",
@@ -791,6 +798,7 @@ function _clearPendingMfaChallenges() {
 module.exports = {
   generateTotpSecret,
   verifyTotp,
+  verifyTotpTimingSafe,
   decryptTotpSecret,
   createTotpFactor,
   verifyTotpFactor,

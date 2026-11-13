@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Animated,
   Easing,
@@ -10,6 +10,7 @@ import {
   Platform,
   useWindowDimensions,
   Image,
+  TextInput,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter, usePathname } from "expo-router";
@@ -42,6 +43,8 @@ import {
 import { isAdminRole, isSuperAdminRole } from "../../src/lib/roles";
 import { setAdminAppPreview } from "../../src/lib/panelMode";
 import StatusBadge from "../../src/components/admin/StatusBadge";
+import Button from "../../src/components/ui/Button";
+import { checkAdminSessionStatus, stepUpAdminMfa } from "../../src/lib/adminApi";
 
 const SIDEBAR_ANIMATION_MS = 240;
 
@@ -206,6 +209,66 @@ export default function AdminLayout() {
   const ThemePreferenceIcon =
     preference === "system" ? Monitor : preference === "light" ? Sun : Moon;
 
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [sessionChecking, setSessionChecking] = useState(true);
+  const [sessionKey, setSessionKey] = useState(0);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+
+  const checkSession = useCallback(async () => {
+    if (!adminUser) {
+      setSessionChecking(false);
+      return;
+    }
+    try {
+      const res = await checkAdminSessionStatus();
+      if (res.isAdmin && !res.valid) {
+        setSessionExpired(true);
+      } else {
+        setSessionExpired(false);
+      }
+    } catch {
+      // Non-blocking
+    } finally {
+      setSessionChecking(false);
+    }
+  }, [adminUser]);
+
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const onExpired = () => setSessionExpired(true);
+    window.addEventListener("admin_session_expired", onExpired);
+    return () => window.removeEventListener("admin_session_expired", onExpired);
+  }, []);
+
+  const handleUnlockSession = async () => {
+    const clean = mfaCode.replace(/\D/g, "").slice(0, 6);
+    if (clean.length !== 6 || mfaBusy) return;
+
+    setMfaBusy(true);
+    setMfaError(null);
+    try {
+      const res = await stepUpAdminMfa(clean);
+      if (res?.ok) {
+        setSessionExpired(false);
+        setSessionKey((k) => k + 1);
+        setMfaCode("");
+        setMfaError(null);
+      } else {
+        setMfaError(res?.message || "Verification failed");
+      }
+    } catch (e: any) {
+      setMfaError(e?.response?.data?.error || e?.message || "Invalid authenticator code. Please check your app.");
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
   useEffect(() => {
     const animation = Animated.timing(sidebarWidthAnim, {
       toValue: sidebarTargetWidth,
@@ -305,7 +368,7 @@ export default function AdminLayout() {
     );
   }
 
-  if (!profile) {
+  if (!profile || (adminUser && sessionChecking)) {
     return (
       <View
         style={{
@@ -382,6 +445,106 @@ export default function AdminLayout() {
     );
   }
 
+  if (sessionExpired) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.surfacePage,
+          padding: SPACE.x8,
+        }}
+      >
+        <View
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 24,
+            backgroundColor: colors.brandWash,
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: SPACE.x4,
+          }}
+        >
+          <ShieldCheck size={36} color={colors.brandSolid} strokeWidth={2.2} />
+        </View>
+
+        <Text style={{ ...TYPE.h1, color: colors.textPrimary, textAlign: "center" }}>
+          Admin Authentication Required
+        </Text>
+        <Text
+          style={{
+            ...TYPE.body,
+            color: colors.inkSoft,
+            textAlign: "center",
+            maxWidth: 440,
+            marginTop: SPACE.x2,
+            marginBottom: SPACE.x6,
+            lineHeight: 22,
+          }}
+        >
+          Your 24-hour administrative session has expired. Enter the 6-digit code from your authenticator app to unlock the console.
+        </Text>
+
+        <View style={{ width: "100%", maxWidth: 360, gap: SPACE.x3 }}>
+          <TextInput
+            value={mfaCode}
+            onChangeText={(txt) => {
+              setMfaCode(txt.replace(/\D/g, "").slice(0, 6));
+              if (mfaError) setMfaError(null);
+            }}
+            placeholder="000000"
+            placeholderTextColor={colors.inkFaint}
+            keyboardType="number-pad"
+            maxLength={6}
+            autoFocus
+            editable={!mfaBusy}
+            onSubmitEditing={mfaCode.length === 6 ? handleUnlockSession : undefined}
+            style={{
+              height: 54,
+              fontSize: 26,
+              fontWeight: "700",
+              letterSpacing: 8,
+              textAlign: "center",
+              borderRadius: RADIUS.lg,
+              borderWidth: 1.5,
+              borderColor: mfaError ? colors.destructive : colors.border,
+              backgroundColor: colors.surfaceSunken,
+              color: colors.textPrimary,
+              ...Platform.select({
+                web: { outlineStyle: "none" } as any,
+              }),
+            }}
+          />
+
+          {mfaError && (
+            <Text style={{ ...TYPE.caption, color: colors.destructive, textAlign: "center" }}>
+              {mfaError}
+            </Text>
+          )}
+
+          <Button
+            variant="primary"
+            label={mfaBusy ? "Verifying…" : "Unlock Admin Console"}
+            disabled={mfaCode.length !== 6 || mfaBusy}
+            onPress={handleUnlockSession}
+          />
+
+          <Button
+            variant="ghost"
+            label="Return to App"
+            disabled={mfaBusy}
+            onPress={() => {
+              setAdminAppPreview(true);
+              router.replace("/(tabs)/");
+            }}
+          />
+        </View>
+      </View>
+    );
+  }
+
   const isActive = (path: string) => {
     const relative = pathname.replace(/^\/\(admin\)/, "") || "/";
     if (path === "/(admin)") return relative === "/";
@@ -392,7 +555,7 @@ export default function AdminLayout() {
   const governance: NavEntry[] = [
     { label: "Overview", path: "/(admin)", icon: LayoutDashboard },
     { label: "Users", path: "/(admin)/users", icon: Users },
-    { label: "Verification", path: "/verify-requests", icon: UserCheck },
+    { label: "Verification", path: "/(admin)/verification", icon: UserCheck },
     { label: "Reports & Content", path: "/(admin)/content", icon: FileText },
     { label: "Announcements", path: "/(admin)/announcements", icon: Megaphone },
   ];
@@ -689,6 +852,7 @@ export default function AdminLayout() {
 
       <View style={{ flex: 1, overflow: "hidden", backgroundColor: colors.surfacePage }}>
         <Stack
+          key={sessionKey}
           screenOptions={{
             headerShown: false,
             animation: "fade",

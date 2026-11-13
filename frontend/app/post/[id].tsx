@@ -11,15 +11,10 @@ import {
   Platform,
   useWindowDimensions,
   StyleSheet,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
 import {
   ArrowLeft,
   X,
@@ -36,7 +31,10 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  Globe,
+  Users,
 } from "lucide-react-native";
+import Avatar from "../../src/components/Avatar";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { elevation, focusRing, RADIUS, SPACE, TYPE, type ThemeTokens } from "../../src/lib/tokens";
@@ -112,8 +110,7 @@ export default function PostDetailScreen() {
   const [composerFocused, setComposerFocused] = useState(false);
 
   const inputRef = useRef<any>(null);
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -139,7 +136,7 @@ export default function PostDetailScreen() {
                 course: postData.author?.department_name || "—",
                 yearLevel: postData.author?.year_level || "—",
               },
-              title: postData.title || "Post Update",
+              title: postData.title || "",
               description: postData.content || postData.description || "",
               type: postData.type || "text",
               tags: postData.technologies || postData.tags || [],
@@ -213,11 +210,11 @@ export default function PostDetailScreen() {
       setNotice("Please sign in with your institutional account to like posts.");
       return;
     }
-    scale.value = withSequence(
-      withTiming(1.4, { duration: 110 }),
-      withTiming(0.85, { duration: 80 }),
-      withTiming(1, { duration: 110 })
-    );
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 1.4, duration: 110, useNativeDriver: Platform.OS !== "web" }),
+      Animated.timing(scaleAnim, { toValue: 0.85, duration: 80, useNativeDriver: Platform.OS !== "web" }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 110, useNativeDriver: Platform.OS !== "web" }),
+    ]).start();
     const newLiked = !liked;
     setLiked(newLiked);
     setLikeCount(newLiked ? likeCount + 1 : likeCount - 1);
@@ -232,7 +229,9 @@ export default function PostDetailScreen() {
   const handleComment = async () => {
     if (!commentText.trim() || !profile?.id) return;
 
-    if (profile?.role === "student" && !profile?.profile_completed) {
+    const isStudent = profile?.role === "student";
+    const isProfileIncomplete = !profile?.profile_completed && profile?.verification_status !== "verified";
+    if (isStudent && isProfileIncomplete) {
       setNotice("Please complete your student profile (full name, student ID, department, course) before commenting.");
       return;
     }
@@ -404,7 +403,7 @@ export default function PostDetailScreen() {
   const currentMedia = mediaList[activeMediaIndex] || mediaList[0];
 
   // ─── RIGHT SIDEBAR CONTENT (Author, content, comments, composer) ─────────
-  const renderSidebar = () => (
+  const renderSidebar = (options?: { showCloseBtn?: boolean }) => (
     <View
       style={{
         flex: 1,
@@ -414,92 +413,118 @@ export default function PostDetailScreen() {
         height: "100%",
       }}
     >
-      {/* Top Author Header */}
+      {/* Top Author Header (Enhanced & Simplified) */}
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
-          padding: SPACE.x4,
+          paddingHorizontal: SPACE.x5,
+          paddingVertical: SPACE.x4,
           borderBottomWidth: 1,
           borderBottomColor: colors.line,
         }}
       >
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: colors.brandWash,
-            alignItems: "center",
-            justifyContent: "center",
-            marginRight: SPACE.x3,
-          }}
-        >
-          <Text style={{ fontSize: 16, fontWeight: "800", color: colors.brand }}>
-            {post.author.initials}
-          </Text>
-        </View>
+        <Avatar name={post.author.name} size={42} />
 
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flex: 1, marginLeft: SPACE.x3, minWidth: 0 }}>
           <Text
-            style={{ ...TYPE.bodyStrong, fontWeight: "700", color: colors.ink }}
+            style={{ ...TYPE.bodyStrong, fontSize: 15, fontWeight: "700", color: colors.ink }}
             numberOfLines={1}
           >
             {post.author.name}
           </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
             <Text style={{ ...TYPE.caption, color: colors.inkFaint }} numberOfLines={1}>
-              {post.createdAt} · {post.author.course}
+              {post.createdAt}
+              {post.author.course && post.author.course !== "—" && post.author.course !== "-"
+                ? ` · ${post.author.course}`
+                : ""}
             </Text>
+            {post.visibility ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginLeft: 2 }}>
+                <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>·</Text>
+                {post.visibility === "friends" ? (
+                  <Users size={11} color={colors.inkFaint} />
+                ) : (
+                  <Globe size={11} color={colors.inkFaint} />
+                )}
+              </View>
+            ) : null}
           </View>
         </View>
 
-        {isOwner ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x1 }}>
-            <IconButton icon={Pencil} label="Edit post" variant="ghost" onPress={handleEdit} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x1 }}>
+          {isOwner ? (
+            <>
+              <IconButton icon={Pencil} label="Edit post" variant="ghost" onPress={handleEdit} />
+              <IconButton
+                icon={Trash2}
+                label="Delete post"
+                variant="ghost"
+                onPress={() => setConfirmDeletePost(true)}
+              />
+            </>
+          ) : null}
+          {options?.showCloseBtn ? (
             <IconButton
-              icon={Trash2}
-              label="Delete post"
+              icon={X}
+              label="Close post"
               variant="ghost"
-              onPress={() => setConfirmDeletePost(true)}
+              onPress={() => safeBack("/(tabs)")}
             />
-          </View>
-        ) : null}
+          ) : null}
+        </View>
       </View>
 
       {/* Middle Scrollable Body */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: SPACE.x4, paddingBottom: SPACE.x6 }}
+        contentContainerStyle={{ padding: SPACE.x5, paddingBottom: SPACE.x6 }}
         style={{ flex: 1 }}
       >
-        {/* Type Badge & Title */}
-        <View style={{ marginBottom: SPACE.x2 }}>
-          <View
+        {/* Type Badge (Shown only for specialized post types like projects or capstones) */}
+        {post.type !== "text" && post.type !== "image" && (
+          <View style={{ marginBottom: SPACE.x2 }}>
+            <View
+              style={{
+                alignSelf: "flex-start",
+                backgroundColor: typeConfig.bg,
+                paddingHorizontal: SPACE.x3,
+                paddingVertical: 3,
+                borderRadius: RADIUS.pill,
+              }}
+            >
+              <Text style={{ ...TYPE.micro, fontSize: 10, color: typeConfig.text }}>
+                {typeConfig.label}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {post.title ? (
+          <Text
             style={{
-              alignSelf: "flex-start",
-              backgroundColor: typeConfig.bg,
-              paddingHorizontal: SPACE.x3,
-              paddingVertical: 4,
-              borderRadius: RADIUS.pill,
+              ...TYPE.h2,
+              fontSize: 18,
+              fontWeight: "700",
+              color: colors.ink,
+              lineHeight: 24,
               marginBottom: SPACE.x2,
             }}
           >
-            <Text style={{ ...TYPE.micro, fontSize: 10, color: typeConfig.text }}>
-              {typeConfig.label}
-            </Text>
-          </View>
-          <Text style={{ ...TYPE.h2, color: colors.ink, lineHeight: 26 }}>{post.title}</Text>
-        </View>
+            {post.title}
+          </Text>
+        ) : null}
 
         {/* Post Description */}
         {post.description ? (
           <Text
             style={{
               ...TYPE.body,
-              color: colors.inkSoft,
+              fontSize: 15,
+              color: colors.ink,
               marginBottom: SPACE.x4,
-              lineHeight: 22,
+              lineHeight: 23,
             }}
           >
             {post.description}
@@ -673,7 +698,7 @@ export default function PostDetailScreen() {
             marginBottom: SPACE.x4,
           }}
         >
-          <Animated.View style={animatedStyle}>
+          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
             <Pressable
               onPress={handleLike}
               accessibilityRole="button"
@@ -937,7 +962,7 @@ export default function PostDetailScreen() {
           backgroundColor: colors.panel,
         }}
       >
-        {profile?.role === "student" && !profile?.profile_completed ? (
+        {profile?.role === "student" && !profile?.profile_completed && profile?.verification_status !== "verified" ? (
           <View
             style={{
               backgroundColor: colors.brandWash,
@@ -1044,8 +1069,110 @@ export default function PostDetailScreen() {
     </View>
   );
 
-  // ─── DESKTOP THEATRE LAYOUT (Facebook-Style Split Canvas) ───────────────────
+  // ─── SHARED MODALS (Delete post, Delete comment, Notice) ───────────────────
+  const renderModals = () => (
+    <>
+      <Modal
+        visible={confirmDeletePost}
+        onClose={() => {
+          if (!deletingPost) setConfirmDeletePost(false);
+        }}
+        maxWidth={440}
+        accessibilityLabel="Delete post confirmation"
+      >
+        <View style={{ padding: SPACE.x6 }}>
+          <Text style={{ ...TYPE.h2, color: colors.ink }}>Delete post?</Text>
+          <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
+            This removes the post and its comments for everyone. This cannot be undone.
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: SPACE.x3, marginTop: SPACE.x5 }}>
+            <Button label="Cancel" variant="secondary" onPress={() => setConfirmDeletePost(false)} disabled={deletingPost} />
+            <Button label="Delete post" variant="danger" onPress={() => void performDeletePost()} loading={deletingPost} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!commentToDelete}
+        onClose={() => {
+          if (!deletingComment) setCommentToDelete(null);
+        }}
+        maxWidth={440}
+        accessibilityLabel="Delete comment confirmation"
+      >
+        <View style={{ padding: SPACE.x6 }}>
+          <Text style={{ ...TYPE.h2, color: colors.ink }}>Delete comment?</Text>
+          <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
+            This comment will be removed permanently.
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: SPACE.x3, marginTop: SPACE.x5 }}>
+            <Button label="Cancel" variant="secondary" onPress={() => setCommentToDelete(null)} disabled={deletingComment} />
+            <Button label="Delete comment" variant="danger" onPress={() => void performDeleteComment()} loading={deletingComment} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!notice} onClose={() => setNotice(null)} maxWidth={420} accessibilityLabel="Notice">
+        <View style={{ padding: SPACE.x6 }}>
+          <Text style={{ ...TYPE.h2, color: colors.ink }}>Notice</Text>
+          <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>{notice}</Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: SPACE.x5 }}>
+            <Button label="Got it" onPress={() => setNotice(null)} />
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+
+  // ─── DESKTOP LAYOUT (Clean Centered Modal for Text, Split Theatre for Media) ───
   if (isDesktop) {
+    if (mediaList.length === 0) {
+      return (
+        <View
+          style={{
+            position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.72)",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1200,
+          }}
+        >
+          {/* Backdrop click to dismiss */}
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => safeBack("/(tabs)")}
+            accessibilityLabel="Dismiss modal"
+          />
+
+          {/* Centered Post Dialog Card */}
+          <View
+            style={{
+              width: "92%",
+              maxWidth: 680,
+              maxHeight: "90%",
+              height: 720,
+              backgroundColor: colors.panel,
+              borderRadius: RADIUS.xl,
+              borderWidth: 1,
+              borderColor: colors.line,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              ...elevation("lg", colors),
+            }}
+          >
+            {renderSidebar({ showCloseBtn: true })}
+          </View>
+
+          {renderModals()}
+        </View>
+      );
+    }
+
     return (
       <View style={{ flex: 1, flexDirection: "row", backgroundColor: "#06090F", overflow: "hidden" }}>
         {/* Left Theatre Canvas (Full height dark background with centered media) */}
@@ -1080,183 +1207,99 @@ export default function PostDetailScreen() {
             <X size={22} color="#FFFFFF" strokeWidth={2.5} />
           </Pressable>
 
-          {/* Centered Media or Presentation Card */}
-          {mediaList.length > 0 ? (
-            <View style={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center" }}>
-              <Image
-                source={{ uri: currentMedia }}
-                style={{
-                  width: "92%",
-                  height: "90%",
-                  maxHeight: "92%",
-                }}
-                resizeMode="contain"
-              />
-
-              {/* Prev / Next controls if multiple images */}
-              {mediaList.length > 1 ? (
-                <>
-                  <Pressable
-                    onPress={() =>
-                      setActiveMediaIndex((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1))
-                    }
-                    accessibilityLabel="Previous image"
-                    style={({ pressed }) => ({
-                      position: "absolute",
-                      left: 20,
-                      top: "50%",
-                      transform: [{ translateY: -22 }],
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
-                      backgroundColor: pressed ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.5)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    })}
-                  >
-                    <ChevronLeft size={26} color="#FFFFFF" />
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() =>
-                      setActiveMediaIndex((prev) => (prev < mediaList.length - 1 ? prev + 1 : 0))
-                    }
-                    accessibilityLabel="Next image"
-                    style={({ pressed }) => ({
-                      position: "absolute",
-                      right: 20,
-                      top: "50%",
-                      transform: [{ translateY: -22 }],
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
-                      backgroundColor: pressed ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.5)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    })}
-                  >
-                    <ChevronRight size={26} color="#FFFFFF" />
-                  </Pressable>
-
-                  {/* Multi-image dot indicator */}
-                  <View
-                    style={{
-                      position: "absolute",
-                      bottom: 24,
-                      flexDirection: "row",
-                      gap: 8,
-                      backgroundColor: "rgba(0,0,0,0.6)",
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                      borderRadius: RADIUS.pill,
-                    }}
-                  >
-                    {mediaList.map((_, idx) => (
-                      <View
-                        key={idx}
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 4,
-                          backgroundColor: idx === activeMediaIndex ? "#FFFFFF" : "rgba(255,255,255,0.4)",
-                        }}
-                      />
-                    ))}
-                  </View>
-                </>
-              ) : null}
-            </View>
-          ) : (
-            /* Non-image post presentation in theatre center */
-            <View
+          {/* Centered Media */}
+          <View style={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center" }}>
+            <Image
+              source={{ uri: currentMedia }}
               style={{
-                width: "80%",
-                maxWidth: 620,
-                padding: SPACE.x8,
-                backgroundColor: colors.panel,
-                borderRadius: RADIUS.xxl,
-                borderWidth: 1,
-                borderColor: colors.line,
-                ...elevation("lg", colors),
+                width: "92%",
+                height: "90%",
+                maxHeight: "92%",
               }}
-            >
-              <View
-                style={{
-                  alignSelf: "flex-start",
-                  backgroundColor: typeConfig.bg,
-                  paddingHorizontal: SPACE.x3,
-                  paddingVertical: 4,
-                  borderRadius: RADIUS.pill,
-                  marginBottom: SPACE.x3,
-                }}
-              >
-                <Text style={{ ...TYPE.micro, color: typeConfig.text }}>{typeConfig.label}</Text>
-              </View>
-              <Text style={{ ...TYPE.h1, color: colors.ink, marginBottom: SPACE.x3 }}>
-                {post.title}
-              </Text>
-              <Text style={{ ...TYPE.body, color: colors.inkSoft, lineHeight: 24 }}>
-                {post.description}
-              </Text>
-            </View>
-          )}
+              resizeMode="contain"
+            />
+
+            {/* Prev / Next controls if multiple images */}
+            {mediaList.length > 1 ? (
+              <>
+                <Pressable
+                  onPress={() =>
+                    setActiveMediaIndex((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1))
+                  }
+                  accessibilityLabel="Previous image"
+                  style={({ pressed }) => ({
+                    position: "absolute",
+                    left: 20,
+                    top: "50%",
+                    transform: [{ translateY: -22 }],
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: pressed ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.5)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  })}
+                >
+                  <ChevronLeft size={26} color="#FFFFFF" />
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    setActiveMediaIndex((prev) => (prev < mediaList.length - 1 ? prev + 1 : 0))
+                  }
+                  accessibilityLabel="Next image"
+                  style={({ pressed }) => ({
+                    position: "absolute",
+                    right: 20,
+                    top: "50%",
+                    transform: [{ translateY: -22 }],
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: pressed ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.5)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  })}
+                >
+                  <ChevronRight size={26} color="#FFFFFF" />
+                </Pressable>
+
+                {/* Multi-image dot indicator */}
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 24,
+                    flexDirection: "row",
+                    gap: 8,
+                    backgroundColor: "rgba(0,0,0,0.6)",
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: RADIUS.pill,
+                  }}
+                >
+                  {mediaList.map((_, idx) => (
+                    <View
+                      key={idx}
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: idx === activeMediaIndex ? "#FFFFFF" : "rgba(255,255,255,0.4)",
+                      }}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : null}
+          </View>
         </View>
 
         {/* Right Pane: 440px wide sidebar */}
         <View style={{ width: 440, height: "100%", borderLeftWidth: 1, borderLeftColor: colors.line }}>
-          {renderSidebar()}
+          {renderSidebar({ showCloseBtn: true })}
         </View>
 
-        {/* Modals for delete/notice */}
-        <Modal
-          visible={confirmDeletePost}
-          onClose={() => {
-            if (!deletingPost) setConfirmDeletePost(false);
-          }}
-          maxWidth={440}
-          accessibilityLabel="Delete post confirmation"
-        >
-          <View style={{ padding: SPACE.x6 }}>
-            <Text style={{ ...TYPE.h2, color: colors.ink }}>Delete post?</Text>
-            <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
-              This removes the post and its comments for everyone. This cannot be undone.
-            </Text>
-            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: SPACE.x3, marginTop: SPACE.x5 }}>
-              <Button label="Cancel" variant="secondary" onPress={() => setConfirmDeletePost(false)} disabled={deletingPost} />
-              <Button label="Delete post" variant="danger" onPress={() => void performDeletePost()} loading={deletingPost} />
-            </View>
-          </View>
-        </Modal>
-
-        <Modal
-          visible={!!commentToDelete}
-          onClose={() => {
-            if (!deletingComment) setCommentToDelete(null);
-          }}
-          maxWidth={440}
-          accessibilityLabel="Delete comment confirmation"
-        >
-          <View style={{ padding: SPACE.x6 }}>
-            <Text style={{ ...TYPE.h2, color: colors.ink }}>Delete comment?</Text>
-            <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
-              This comment will be removed permanently.
-            </Text>
-            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: SPACE.x3, marginTop: SPACE.x5 }}>
-              <Button label="Cancel" variant="secondary" onPress={() => setCommentToDelete(null)} disabled={deletingComment} />
-              <Button label="Delete comment" variant="danger" onPress={() => void performDeleteComment()} loading={deletingComment} />
-            </View>
-          </View>
-        </Modal>
-
-        <Modal visible={!!notice} onClose={() => setNotice(null)} maxWidth={420} accessibilityLabel="Notice">
-          <View style={{ padding: SPACE.x6 }}>
-            <Text style={{ ...TYPE.h2, color: colors.ink }}>Notice</Text>
-            <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>{notice}</Text>
-            <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: SPACE.x5 }}>
-              <Button label="Got it" onPress={() => setNotice(null)} />
-            </View>
-          </View>
-        </Modal>
+        {renderModals()}
       </View>
     );
   }
@@ -1281,7 +1324,7 @@ export default function PostDetailScreen() {
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Post</Text>
           <Text style={{ ...TYPE.title, color: colors.ink }} numberOfLines={1}>
-            {post.title}
+            {post.title || (post.description ? (post.description.slice(0, 45) + (post.description.length > 45 ? "..." : "")) : "Post Details")}
           </Text>
         </View>
         {isOwner && (
@@ -1301,56 +1344,65 @@ export default function PostDetailScreen() {
         <View style={{ width: "100%", maxWidth: 760, alignSelf: "center", padding: SPACE.x4, paddingBottom: SPACE.x10 }}>
           <Card padding={0} style={{ overflow: "hidden" }}>
             <View style={{ flexDirection: "row", alignItems: "center", padding: SPACE.x4 }}>
-              <View
-                style={{
-                  width: 46,
-                  height: 46,
-                  borderRadius: 23,
-                  backgroundColor: colors.brandWash,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: SPACE.x3,
-                }}
-              >
-                <Text style={{ fontSize: 16, fontWeight: "800", color: colors.brand }}>
-                  {post.author.initials}
-                </Text>
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ ...TYPE.bodyStrong, fontWeight: "700", color: colors.ink }} numberOfLines={1}>
+              <Avatar name={post.author.name} size={42} />
+              <View style={{ flex: 1, marginLeft: SPACE.x3, minWidth: 0 }}>
+                <Text style={{ ...TYPE.bodyStrong, fontSize: 15, fontWeight: "700", color: colors.ink }} numberOfLines={1}>
                   {post.author.name}
                 </Text>
-                <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: 2 }} numberOfLines={1}>
-                  {post.author.course} · {post.author.yearLevel}
-                </Text>
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x1 }}>
-                <Calendar size={13} color={colors.inkFaint} />
-                <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>{post.createdAt}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                  <Text style={{ ...TYPE.caption, color: colors.inkFaint }} numberOfLines={1}>
+                    {post.createdAt}
+                    {post.author.course && post.author.course !== "—" && post.author.course !== "-"
+                      ? ` · ${post.author.course}`
+                      : ""}
+                  </Text>
+                  {post.visibility ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginLeft: 2 }}>
+                      <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>·</Text>
+                      {post.visibility === "friends" ? (
+                        <Users size={11} color={colors.inkFaint} />
+                      ) : (
+                        <Globe size={11} color={colors.inkFaint} />
+                      )}
+                    </View>
+                  ) : null}
+                </View>
               </View>
             </View>
 
-            <View style={{ paddingHorizontal: SPACE.x4, marginBottom: SPACE.x3 }}>
-              <View
+            {post.type !== "text" && post.type !== "image" && (
+              <View style={{ paddingHorizontal: SPACE.x4, marginBottom: SPACE.x3 }}>
+                <View
+                  style={{
+                    alignSelf: "flex-start",
+                    backgroundColor: typeConfig.bg,
+                    paddingHorizontal: SPACE.x3,
+                    paddingVertical: 3,
+                    borderRadius: RADIUS.pill,
+                  }}
+                >
+                  <Text style={{ ...TYPE.micro, fontSize: 9, color: typeConfig.text }}>
+                    {typeConfig.label}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {post.title ? (
+              <Text style={{ ...TYPE.h2, color: colors.ink, paddingHorizontal: SPACE.x4, marginBottom: SPACE.x2 }}>
+                {post.title}
+              </Text>
+            ) : null}
+            {post.description ? (
+              <Text
                 style={{
-                  alignSelf: "flex-start",
-                  backgroundColor: typeConfig.bg,
-                  paddingHorizontal: SPACE.x3,
-                  paddingVertical: 4,
-                  borderRadius: RADIUS.pill,
+                  ...(post.title ? TYPE.body : TYPE.bodyStrong),
+                  color: post.title ? colors.inkSoft : colors.ink,
+                  paddingHorizontal: SPACE.x4,
+                  marginBottom: SPACE.x4,
+                  lineHeight: post.title ? 22 : 26,
                 }}
               >
-                <Text style={{ ...TYPE.micro, fontSize: 9, color: typeConfig.text }}>
-                  {typeConfig.label}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={{ ...TYPE.h2, color: colors.ink, paddingHorizontal: SPACE.x4, marginBottom: SPACE.x2 }}>
-              {post.title}
-            </Text>
-            {post.description ? (
-              <Text style={{ ...TYPE.body, color: colors.inkSoft, paddingHorizontal: SPACE.x4, marginBottom: SPACE.x4, lineHeight: 22 }}>
                 {post.description}
               </Text>
             ) : null}
@@ -1375,7 +1427,7 @@ export default function PostDetailScreen() {
             {/* Engagement */}
             <View style={{ height: 1, backgroundColor: colors.line }} />
             <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE.x2, paddingVertical: SPACE.x1 }}>
-              <Animated.View style={animatedStyle}>
+              <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
                 <Pressable
                   onPress={handleLike}
                   accessibilityRole="button"
@@ -1440,7 +1492,7 @@ export default function PostDetailScreen() {
             </Text>
 
             {/* Composer */}
-            {profile?.role === "student" && !profile?.profile_completed ? (
+            {profile?.role === "student" && !profile?.profile_completed && profile?.verification_status !== "verified" ? (
               <View style={{ backgroundColor: colors.brandWash, borderRadius: RADIUS.md, padding: SPACE.x3, marginBottom: SPACE.x4 }}>
                 <Text style={{ ...TYPE.caption, color: colors.brand, fontWeight: "700" }}>Complete your profile to comment</Text>
                 <Button label="Go to Profile" size="sm" onPress={() => router.push("/onboarding")} style={{ marginTop: 8 }} />

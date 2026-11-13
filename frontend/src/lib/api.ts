@@ -75,6 +75,11 @@ client.interceptors.response.use(
       originalRequest &&
       !originalRequest._retry
     ) {
+      if (error.response?.data?.code === "session_expired") {
+        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+          window.dispatchEvent(new CustomEvent("admin_session_expired"));
+        }
+      }
       const errMsg = error.response?.data?.error || "";
       if (/token|jwt/i.test(errMsg)) {
         originalRequest._retry = true;

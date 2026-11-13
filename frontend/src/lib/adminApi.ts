@@ -287,7 +287,7 @@ export function listAdminAudit(params: {
 }
 
 export function getAudienceCount(audience: AnnouncementAudience): Promise<{ count: number }> {
-  return apiJson<{ count: number }>(`/api/announcements/audience-count${queryString(audience as any)}`);
+  return apiJson<{ count: number }>(`/announcements/audience-count${queryString(audience as any)}`);
 }
 
 export function sendAnnouncement(input: {
@@ -297,7 +297,7 @@ export function sendAnnouncement(input: {
   pinned?: boolean;
   expires_at?: string | null;
 }): Promise<{ id: string; recipients: number }> {
-  return apiJson<{ id: string; recipients: number }>("/api/announcements", {
+  return apiJson<{ id: string; recipients: number }>("/announcements", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -307,7 +307,7 @@ export function listAnnouncements(params: {
   limit?: number;
   cursor?: string | null;
 }): Promise<Paged<Announcement>> {
-  return apiJson<Paged<Announcement>>(`/api/announcements${queryString(params)}`);
+  return apiJson<Paged<Announcement>>(`/announcements${queryString(params)}`);
 }
 
 export function updateAnnouncement(
@@ -319,14 +319,29 @@ export function updateAnnouncement(
     expires_at?: string | null;
   }
 ): Promise<Announcement | null> {
-  return apiJson<Announcement | null>(`/api/announcements/${encodeURIComponent(id)}`, {
+  return apiJson<Announcement | null>(`/announcements/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(input),
   });
 }
 
 export function deleteAnnouncement(id: string): Promise<void> {
-  return apiJson(`/api/announcements/${encodeURIComponent(id)}`, {
+  return apiJson(`/announcements/${encodeURIComponent(id)}`, {
     method: "DELETE",
+  });
+}
+
+export async function checkAdminSessionStatus(): Promise<{ isAdmin: boolean; valid: boolean; remainingMs: number }> {
+  try {
+    return await apiJson<{ isAdmin: boolean; valid: boolean; remainingMs: number }>("/auth/mfa/admin-session");
+  } catch {
+    return { isAdmin: false, valid: false, remainingMs: 0 };
+  }
+}
+
+export async function stepUpAdminMfa(code: string): Promise<{ ok: boolean; message: string }> {
+  return await apiJson<{ ok: boolean; message: string }>("/auth/mfa/step-up", {
+    method: "POST",
+    body: JSON.stringify({ code }),
   });
 }
