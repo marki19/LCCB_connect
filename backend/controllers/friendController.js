@@ -140,6 +140,21 @@ const removeFriend = async (req, res, next) => {
   }
 };
 
+/**
+ * People you may know. Guests never reach this (requireAuth upstream); an
+ * empty list means the client renders nothing.
+ */
+const getSuggestions = async (req, res, next) => {
+  try {
+    const suggestions = await friendModel.listSuggestions(req.user.id, {
+      limit: clampLimit(req.query.limit),
+    });
+    res.json(suggestions);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listFriends,
   getRequests,
@@ -147,4 +162,5 @@ module.exports = {
   acceptRequest: respond("accepted"),
   declineRequest: respond("declined"),
   removeFriend,
+  getSuggestions,
 };
