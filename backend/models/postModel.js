@@ -49,12 +49,35 @@ const getAllPosts = async ({
   }
 
   if (cursor) {
-    const [createdAt, id] = String(cursor).split("|");
+    const parts = String(cursor).split("|");
+    let isPinned = false;
+    let createdAt = null;
+    let id = null;
+
+    if (parts.length >= 3) {
+      isPinned = parts[0] === "true" || parts[0] === "1";
+      createdAt = parts[1];
+      id = parts[2];
+    } else if (parts.length === 2) {
+      isPinned = false;
+      createdAt = parts[0];
+      id = parts[1];
+    }
+
     if (createdAt && id) {
-      params.push(createdAt, id);
+      params.push(isPinned, createdAt, id);
+      const pinnedParam = `$${params.length - 2}::boolean`;
+      const createdParam = `$${params.length - 1}::timestamptz`;
+      const idParam = `$${params.length}::uuid`;
       conditions.push(`(
-        p.created_at < $${params.length - 1}::timestamptz
-        OR (p.created_at = $${params.length - 1}::timestamptz AND p.id < $${params.length}::uuid)
+        (COALESCE(p.pinned, false) = false AND ${pinnedParam} = true)
+        OR (
+          COALESCE(p.pinned, false) = ${pinnedParam}
+          AND (
+            p.created_at < ${createdParam}
+            OR (p.created_at = ${createdParam} AND p.id < ${idParam})
+          )
+        )
       )`);
     }
   }
@@ -349,12 +372,35 @@ const visiblePostsFor = async ({
     }
 
     if (cursor) {
-    const [createdAt, id] = String(cursor).split("|");
+    const parts = String(cursor).split("|");
+    let isPinned = false;
+    let createdAt = null;
+    let id = null;
+
+    if (parts.length >= 3) {
+      isPinned = parts[0] === "true" || parts[0] === "1";
+      createdAt = parts[1];
+      id = parts[2];
+    } else if (parts.length === 2) {
+      isPinned = false;
+      createdAt = parts[0];
+      id = parts[1];
+    }
+
     if (createdAt && id) {
-      params.push(createdAt, id);
+      params.push(isPinned, createdAt, id);
+      const pinnedParam = `$${params.length - 2}::boolean`;
+      const createdParam = `$${params.length - 1}::timestamptz`;
+      const idParam = `$${params.length}::uuid`;
       conditions.push(`(
-        p.created_at < $${params.length - 1}::timestamptz
-        OR (p.created_at = $${params.length - 1}::timestamptz AND p.id < $${params.length}::uuid)
+        (COALESCE(p.pinned, false) = false AND ${pinnedParam} = true)
+        OR (
+          COALESCE(p.pinned, false) = ${pinnedParam}
+          AND (
+            p.created_at < ${createdParam}
+            OR (p.created_at = ${createdParam} AND p.id < ${idParam})
+          )
+        )
       )`);
     }
   }

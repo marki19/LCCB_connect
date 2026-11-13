@@ -155,7 +155,7 @@ describe("GET /api/users/directory", () => {
   it("wiring: getDirectory called with correct params for default scope", async () => {
     getDirectory.setImpl(async (userId, opts) => {
       assert.equal(userId, "u1");
-      assert.deepEqual(opts, { limit: 50, q: null, scope: "network" });
+      assert.deepEqual(opts, { limit: 25, q: null, scope: "network" });
       return [];
     });
 

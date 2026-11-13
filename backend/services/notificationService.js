@@ -13,11 +13,11 @@ async function getTargetAdmins(departmentId = null) {
   const sql = `
     SELECT id, role, department_id FROM public.profiles
     WHERE
-      LOWER(role) IN ('admin', 'superadmin')
+      role IN ('admin', 'superadmin')
       OR (
-        LOWER(REPLACE(REPLACE(role, '_', ''), '-', '')) = 'departmentadmin'
-        AND $1::uuid IS NOT NULL
+        $1::uuid IS NOT NULL
         AND department_id = $1::uuid
+        AND role IN ('departmentAdmin', 'departmentadmin', 'department_admin')
       );
   `;
   const result = await db.query(sql, [departmentId || null]);
@@ -28,25 +28,24 @@ async function getTargetAdmins(departmentId = null) {
  * Creates notification records in bulk using parameterized raw SQL.
  * Stores the department as both the authoritative `department_id` and a
  * denormalized display `department` name.
+ * Uses a single multi-row INSERT with unnest to avoid N+1 query loops.
  */
 async function createNotifications(adminIds, { actorId, type, targetId, departmentId, departmentName, message }) {
   if (!adminIds || adminIds.length === 0) return;
 
-  for (const adminId of adminIds) {
-    const sql = `
-      INSERT INTO public.notifications (user_id, actor_id, type, target_id, department_id, department, message)
-      VALUES ($1, $2, $3, $4, $5, $6, $7);
-    `;
-    await db.query(sql, [
-      adminId,
-      actorId || null,
-      type,
-      targetId || null,
-      departmentId || null,
-      departmentName || null,
-      message,
-    ]);
-  }
+  const sql = `
+    INSERT INTO public.notifications (user_id, actor_id, type, target_id, department_id, department, message)
+    SELECT unnest($1::uuid[]), $2, $3, $4, $5, $6, $7;
+  `;
+  await db.query(sql, [
+    adminIds,
+    actorId || null,
+    type,
+    targetId || null,
+    departmentId || null,
+    departmentName || null,
+    message,
+  ]);
 }
 
 /**
