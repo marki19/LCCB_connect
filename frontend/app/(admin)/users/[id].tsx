@@ -37,6 +37,7 @@ import {
 } from "../../../src/lib/roles";
 import { useAuth } from "../../../src/contexts/AuthContext";
 import { useTheme } from "../../../src/contexts/ThemeContext";
+import { useToast } from "../../../src/contexts/ToastContext";
 import { ThemeTokens } from "../../../src/lib/tokens";
 import ActionDialog from "../../../src/components/admin/ActionDialog";
 
@@ -113,6 +114,7 @@ export default function AdminUserDossierScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { profile } = useAuth();
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const [target, setTarget] = useState<AdminDossier | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -159,6 +161,7 @@ export default function AdminUserDossierScreen() {
       await action();
       setDialog(null);
       setNotice(message);
+      showToast({ message, tone: "success" });
       await load();
     } catch (e: any) {
       setError(e?.message || "The action failed.");

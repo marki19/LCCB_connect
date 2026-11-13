@@ -12,6 +12,7 @@ import { listAdminAudit, type AuditEntry } from "../../src/lib/adminApi";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { ThemeTokens } from "../../src/lib/tokens";
 import PageHeader from "../../src/components/admin/PageHeader";
+import DatePickerField from "../../src/components/ui/DatePickerField";
 
 const ACTION_OPTIONS = [
   { value: "", label: "All actions" },
@@ -205,39 +206,19 @@ export default function AdminAuditScreen() {
             />
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <TextInput
+            <DatePickerField
+              compact
               value={from}
-              onChangeText={setFrom}
+              onChange={setFrom}
               placeholder="From YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
-              style={{
-                width: 144,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.inputBorder,
-                backgroundColor: colors.inputBg,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                fontSize: 13,
-                color: colors.textPrimary,
-              }}
+              containerStyle={{ width: 155 }}
             />
-            <TextInput
+            <DatePickerField
+              compact
               value={to}
-              onChangeText={setTo}
+              onChange={setTo}
               placeholder="To YYYY-MM-DD"
-              placeholderTextColor={colors.textMuted}
-              style={{
-                width: 144,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.inputBorder,
-                backgroundColor: colors.inputBg,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                fontSize: 13,
-                color: colors.textPrimary,
-              }}
+              containerStyle={{ width: 155 }}
             />
           </View>
           <Text style={{ fontSize: 13, color: colors.textTertiary }}>

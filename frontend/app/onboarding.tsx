@@ -3,6 +3,7 @@ import { ScrollView, View, Text, SafeAreaView, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { useToast } from "../src/contexts/ToastContext";
 import { apiJson, ApiError } from "../src/lib/api";
 import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
 import Button from "../src/components/ui/Button";
@@ -46,6 +47,7 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const { refreshProfile, profile } = useAuth();
   const { colors } = useTheme();
+  const { showToast } = useToast();
 
   const [mine, setMine] = useState<MineResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,6 +90,7 @@ export default function OnboardingScreen() {
   }, [loadMine]);
 
   const role = profile?.role ?? "student";
+  const isAdmin = role === "superadmin" || role === "admin";
   const isSuperadmin = role === "superadmin";
   const fullNameLocked = !!profile?.full_name;
 
@@ -144,6 +147,12 @@ export default function OnboardingScreen() {
             body: JSON.stringify(payload),
           });
         }
+        await loadMine();
+        await refreshProfile();
+        showToast({
+          message: "Verification submitted successfully.",
+          tone: "success",
+        });
         return { ok: true };
       } catch (error: any) {
         if (error instanceof ApiError) {
@@ -159,9 +168,13 @@ export default function OnboardingScreen() {
   );
 
   const handleSuccess = useCallback(async () => {
+    showToast({
+      message: "Verification submitted for review.",
+      tone: "success",
+    });
     await refreshProfile();
     router.replace("/(tabs)/");
-  }, [refreshProfile, router]);
+  }, [refreshProfile, router, showToast]);
 
   if (loading) {
     return (
@@ -187,8 +200,8 @@ export default function OnboardingScreen() {
     );
   }
 
-  // Superadmin — no verification needed
-  if (isSuperadmin) {
+  // Admin & Superadmin — no verification needed
+  if (isAdmin) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
@@ -207,9 +220,11 @@ export default function OnboardingScreen() {
               >
                 <Text style={{ fontSize: 28 }}>🛡️</Text>
               </View>
-              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>Superadmin access</Text>
+              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>
+                {isSuperadmin ? "Superadmin access" : "Administrator access"}
+              </Text>
               <Text style={{ ...TYPE.body, color: colors.inkSoft, textAlign: "center" }}>
-                Superadmin accounts do not require verification. You have full access already.
+                Admin accounts do not require verification. You have full access already.
               </Text>
               <View style={{ marginTop: SPACE.x6, alignSelf: "stretch" }}>
                 <Button label="Continue to app" fullWidth size="lg" onPress={() => router.replace("/(tabs)/")} />
@@ -223,9 +238,9 @@ export default function OnboardingScreen() {
 
   // Pending — read-only summary
   const isPending = mine?.request?.status === "pending";
-  const isApproved = mine?.request?.status === "approved";
+  const isApproved = mine?.request?.status === "approved" || profile?.verification_status === "verified";
   const isDeclined = mine?.request?.status === "declined";
-  const requestStatus = mine?.request?.status ?? "unverified";
+  const requestStatus = profile?.verification_status === "verified" ? "approved" : (mine?.request?.status ?? "unverified");
 
   if (isPending) {
     return (

@@ -187,7 +187,8 @@ describe("send a message (§11)", () => {
       .send({ body: "hello", client_msg_id: CLIENT });
 
     assert.equal(res.status, 403);
-    assert.deepEqual(res.body, { error: "This user isn't accepting messages" });
+    assert.equal(res.body.error, "This user isn't accepting messages");
+    assert.ok(res.body.requestId);
   });
 
   it("stamps the sender from the token and returns 201", async () => {

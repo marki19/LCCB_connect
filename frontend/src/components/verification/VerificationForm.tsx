@@ -13,6 +13,7 @@ import Modal from "../ui/Modal";
 import Reveal from "../ui/Reveal";
 import SelectField, { SelectOption } from "../SelectField";
 import TextField from "../ui/TextField";
+import DatePickerField from "../ui/DatePickerField";
 
 type Props = {
   /** The caller's role from the server — determines which fields render. */
@@ -173,8 +174,16 @@ export default function VerificationForm({
   );
 
   const handleChange = (key: keyof typeof form, value: string) => {
-    setForm((f) => ({ ...f, [key]: value }));
-    const err = validate(key, value);
+    let cleanVal = value;
+    if (key === "student_id") {
+      cleanVal = value.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+    } else if (key === "otp_code") {
+      cleanVal = value.replace(/\D/g, "").slice(0, 6);
+    } else if (key === "full_name") {
+      cleanVal = value.replace(/[^\w\s.-]/gi, "");
+    }
+    setForm((f) => ({ ...f, [key]: cleanVal }));
+    const err = validate(key, cleanVal);
     setErrors((e) => ({ ...e, [key]: err ?? "" }));
   };
 
@@ -237,13 +246,20 @@ export default function VerificationForm({
 
     setSubmitting(true);
     try {
+      const rawBirthdate = form.birthdate?.trim() ?? "";
+      let birthdateFormatted = rawBirthdate;
+      const mdy = rawBirthdate.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+      if (mdy) {
+        birthdateFormatted = `${mdy[3]}-${mdy[1]}-${mdy[2]}`;
+      }
+
       const payload = {
         full_name: form.full_name?.trim() ?? "",
         student_id: form.student_id?.trim().toUpperCase() ?? "",
         department_id: form.department_id || null,
         course_id: form.course_id || null,
         year_level: form.year_level?.trim() ?? "",
-        birthdate: form.birthdate?.trim() ?? "",
+        birthdate: birthdateFormatted,
         otp_code: otp,
       };
 
@@ -533,6 +549,22 @@ export default function VerificationForm({
                           </Text>
                         ) : null}
                       </View>
+                    );
+                  }
+
+                  if (def.key === "birthdate") {
+                    return (
+                      <DatePickerField
+                        key={def.key}
+                        label={def.label}
+                        value={form.birthdate || ""}
+                        onChange={(v) => handleChange("birthdate", v)}
+                        placeholder="YYYY-MM-DD"
+                        hint={def.locked ? def.lockHint : "Pick from calendar or type numbers (auto-formatted)"}
+                        error={fieldError("birthdate")}
+                        maxDate={new Date()}
+                        editable={canEdit && !def.locked}
+                      />
                     );
                   }
 

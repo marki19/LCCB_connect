@@ -2,6 +2,7 @@ const messageModel = require("../models/messageModel");
 const notificationService = require("../services/notificationService");
 const pushService = require("../services/pushService");
 const { clampLimit } = require("../models/pagination");
+const { normalizeRole } = require("../utils/roles");
 
 /**
  * Messaging controller (Messaging_plan.md §6, §9, §11).
@@ -93,8 +94,9 @@ const createConversation = async (req, res, next) => {
       return res.status(400).json({ error: "You can't message yourself" });
     }
 
-    // Verify user profile is complete before allowing messaging
-    if (!req.profile?.profile_completed) {
+    // Verify student profile is complete before allowing messaging (verified students are exempt)
+    const role = normalizeRole(req.profile?.role);
+    if (role === "student" && !req.profile?.profile_completed && req.profile?.verification_status !== "verified") {
       return res.status(403).json({
         error: "Profile incomplete",
         message: "Complete your profile (full name, student ID, department, and course) before messaging.",

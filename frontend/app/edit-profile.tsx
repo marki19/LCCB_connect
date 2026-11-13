@@ -13,6 +13,7 @@ import { useState } from "react";
 /* router unused - back navigation happens via safeBack() */
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { useToast } from "../src/contexts/ToastContext";
 import { pickImage, uploadToStorage, MAX_UPLOAD_BYTES } from "../src/lib/upload";
 import { ArrowLeft, Camera, X, Check } from "lucide-react-native";
 import { apiFetch } from "../src/lib/api";
@@ -68,6 +69,7 @@ function ReadOnlyField({
 export default function EditProfileScreen() {
   const { profile, session } = useAuth();
   const { colors } = useTheme();
+  const { showToast } = useToast();
 
   const [bio, setBio] = useState(profile?.bio || "");
   const [yearLevel, setYearLevel] = useState(profile?.year_level || "");
@@ -124,7 +126,8 @@ export default function EditProfileScreen() {
         throw new Error(errData.error || "Failed to update profile via backend");
       }
 
-      // Force context to re-fetch would be ideal, but for now we just dismiss modal
+      // Show success confirmation toast and dismiss modal
+      showToast({ message: "Profile updated successfully.", tone: "success" });
       safeBack("/(tabs)/profile");
     } catch (error: any) {
       setNotice(error.message || "Something went wrong while saving your profile.");
@@ -134,11 +137,18 @@ export default function EditProfileScreen() {
   };
 
   const addSkill = () => {
-    const trimmed = newSkill.trim();
-    if (trimmed && !skills.includes(trimmed)) {
-      setSkills([...skills, trimmed]);
-      setNewSkill("");
+    const trimmed = newSkill.trim().slice(0, 50);
+    if (!trimmed) return;
+    if (skills.length >= 30) {
+      setNotice("You can add at most 30 skills.");
+      return;
     }
+    if (skills.includes(trimmed)) {
+      setNewSkill("");
+      return;
+    }
+    setSkills([...skills, trimmed]);
+    setNewSkill("");
   };
 
   return (
@@ -251,7 +261,9 @@ export default function EditProfileScreen() {
                 onChangeText={setBio}
                 placeholder="Tell us about yourself…"
                 multiline
+                maxLength={500}
                 minHeight={110}
+                hint={`${bio.length}/500`}
                 autoCapitalize="sentences"
               />
 

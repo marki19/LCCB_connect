@@ -10,14 +10,19 @@ const db = require("../db");
  * notifies only campus admins — it must not fan out to every department admin.
  */
 async function getTargetAdmins(departmentId = null) {
+  // `role` is stored mixed-case ('superAdmin' vs 'superadmin', per
+  // chk_profiles_role), so compare through normalize_role(). Exact string
+  // matching silently drops camelCase admins from every notification fan-out.
+  // The function is IMMUTABLE and backed by idx_profiles_role_norm
+  // (migration 043), so this stays sargable.
   const sql = `
     SELECT id, role, department_id FROM public.profiles
     WHERE
-      role IN ('admin', 'superadmin')
+      public.normalize_role(role) IN ('admin', 'superadmin')
       OR (
         $1::uuid IS NOT NULL
         AND department_id = $1::uuid
-        AND role IN ('departmentAdmin', 'departmentadmin', 'department_admin')
+        AND public.normalize_role(role) = 'departmentadmin'
       );
   `;
   const result = await db.query(sql, [departmentId || null]);

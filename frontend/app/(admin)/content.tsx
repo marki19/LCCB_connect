@@ -32,6 +32,7 @@ import { apiJson } from "../../src/lib/api";
 import { fetchDepartments } from "../../src/lib/catalog";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
+import { useToast } from "../../src/contexts/ToastContext";
 import { ThemeTokens } from "../../src/lib/tokens";
 import { isSuperAdminRole } from "../../src/lib/roles";
 import type { Department } from "../../src/types";
@@ -135,6 +136,7 @@ export default function AdminContentScreen() {
   const router = useRouter();
   const { profile } = useAuth();
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const superadmin = isSuperAdminRole(profile?.role);
 
   const [tab, setTab] = useState<"queue" | "library">("queue");
@@ -346,7 +348,9 @@ export default function AdminContentScreen() {
           pending.action as "reviewed" | "dismissed",
           input.reason
         );
-        setNotice("Report resolved.");
+        const msg = "Report resolved.";
+        setNotice(msg);
+        showToast({ message: msg, tone: "success" });
       } else if (pending.type) {
         await moderateContent(
           pending.type,
@@ -354,10 +358,10 @@ export default function AdminContentScreen() {
           pending.action as ModerationAction,
           input.reason
         );
-        setNotice(
-          `${pending.type[0].toUpperCase()}${pending.type.slice(1)} ${pending.action === "restore" ? "restored" : pending.action === "hide" ? "hidden" : pending.action === "approve" ? "approved" : "deleted"
-          }.`
-        );
+        const actionVerb = pending.action === "restore" ? "restored" : pending.action === "hide" ? "hidden" : pending.action === "approve" ? "approved" : "deleted";
+        const msg = `${pending.type[0].toUpperCase()}${pending.type.slice(1)} ${actionVerb}.`;
+        setNotice(msg);
+        showToast({ message: msg, tone: "success" });
       }
       setPending(null);
       refresh();

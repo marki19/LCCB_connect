@@ -216,30 +216,37 @@ async function bulkSignBucket(bucket, keys, { expiresIn = DEFAULT_SIGNED_URL_EXP
         return { data: null, error: new Error("createSignedUrls unavailable") };
       })();
 
+      let timeoutTimer = null;
       const timeoutPromise = new Promise((_, reject) => {
-        const timer = setTimeout(() => reject(new Error("Storage signing timed out")), 3000);
-        if (typeof timer.unref === "function") timer.unref();
+        timeoutTimer = setTimeout(() => reject(new Error("Storage signing timed out")), 3000);
+        if (typeof timeoutTimer.unref === "function") timeoutTimer.unref();
       });
 
-      const { data, error } = await Promise.race([signPromise, timeoutPromise]);
+      try {
+        const { data, error } = await Promise.race([signPromise, timeoutPromise]);
 
-      if (error || !Array.isArray(data)) {
-        for (const k of chunk) resultMap.set(k, k);
-        continue;
-      }
-
-      for (const item of data) {
-        const path = item.path || item.error?.path;
-        if (path && item.signedUrl && !item.error) {
-          resultMap.set(path, item.signedUrl);
-          setCachedUrl(bucket, path, item.signedUrl, ttlMs);
-        } else if (path) {
-          resultMap.set(path, path);
+        if (error || !Array.isArray(data)) {
+          for (const k of chunk) resultMap.set(k, k);
+          continue;
         }
-      }
 
-      for (const k of chunk) {
-        if (!resultMap.has(k)) resultMap.set(k, k);
+        for (const item of data) {
+          const path = item.path || item.error?.path;
+          if (path && item.signedUrl && !item.error) {
+            resultMap.set(path, item.signedUrl);
+            setCachedUrl(bucket, path, item.signedUrl, ttlMs);
+          } else if (path) {
+            resultMap.set(path, path);
+          }
+        }
+
+        for (const k of chunk) {
+          if (!resultMap.has(k)) resultMap.set(k, k);
+        }
+      } finally {
+        // The race usually resolves well before the 3s guard; without this the
+        // timer lingers for every batch on every response.
+        if (timeoutTimer) clearTimeout(timeoutTimer);
       }
     } catch {
       // Timeout or network rejection: return raw keys to unblock response
@@ -267,9 +274,6 @@ function withStorageUrlsSync(value) {
           output[field] = publicStorageUrl(bucket, output[field]);
         }
       }
-    }
-    if (Array.isArray(output.image_urls)) {
-      output.image_urls = output.image_urls.map((key) => key);
     }
     if (output.author && typeof output.author === "object") {
       if (typeof output.author.avatar_url === "string" && !isAbsoluteUrl(output.author.avatar_url)) {

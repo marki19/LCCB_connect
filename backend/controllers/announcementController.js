@@ -2,6 +2,7 @@ const announcementModel = require("../models/announcementModel");
 const { normalizeRole } = require("../middleware/auth");
 const { announcementAudienceSchema } = require("../validation");
 const auditService = require("../services/auditService");
+const pushService = require("../services/pushService");
 const db = require("../db");
 
 const { ACTIONS } = auditService;
@@ -133,7 +134,7 @@ const create = async (req, res, next) => {
     const resolved = await resolveAudience(req.profile, audience);
     if (resolved.error) return res.status(resolved.status || 403).json({ error: resolved.error });
 
-    const { post, recipients } = await announcementModel.create({
+    const { post, recipients, recipientIds } = await announcementModel.create({
       authorId: req.user.id,
       title,
       body,
@@ -152,6 +153,29 @@ const create = async (req, res, next) => {
     });
 
     res.status(201).json({ ...shapeAnnouncement(post), recipients });
+
+    // Asynchronously dispatch OS push notifications to recipients on mobile
+    Promise.resolve().then(async () => {
+      try {
+        if (Array.isArray(recipientIds) && recipientIds.length > 0) {
+          const preview = body.length > 100 ? `${body.slice(0, 100)}…` : body;
+          for (const recipientId of recipientIds) {
+            await pushService.sendToUser({
+              userId: recipientId,
+              title: `Campus Announcement: ${title}`,
+              body: preview,
+              data: {
+                type: "announcement",
+                targetId: post.id,
+              },
+              respectDnd: false, // Campus broadcasts bypass DND
+            });
+          }
+        }
+      } catch (err) {
+        console.error("[announcement] Push delivery failed:", err?.message);
+      }
+    });
   } catch (error) {
     next(error);
   }
@@ -237,6 +261,7 @@ const list = async (req, res, next) => {
 
     res.json({
       items: result.items.map(shapeAnnouncement),
+      total: result.total ?? result.items.length,
       next_cursor: result.next_cursor,
     });
   } catch (error) {

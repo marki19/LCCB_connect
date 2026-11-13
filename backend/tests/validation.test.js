@@ -141,3 +141,62 @@ describe("visibility contract", () => {
     assert.equal(thesis({ visibility: "custom", audience: ["not-a-uuid"] }).success, false);
   });
 });
+
+// Admin console forms send a few UI-only keys that `.strict()` rejects. The
+// middleware strips those keys and re-validates; it must never let an invalid
+// *field* through just because the caller is an admin.
+describe("validate middleware admin leniency", () => {
+  const express = require("express");
+  const request = require("supertest");
+  const { validate } = require("../validation");
+
+  const buildApp = (role) => {
+    const app = express();
+    app.use(express.json());
+    app.post(
+      "/posts",
+      (req, _res, next) => {
+        req.profile = role ? { role } : undefined;
+        next();
+      },
+      validate(createPostSchema),
+      (req, res) => res.json({ body: req.body })
+    );
+    return app;
+  };
+
+  it("still rejects an invalid field for an admin", async () => {
+    const res = await request(buildApp("superadmin"))
+      .post("/posts")
+      .send({ content: "hello", visibility: "not-a-visibility" });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error, "Validation failed");
+  });
+
+  it("rejects an empty post for an admin", async () => {
+    const res = await request(buildApp("admin"))
+      .post("/posts")
+      .send({ visibility: "public" });
+
+    assert.equal(res.status, 400);
+  });
+
+  it("strips UI-only keys for an admin and validates the rest", async () => {
+    const res = await request(buildApp("superadmin"))
+      .post("/posts")
+      .send({ content: "hello", composerMode: "expanded" });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.body.content, "hello");
+    assert.equal("composerMode" in res.body.body, false);
+  });
+
+  it("does not relax anything for a student", async () => {
+    const res = await request(buildApp("student"))
+      .post("/posts")
+      .send({ content: "hello", composerMode: "expanded" });
+
+    assert.equal(res.status, 400);
+  });
+});

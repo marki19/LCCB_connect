@@ -13,10 +13,12 @@ import {
 import { fetchDepartments, fetchCourses } from "../../src/lib/catalog";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
+import { useToast } from "../../src/contexts/ToastContext";
 import { ThemeTokens } from "../../src/lib/tokens";
 import type { Department } from "../../src/types";
 import ActionDialog from "../../src/components/admin/ActionDialog";
 import PageHeader from "../../src/components/admin/PageHeader";
+import DatePickerField from "../../src/components/ui/DatePickerField";
 
 type AudienceType = "all" | "role" | "department" | "course" | "year_level";
 
@@ -99,6 +101,7 @@ function SectionLabel({ children, colors }: { children: React.ReactNode; colors:
 
 export default function AdminAnnouncementsScreen() {
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const { profile } = useAuth();
   const isCampusAdmin = profile?.role === "admin" || profile?.role === "superadmin";
   const myDeptId = profile?.department_id;
@@ -293,7 +296,9 @@ export default function AdminAnnouncementsScreen() {
       setBody("");
       setPinned(false);
       setExpiresAt("");
-      setNotice(`Announcement sent to ${result.recipients} recipient${result.recipients === 1 ? "" : "s"}.`);
+      const successMsg = `Announcement sent to ${result.recipients} recipient${result.recipients === 1 ? "" : "s"}.`;
+      setNotice(successMsg);
+      showToast({ message: successMsg, tone: "success" });
       await loadHistory(null, false);
     } catch (e: any) {
       setError(e?.message || "Could not send the announcement.");
@@ -323,6 +328,7 @@ export default function AdminAnnouncementsScreen() {
       });
       setEditingId(null);
       setNotice("Announcement updated.");
+      showToast({ message: "Announcement updated.", tone: "success" });
       await loadHistory(null, false);
     } catch (e: any) {
       setError(e?.message || "Could not update announcement.");
@@ -340,6 +346,7 @@ export default function AdminAnnouncementsScreen() {
       await deleteAnnouncement(deletingId);
       setDeletingId(null);
       setNotice("Announcement deleted.");
+      showToast({ message: "Announcement deleted.", tone: "info" });
       await loadHistory(null, false);
     } catch (e: any) {
       setError(e?.message || "Could not delete announcement.");
@@ -583,22 +590,14 @@ export default function AdminAnnouncementsScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Bell size={16} color={colors.textTertiary} />
               <Text style={{ fontSize: 12, color: colors.textTertiary }}>Expires</Text>
-              <TextInput
+              <DatePickerField
+                compact
+                mode="datetime"
                 value={expiresAt}
-                onChangeText={setExpiresAt}
+                onChange={setExpiresAt}
                 placeholder="YYYY-MM-DDTHH:MM"
-                placeholderTextColor={colors.textMuted}
-                style={{
-                  width: 160,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: colors.inputBorder,
-                  backgroundColor: colors.inputBg,
-                  paddingHorizontal: 10,
-                  paddingVertical: 8,
-                  fontSize: 12,
-                  color: colors.textPrimary,
-                }}
+                minDate={new Date()}
+                containerStyle={{ width: 195 }}
               />
             </View>
           </View>
@@ -762,22 +761,13 @@ export default function AdminAnnouncementsScreen() {
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                           <Calendar size={14} color={colors.textTertiary} />
                           <Text style={{ fontSize: 11, color: colors.textTertiary }}>Expires</Text>
-                          <TextInput
+                          <DatePickerField
+                            compact
+                            mode="datetime"
                             value={editExpiresAt}
-                            onChangeText={setEditExpiresAt}
+                            onChange={setEditExpiresAt}
                             placeholder="YYYY-MM-DDTHH:MM"
-                            placeholderTextColor={colors.textMuted}
-                            style={{
-                              width: 140,
-                              borderRadius: 8,
-                              borderWidth: 1,
-                              borderColor: colors.inputBorder,
-                              backgroundColor: colors.inputBg,
-                              paddingHorizontal: 8,
-                              paddingVertical: 6,
-                              fontSize: 11,
-                              color: colors.textPrimary,
-                            }}
+                            containerStyle={{ width: 180 }}
                           />
                         </View>
                       </View>

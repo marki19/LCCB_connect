@@ -49,6 +49,13 @@ function shutdown(signal) {
     clearTimeout(forceTimer);
     process.exit(0);
   });
+
+  // `server.close()` waits for idle keep-alive sockets to time out, so without
+  // this every deploy sits on the 10s force timer. Idle connections are dropped;
+  // requests already in flight still complete before the callback above runs.
+  if (typeof server.closeIdleConnections === "function") {
+    server.closeIdleConnections();
+  }
 }
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));

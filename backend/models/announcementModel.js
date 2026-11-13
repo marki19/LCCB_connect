@@ -140,7 +140,7 @@ async function create({ authorId, title, body, audience, pinned = false, expires
       );
     }
 
-    return { post, recipients: recipients.length };
+    return { post, recipients: recipients.length, recipientIds: recipients.map((r) => r.id) };
   });
 }
 

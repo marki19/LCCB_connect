@@ -107,6 +107,7 @@ const getAllPosts = async ({
       p.title,
       p.technologies,
       p.github_url,
+      p.pinned,
       p.image_url,
       p.image_urls,
       p.preview_metadata,
@@ -166,6 +167,7 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
       p.title,
       p.technologies,
       p.github_url,
+      p.pinned,
       p.image_url,
       p.image_urls,
       p.preview_metadata,
@@ -223,6 +225,7 @@ const buildPostSelect = (paramsLength, viewerId) => {
       p.title,
       p.technologies,
       p.github_url,
+      p.pinned,
       p.image_url,
       p.image_urls,
       p.preview_metadata,
@@ -272,6 +275,7 @@ const buildRepostSelect = (paramsLength, viewerId) => {
       p.title,
       p.technologies,
       p.github_url,
+      p.pinned,
       p.image_url,
       p.image_urls,
       p.preview_metadata,
@@ -512,7 +516,16 @@ const visiblePostsFor = async ({
     new Date(b.created_at) - new Date(a.created_at)
   );
 
-  return { posts: allItems };
+  // The cursor is built here, beside the ORDER BY it mirrors, so clients never
+  // have to know the keyset format. Ordering is `pinned DESC, created_at DESC,
+  // id DESC`, so the marker carries all three columns.
+  const lastRow = postsResult.rows[postsResult.rows.length - 1];
+  const next_cursor =
+    postsResult.rows.length === limit && lastRow
+      ? `${lastRow.pinned ? "true" : "false"}|${new Date(lastRow.created_at).toISOString()}|${lastRow.id}`
+      : null;
+
+  return { posts: allItems, next_cursor };
 };
 
 // ---- visibility + audience -------------------------------------------------
@@ -805,6 +818,7 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
       p.title,
       p.technologies,
       p.github_url,
+      p.pinned,
       p.image_url,
       p.image_urls,
       p.visibility,

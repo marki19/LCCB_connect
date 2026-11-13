@@ -56,15 +56,17 @@ describe("notificationService", () => {
   });
 
   describe("getTargetAdmins", () => {
-    it("queries campus admins and department admins using sargable role checks", async () => {
+    it("queries campus admins and department admins through normalize_role", async () => {
       const deptId = "66666666-6666-4666-8666-666666666666";
       await notificationService.getTargetAdmins(deptId);
 
       assert.equal(query.calls.length, 1);
       const [sql, params] = query.calls[0];
-      assert.match(sql, /role IN \('admin', 'superadmin'\)/i);
+      // Role is stored mixed-case ('superAdmin' as well as 'superadmin'), so an
+      // exact match would silently drop camelCase admins.
+      assert.match(sql, /normalize_role\(role\) IN \('admin', 'superadmin'\)/i);
+      assert.match(sql, /normalize_role\(role\) = 'departmentadmin'/i);
       assert.match(sql, /department_id = \$1::uuid/i);
-      assert.doesNotMatch(sql, /LOWER\(REPLACE/i);
       assert.deepEqual(params, [deptId]);
     });
 
@@ -78,3 +80,4 @@ describe("notificationService", () => {
     });
   });
 });
+

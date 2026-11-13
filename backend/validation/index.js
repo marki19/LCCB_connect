@@ -1,4 +1,5 @@
 const { z } = require("zod");
+const { normalizeRole } = require("../utils/roles");
 
 /**
  * Request body schemas + a `validate` middleware.
@@ -102,7 +103,23 @@ const postFields = {
   allow_reposts: z.boolean().optional(),
 };
 
-const createPostSchema = withCustomAudienceRule(z.object(postFields).strict());
+const withPostContentRule = (schema) =>
+  schema.superRefine((data, ctx) => {
+    const hasContent = Boolean(data.content && data.content.trim().length > 0);
+    const hasTitle = Boolean(data.title && data.title.trim().length > 0);
+    const hasImage = Boolean(data.image_url || (Array.isArray(data.image_urls) && data.image_urls.length > 0));
+    const hasPreview = Boolean(data.preview_metadata || data.github_url);
+
+    if (!hasContent && !hasTitle && !hasImage && !hasPreview) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["content"],
+        message: "A post must have at least content, an image, a title, or a link",
+      });
+    }
+  });
+
+const createPostSchema = withPostContentRule(withCustomAudienceRule(z.object(postFields).strict()));
 const updatePostSchema = withCustomAudienceRule(z.object(postFields).strict());
 
 // ---- comments --------------------------------------------------------------
@@ -508,8 +525,41 @@ const announcementUpdateSchema = z
  * value replaces `req.body`. On failure returns 400 with per-field messages and
  * never touches the database.
  */
+// Schemas whose forms are driven by the admin console, which sends a few extra
+// UI-only keys. Those keys are stripped and the remaining body is still
+// validated against the schema — the schema itself is never bypassed.
+const ADMIN_LENIENT_SCHEMAS = new Set([
+  createPostSchema,
+  updatePostSchema,
+  createCommentSchema,
+  updateCommentSchema,
+]);
+
 const validate = (schema) => (req, res, next) => {
-  const result = schema.safeParse(req.body ?? {});
+  let result = schema.safeParse(req.body ?? {});
+
+  // Tolerate unknown keys from admin forms without weakening field validation.
+  // An earlier version called next() on any failure that carried content or a
+  // title, which let an admin request send an invalid `visibility`,
+  // `image_urls`, or `department_id` straight into the model.
+  if (!result.success && ADMIN_LENIENT_SCHEMAS.has(schema)) {
+    const role = normalizeRole(req.profile?.role);
+    const isAdmin = role === "superadmin" || role === "admin";
+    const issues = result.error.issues;
+
+    if (
+      isAdmin &&
+      issues.length > 0 &&
+      issues.every((issue) => issue.code === "unrecognized_keys")
+    ) {
+      const body = { ...(req.body ?? {}) };
+      for (const issue of issues) {
+        for (const key of issue.keys ?? []) delete body[key];
+      }
+      result = schema.safeParse(body);
+    }
+  }
+
   if (!result.success) {
     // `unrecognized_keys` carries an empty path, so expand it into one entry per
     // rejected key — the caller needs to know exactly which key was refused.

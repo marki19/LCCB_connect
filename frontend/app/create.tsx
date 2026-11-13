@@ -36,6 +36,7 @@ import {
 import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { useToast } from "../src/contexts/ToastContext";
 import { uploadToStorage, pickImage, pickMultipleImages } from "../src/lib/upload";
 import { apiFetch, updatePost } from "../src/lib/api";
 import { fetchLinkPreview, LinkPreviewData } from "../src/lib/linkPreview";
@@ -56,6 +57,7 @@ type PostType = "text" | "image" | "project" | "capstone" | "website";
 export default function CreatePostModal() {
   const { profile } = useAuth();
   const { colors, isDark } = useTheme();
+  const { showToast } = useToast();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 768;
@@ -150,16 +152,23 @@ export default function CreatePostModal() {
     setImageUris((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const trimmedContent = content.trim();
+  const trimmedTitle = title.trim();
+
   const isPostValid = Boolean(
-    content.trim() ||
-      imageUris.length > 0 ||
-      (postType === "project" && title.trim()) ||
-      (postType === "capstone" && title.trim()) ||
-      (postType === "website" && (githubUrl.trim() || previewData))
+    (postType === "text" && trimmedContent.length > 0) ||
+      (postType === "image" && imageUris.length > 0) ||
+      (postType === "project" && (trimmedTitle.length > 0 || trimmedContent.length > 0)) ||
+      (postType === "capstone" && (trimmedTitle.length > 0 || trimmedContent.length > 0)) ||
+      (postType === "website" && (githubUrl.trim().length > 0 || previewData || trimmedContent.length > 0)) ||
+      trimmedContent.length > 0 ||
+      imageUris.length > 0
   );
 
   const handlePublish = async () => {
-    if (profile?.role === "student" && !profile?.profile_completed) {
+    const isStudent = profile?.role === "student";
+    const isProfileIncomplete = !profile?.profile_completed && profile?.verification_status !== "verified";
+    if (isStudent && isProfileIncomplete) {
       if (Platform.OS === "web") {
         const proceed = typeof window !== "undefined" && window.confirm
           ? window.confirm(
@@ -214,11 +223,11 @@ export default function CreatePostModal() {
       if (isEditing && postId) {
         // Edit mode — PUT /posts/:id
         await updatePost(postId, {
-          content,
+          content: trimmedContent || undefined,
           type: postType,
-          title: title || finalPreviewMetadata?.title || null,
+          title: trimmedTitle || finalPreviewMetadata?.title || null,
           technologies: techArray,
-          github_url: githubUrl || null,
+          github_url: githubUrl.trim() || null,
           preview_metadata: finalPreviewMetadata || null,
           allow_reposts: allowReposts,
           ...(finalImageKeys.length > 0 ? { image_url: finalImageKey, image_urls: finalImageKeys } : {}),
@@ -229,11 +238,11 @@ export default function CreatePostModal() {
         const res = await apiFetch(`/posts`, {
           method: "POST",
           body: JSON.stringify({
-            content,
+            content: trimmedContent || null,
             type: postType,
-            title: title || finalPreviewMetadata?.title || null,
+            title: trimmedTitle || finalPreviewMetadata?.title || null,
             technologies: techArray,
-            github_url: githubUrl || null,
+            github_url: githubUrl.trim() || null,
             image_url: finalImageKey,
             image_urls: finalImageKeys,
             preview_metadata: finalPreviewMetadata || null,
@@ -274,6 +283,10 @@ export default function CreatePostModal() {
         }
       }
 
+      showToast({
+        message: isEditing ? "Post updated successfully." : "Post published successfully.",
+        tone: "success",
+      });
       safeBack("/(tabs)");
     } catch (err: any) {
       setNotice({
@@ -658,7 +671,7 @@ export default function CreatePostModal() {
         )}
 
         {/* Profile Incomplete Banner */}
-        {profile?.role === "student" && !profile?.profile_completed && (
+        {profile?.role === "student" && !profile?.profile_completed && profile?.verification_status !== "verified" && (
           <View
             style={{
               flexDirection: "row",

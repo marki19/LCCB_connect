@@ -200,11 +200,25 @@ export function validateField(def: VerificationFieldDef, value: string): string 
 
   // Birthdate calendar validation
   if (def.key === "birthdate") {
-    const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return "Birthdate must be YYYY-MM-DD";
-    const year = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10);
-    const day = parseInt(match[3], 10);
+    let year = 0;
+    let month = 0;
+    let day = 0;
+
+    const ymdMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const mdyMatch = trimmed.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+
+    if (ymdMatch) {
+      year = parseInt(ymdMatch[1], 10);
+      month = parseInt(ymdMatch[2], 10);
+      day = parseInt(ymdMatch[3], 10);
+    } else if (mdyMatch) {
+      month = parseInt(mdyMatch[1], 10);
+      day = parseInt(mdyMatch[2], 10);
+      year = parseInt(mdyMatch[3], 10);
+    } else {
+      return "Birthdate must be YYYY-MM-DD or MM/DD/YYYY";
+    }
+
     if (month < 1 || month > 12) return "Invalid month (01–12)";
     if (day < 1 || day > 31) return "Invalid day (01–31)";
     const testDate = new Date(year, month - 1, day);

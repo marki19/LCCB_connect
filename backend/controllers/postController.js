@@ -6,6 +6,7 @@ const notificationService = require("../services/notificationService");
 const previewService = require("../services/previewService");
 const { resolveAudience } = require("../services/visibilityService");
 const { signedStorageUrl } = require("../services/storageService");
+const { normalizeRole } = require("../utils/roles");
 
 /**
  * A custom-visibility write must name accepted friends. Returns the normalized
@@ -79,8 +80,9 @@ const getPost = async (req, res, next) => {
 
 const createPost = async (req, res, next) => {
   try {
-    // Verify user identity is complete before allowing post creation
-    if (!req.profile?.profile_completed) {
+    const role = normalizeRole(req.profile?.role);
+    // Students must complete their academic profile before creating posts (verified students are exempt)
+    if (role === "student" && !req.profile?.profile_completed && req.profile?.verification_status !== "verified") {
       return res.status(403).json({
         error: "Profile incomplete",
         message: "Complete your profile (full name, student ID, department, and course) before creating posts.",
@@ -88,22 +90,16 @@ const createPost = async (req, res, next) => {
       });
     }
 
-    // Verify user identity is verified before allowing post creation
-    if (!req.profile?.identity_complete) {
-      return res.status(403).json({
-        error: "Identity verification required",
-        message: "Complete your student identity verification before creating posts.",
-        code: "VERIFICATION_REQUIRED",
-      });
-    }
-
     const resolved = await resolveRequestBodyAudience(req.user.id, req.body);
-    if (resolved.error) {
+    if (resolved.error && role !== "superadmin" && role !== "admin") {
       return res.status(400).json({ error: resolved.error, invalid: resolved.invalid });
     }
 
+    const postPayload = resolved.body || req.body;
     const newPost = await postModel.createPost({
-      ...resolved.body,
+      ...postPayload,
+      type: postPayload.type || "post",
+      content: postPayload.content ?? null,
       author_id: req.user.id,
     });
     res.status(201).json(newPost);

@@ -31,6 +31,7 @@ import PeerPicker from "../src/components/PeerPicker";
 import DesktopTopBar, { TOP_BAR_HEIGHT } from "../src/components/topbar/DesktopTopBar";
 import { usePresence } from "../src/contexts/PresenceContext";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { useToast } from "../src/contexts/ToastContext";
 import { useFloatingChat } from "../src/contexts/FloatingChatContext";
 import {
   acceptFriendRequest,
@@ -56,6 +57,7 @@ export default function FriendsScreen() {
   const { modeOf } = usePresence();
   const { colors, isDark } = useTheme();
   const { openChat } = useFloatingChat();
+  const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<"requests" | "all">("requests");
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -130,6 +132,7 @@ export default function FriendsScreen() {
           try {
             await removeFriend(friend.peer.id);
             setFriends((prev) => prev.filter((f) => f.peer.id !== friend.peer.id));
+            showToast({ message: "Friend removed.", tone: "info" });
           } catch {
             // Non-fatal
           }
@@ -143,8 +146,10 @@ export default function FriendsScreen() {
       setProcessingId(id);
       if (action === "accept") {
         await acceptFriendRequest(id);
+        showToast({ message: "Friend request accepted.", tone: "success" });
       } else {
         await declineFriendRequest(id);
+        showToast({ message: "Friend request declined.", tone: "info" });
       }
       await load();
     } catch {

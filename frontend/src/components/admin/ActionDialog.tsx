@@ -4,6 +4,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import Button from "../ui/Button";
 import Modal from "../ui/Modal";
 import TextField from "../ui/TextField";
+import DatePickerField from "../ui/DatePickerField";
 import { SPACE } from "../../lib/tokens";
 
 type ActionDialogProps = {
@@ -66,12 +67,13 @@ export default function ActionDialog({
 
         <View style={{ marginTop: SPACE.x5 }}>
           {showUntil ? (
-            <TextField
+            <DatePickerField
               label="Suspended until (optional)"
               value={until}
-              onChangeText={setUntil}
+              onChange={setUntil}
               placeholder="YYYY-MM-DD — blank means indefinite"
-              hint="Leave blank to suspend indefinitely."
+              hint="Pick from calendar or type numbers (auto-formatted). Blank means indefinite."
+              minDate={new Date()}
             />
           ) : null}
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "expo-router";
 import {
   View,
   Text,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react-native";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { useToast } from "../src/contexts/ToastContext";
 import { apiJson, ApiError } from "../src/lib/api";
 import { safeBack } from "../src/lib/navigation";
 import { focusRing, RADIUS, SPACE, TYPE } from "../src/lib/tokens";
@@ -117,8 +119,10 @@ function normalizeRequest(raw: any): VerificationRequest {
 }
 
 export default function VerifyRequestsScreen() {
+  const router = useRouter();
   const { profile, refreshProfile } = useAuth();
   const { colors } = useTheme();
+  const { showToast } = useToast();
 
   const [requests, setRequests] = useState<VerificationRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,6 +143,12 @@ export default function VerifyRequestsScreen() {
   const isDepartmentAdmin = profile?.role === "departmentAdmin";
   const isAdminOrAbove = ["admin", "superadmin"].includes(profile?.role || "");
   const canReview = isDepartmentAdmin || isAdminOrAbove;
+
+  useEffect(() => {
+    if (isAdminOrAbove) {
+      router.replace("/(admin)/verification");
+    }
+  }, [isAdminOrAbove, router]);
 
   const cursorRef = useRef<string | null>(null);
   const loadedInitialRef = useRef(false);
@@ -216,6 +226,7 @@ export default function VerifyRequestsScreen() {
     setApproving(request.id);
     try {
       await apiJson(`/verification/${request.id}/approve`, { method: "POST" });
+      showToast({ message: "Verification request approved.", tone: "success" });
       setNotice({
         title: "Request approved",
         message: "The student is verified and now has full access.",
@@ -263,6 +274,7 @@ export default function VerifyRequestsScreen() {
         method: "POST",
         body: JSON.stringify({ note }),
       });
+      showToast({ message: "Verification request declined.", tone: "info" });
       setShowDeclineModal(false);
       setSelectedRequest(null);
       setDeclineNote("");

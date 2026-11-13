@@ -27,18 +27,24 @@ const DAY = 24 * HOUR;
 /**
  * Builds a limiter keyed by the authenticated user. Falls back to the client IP
  * for any route that somehow reaches it unauthenticated.
+ *
+ * `skipAdmins` is opt-in. Exempting admins from *write* budgets removes
+ * flood protection from the accounts with the most privilege, so only read-side
+ * budgets (search) should set it.
  */
-function perUserLimiter({ windowMs, limit, message }) {
+function perUserLimiter({ windowMs, limit, message, skipAdmins = false }) {
   return rateLimit({
     windowMs,
     limit,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: message },
-    skip: (req) => {
-      const role = normalizeRole(req.profile?.role);
-      return role === "superadmin" || role === "admin";
-    },
+    skip: skipAdmins
+      ? (req) => {
+          const role = normalizeRole(req.profile?.role);
+          return role === "superadmin" || role === "admin";
+        }
+      : undefined,
     keyGenerator: (req) =>
       req.user?.id ? `user:${req.user.id}` : rateLimit.ipKeyGenerator(req.ip),
   });
@@ -119,6 +125,8 @@ const searchLimiter = perUserLimiter({
   windowMs: MINUTE,
   limit: parseLimit(process.env.RATE_LIMIT_SEARCH_MAX, 30),
   message: "Too many search requests. Please slow down.",
+  // Read-side budget: admins browsing the console should not be throttled.
+  skipAdmins: true,
 });
 
 const linkPreviewLimiter = perUserLimiter({
