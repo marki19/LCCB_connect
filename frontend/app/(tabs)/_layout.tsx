@@ -65,6 +65,7 @@ function MobileTabBar({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors, isDark, toggleTheme } = useTheme();
+  const { profile } = useAuth();
   const [hovered, setHovered] = useState(false);
   const [focusVisible, setFocusVisible] = useState(false);
 

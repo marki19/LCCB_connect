@@ -1,7 +1,7 @@
 export type PostType = "text" | "image" | "project" | "capstone" | "website" | "thesis" | "discussion";
 
 /** Who may read a post or thesis. Enforced in Postgres (see migration 014). */
-export type ContentVisibility = "public" | "friends" | "custom" | "private";
+export type ContentVisibility = "public" | "department" | "friends" | "custom" | "private";
 
 export type User = {
   id: string;

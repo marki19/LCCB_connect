@@ -8,8 +8,11 @@ import {
   signInWithIdentifier,
   signInWithGoogle,
   completeMfaChallenge,
+  installSession,
+  type MfaEnrollmentRequiredResponse,
 } from "../../src/lib/auth";
 import AuthScaffold from "../../src/components/auth/AuthScaffold";
+import MfaSetupModal from "../../src/components/auth/MfaSetupModal";
 import Alert from "../../src/components/ui/Alert";
 import Button from "../../src/components/ui/Button";
 import TextField from "../../src/components/ui/TextField";
@@ -49,8 +52,11 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // MFA Challenge state
+  // MFA Challenge & Setup state
   const [showMfaChallenge, setShowMfaChallenge] = useState(false);
+  const [showMfaEnrollModal, setShowMfaEnrollModal] = useState(false);
+  const [pendingEnrollment, setPendingEnrollment] =
+    useState<MfaEnrollmentRequiredResponse | null>(null);
   const [mfaChallengeToken, setMfaChallengeToken] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [mfaCodeError, setMfaCodeError] = useState("");
@@ -96,7 +102,19 @@ export default function LoginScreen() {
         throw new Error("No ID token received from Google");
       }
 
-      await signInWithGoogle(response.data.idToken);
+      const result = await signInWithGoogle(response.data.idToken);
+      if (result && typeof result === "object" && "mfa_required" in result) {
+        setMfaChallengeToken(result.challenge_token);
+        setShowMfaChallenge(true);
+        setLoading(false);
+        return;
+      }
+      if (result && typeof result === "object" && "mfa_enrollment_required" in result) {
+        setPendingEnrollment(result);
+        setShowMfaEnrollModal(true);
+        setLoading(false);
+        return;
+      }
     } catch (err: any) {
       if (err.code === "SIGN_IN_CANCELLED") {
         setLoading(false);
@@ -152,6 +170,12 @@ export default function LoginScreen() {
       if (result && typeof result === "object" && "mfa_required" in result) {
         setMfaChallengeToken(result.challenge_token);
         setShowMfaChallenge(true);
+        setLoading(false);
+        return;
+      }
+      if (result && typeof result === "object" && "mfa_enrollment_required" in result) {
+        setPendingEnrollment(result);
+        setShowMfaEnrollModal(true);
         setLoading(false);
         return;
       }
@@ -386,6 +410,32 @@ export default function LoginScreen() {
           />
         </View>
       )}
+
+      <MfaSetupModal
+        visible={showMfaEnrollModal}
+        isMandatory={true}
+        tempToken={pendingEnrollment?.access_token}
+        onClose={() => {
+          setShowMfaEnrollModal(false);
+          setPendingEnrollment(null);
+          setGeneralError("Admin accounts require multi-factor authentication to log in.");
+        }}
+        onSuccess={async () => {
+          if (pendingEnrollment) {
+            try {
+              await installSession({
+                access_token: pendingEnrollment.access_token,
+                refresh_token: pendingEnrollment.refresh_token,
+                expires_at: pendingEnrollment.expires_at,
+              });
+            } catch (err: any) {
+              setGeneralError(err?.message || "Failed to finalize session after MFA setup");
+            }
+          }
+          setShowMfaEnrollModal(false);
+          setPendingEnrollment(null);
+        }}
+      />
     </AuthScaffold>
   );
 }

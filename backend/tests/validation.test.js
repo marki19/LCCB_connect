@@ -108,8 +108,8 @@ describe("visibility contract", () => {
   const thesis = (extra) =>
     createThesisSchema.safeParse({ title: "t", abstract: "a", category: "c", pdf_url: "1/2.pdf", ...extra });
 
-  it("accepts each of the four levels", () => {
-    for (const visibility of ["public", "friends", "private"]) {
+  it("accepts each of the five levels", () => {
+    for (const visibility of ["public", "department", "friends", "private"]) {
       assert.equal(post({ visibility }).success, true, visibility);
       assert.equal(thesis({ visibility }).success, true, visibility);
     }

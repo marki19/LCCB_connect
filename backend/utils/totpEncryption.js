@@ -14,19 +14,20 @@ const TAG_LENGTH = 16; // 128 bits
 const KEY_LENGTH = 32; // 256 bits
 const KEY_INFO = "totp-secrets";
 
+const FIXED_SALT = Buffer.from("lccb-totp-secrets-salt-v1", "utf8");
+
 let keyCache = null;
 
 function deriveKey() {
   if (keyCache) return keyCache;
   
-  const masterKey = process.env.TOTP_SECRET_KEY;
+  const masterKey = process.env.TOTP_SECRET_KEY || process.env.MFA_CHALLENGE_SECRET;
   if (!masterKey) {
-    throw new Error("TOTP_SECRET_KEY environment variable is required");
+    throw new Error("TOTP_SECRET_KEY or MFA_CHALLENGE_SECRET environment variable is required");
   }
   
-  // HKDF-SHA256 to derive encryption key
-  const salt = crypto.randomBytes(16); // Not stored, just used for derivation
-  const key = crypto.hkdfSync("sha256", masterKey, salt, KEY_INFO, KEY_LENGTH);
+  // Deterministic HKDF-SHA256 with fixed salt so key remains consistent across reboots & workers
+  const key = crypto.hkdfSync("sha256", masterKey, FIXED_SALT, KEY_INFO, KEY_LENGTH);
   keyCache = key;
   return key;
 }

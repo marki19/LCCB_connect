@@ -1,6 +1,6 @@
 /**
  * ChatsPopover — Messenger-style chats panel.
- * Shows conversation list with presence dots, unread badges, search, and footer link.
+ * Shows persistent conversation list with presence dots, last messages, unread badges, search, and footer link.
  */
 
 import { useState, useEffect } from "react";
@@ -19,7 +19,8 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePresence } from "../../contexts/PresenceContext";
 import { useFloatingChat } from "../../contexts/FloatingChatContext";
-import { apiJson } from "../../lib/api";
+import { listConversations, listRequests } from "../../lib/messages";
+import type { Conversation } from "../../types";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
 import { TOP_BAR_HEIGHT } from "./constants";
@@ -29,14 +30,28 @@ interface ChatsPopoverProps {
   unreadCount: number;
 }
 
-export default function ChatsPopover({ onClose, unreadCount }: ChatsPopoverProps) {
+const formatWhen = (iso?: string | null) => {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diffSec < 60) return "just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h`;
+  const diffDays = Math.floor(diffHr / 24);
+  if (diffDays < 7) return `${diffDays}d`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+};
+
+export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
   const { colors } = useTheme();
   const { profile, session } = useAuth();
   const { modeOf } = usePresence();
   const { openChat } = useFloatingChat();
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [peers, setPeers] = useState<any[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const isGuest = profile?.role === "guest";
   const [loading, setLoading] = useState(() => !isGuest && Boolean(session?.user?.id));
 
@@ -46,36 +61,54 @@ export default function ChatsPopover({ onClose, unreadCount }: ChatsPopoverProps
     }
     let cancelled = false;
     setLoading(true);
-    apiJson<any[]>("/friends?limit=20")
-      .then((rows) => {
+    Promise.all([listConversations(30), listRequests(10)])
+      .then(([convs, reqs]) => {
         if (!cancelled) {
-          const list = rows.map((r: any) => r.peer ?? r).filter(Boolean);
-          setPeers(list.filter((p: any) => p.id !== profile?.id));
+          const all = [...convs, ...(reqs.received || [])];
+          const seen = new Set<string>();
+          const deduped: Conversation[] = [];
+          for (const c of all) {
+            if (!seen.has(c.id)) {
+              seen.add(c.id);
+              deduped.push(c);
+            }
+          }
+          setConversations(deduped);
         }
       })
-      .catch(console.error)
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .catch((e) => {
+        if (e?.status !== 401) {
+          console.error("Failed to load conversations in popover:", e);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isGuest, profile?.id, session?.user?.id]);
 
   const filtered = search.trim()
-    ? peers.filter((p) =>
-        (p.full_name ?? p.username ?? "")
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      )
-    : peers;
+    ? conversations.filter((c) => {
+        const name = (c.peer?.full_name ?? c.peer?.username ?? "").toLowerCase();
+        const msg = (c.last_message?.body ?? "").toLowerCase();
+        const term = search.toLowerCase();
+        return name.includes(term) || msg.includes(term);
+      })
+    : conversations;
 
-  const handleOpenChat = (peer: any) => {
+  const handleOpenConversation = (c: Conversation) => {
     onClose();
     if (Platform.OS === "web") {
       openChat({
-        peerId: peer.id,
-        peerName: peer.full_name ?? peer.username,
-        avatarUrl: peer.avatar_url,
+        conversationId: c.id,
+        peerId: c.peer?.id || "",
+        peerName: c.peer?.full_name ?? c.peer?.username ?? "Conversation",
+        avatarUrl: c.peer?.avatar_url ?? undefined,
       });
     } else {
-      router.push(`/messages/${peer.id}`);
+      router.push(`/messages/${c.id}`);
     }
   };
 
@@ -151,19 +184,27 @@ export default function ChatsPopover({ onClose, unreadCount }: ChatsPopoverProps
             </Text>
           </View>
         ) : (
-          filtered.map((peer) => {
-            const online = modeOf(peer.id) === "online";
+          filtered.map((c) => {
+            const peerId = c.peer?.id;
+            const online = peerId ? modeOf(peerId) === "online" : false;
+            const peerName = c.peer?.full_name ?? c.peer?.username ?? "Conversation";
+            const lastText = c.last_message?.body ?? (c.status === "requested" ? "Message request" : "Started a conversation");
+            const lastTime = formatWhen(c.last_message?.created_at || c.last_message_at || c.created_at);
+            const hasUnread = (c.unread ?? 0) > 0;
+
             return (
               <Pressable
-                key={peer.id}
-                onPress={() => handleOpenChat(peer)}
+                key={c.id}
+                onPress={() => handleOpenConversation(c)}
                 accessibilityRole="button"
-                accessibilityLabel={`Chat with ${peer.full_name ?? peer.username}`}
+                accessibilityLabel={`Chat with ${peerName}`}
                 style={({ pressed }) => [
                   styles.item,
                   {
                     backgroundColor: pressed
                       ? colors.hoverOverlay
+                      : hasUnread
+                      ? colors.brandWash
                       : "transparent",
                   },
                 ]}
@@ -171,7 +212,7 @@ export default function ChatsPopover({ onClose, unreadCount }: ChatsPopoverProps
                 {/* Avatar + presence dot */}
                 <View style={styles.avatarWrap}>
                   <Avatar
-                    name={peer.full_name ?? peer.username}
+                    name={peerName}
                     size={40}
                   />
                   {online && (
@@ -189,19 +230,39 @@ export default function ChatsPopover({ onClose, unreadCount }: ChatsPopoverProps
 
                 {/* Name + snippet */}
                 <View style={styles.itemText}>
+                  <View style={styles.itemHeaderRow}>
+                    <Text
+                      style={[
+                        styles.itemName,
+                        { color: colors.ink },
+                        hasUnread && { fontWeight: "700" },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {peerName}
+                    </Text>
+                    {!!lastTime && (
+                      <Text style={[styles.itemTime, { color: colors.inkFaint }]}>
+                        {lastTime}
+                      </Text>
+                    )}
+                  </View>
                   <Text
-                    style={[styles.itemName, { color: colors.ink }]}
+                    style={[
+                      styles.itemSnippet,
+                      { color: hasUnread ? colors.brand : colors.inkFaint },
+                      hasUnread && { fontWeight: "600" },
+                    ]}
                     numberOfLines={1}
                   >
-                    {peer.full_name ?? peer.username}
-                  </Text>
-                  <Text
-                    style={[styles.itemSnippet, { color: colors.inkFaint }]}
-                    numberOfLines={1}
-                  >
-                    Tap to start a conversation
+                    {lastText}
                   </Text>
                 </View>
+
+                {/* Unread indicator */}
+                {hasUnread && (
+                  <View style={[styles.unreadBadge, { backgroundColor: colors.brand }]} />
+                )}
               </Pressable>
             );
           })
@@ -308,15 +369,33 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  itemHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: SPACE.x2,
+  },
   itemName: {
     ...TYPE.body,
     fontSize: 14,
     fontWeight: "600",
     marginBottom: 2,
+    flex: 1,
+  },
+  itemTime: {
+    fontSize: 11,
+    flexShrink: 0,
   },
   itemSnippet: {
     ...TYPE.caption,
     fontSize: 12,
+  },
+  unreadBadge: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: 6,
+    flexShrink: 0,
   },
   footer: {
     paddingVertical: SPACE.x3,

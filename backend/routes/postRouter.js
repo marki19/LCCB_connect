@@ -5,6 +5,16 @@ const savedPostController = require("../controllers/savedPostController");
 const savedCollectionController = require("../controllers/savedCollectionController");
 const { loadProfile, requireVerified } = require("../middleware/auth");
 const {
+  postCreateLimiter,
+  postDailyLimiter,
+  repostLimiter,
+  repostDailyLimiter,
+  commentCreateLimiter,
+  commentDailyLimiter,
+  likeLimiter,
+  linkPreviewLimiter,
+} = require("../middleware/actionLimits");
+const {
   validate,
   createPostSchema,
   updatePostSchema,
@@ -23,7 +33,15 @@ router.delete("/saved/collections/:id", requireVerified, savedCollectionControll
 // Routes (global requireAuth is applied when this router is mounted in app.js)
 router.get("/", postController.getPosts);
 router.get("/:id", postController.getPost);
-router.post("/", loadProfile, requireVerified, validate(createPostSchema), postController.createPost);
+router.post(
+  "/",
+  postCreateLimiter,
+  postDailyLimiter,
+  loadProfile,
+  requireVerified,
+  validate(createPostSchema),
+  postController.createPost
+);
 router.put("/:id", requireVerified, validate(updatePostSchema), postController.updatePost);
 router.delete("/:id", requireVerified, postController.deletePost);
 
@@ -32,14 +50,22 @@ router.post("/:id/save", requireVerified, savedPostController.save);
 router.delete("/:id/save", requireVerified, savedPostController.unsave);
 
 // Reposts
-router.post("/:id/repost", requireVerified, postController.createRepost);
+router.post("/:id/repost", repostLimiter, repostDailyLimiter, requireVerified, postController.createRepost);
 router.delete("/:id/repost", requireVerified, postController.undoRepost);
 router.get("/:id/reposts", postController.getReposts);
 
 // Pure Raw SQL Likes and Comments
-router.post("/:id/like", requireVerified, postController.toggleLike);
+router.post("/:id/like", likeLimiter, requireVerified, postController.toggleLike);
 router.get("/:id/comments", postController.getComments);
-router.post("/:id/comments", loadProfile, requireVerified, validate(createCommentSchema), postController.addComment);
+router.post(
+  "/:id/comments",
+  commentCreateLimiter,
+  commentDailyLimiter,
+  loadProfile,
+  requireVerified,
+  validate(createCommentSchema),
+  postController.addComment
+);
 // Author-scoped comment edit/delete (ownership enforced in SQL -> 404).
 router.put("/:id/comments/:commentId", loadProfile, requireVerified, validate(updateCommentSchema), postController.updateComment);
 router.delete("/:id/comments/:commentId", requireVerified, postController.deleteComment);
@@ -48,7 +74,7 @@ router.delete("/:id/comments/:commentId", requireVerified, postController.delete
 router.get("/:id/file", postController.getPostFile);
 
 // Link preview generation
-router.post("/preview", requireVerified, postController.generatePreview);
+router.post("/preview", linkPreviewLimiter, requireVerified, postController.generatePreview);
 
 module.exports = router;
 

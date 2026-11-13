@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import {
   BookOpen,
-  Building2,
   FileText,
   FolderGit2,
   Globe,
@@ -23,8 +22,6 @@ import {
   WifiOff,
   X,
 } from "lucide-react-native";
-import { fetchDepartments, fetchCourses } from "../../src/lib/catalog";
-import type { Department, Course } from "../../src/types";
 import HomeHeader from "../../src/components/HomeHeader";
 import PostCard from "../../src/components/PostCard";
 import RepostCard from "../../src/components/RepostCard";
@@ -106,24 +103,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { activeCategory: filter, setCategory: setFilter } = useFeedFilter();
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const loadedRef = useRef(false);
-
-  useEffect(() => {
-    fetchDepartments().then(setDepartments).catch(() => setDepartments([]));
-  }, []);
-
-  useEffect(() => {
-    if (selectedDeptId) {
-      fetchCourses(selectedDeptId).then(setCourses).catch(() => setCourses([]));
-    } else {
-      setCourses([]);
-    }
-    setSelectedCourseId(null);
-  }, [selectedDeptId]);
 
   const handlePostDeleted = useCallback((id: string | number) => {
     setPosts((prev) => prev.filter((p) => String(p.id) !== String(id)));
@@ -179,17 +159,8 @@ export default function HomeScreen() {
       let postFailed = false;
       let thesisFailed = false;
 
-      const postQuery = new URLSearchParams();
-      if (selectedDeptId) postQuery.set("department_id", selectedDeptId);
-      if (selectedCourseId) postQuery.set("course_id", selectedCourseId);
-      const postQueryStr = postQuery.toString() ? `?${postQuery.toString()}` : "";
-
-      const thesisQuery = new URLSearchParams();
-      if (selectedDeptId) thesisQuery.set("department_id", selectedDeptId);
-      const thesisQueryStr = thesisQuery.toString() ? `?${thesisQuery.toString()}` : "";
-
       try {
-        const res = await apiFetch(`/posts${postQueryStr}`);
+        const res = await apiFetch("/posts");
         if (res.ok) {
           const data = await res.json();
           const list = Array.isArray(data) ? data : (Array.isArray(data?.posts) ? data.posts : []);
@@ -258,7 +229,7 @@ export default function HomeScreen() {
       }
 
     try {
-      const res = await apiFetch(`/theses${thesisQueryStr}`);
+      const res = await apiFetch("/theses");
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data) ? data : (Array.isArray(data?.theses) ? data.theses : []);
@@ -313,7 +284,7 @@ export default function HomeScreen() {
     setPosts(unified);
     setLoading(false);
     loadedRef.current = true;
-  }, [filter, selectedDeptId, selectedCourseId]);
+  }, [filter]);
 
   useFocusEffect(
     useCallback(() => {
@@ -564,226 +535,6 @@ export default function HomeScreen() {
                     </View>
                   </View>
                 )}
-
-                {/* Department Faceted Filters */}
-                <View style={{ marginBottom: SPACE.x3 }}>
-                  {departments.length > 0 && (
-                    <View style={{ marginTop: SPACE.x2 }}>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ paddingHorizontal: SPACE.x4, gap: 6 }}
-                      >
-                        <Pressable
-                          accessibilityRole="tab"
-                          accessibilityLabel="All Departments"
-                          accessibilityState={{ selected: selectedDeptId === null }}
-                          onPress={() => setSelectedDeptId(null)}
-                          style={({ pressed }) => ({
-                            minHeight: 30,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 5,
-                            borderRadius: RADIUS.pill,
-                            borderWidth: 1,
-                            borderColor: selectedDeptId === null ? colors.brandSolid : colors.line,
-                            backgroundColor: selectedDeptId === null
-                              ? colors.brandSolid
-                              : pressed
-                              ? colors.panelInset
-                              : colors.panel,
-                            paddingHorizontal: SPACE.x3,
-                            opacity: pressed ? 0.9 : 1,
-                          })}
-                        >
-                          <Building2
-                            size={12}
-                            color={selectedDeptId === null ? colors.textOnPrimary : colors.inkSoft}
-                            strokeWidth={2}
-                          />
-                          <Text
-                            style={{
-                              ...TYPE.caption,
-                              fontSize: 12,
-                              fontWeight: "600",
-                              color: selectedDeptId === null ? colors.textOnPrimary : colors.inkSoft,
-                            }}
-                          >
-                            All Depts
-                          </Text>
-                        </Pressable>
-
-                        {departments.map((dept) => {
-                          const active = selectedDeptId === dept.id;
-                          return (
-                            <Pressable
-                              key={dept.id}
-                              accessibilityRole="tab"
-                              accessibilityLabel={dept.name}
-                              accessibilityState={{ selected: active }}
-                              onPress={() => setSelectedDeptId(active ? null : dept.id)}
-                              style={({ pressed }) => ({
-                                minHeight: 30,
-                                flexDirection: "row",
-                                alignItems: "center",
-                                gap: 5,
-                                borderRadius: RADIUS.pill,
-                                borderWidth: 1,
-                                borderColor: active ? colors.brandSolid : colors.line,
-                                backgroundColor: active
-                                  ? colors.brandSolid
-                                  : pressed
-                                  ? colors.panelInset
-                                  : colors.panel,
-                                paddingHorizontal: SPACE.x3,
-                                opacity: pressed ? 0.9 : 1,
-                              })}
-                            >
-                              <Building2
-                                size={12}
-                                color={active ? colors.textOnPrimary : colors.inkSoft}
-                                strokeWidth={2}
-                              />
-                              <Text
-                                style={{
-                                  ...TYPE.caption,
-                                  fontSize: 12,
-                                  fontWeight: "600",
-                                  color: active ? colors.textOnPrimary : colors.inkSoft,
-                                }}
-                              >
-                                {dept.code || dept.name}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  {/* Course Faceted Filters (Cascaded when department is selected) */}
-                  {selectedDeptId && courses.length > 0 && (
-                    <View style={{ marginTop: 6 }}>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ paddingHorizontal: SPACE.x4, gap: 6 }}
-                      >
-                        <Pressable
-                          accessibilityRole="tab"
-                          accessibilityLabel="All Courses"
-                          accessibilityState={{ selected: selectedCourseId === null }}
-                          onPress={() => setSelectedCourseId(null)}
-                          style={({ pressed }) => ({
-                            minHeight: 28,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 4,
-                            borderRadius: RADIUS.pill,
-                            borderWidth: 1,
-                            borderColor: selectedCourseId === null ? colors.brandSolid : colors.line,
-                            backgroundColor: selectedCourseId === null
-                              ? colors.brandSolid
-                              : pressed
-                              ? colors.panelInset
-                              : colors.surfaceSunken,
-                            paddingHorizontal: SPACE.x3,
-                            opacity: pressed ? 0.9 : 1,
-                          })}
-                        >
-                          <GraduationCap
-                            size={12}
-                            color={selectedCourseId === null ? colors.textOnPrimary : colors.inkSoft}
-                            strokeWidth={2}
-                          />
-                          <Text
-                            style={{
-                              ...TYPE.caption,
-                              fontSize: 11,
-                              fontWeight: "600",
-                              color: selectedCourseId === null ? colors.textOnPrimary : colors.inkSoft,
-                            }}
-                          >
-                            All Programs
-                          </Text>
-                        </Pressable>
-
-                        {courses.map((course) => {
-                          const active = selectedCourseId === course.id;
-                          return (
-                            <Pressable
-                              key={course.id}
-                              accessibilityRole="tab"
-                              accessibilityLabel={course.name}
-                              accessibilityState={{ selected: active }}
-                              onPress={() => setSelectedCourseId(active ? null : course.id)}
-                              style={({ pressed }) => ({
-                                minHeight: 28,
-                                flexDirection: "row",
-                                alignItems: "center",
-                                gap: 4,
-                                borderRadius: RADIUS.pill,
-                                borderWidth: 1,
-                                borderColor: active ? colors.brandSolid : colors.line,
-                                backgroundColor: active
-                                  ? colors.brandSolid
-                                  : pressed
-                                  ? colors.panelInset
-                                  : colors.surfaceSunken,
-                                paddingHorizontal: SPACE.x3,
-                                opacity: pressed ? 0.9 : 1,
-                              })}
-                            >
-                              <GraduationCap
-                                size={12}
-                                color={active ? colors.textOnPrimary : colors.inkSoft}
-                                strokeWidth={2}
-                              />
-                              <Text
-                                style={{
-                                  ...TYPE.caption,
-                                  fontSize: 11,
-                                  fontWeight: "600",
-                                  color: active ? colors.textOnPrimary : colors.inkSoft,
-                                }}
-                              >
-                                {course.code || course.name}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  {/* Reset scope pill if department or course filter is active */}
-                  {(selectedDeptId || selectedCourseId) && (
-                    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: SPACE.x4, marginTop: 6, gap: 6 }}>
-                      <Pressable
-                        onPress={() => {
-                          setSelectedDeptId(null);
-                          setSelectedCourseId(null);
-                        }}
-                        style={({ pressed }) => ({
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 4,
-                          paddingVertical: 3,
-                          paddingHorizontal: 8,
-                          borderRadius: RADIUS.sm,
-                          backgroundColor: pressed ? colors.hoverOverlay : "transparent",
-                        })}
-                        accessibilityRole="button"
-                        accessibilityLabel="Clear scope filter"
-                      >
-                        <X size={12} color={colors.inkFaint} strokeWidth={2} />
-                        <Text style={{ fontSize: 11, color: colors.inkFaint, fontWeight: "500" }}>
-                          Clear department scope
-                        </Text>
-                      </Pressable>
-                    </View>
-                  )}
-                </View>
               </View>
             }
             ListEmptyComponent={

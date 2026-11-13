@@ -342,7 +342,7 @@ const visiblePostsFor = async ({
       conditions.push(`p.type = $${params.length}`);
     }
 
-    if (visibility && ['public', 'friends', 'private', 'custom'].includes(visibility)) {
+    if (visibility && ['public', 'department', 'friends', 'private', 'custom'].includes(visibility)) {
       params.push(visibility);
       conditions.push(`p.visibility = $${params.length}`);
     }

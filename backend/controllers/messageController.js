@@ -47,6 +47,21 @@ const getConversations = async (req, res, next) => {
   }
 };
 
+const getConversationById = async (req, res, next) => {
+  try {
+    const conversation = await messageModel.getConversationForParticipant(
+      req.params.id,
+      req.user.id
+    );
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+    res.json(conversation);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getRequests = async (req, res, next) => {
   try {
     const requests = await messageModel.listRequests(req.user.id, {
@@ -281,6 +296,7 @@ const reportMessage = async (req, res, next) => {
 
 module.exports = {
   getConversations,
+  getConversationById,
   getRequests,
   getUnreadCount,
   createConversation,

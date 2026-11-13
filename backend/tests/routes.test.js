@@ -164,12 +164,13 @@ describe("identity comes from the token, never the body", () => {
   });
 
   it("stamps the liker from the token", async () => {
-    m.toggleLike.setImpl(async () => ({ liked: true }));
+      m.getPostById.setImpl(async (id) => ({ id, visibility: "public" }));
+      m.toggleLike.setImpl(async () => ({ liked: true }));
 
-    await request(app).post("/api/posts/p1/like").set(AUTH).send({ user_id: "u9" });
+      await request(app).post("/api/posts/p1/like").set(AUTH).send({ user_id: "u9" });
 
-    assert.deepEqual(m.toggleLike.calls, [["p1", "u1"]]);
-  });
+      assert.deepEqual(m.toggleLike.calls, [["p1", "u1"]]);
+    });
 });
 
 describe("ownership is enforced in SQL (404, not 403)", () => {

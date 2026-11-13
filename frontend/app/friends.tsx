@@ -4,6 +4,8 @@ import {
   Text,
   FlatList,
   Pressable,
+  TouchableOpacity,
+  ActivityIndicator,
   RefreshControl,
   Alert,
   Platform,
@@ -113,7 +115,7 @@ export default function FriendsScreen() {
         router.push(`/messages/${conversation.id}`);
       }
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Please try again.");
+      Alert.alert("Error", err instanceof Error ? err.message : "Please try again.");
     }
   };
 

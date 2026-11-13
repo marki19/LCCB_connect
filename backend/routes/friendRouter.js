@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const friendController = require("../controllers/friendController");
-const { friendRequestLimiter } = require("../middleware/messagingLimits");
+const { friendRequestLimiter } = require("../middleware/actionLimits");
 const { requireVerified } = require("../middleware/auth");
 const { validate, friendRequestSchema } = require("../validation");
 
@@ -9,6 +9,13 @@ const { validate, friendRequestSchema } = require("../validation");
 
 router.get("/", friendController.listFriends);
 router.get("/requests", friendController.getRequests);
+router.post(
+  "/",
+  requireVerified,
+  friendRequestLimiter,
+  validate(friendRequestSchema),
+  friendController.createRequest
+);
 router.post(
   "/requests",
   requireVerified,

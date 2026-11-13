@@ -5,9 +5,11 @@ import {
   TextInput,
   SectionList,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Search, MessageSquare, UserPlus, Check, X, Lock, Users } from "lucide-react-native";
 import { apiJson, apiFetch } from "../lib/api";
+import { sendFriendRequest } from "../lib/messages";
 import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
@@ -171,14 +173,7 @@ export default function PeerPicker({ visible, onClose, onOpened, mode = "message
     setBusyId(peer.id);
     setError(null);
     try {
-      const res = await apiFetch("/friends", {
-        method: "POST",
-        body: JSON.stringify({ addressee_id: peer.id }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Could not send request");
-      }
+      await sendFriendRequest(peer.id);
       setSections((prev) =>
         prev.map((section) => ({
           ...section,

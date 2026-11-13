@@ -118,7 +118,7 @@ export default function DesktopLayout({
           setUnreadCount(data.unread);
         }
       } catch (e: any) {
-        if (e?.status !== 401) {
+        if (e?.status !== 401 && !e?.message?.includes("token")) {
           console.error("Failed to load unread count:", e);
         }
       }

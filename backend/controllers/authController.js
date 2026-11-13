@@ -1,52 +1,20 @@
 const bcrypt = require("bcrypt");
+const db = require("../db");
 const userModel = require("../models/userModel");
 const accountService = require("../services/accountService");
 const { getSupabaseAdmin } = require("../services/supabaseAdmin");
-const { sendOtpEmail, sendAccountExistsEmail } = require("../services/emailService");
+const { sendOtpEmail, sendAccountExistsEmail, sendPasswordResetOtpEmail } = require("../services/emailService");
 const { generateOtp, hashOtp, verifyOtpHash, MAX_OTP_ATTEMPTS } = require("../utils/otp");
 const { isSuspendedProfile } = require("../middleware/auth");
 const mfaService = require("../services/mfaService");
 const { record, ACTIONS } = require("../services/auditService");
 const { lockoutIntervalFor } = require("../utils/lockout");
+const passwordResetModel = require("../models/passwordResetModel");
 
 const GENERIC_LOGIN_ERROR = "Invalid email, student ID, or password";
 const GENERIC_CODE_ERROR = "That code is incorrect or has expired. Request a new one.";
 const BCRYPT_COST = 12;
 const OTP_EXPIRY_MINUTES = 10;
-const MFA_CHALLENGE_TTL_SECONDS = 300; // 5 minutes
-
-// In-memory cache for pending MFA sessions (use Redis in production)
-const pendingMfaSessions = new Map();
-
-/**
- * Stores a pending MFA session keyed by challenge token.
- * Automatically expires after MFA_CHALLENGE_TTL_SECONDS.
- */
-function storePendingMfaSession(challengeToken, session) {
-  const expiry = Date.now() + MFA_CHALLENGE_TTL_SECONDS * 1000;
-  pendingMfaSessions.set(challengeToken, { session, expiry });
-  // Clean up expired entries periodically
-  if (pendingMfaSessions.size > 1000) {
-    const now = Date.now();
-    for (const [key, value] of pendingMfaSessions.entries()) {
-      if (value.expiry < now) pendingMfaSessions.delete(key);
-    }
-  }
-}
-
-/**
- * Retrieves and removes a pending MFA session.
- */
-function consumePendingMfaSession(challengeToken) {
-  const entry = pendingMfaSessions.get(challengeToken);
-  if (!entry) return null;
-  if (entry.expiry < Date.now()) {
-    pendingMfaSessions.delete(challengeToken);
-    return null;
-  }
-  pendingMfaSessions.delete(challengeToken);
-  return entry.session;
-}
 
 /**
  * The service-role client is required for every sign-in path now that login is
@@ -72,40 +40,6 @@ function sendTokens(res, session, status = 200, extra = {}) {
     expires_at: session.expires_at,
     ...extra,
   });
-}
-
-/**
- * Creates a short-lived challenge token for MFA.
- * The token contains the user ID and is signed with a server-side secret.
- */
-function createMfaChallengeToken(userId) {
-  const payload = {
-    sub: userId,
-    type: "mfa_challenge",
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + MFA_CHALLENGE_TTL_SECONDS,
-  };
-  // Simple base64url encoding for the challenge token (not a JWT, just encoded payload)
-  // In production, consider using a proper JWT library with HS256 signing
-  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
-  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  // Note: For simplicity, we use an unsigned token. The server validates expiry and type.
-  // A production system should sign this with a secret.
-  return `${header}.${encodedPayload}.`;
-}
-
-function verifyMfaChallengeToken(token) {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
-    if (payload.type !== "mfa_challenge") return null;
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp < now) return null;
-    return payload.sub;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -299,9 +233,9 @@ async function login(req, res, next) {
     }
 
     if (hasMfa) {
-      // User has MFA enrolled - store the session and return a challenge token
-      const challengeToken = createMfaChallengeToken(data.user.id);
-      storePendingMfaSession(challengeToken, data.session);
+      // User has MFA enrolled - hand back a signed challenge token bound to
+      // the first-factor session.
+      const challengeToken = mfaService.createMfaChallenge(data.user.id, data.session);
 
       // Record the MFA challenge initiation
       await mfaService.recordSessionEvent({
@@ -343,14 +277,17 @@ async function mfaChallenge(req, res, next) {
   try {
     const { challenge_token, code } = req.body;
 
-    // Verify the challenge token
-    const userId = verifyMfaChallengeToken(challenge_token);
-    if (!userId) {
+    // Verify the signed challenge and confirm a pending first-factor session
+    // exists for it. A forged token has no `jti` entry, so it never reaches
+    // TOTP verification.
+    const challenge = mfaService.resolveMfaChallenge(challenge_token);
+    if (!challenge) {
       return res.status(401).json({
         error: "Invalid or expired challenge. Please sign in again.",
         code: "challenge_invalid",
       });
     }
+    const userId = challenge.userId;
 
     // Get user profile
     const profile = await userModel.getUserById(userId);
@@ -420,15 +357,23 @@ async function mfaChallenge(req, res, next) {
     }
 
     // Update the factor's last_used_step
-    const supabase = getSupabaseAdmin();
-    await supabase
-      .from("mfa_factors")
-      .update({ last_used_step: currentStep })
-      .eq("id", verifiedFactor.id);
+    try {
+      await db.query(`UPDATE public.mfa_factors SET last_used_step = $1 WHERE id = $2`, [
+        currentStep,
+        verifiedFactor.id,
+      ]);
+    } catch {
+      const supabase = getSupabaseAdmin();
+      await supabase
+        .from("mfa_factors")
+        .update({ last_used_step: currentStep })
+        .eq("id", verifiedFactor.id);
+    }
 
-    // Consume the stored session
-    const session = consumePendingMfaSession(challenge_token);
-    if (!session) {
+    // Claim the pending session. It is single-use, so a replayed challenge
+    // token cannot mint a second pair of tokens.
+    const pending = mfaService.consumeMfaChallenge(challenge.jti);
+    if (!pending) {
       return res.status(401).json({
         error: "Invalid or expired challenge. Please sign in again.",
         code: "challenge_invalid",
@@ -447,7 +392,7 @@ async function mfaChallenge(req, res, next) {
     // Record audit event
     await mfaService.recordMfaChallenge({ userId, req, success: true });
 
-    return sendTokens(res, session);
+    return sendTokens(res, pending.session);
   } catch (err) {
     next(err);
   }
@@ -698,7 +643,7 @@ async function requestSignup(req, res, next) {
 async function mfaEnroll(req, res, next) {
   try {
     const userId = req.user.id;
-    const email = req.user.email;
+    const email = req.user.email || req.profile?.email || null;
 
     // Check if user already has a verified TOTP factor
     const hasVerified = await mfaService.hasVerifiedTotp(userId);
@@ -721,6 +666,7 @@ async function mfaEnroll(req, res, next) {
       qr_code_url: qrCodeDataUrl,
     });
   } catch (err) {
+    console.error("[mfa] Error in mfaEnroll:", err);
     next(err);
   }
 }
@@ -783,15 +729,25 @@ async function mfaUnenroll(req, res, next) {
     }
 
     // Verify the code first
-    const supabase = getSupabaseAdmin();
-    const { data: factor, error: fetchError } = await supabase
-      .from("mfa_factors")
-      .select("*")
-      .eq("id", factor_id)
-      .eq("user_id", userId)
-      .single();
+    let factor = null;
+    try {
+      const res = await db.query(
+        `SELECT * FROM public.mfa_factors WHERE id = $1 AND user_id = $2`,
+        [factor_id, userId]
+      );
+      factor = res.rows[0];
+    } catch {
+      const supabase = getSupabaseAdmin();
+      const { data } = await supabase
+        .from("mfa_factors")
+        .select("*")
+        .eq("id", factor_id)
+        .eq("user_id", userId)
+        .single();
+      factor = data;
+    }
 
-    if (fetchError || !factor) {
+    if (!factor) {
       return res.status(404).json({ error: "Factor not found" });
     }
 
@@ -951,15 +907,168 @@ async function googleAuth(req, res, next) {
     // Check if user has verified MFA
     const hasMfa = await mfaService.hasVerifiedTotp(user.id);
 
-    // Record successful login
+    // Admin/superadmin must have MFA enrolled
+    const role = profile?.role?.toLowerCase().replace(/[-_]/g, "");
+    const isAdmin = role === "admin" || role === "superadmin";
+
+    // Admin without MFA gets an initial session with mfa_enrollment_required: true
+    // so they can authenticate to /api/auth/mfa/enroll while /api/admin/* remains locked
+    if (isAdmin && !hasMfa) {
+      await mfaService.recordLogin({
+        userId: user.id,
+        req,
+        aal: "aal1",
+        mfaChallenged: false,
+      });
+
+      return sendTokens(res, data.session, 200, {
+        mfa_enrollment_required: true,
+        message: "Admin accounts require MFA. Please complete MFA enrollment.",
+      });
+    }
+
+    if (hasMfa) {
+      const challengeToken = mfaService.createMfaChallenge(user.id, data.session);
+      await mfaService.recordSessionEvent({
+        userId: user.id,
+        eventType: "mfa_challenge",
+        aal: "aal1",
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+        userAgent: req.headers["user-agent"] || null,
+        metadata: { mfa_challenged: true },
+      });
+
+      return res.status(200).json({
+        mfa_required: true,
+        challenge_token: challengeToken,
+        message: "Multi-factor authentication required",
+      });
+    }
+
+    // Record successful login (non-admin, no MFA)
     await mfaService.recordLogin({
       userId: user.id,
       req,
-      aal: hasMfa ? "aal2" : "aal1",
-      mfaChallenged: hasMfa,
+      aal: "aal1",
+      mfaChallenged: false,
     });
 
     return sendTokens(res, data.session);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/request-password-reset
+ *
+ * Backend-owned password reset (Option B). Stores a pending row with only an
+ * HMAC of the 6-digit code and emails it. The response is identical whether
+ * or not the address is registered, so this endpoint cannot enumerate accounts.
+ *
+ * Rate limited: 3 requests per 10 minutes per email (handled by middleware).
+ */
+async function requestPasswordReset(req, res, next) {
+  try {
+    const { email } = req.body;
+    const normalizedEmail = email.toLowerCase();
+
+    const accepted = () =>
+      res.status(202).json({
+        message: "If that address is registered, a reset code is on its way.",
+        retry_after: 60,
+      });
+
+    // Look up the profile. A missing profile is NOT distinguishable from a
+    // present one in the response — the same code email shape is sent either
+    // way, so an attacker cannot tell which addresses are registered.
+    const profile = await passwordResetModel.getProfileByEmail(normalizedEmail);
+
+    // Generate OTP
+    const otpCode = generateOtp();
+    const otpExpiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    await passwordResetModel.createPasswordReset({
+      email: normalizedEmail,
+      otpHash: hashOtp(normalizedEmail, otpCode),
+      otpExpiresAt,
+      userId: profile?.id || null,
+    });
+
+    // Send OTP email. `fullName` is only used for the greeting and is escaped
+    // in the email service; it is never logged.
+    await sendPasswordResetOtpEmail({
+      to: normalizedEmail,
+      otpCode,
+      fullName: profile?.full_name || "",
+      expiresMinutes: OTP_EXPIRY_MINUTES,
+    });
+
+    return accepted();
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/auth/verify-password-reset
+ *
+ * Verifies the 6-digit reset code and applies the new password through the
+ * admin client. Every failure returns the same body so the endpoint cannot
+ * be used to probe reset state.
+ *
+ * On success the reset row is marked used and the caller is redirected to
+ * login with a one-line success message.
+ */
+async function verifyPasswordReset(req, res, next) {
+  try {
+    const { email, token, password } = req.body;
+    const normalizedEmail = email.toLowerCase();
+
+    const invalidCode = () =>
+      res.status(401).json({ error: GENERIC_CODE_ERROR, code: "code_invalid" });
+
+    const reset = await passwordResetModel.getPasswordResetByEmail(normalizedEmail);
+    if (!reset || reset.used_at) {
+      return invalidCode();
+    }
+
+    // Check expiry. The record is useless after this point either way.
+    if (new Date(reset.otp_expires_at) < new Date()) {
+      await passwordResetModel.deletePasswordReset(normalizedEmail);
+      return invalidCode();
+    }
+
+    // Verify OTP against the stored HMAC.
+    if (!verifyOtpHash(normalizedEmail, token, reset.otp_hash)) {
+      const attempts = await passwordResetModel.incrementPasswordResetAttempts(normalizedEmail);
+      if (attempts >= MAX_OTP_ATTEMPTS) {
+        await passwordResetModel.deletePasswordReset(normalizedEmail);
+      }
+      return invalidCode();
+    }
+
+    const supabase = adminClientOr503(res);
+    if (!supabase) return;
+
+    // Apply the new password to the auth user.
+    try {
+      await passwordResetModel.updateUserPassword(reset.user_id, password);
+    } catch (err) {
+      console.error("[auth] Password reset update failed:", err.message);
+      return res.status(500).json({
+        error: "Could not update the password. Try again in a moment.",
+        code: "update_failed",
+      });
+    }
+
+    // Mark the reset row used and clean up any expired rows.
+    await passwordResetModel.markPasswordResetUsed(normalizedEmail);
+    await passwordResetModel.deleteExpiredPasswordResets().catch(() => {});
+
+    return res.status(200).json({
+      message: "Password updated. Sign in with your new password.",
+    });
   } catch (err) {
     next(err);
   }
@@ -980,4 +1089,7 @@ module.exports = {
   mfaList,
   // Session endpoints
   logout,
+  // Password reset (Option B)
+  requestPasswordReset,
+  verifyPasswordReset,
 };

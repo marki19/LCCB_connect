@@ -16,6 +16,11 @@ process.env.NODE_ENV = "test";
 // Load real .env for database connection
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || "https://test-project.supabase.co";
+process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "test-anon-key";
+process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "test-service-role-key";
+process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://postgres:postgrespassword@127.0.0.1:5432/lcc_connect_test";
+
 const { stub } = require("./stub.helper");
 const userModel = require("../models/userModel");
 const adminModel = require("../models/adminModel");

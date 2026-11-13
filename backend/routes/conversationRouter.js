@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const messageController = require("../controllers/messageController");
-const { messagingSendLimiter, messagingDailyLimiter } = require("../middleware/messagingLimits");
+const { messagingSendLimiter } = require("../middleware/actionLimits");
 const { requireVerified } = require("../middleware/auth");
 const {
   validate,
@@ -19,13 +19,13 @@ router.get("/requests", messageController.getRequests);
 router.get("/unread-count", messageController.getUnreadCount);
 router.post("/", requireVerified, validate(createConversationSchema), messageController.createConversation);
 
+router.get("/:id", messageController.getConversationById);
 router.post("/:id/accept", messageController.acceptRequest);
 router.get("/:id/messages", messageController.getMessages);
 router.post(
   "/:id/messages",
   requireVerified,
   messagingSendLimiter,
-  messagingDailyLimiter,
   validate(sendMessageSchema),
   messageController.sendMessage
 );

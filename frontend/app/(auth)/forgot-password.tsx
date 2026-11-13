@@ -2,16 +2,17 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { Mail } from "lucide-react-native";
-import { supabase } from "../../src/lib/supabase";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import AuthScaffold from "../../src/components/auth/AuthScaffold";
 import Alert from "../../src/components/ui/Alert";
 import Button from "../../src/components/ui/Button";
 import TextField from "../../src/components/ui/TextField";
+import { apiJson, ApiError } from "../../src/lib/api";
 
 /**
- * Plan §5 Phase 2.3: email field → resetPasswordForEmail → always navigate to
- * the reset screen with "If that address exists, a code is on its way."
+ * Option B: backend-owned password reset flow.
+ * email field → POST /api/auth/request-password-reset → always navigate to
+ * the reset screen with "If that address is registered, a code is on its way."
  * Never branch on the response, so an unknown address is not confirmed.
  */
 export default function ForgotPasswordScreen() {
@@ -38,11 +39,16 @@ export default function ForgotPasswordScreen() {
     setError("");
 
     try {
-      await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: "",
+      await apiJson<{ message: string }>("/auth/request-password-reset", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
-    } catch {
-      setError("Could not send the code. Try again in a moment.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Could not send the code. Try again in a moment.");
+      }
       setLoading(false);
       return;
     }
@@ -51,7 +57,7 @@ export default function ForgotPasswordScreen() {
       pathname: "/(auth)/reset-password",
       params: {
         email: email.trim().toLowerCase(),
-        notice: "If that address exists, a code is on its way.",
+        notice: "If that address is registered, a reset code is on its way.",
       },
     });
     setLoading(false);

@@ -1,3 +1,6 @@
+process.env.NODE_ENV = "test";
+process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://postgres:postgrespassword@127.0.0.1:5432/lcc_connect_test";
+
 const test = require("node:test");
 const assert = require("node:assert");
 const db = require("../db");

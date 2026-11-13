@@ -70,7 +70,7 @@ const previewMetadataSchema = z
 // The enforcement lives in `visible_posts()` / `visible_theses()` in Postgres
 // (migration 014); these schemas only validate what a client may ask for.
 // `custom` must carry an explicit, non-empty audience.
-const Visibility = z.enum(["public", "friends", "custom", "private"]);
+const Visibility = z.enum(["public", "department", "friends", "custom", "private"]);
 const Audience = z.array(z.string().uuid()).max(500);
 
 const withCustomAudienceRule = (schema) =>
@@ -246,31 +246,64 @@ const resendSignupSchema = z
   })
   .strict();
 
-/**
- * Request signup: stores a pending row and sends the code.
- * The password is bcrypt-hashed before it touches the database.
- */
-const requestSignupSchema = z
-  .object({
-    email: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .regex(
-        /^[^@\s]+@lccbonline\.edu\.ph$/,
-        "Must be an @lccbonline.edu.ph address"
-      ),
-    password: z
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .max(72, "Password too long"),
-    full_name: z
-      .string()
-      .trim()
-      .min(2, "Full name must be at least 2 characters")
-      .max(200, "Full name too long"),
-  })
-  .strict();
+  /** Request signup: stores a pending row and sends the code.
+  * The password is bcrypt-hashed before it touches the database.
+  */
+ const requestSignupSchema = z
+   .object({
+     email: z
+       .string()
+       .trim()
+       .toLowerCase()
+       .regex(
+         /^[^@\s]+@lccbonline\.edu\.ph$/,
+         "Must be an @lccbonline.edu.ph address"
+       ),
+     password: z
+       .string()
+       .min(8, "Password must be at least 8 characters")
+       .max(72, "Password too long"),
+     full_name: z
+       .string()
+       .trim()
+       .min(2, "Full name must be at least 2 characters")
+       .max(200, "Full name too long"),
+   })
+   .strict();
+
+ /** Password reset request: email only. The response is identical whether or
+  * not the address is registered, so the shape is deliberately minimal.
+  */
+ const requestPasswordResetSchema = z
+   .object({
+     email: z
+       .string()
+       .trim()
+       .toLowerCase()
+       .regex(
+         /^[^@\s]+@lccbonline\.edu\.ph$/,
+         "Must be an @lccbonline.edu.ph address"
+       ),
+   })
+   .strict();
+
+ /** Password reset verify: code + new password. The password is re-submitted
+  * and handed straight to the admin client; nothing recoverable is stored.
+  */
+ const verifyPasswordResetSchema = z
+   .object({
+     email: z
+       .string()
+       .trim()
+       .toLowerCase()
+       .regex(
+         /^[^@\s]+@lccbonline\.edu\.ph$/,
+         "Must be an @lccbonline.edu.ph address"
+       ),
+     token: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
+     password: z.string().min(8, "Password must be at least 8 characters").max(72, "Password too long"),
+   })
+   .strict();
 
 /**
  * MFA challenge: verifies a TOTP code during login.
@@ -497,6 +530,8 @@ const validate = (schema) => (req, res, next) => {
   verifySignupSchema,
   resendSignupSchema,
   requestSignupSchema,
-    brevoWebhookSchema,
+    requestPasswordResetSchema,
+    verifyPasswordResetSchema,
+      brevoWebhookSchema,
     mfaChallengeSchema,
   };
