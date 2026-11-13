@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -6,13 +6,13 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
   Activity,
   AlertTriangle,
-  ArrowUpRight,
+  ArrowRight,
   BookOpen,
+  ChevronRight,
   Clock3,
   EyeOff,
   FileText,
@@ -21,8 +21,6 @@ import {
   MessageSquare,
   ShieldAlert,
   ShieldCheck,
-  Sparkles,
-  ScrollText,
   Users,
   WifiOff,
 } from "lucide-react-native";
@@ -31,21 +29,18 @@ import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { isSuperAdminRole } from "../../src/lib/roles";
 import {
-  elevation,
   focusRing,
-  MOTION,
   RADIUS,
   SPACE,
-  TYPE,
   type ThemeTokens,
 } from "../../src/lib/tokens";
-import { formatCount, useCountUp } from "../../src/hooks/useCountUp";
+import { formatCount } from "../../src/hooks/useCountUp";
 import PageHeader from "../../src/components/admin/PageHeader";
 import KpiCard from "../../src/components/admin/KpiCard";
 import StatusBadge from "../../src/components/admin/StatusBadge";
 import EmptyState from "../../src/components/admin/EmptyState";
 import MixBar from "../../src/components/admin/MixBar";
-import PulseRing from "../../src/components/admin/PulseRing";
+import { CONSOLE_TEXT, consoleCard } from "../../src/components/admin/consoleTheme";
 import Reveal from "../../src/components/ui/Reveal";
 import { Skeleton } from "../../src/components/ui/Skeleton";
 
@@ -87,24 +82,18 @@ function timeAgo(value: string) {
   if (!Number.isFinite(date)) return "unknown";
   const seconds = Math.max(0, Math.floor((Date.now() - date) / 1000));
   if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+  return `${Math.floor(seconds / 86400)} d ago`;
 }
 
 function ageInfo(value: string) {
   const date = new Date(value).getTime();
-  if (!Number.isFinite(date)) return { label: "unknown age", urgent: false };
+  if (!Number.isFinite(date)) return { label: "unknown", urgent: false };
   const hours = Math.max(0, Math.floor((Date.now() - date) / 3_600_000));
-  if (hours < 1) return { label: "under 1h", urgent: false };
-  if (hours < 24) return { label: `${hours}h`, urgent: hours >= 12 };
-  return { label: `${Math.floor(hours / 24)}d`, urgent: true };
-}
-
-function clockTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  if (hours < 1) return { label: "under 1 h", urgent: false };
+  if (hours < 24) return { label: `${hours} h`, urgent: hours >= 12 };
+  return { label: `${Math.floor(hours / 24)} d`, urgent: true };
 }
 
 function percent(part: number, total: number) {
@@ -112,291 +101,102 @@ function percent(part: number, total: number) {
   return Math.round((part / total) * 100);
 }
 
-function panelStyle(colors: ThemeTokens) {
-  return {
-    backgroundColor: colors.panel,
-    borderRadius: RADIUS.xxl,
-    borderWidth: 1,
-    borderColor: colors.line,
-    ...elevation("sm", colors),
-  } as const;
-}
-
 function SectionLabel({ children, colors }: { children: ReactNode; colors: ThemeTokens }) {
-  return <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>{children}</Text>;
+  return (
+    <Text style={{ ...CONSOLE_TEXT.eyebrow, fontSize: 10.5, color: colors.inkFaint }}>
+      {children}
+    </Text>
+  );
 }
 
-function PanelHeading({
+function Panel({
   eyebrow,
   title,
   right,
+  children,
+  style,
   colors,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   right?: ReactNode;
+  children: ReactNode;
+  style?: any;
   colors: ThemeTokens;
 }) {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-        gap: SPACE.x3,
-        flexWrap: "wrap",
-      }}
-    >
-      <View style={{ flexShrink: 1 }}>
-        <SectionLabel colors={colors}>{eyebrow}</SectionLabel>
-        <Text accessibilityRole="header" style={{ ...TYPE.h2, color: colors.ink, marginTop: 3 }}>
-          {title}
-        </Text>
-      </View>
-      {right}
-    </View>
-  );
-}
-
-// ─── Hero ──────────────────────────────────────────────────────────────────
-
-function HeroPulse({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
-  const router = useRouter();
-  const total = data.users.total;
-  const active = data.users.active_7d;
-  const ratio = total ? Math.min(1, active / total) : 0;
-  const displayedTotal = useCountUp(total);
-  const displayedActive = useCountUp(active);
-  const newJoin = data.users.new_7d;
-
-  const segments = useMemo(
-    () => [
-      { label: "Students", value: data.users.students, color: colors.mixStudent },
-      { label: "Faculty", value: data.users.faculty, color: colors.mixFaculty },
-      { label: "Dept. admins", value: data.users.department_admins, color: colors.mixDept },
-      { label: "Admins", value: data.users.admins, color: colors.mixAdmin },
-      { label: "Superadmins", value: data.users.superadmins, color: colors.mixSuper },
-    ],
-    [colors, data.users]
-  );
-
-  return (
-    <LinearGradient
-      colors={[colors.heroFrom, colors.heroTo]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{
-        flex: 1,
-        minHeight: 316,
-        borderRadius: RADIUS.xxl,
-        padding: SPACE.x6,
-        overflow: "hidden",
-        borderWidth: 1,
-        borderColor: colors.heroLine,
-        ...elevation("md", colors),
-      }}
-    >
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: -100,
-          right: -80,
-          width: 260,
-          height: 260,
-          borderRadius: 130,
-          backgroundColor: colors.heroGlow,
-          opacity: 0.24,
-        }}
-      />
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          bottom: -140,
-          left: -60,
-          width: 280,
-          height: 280,
-          borderRadius: 140,
-          backgroundColor: colors.heroGlow,
-          opacity: 0.12,
-        }}
-      />
-
+    <View style={[{ ...consoleCard(colors), padding: SPACE.x5 }, style]}>
       <View
         style={{
           flexDirection: "row",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          gap: SPACE.x4,
-        }}
-      >
-        <View style={{ flex: 1, minWidth: 220 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x2 }}>
-            <View
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 4,
-                backgroundColor: colors.accentBright,
-              }}
-            />
-            <Text style={{ ...TYPE.micro, fontSize: 9.5, color: colors.heroTextMuted }}>
-              Campus pulse · live
-            </Text>
-          </View>
-
-          <Text
-            style={{
-              ...TYPE.display,
-              fontSize: 58,
-              lineHeight: 62,
-              color: colors.heroText,
-              marginTop: SPACE.x3,
-              fontVariant: ["tabular-nums"],
-            }}
-          >
-            {formatCount(displayedTotal)}
-          </Text>
-          <Text style={{ ...TYPE.body, color: colors.heroTextMuted }}>
-            people in the network
-          </Text>
-
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: SPACE.x3,
-              flexWrap: "wrap",
-              marginTop: SPACE.x4,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 5,
-                borderRadius: RADIUS.pill,
-                backgroundColor:
-                  newJoin > 0 ? "rgba(143, 240, 211, 0.16)" : colors.heroLine,
-                paddingHorizontal: SPACE.x3,
-                paddingVertical: 5,
-              }}
-            >
-              <ArrowUpRight
-                size={12}
-                color={newJoin > 0 ? colors.mixFaculty : colors.heroTextMuted}
-                strokeWidth={2.6}
-              />
-              <Text
-                style={{
-                  ...TYPE.caption,
-                  fontSize: 11,
-                  fontWeight: "700",
-                  color: newJoin > 0 ? colors.mixFaculty : colors.heroTextMuted,
-                }}
-              >
-                {newJoin > 0 ? `+${newJoin} joined this week` : "No new joins this week"}
-              </Text>
-            </View>
-            <Text style={{ ...TYPE.caption, color: colors.heroTextMuted }}>
-              {formatCount(displayedActive)} active in the last 7 days
-            </Text>
-          </View>
-        </View>
-
-        <PulseRing
-          value={ratio}
-          size={102}
-          color={colors.navAccent}
-          trackColor={colors.heroLine}
-          label={`${Math.round(ratio * 100)}%`}
-          sublabel="Active 7d"
-          onDark
-        />
-      </View>
-
-      <View style={{ height: 1, backgroundColor: colors.heroLine, marginVertical: SPACE.x5 }} />
-
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SPACE.x5 }}>
-        {segments.map((segment) => (
-          <View key={segment.label} style={{ minWidth: 78 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-              <View
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: segment.color,
-                }}
-              />
-              <Text style={{ ...TYPE.micro, fontSize: 8, color: colors.heroTextMuted }}>
-                {segment.label}
-              </Text>
-            </View>
-            <Text
-              style={{
-                ...TYPE.title,
-                fontSize: 17,
-                color: colors.heroText,
-                marginTop: 2,
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {formatCount(segment.value)}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={{ marginTop: SPACE.x4 }}>
-        <MixBar segments={segments} height={6} trackColor={colors.heroLine} />
-      </View>
-
-      <View
-        style={{
-          marginTop: SPACE.x5,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
           gap: SPACE.x3,
           flexWrap: "wrap",
         }}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="View directory — open the user directory"
-          onPress={() => router.push("/(admin)/users" as any)}
-          style={({ pressed }) => ({
-            minHeight: 34,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            borderRadius: RADIUS.pill,
-            backgroundColor: "rgba(247, 244, 236, 0.10)",
-            borderWidth: 1,
-            borderColor: colors.heroLine,
-            paddingHorizontal: SPACE.x3,
-            paddingVertical: 6,
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.heroText }}>
-            View directory
+        <View style={{ flexShrink: 1 }}>
+          {eyebrow ? <SectionLabel colors={colors}>{eyebrow}</SectionLabel> : null}
+          <Text
+            accessibilityRole="header"
+            style={{
+              ...CONSOLE_TEXT.sectionTitle,
+              color: colors.ink,
+              marginTop: eyebrow ? 3 : 0,
+            }}
+          >
+            {title}
           </Text>
-          <ArrowUpRight size={13} color={colors.heroText} />
-        </Pressable>
-        <Text style={{ ...TYPE.caption, fontSize: 11, color: colors.heroTextMuted }}>
-          Updated {clockTime(data.generated_at)}
-        </Text>
+        </View>
+        {right}
       </View>
-    </LinearGradient>
+      <View style={{ marginTop: SPACE.x4 }}>{children}</View>
+    </View>
   );
 }
 
-// ─── Needs attention ───────────────────────────────────────────────────────
+/** Small, quiet status pill used inside panel headings. */
+function CountPill({
+  label,
+  tone,
+  colors,
+}: {
+  label: string;
+  tone: "warning" | "success" | "neutral";
+  colors: ThemeTokens;
+}) {
+  const palette =
+    tone === "warning"
+      ? { bg: colors.accentWash, fg: colors.accentText }
+      : tone === "success"
+      ? { bg: colors.jadeWash, fg: colors.jadeText }
+      : { bg: colors.panelInset, fg: colors.inkSoft };
 
-function AttentionRow({
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        borderRadius: RADIUS.sm,
+        backgroundColor: palette.bg,
+        paddingHorizontal: SPACE.x2,
+        paddingVertical: 4,
+      }}
+    >
+      <Clock3 size={11} color={palette.fg} strokeWidth={2.4} />
+      <Text
+        style={{ ...CONSOLE_TEXT.caption, fontSize: 11.5, fontWeight: "700", color: palette.fg }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+// ─── Review queue ───────────────────────────────────────────────────────────
+
+function QueueRow({
   item,
   colors,
   onPress,
@@ -409,7 +209,7 @@ function AttentionRow({
   const [focused, setFocused] = useState(false);
   const Icon = ATTENTION_ICONS[item.kind] || AlertTriangle;
   const age = ageInfo(item.created_at);
-  const severe = item.kind === "message_report";
+  const urgent = age.urgent;
 
   return (
     <Pressable
@@ -427,505 +227,131 @@ function AttentionRow({
           flexDirection: "row",
           alignItems: "center",
           gap: SPACE.x3,
-          borderRadius: RADIUS.lg,
+          borderRadius: RADIUS.md,
           paddingVertical: SPACE.x3,
-          paddingHorizontal: SPACE.x3,
+          paddingHorizontal: SPACE.x2,
           backgroundColor: hovered ? colors.panelInset : "transparent",
-          transform: [{ translateX: hovered ? 2 : 0 }],
         },
         focusRing(colors, focused),
       ]}
     >
       <View
         style={{
-          width: 3,
-          alignSelf: "stretch",
-          minHeight: 38,
-          borderRadius: 2,
-          backgroundColor: severe ? colors.coral : colors.accentBright,
-        }}
-      />
-      <View
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: RADIUS.md,
+          width: 32,
+          height: 32,
+          borderRadius: RADIUS.sm,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: severe ? colors.coralWash : colors.accentWash,
+          backgroundColor: urgent ? colors.coralWash : colors.accentWash,
         }}
       >
-        <Icon size={15} color={severe ? colors.coralText : colors.accentText} strokeWidth={2.1} />
+        <Icon
+          size={15}
+          color={urgent ? colors.coralText : colors.accentText}
+          strokeWidth={2}
+        />
       </View>
+
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={{ ...TYPE.bodyStrong, color: colors.ink }}>
+        <Text numberOfLines={1} style={{ ...CONSOLE_TEXT.strong, color: colors.ink }}>
           {item.label || "Untitled"}
         </Text>
-        <Text numberOfLines={1} style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: 1 }}>
+        <Text
+          numberOfLines={1}
+          style={{ ...CONSOLE_TEXT.caption, color: colors.inkFaint, marginTop: 1 }}
+        >
           {ATTENTION_LABELS[item.kind] || item.kind}
-          {item.author ? ` · ${item.author}` : ""}
+          {item.author ? ` by ${item.author}` : ""}
         </Text>
       </View>
-      <View style={{ alignItems: "flex-end", gap: 3 }}>
-        <Text
-          style={{
-            ...TYPE.micro,
-            fontSize: 8,
-            letterSpacing: 0.9,
-            color: age.urgent ? colors.coralText : colors.inkFaint,
-          }}
-        >
-          {age.urgent ? "Waiting" : "Age"}
-        </Text>
-        <Text
-          style={{
-            ...TYPE.caption,
-            fontSize: 11,
-            fontWeight: "700",
-            color: age.urgent ? colors.coralText : colors.inkSoft,
-          }}
-        >
-          {age.label}
-        </Text>
-      </View>
-      <ArrowUpRight size={14} color={colors.inkFaint} />
+
+      <Text
+        style={{
+          ...CONSOLE_TEXT.caption,
+          fontSize: 12,
+          fontWeight: "600",
+          color: urgent ? colors.coralText : colors.inkFaint,
+        }}
+      >
+        {age.label}
+      </Text>
+      <ChevronRight size={15} color={colors.inkFaint} />
     </Pressable>
   );
 }
 
-function AttentionPanel({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
+function QueuePanel({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
   const router = useRouter();
   const items = data.needs_attention.slice(0, 6);
   const total = data.needs_attention.length;
 
   return (
-    <View style={{ ...panelStyle(colors), flex: 1, overflow: "hidden" }}>
-      <View style={{ height: 4, backgroundColor: colors.accentBright }} />
-      <View style={{ padding: SPACE.x5 }}>
-        <PanelHeading
-          eyebrow="Queue"
-          title="Needs attention"
-          colors={colors}
-          right={
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 5,
-                borderRadius: RADIUS.pill,
-                backgroundColor: total > 0 ? colors.accentWash : colors.jadeWash,
-                paddingHorizontal: SPACE.x3,
-                paddingVertical: 4,
-              }}
-            >
-              <Clock3
-                size={11}
-                color={total > 0 ? colors.accentText : colors.jadeText}
-                strokeWidth={2.4}
-              />
-              <Text
-                style={{
-                  ...TYPE.caption,
-                  fontSize: 11,
-                  fontWeight: "700",
-                  color: total > 0 ? colors.accentText : colors.jadeText,
-                }}
-              >
-                {total > 0 ? `${total} open` : "Clear"}
-              </Text>
-            </View>
-          }
-        />
-
-        <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: 4 }}>
-          Oldest first · urgent items surface here.
-        </Text>
-
-        <View style={{ marginTop: SPACE.x3 }}>
-          {items.length === 0 ? (
-            <EmptyState
-              compact
-              icon={ShieldCheck}
-              tone="success"
-              title="The queue is clear"
-              body="No reports are waiting right now. Enjoy the quiet — it is well earned."
-              actionLabel="Open moderation"
-              onAction={() => router.push("/(admin)/content" as any)}
-            />
-          ) : (
-            items.map((item) => (
-              <AttentionRow
-                key={`${item.kind}-${item.id}`}
-                item={item}
-                colors={colors}
-                onPress={() => router.push("/(admin)/content" as any)}
-              />
-            ))
-          )}
-        </View>
-
-        {total > 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push("/(admin)/content" as any)}
-            style={({ pressed }) => ({
-              marginTop: SPACE.x3,
-              minHeight: 38,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              borderRadius: RADIUS.md,
-              borderWidth: 1,
-              borderColor: colors.line,
-              backgroundColor: pressed ? colors.panelInset : "transparent",
-            })}
-          >
-            <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.inkSoft }}>
-              {total > items.length ? `View all ${total} in Reports & Content` : "Open Reports & Content"}
-            </Text>
-            <ArrowUpRight size={13} color={colors.inkSoft} />
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-// ─── Supporting metrics ────────────────────────────────────────────────────
-
-function LedgerStat({
-  icon: Icon,
-  value,
-  label,
-  tone,
-  colors,
-}: {
-  icon: any;
-  value: number;
-  label: string;
-  tone: "neutral" | "accent" | "coral" | "brand";
-  colors: ThemeTokens;
-}) {
-  const palette =
-    tone === "accent"
-      ? { fg: colors.accentText, bg: colors.accentWash }
-      : tone === "coral"
-      ? { fg: colors.coralText, bg: colors.coralWash }
-      : tone === "brand"
-      ? { fg: colors.brand, bg: colors.brandWash }
-      : { fg: colors.inkSoft, bg: colors.panelInset };
-
-  return (
-    <View
-      style={{
-        flex: 1,
-        minWidth: 150,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: SPACE.x3,
-        paddingVertical: SPACE.x2,
-      }}
+    <Panel
+      eyebrow="Moderation"
+      title="Review queue"
+      colors={colors}
+      style={{ flex: 1.5, minWidth: 0 }}
+      right={<CountPill label={total > 0 ? `${total} open` : "Clear"} tone={total > 0 ? "warning" : "success"} colors={colors} />}
     >
-      <View
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: RADIUS.md,
-          backgroundColor: palette.bg,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Icon size={16} color={palette.fg} strokeWidth={2.1} />
-      </View>
-      <View style={{ flexShrink: 1 }}>
-        <Text
-          style={{
-            ...TYPE.title,
-            fontSize: 18,
-            color: colors.ink,
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {formatCount(value)}
-        </Text>
-        <Text style={{ ...TYPE.caption, fontSize: 11, color: colors.inkFaint }}>{label}</Text>
-      </View>
-    </View>
-  );
-}
-
-function LedgerStrip({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
-  return (
-    <View
-      style={{
-        ...panelStyle(colors),
-        paddingHorizontal: SPACE.x5,
-        paddingVertical: SPACE.x2,
-        flexDirection: "row",
-        flexWrap: "wrap",
-        columnGap: SPACE.x5,
-        rowGap: SPACE.x1,
-      }}
-    >
-      <LedgerStat
-        icon={EyeOff}
-        value={data.content.hidden}
-        label="Hidden content"
-        tone="neutral"
-        colors={colors}
-      />
-      <LedgerStat
-        icon={AlertTriangle}
-        value={data.content.flagged}
-        label="Flagged content"
-        tone="accent"
-        colors={colors}
-      />
-      <LedgerStat
-        icon={ShieldAlert}
-        value={data.users.suspended}
-        label="Suspended accounts"
-        tone="coral"
-        colors={colors}
-      />
-      <LedgerStat
-        icon={Megaphone}
-        value={data.announcements.sent_30d}
-        label="Announcements · 30d"
-        tone="brand"
-        colors={colors}
-      />
-    </View>
-  );
-}
-
-// ─── Bottom row ────────────────────────────────────────────────────────────
-
-function DistributionPanel({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
-  const roles = [
-    { label: "Students", value: data.users.students, color: colors.brandBright },
-    { label: "Faculty", value: data.users.faculty, color: colors.jadeBright },
-    { label: "Dept. admins", value: data.users.department_admins, color: colors.accentBright },
-    { label: "Admins", value: data.users.admins, color: colors.coralBright },
-    { label: "Superadmins", value: data.users.superadmins, color: colors.badgeThesisText },
-  ];
-  const content = [
-    { label: "Posts", value: data.content.posts, color: colors.brandBright },
-    { label: "Theses", value: data.content.theses, color: colors.jadeBright },
-    { label: "Comments", value: data.content.comments, color: colors.accentBright },
-  ];
-  const contentTotal = content.reduce((sum, item) => sum + item.value, 0);
-
-  return (
-    <View style={{ ...panelStyle(colors), padding: SPACE.x5 }}>
-      <PanelHeading eyebrow="Distribution" title="Campus makeup" colors={colors} />
-
-      <View style={{ marginTop: SPACE.x4 }}>
-        <MixBar segments={roles} height={9} />
-        <View
-          style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            columnGap: SPACE.x5,
-            rowGap: SPACE.x2,
-            marginTop: SPACE.x4,
-          }}
-        >
-          {roles.map((role) => (
-            <View key={role.label} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <View
-                style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: role.color }}
-              />
-              <Text style={{ ...TYPE.caption, color: colors.inkSoft }}>{role.label}</Text>
-              <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.ink }}>
-                {formatCount(role.value)}
-              </Text>
-              <Text style={{ ...TYPE.caption, fontSize: 11, color: colors.inkFaint }}>
-                {percent(role.value, data.users.total)}%
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={{ height: 1, backgroundColor: colors.line, marginVertical: SPACE.x5 }} />
-
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: SPACE.x3,
-          flexWrap: "wrap",
-        }}
-      >
-        <Text style={{ ...TYPE.title, color: colors.ink }}>Content health</Text>
-        <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
-          {formatCount(contentTotal)} rows tracked
-        </Text>
-      </View>
+      <Text style={{ ...CONSOLE_TEXT.caption, color: colors.inkFaint }}>
+        Oldest first. Items stay here until they are resolved.
+      </Text>
 
       <View style={{ marginTop: SPACE.x3 }}>
-        <MixBar segments={content} height={9} />
-        <View
-          style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            columnGap: SPACE.x5,
-            rowGap: SPACE.x2,
-            marginTop: SPACE.x4,
-          }}
-        >
-          {content.map((item) => (
-            <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <View
-                style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: item.color }}
-              />
-              <Text style={{ ...TYPE.caption, color: colors.inkSoft }}>{item.label}</Text>
-              <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.ink }}>
-                {formatCount(item.value)}
-              </Text>
-            </View>
-          ))}
-          <StatusBadge
-            label={`${formatCount(data.content.hidden)} hidden`}
-            tone={data.content.hidden > 0 ? "warning" : "neutral"}
-            icon={EyeOff}
-          />
-          <StatusBadge
-            label={`${formatCount(data.content.flagged)} flagged`}
-            tone={data.content.flagged > 0 ? "danger" : "success"}
-            icon={data.content.flagged > 0 ? AlertTriangle : ShieldCheck}
-          />
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function RecentActionsPanel({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
-  const router = useRouter();
-  const actions = (data.recent_actions || []).slice(0, 5);
-
-  return (
-    <View style={{ ...panelStyle(colors), padding: SPACE.x5 }}>
-      <PanelHeading
-        eyebrow="Audit trail"
-        title="Recent actions"
-        colors={colors}
-        right={
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push("/(admin)/audit" as any)}
-            style={({ pressed }) => ({
-              minHeight: 32,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 5,
-              borderRadius: RADIUS.pill,
-              backgroundColor: pressed ? colors.panelInset : colors.brandWash,
-              paddingHorizontal: SPACE.x3,
-              paddingVertical: 5,
-            })}
-          >
-            <Text style={{ ...TYPE.caption, fontSize: 11, fontWeight: "700", color: colors.brand }}>
-              Open audit
-            </Text>
-            <ArrowUpRight size={12} color={colors.brand} />
-          </Pressable>
-        }
-      />
-
-      <View style={{ marginTop: SPACE.x4 }}>
-        {actions.length === 0 ? (
+        {items.length === 0 ? (
           <EmptyState
             compact
-            icon={ScrollText}
-            tone="brand"
-            title="No governance actions yet"
-            body="Role changes, suspensions, and moderation decisions will appear here."
+            icon={ShieldCheck}
+            tone="success"
+            title="Nothing to review"
+            body="The queue is clear. New reports will appear here."
           />
         ) : (
-          actions.map((entry, index) => (
-            <View
-              key={entry.id}
-              style={{
-                flexDirection: "row",
-                gap: SPACE.x3,
-                paddingBottom: index === actions.length - 1 ? 0 : SPACE.x4,
-              }}
-            >
-              <View style={{ alignItems: "center" }}>
-                <View
-                  style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: 13,
-                    backgroundColor: colors.brandWash,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Sparkles size={12} color={colors.brand} />
-                </View>
-                {index === actions.length - 1 ? null : (
-                  <View
-                    style={{
-                      width: 1,
-                      flex: 1,
-                      backgroundColor: colors.line,
-                      marginTop: 4,
-                    }}
-                  />
-                )}
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "baseline",
-                    justifyContent: "space-between",
-                    gap: SPACE.x2,
-                  }}
-                >
-                  <Text style={{ ...TYPE.bodyStrong, color: colors.ink, flexShrink: 1 }}>
-                    {ACTION_LABELS[entry.action as string] || (typeof entry.action === "string" ? entry.action : "Unknown action")}
-                  </Text>
-                  <Text style={{ ...TYPE.caption, fontSize: 11, color: colors.inkFaint }}>
-                    {timeAgo(entry.created_at)}
-                  </Text>
-                </View>
-                <Text numberOfLines={1} style={{ ...TYPE.caption, color: colors.inkSoft }}>
-                  {typeof entry.actor_username === "string" ? entry.actor_username : "system"} · {typeof entry.target_label === "string" ? entry.target_label : (typeof entry.target_type === "string" ? entry.target_type : "item")}
-                </Text>
-                {typeof entry.reason === "string" && entry.reason ? (
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      ...TYPE.caption,
-                      fontSize: 11,
-                      fontStyle: "italic",
-                      color: colors.inkFaint,
-                      marginTop: 2,
-                    }}
-                  >
-                    “{entry.reason}”
-                  </Text>
-                ) : null}
-              </View>
-            </View>
+          items.map((item) => (
+            <QueueRow
+              key={`${item.kind}-${item.id}`}
+              item={item}
+              colors={colors}
+              onPress={() => router.push("/(admin)/content" as any)}
+            />
           ))
         )}
       </View>
-    </View>
+
+      {total > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/(admin)/content" as any)}
+          style={({ pressed }) => ({
+            marginTop: SPACE.x3,
+            minHeight: 38,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            borderRadius: RADIUS.sm,
+            borderWidth: 1,
+            borderColor: colors.line,
+            backgroundColor: pressed ? colors.panelInset : "transparent",
+          })}
+        >
+          <Text
+            style={{ ...CONSOLE_TEXT.caption, fontWeight: "700", color: colors.inkSoft }}
+          >
+            {total > items.length
+              ? `View all ${total} in Reports and content`
+              : "Open Reports and content"}
+          </Text>
+          <ArrowRight size={13} color={colors.inkSoft} />
+        </Pressable>
+      ) : null}
+    </Panel>
   );
 }
 
-// ─── Daily shortcuts ───────────────────────────────────────────────────────
+// ─── Quick actions ──────────────────────────────────────────────────────────
 
-function ShortcutsPanel({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
+function QuickActionsPanel({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
   const router = useRouter();
   const openReports =
     data.reports.message_reports +
@@ -933,7 +359,7 @@ function ShortcutsPanel({ data, colors }: { data: AdminOverview; colors: ThemeTo
     data.reports.flagged_comments +
     data.reports.flagged_theses;
 
-  const shortcuts = [
+  const actions = [
     {
       label: "Review reports",
       meta: openReports > 0 ? `${openReports} open` : "Queue clear",
@@ -958,131 +384,423 @@ function ShortcutsPanel({ data, colors }: { data: AdminOverview; colors: ThemeTo
   ] as const;
 
   return (
-    <View style={{ ...panelStyle(colors), padding: SPACE.x5 }}>
-      <PanelHeading eyebrow="Daily routes" title="Console shortcuts" colors={colors} />
-      <View style={{ marginTop: SPACE.x4, gap: SPACE.x1 }}>
-        {shortcuts.map((shortcut) => (
-          <Pressable
-            key={shortcut.label}
-            accessibilityRole="button"
-            accessibilityLabel={`${shortcut.label}. ${shortcut.meta}`}
-            onPress={() => router.push(shortcut.path as any)}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              gap: SPACE.x3,
-              minHeight: 54,
-              borderRadius: RADIUS.lg,
-              paddingHorizontal: SPACE.x2,
-              backgroundColor: pressed ? colors.panelInset : "transparent",
-            })}
-          >
-            <View
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: RADIUS.md,
+    <Panel eyebrow="Shortcuts" title="Quick actions" colors={colors} style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ marginTop: -4 }}>
+        {actions.map((action) => {
+          const palette =
+            action.tone === "danger"
+              ? { bg: colors.coralWash, fg: colors.coralText }
+              : action.tone === "success"
+              ? { bg: colors.jadeWash, fg: colors.jadeText }
+              : action.tone === "warning"
+              ? { bg: colors.accentWash, fg: colors.accentText }
+              : { bg: colors.brandWash, fg: colors.brand };
+
+          return (
+            <Pressable
+              key={action.label}
+              accessibilityRole="button"
+              accessibilityLabel={`${action.label}. ${action.meta}`}
+              onPress={() => router.push(action.path as any)}
+              style={({ pressed }) => ({
+                flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
-                backgroundColor:
-                  shortcut.tone === "danger"
-                    ? colors.coralWash
-                    : shortcut.tone === "success"
-                    ? colors.jadeWash
-                    : shortcut.tone === "warning"
-                    ? colors.accentWash
-                    : colors.brandWash,
-              }}
+                gap: SPACE.x3,
+                minHeight: 52,
+                borderRadius: RADIUS.md,
+                paddingHorizontal: SPACE.x2,
+                backgroundColor: pressed ? colors.panelInset : "transparent",
+              })}
             >
-              <shortcut.icon
-                size={16}
-                color={
-                  shortcut.tone === "danger"
-                    ? colors.coralText
-                    : shortcut.tone === "success"
-                    ? colors.jadeText
-                    : shortcut.tone === "warning"
-                    ? colors.accentText
-                    : colors.brand
-                }
-                strokeWidth={2.1}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ ...TYPE.bodyStrong, color: colors.ink }}>{shortcut.label}</Text>
-              <Text style={{ ...TYPE.caption, fontSize: 11, color: colors.inkFaint }}>
-                {shortcut.meta}
-              </Text>
-            </View>
-            <ArrowUpRight size={14} color={colors.inkFaint} />
-          </Pressable>
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: RADIUS.sm,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: palette.bg,
+                }}
+              >
+                <action.icon size={15} color={palette.fg} strokeWidth={2} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ ...CONSOLE_TEXT.strong, color: colors.ink }}>
+                  {action.label}
+                </Text>
+                <Text style={{ ...CONSOLE_TEXT.caption, color: colors.inkFaint }}>
+                  {action.meta}
+                </Text>
+              </View>
+              <ChevronRight size={15} color={colors.inkFaint} />
+            </Pressable>
+          );
+        })}
+      </View>
+    </Panel>
+  );
+}
+
+// ─── Breakdown ──────────────────────────────────────────────────────────────
+
+function LegendRow({
+  label,
+  value,
+  share,
+  color,
+  colors,
+}: {
+  label: string;
+  value: number;
+  share?: number;
+  color: string;
+  colors: ThemeTokens;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: SPACE.x2,
+        paddingVertical: 6,
+      }}
+    >
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+      <Text style={{ ...CONSOLE_TEXT.caption, color: colors.inkSoft, flex: 1 }}>{label}</Text>
+      <Text style={{ ...CONSOLE_TEXT.caption, fontWeight: "700", color: colors.ink }}>
+        {formatCount(value)}
+      </Text>
+      {typeof share === "number" ? (
+        <Text
+          style={{
+            ...CONSOLE_TEXT.caption,
+            color: colors.inkFaint,
+            minWidth: 34,
+            textAlign: "right",
+          }}
+        >
+          {share}%
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function BreakdownPanel({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
+  const roles = [
+    { label: "Students", value: data.users.students, color: colors.brandBright },
+    { label: "Faculty", value: data.users.faculty, color: colors.jadeBright },
+    { label: "Dept. admins", value: data.users.department_admins, color: colors.accentBright },
+    { label: "Admins", value: data.users.admins, color: colors.coralBright },
+    { label: "Superadmins", value: data.users.superadmins, color: colors.badgeThesisText },
+  ];
+  const content = [
+    { label: "Posts", value: data.content.posts, color: colors.brandBright },
+    { label: "Theses", value: data.content.theses, color: colors.jadeBright },
+    { label: "Comments", value: data.content.comments, color: colors.accentBright },
+  ];
+
+  return (
+    <Panel
+      eyebrow="Distribution"
+      title="Campus breakdown"
+      colors={colors}
+      style={{ flex: 1, minWidth: 0 }}
+    >
+      <Text style={{ ...CONSOLE_TEXT.strong, fontSize: 13, color: colors.inkSoft }}>
+        Accounts by role
+      </Text>
+      <View style={{ marginTop: SPACE.x3 }}>
+        <MixBar segments={roles} height={8} />
+      </View>
+      <View style={{ marginTop: SPACE.x2 }}>
+        {roles.map((role) => (
+          <LegendRow
+            key={role.label}
+            label={role.label}
+            value={role.value}
+            share={percent(role.value, data.users.total)}
+            color={role.color}
+            colors={colors}
+          />
+        ))}
+      </View>
+
+      <View style={{ height: 1, backgroundColor: colors.line, marginVertical: SPACE.x4 }} />
+
+      <Text style={{ ...CONSOLE_TEXT.strong, fontSize: 13, color: colors.inkSoft }}>
+        Content by type
+      </Text>
+      <View style={{ marginTop: SPACE.x3 }}>
+        <MixBar segments={content} height={8} />
+      </View>
+      <View style={{ marginTop: SPACE.x2 }}>
+        {content.map((item) => (
+          <LegendRow
+            key={item.label}
+            label={item.label}
+            value={item.value}
+            color={item.color}
+            colors={colors}
+          />
         ))}
       </View>
 
       <View
         style={{
-          marginTop: SPACE.x4,
-          borderRadius: RADIUS.lg,
-          backgroundColor: colors.panelInset,
-          padding: SPACE.x4,
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: SPACE.x2,
+          marginTop: SPACE.x3,
         }}
       >
-        <Text style={{ ...TYPE.micro, fontSize: 8.5, color: colors.inkFaint }}>
-          Announcement reach · 30d
-        </Text>
-        <Text
-          style={{
-            ...TYPE.title,
-            fontSize: 22,
-            color: colors.ink,
-            marginTop: 3,
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {formatCount(data.announcements.recipients_30d)}
-        </Text>
-        <Text style={{ ...TYPE.caption, color: colors.inkSoft }}>
-          notifications delivered to the campus
-        </Text>
+        <StatusBadge
+          label={`${formatCount(data.content.hidden)} hidden`}
+          tone={data.content.hidden > 0 ? "warning" : "neutral"}
+          icon={EyeOff}
+        />
+        <StatusBadge
+          label={`${formatCount(data.content.flagged)} flagged`}
+          tone={data.content.flagged > 0 ? "danger" : "success"}
+          icon={data.content.flagged > 0 ? AlertTriangle : ShieldCheck}
+        />
       </View>
-    </View>
+    </Panel>
   );
 }
 
-// ─── Loading / error ───────────────────────────────────────────────────────
+// ─── Activity ───────────────────────────────────────────────────────────────
+
+function ActivityPanel({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
+  const router = useRouter();
+  const actions = (data.recent_actions || []).slice(0, 5);
+
+  return (
+    <Panel
+      eyebrow="Audit trail"
+      title="Recent activity"
+      colors={colors}
+      style={{ flex: 1, minWidth: 0 }}
+      right={
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/(admin)/audit" as any)}
+          style={({ pressed }) => ({
+            minHeight: 30,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            borderRadius: RADIUS.sm,
+            backgroundColor: pressed ? colors.panelInset : "transparent",
+            paddingHorizontal: SPACE.x2,
+          })}
+        >
+          <Text
+            style={{ ...CONSOLE_TEXT.caption, fontSize: 12, fontWeight: "700", color: colors.brand }}
+          >
+            Open audit log
+          </Text>
+          <ArrowRight size={12} color={colors.brand} />
+        </Pressable>
+      }
+    >
+      {actions.length === 0 ? (
+        <EmptyState
+          compact
+          icon={ShieldCheck}
+          tone="brand"
+          title="No activity yet"
+          body="Role changes and moderation decisions will appear here."
+        />
+      ) : (
+        <View>
+          {actions.map((entry, index) => (
+            <View
+              key={entry.id}
+              style={{
+                flexDirection: "row",
+                gap: SPACE.x3,
+                paddingBottom: index === actions.length - 1 ? 0 : SPACE.x4,
+              }}
+            >
+              <View style={{ alignItems: "center", paddingTop: 3 }}>
+                <View
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 4,
+                    backgroundColor: colors.brandBright,
+                  }}
+                />
+                {index === actions.length - 1 ? null : (
+                  <View
+                    style={{ width: 1, flex: 1, backgroundColor: colors.line, marginTop: 4 }}
+                  />
+                )}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "baseline",
+                    justifyContent: "space-between",
+                    gap: SPACE.x2,
+                  }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={{ ...CONSOLE_TEXT.strong, color: colors.ink, flexShrink: 1 }}
+                  >
+                    {ACTION_LABELS[entry.action as string] ||
+                      (typeof entry.action === "string" ? entry.action : "Unknown action")}
+                  </Text>
+                  <Text style={{ ...CONSOLE_TEXT.caption, fontSize: 11.5, color: colors.inkFaint }}>
+                    {timeAgo(entry.created_at)}
+                  </Text>
+                </View>
+                <Text
+                  numberOfLines={1}
+                  style={{ ...CONSOLE_TEXT.caption, color: colors.inkSoft, marginTop: 1 }}
+                >
+                  {typeof entry.actor_username === "string" ? entry.actor_username : "system"} ·{" "}
+                  {typeof entry.target_label === "string"
+                    ? entry.target_label
+                    : typeof entry.target_type === "string"
+                    ? entry.target_type
+                    : "item"}
+                </Text>
+                {typeof entry.reason === "string" && entry.reason ? (
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      ...CONSOLE_TEXT.caption,
+                      fontSize: 11.5,
+                      fontStyle: "italic",
+                      color: colors.inkFaint,
+                      marginTop: 2,
+                    }}
+                  >
+                    “{entry.reason}”
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+    </Panel>
+  );
+}
+
+/** What a standard administrator sees in place of the superadmin audit trail. */
+function SnapshotPanel({ data, colors }: { data: AdminOverview; colors: ThemeTokens }) {
+  const rows = [
+    {
+      label: "Hidden content",
+      value: data.content.hidden,
+      icon: EyeOff,
+      tone: { bg: colors.panelInset, fg: colors.inkSoft },
+    },
+    {
+      label: "Flagged content",
+      value: data.content.flagged,
+      icon: AlertTriangle,
+      tone: { bg: colors.accentWash, fg: colors.accentText },
+    },
+    {
+      label: "Suspended accounts",
+      value: data.users.suspended,
+      icon: ShieldAlert,
+      tone: { bg: colors.coralWash, fg: colors.coralText },
+    },
+    {
+      label: "Announcements in 30 days",
+      value: data.announcements.sent_30d,
+      icon: Megaphone,
+      tone: { bg: colors.brandWash, fg: colors.brand },
+    },
+  ];
+
+  return (
+    <Panel eyebrow="Oversight" title="Current status" colors={colors} style={{ flex: 1, minWidth: 0 }}>
+      {rows.map((row) => (
+        <View
+          key={row.label}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: SPACE.x3,
+            paddingVertical: SPACE.x2,
+          }}
+        >
+          <View
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: RADIUS.sm,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: row.tone.bg,
+            }}
+          >
+            <row.icon size={15} color={row.tone.fg} strokeWidth={2} />
+          </View>
+          <Text style={{ ...CONSOLE_TEXT.body, color: colors.inkSoft, flex: 1 }}>
+            {row.label}
+          </Text>
+          <Text style={{ ...CONSOLE_TEXT.metricSmall, color: colors.ink }}>
+            {formatCount(row.value)}
+          </Text>
+        </View>
+      ))}
+
+      <Text
+        style={{
+          ...CONSOLE_TEXT.caption,
+          color: colors.inkFaint,
+          marginTop: SPACE.x3,
+        }}
+      >
+        {formatCount(data.announcements.recipients_30d)} notifications reached the campus in the
+        last 30 days.
+      </Text>
+    </Panel>
+  );
+}
+
+// ─── Loading ────────────────────────────────────────────────────────────────
 
 function OverviewSkeleton() {
   return (
     <View style={{ gap: SPACE.x5 }}>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SPACE.x5 }}>
-        <View style={{ flex: 1.55, minWidth: 320 }}>
-          <Skeleton height={316} radius={RADIUS.xxl} />
-        </View>
-        <View style={{ flex: 1, minWidth: 280 }}>
-          <Skeleton height={316} radius={RADIUS.xxl} />
-        </View>
-      </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SPACE.x4 }}>
-        {[0, 1, 2].map((index) => (
-          <View key={index} style={{ flex: 1, minWidth: 220 }}>
-            <Skeleton height={156} radius={RADIUS.xxl} />
+        {[0, 1, 2, 3].map((index) => (
+          <View key={index} style={{ flex: 1, minWidth: 216 }}>
+            <Skeleton height={148} radius={RADIUS.lg} />
           </View>
         ))}
       </View>
-      <Skeleton height={78} radius={RADIUS.xxl} />
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SPACE.x5 }}>
-        <View style={{ flex: 1.3, minWidth: 300 }}>
-          <Skeleton height={260} radius={RADIUS.xxl} />
+        <View style={{ flex: 1.5, minWidth: 300 }}>
+          <Skeleton height={300} radius={RADIUS.lg} />
         </View>
-        <View style={{ flex: 1, minWidth: 280 }}>
-          <Skeleton height={260} radius={RADIUS.xxl} />
+        <View style={{ flex: 1, minWidth: 260 }}>
+          <Skeleton height={300} radius={RADIUS.lg} />
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SPACE.x5 }}>
+        <View style={{ flex: 1, minWidth: 300 }}>
+          <Skeleton height={320} radius={RADIUS.lg} />
+        </View>
+        <View style={{ flex: 1, minWidth: 300 }}>
+          <Skeleton height={320} radius={RADIUS.lg} />
         </View>
       </View>
     </View>
   );
 }
 
-// ─── Screen ────────────────────────────────────────────────────────────────
+// ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function AdminOverviewScreen() {
   const { profile } = useAuth();
@@ -1111,8 +829,7 @@ export default function AdminOverviewScreen() {
   }, [load]);
 
   const superadmin = isSuperAdminRole(profile?.role);
-  const stackMain = width < 1320;
-  const stackBottom = width < 1040;
+  const stackColumns = width < 1100;
   const horizontalPadding = width < 900 ? SPACE.x5 : width < 1400 ? SPACE.x6 : SPACE.x8;
 
   const flaggedTotal = data
@@ -1134,15 +851,13 @@ export default function AdminOverviewScreen() {
       }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ width: "100%", maxWidth: 1480 }}>
+      <View style={{ width: "100%", maxWidth: 1360 }}>
         <PageHeader
-          eyebrow={`${superadmin ? "Superadmin" : "Administrator"} console / overview`}
+          eyebrow="Admin console"
           title="Overview"
-          description="Campus health, moderation, and governance — read as one continuous story, not four disconnected boxes."
+          description="Accounts, content and the moderation queue at a glance."
           meta={
-            data
-              ? `Snapshot generated ${new Date(data.generated_at).toLocaleString()}`
-              : undefined
+            data ? `Last updated ${new Date(data.generated_at).toLocaleString()}` : undefined
           }
           onRefresh={() => void load()}
           refreshing={loading}
@@ -1155,22 +870,24 @@ export default function AdminOverviewScreen() {
               flexDirection: "row",
               alignItems: "center",
               gap: SPACE.x3,
-              borderRadius: RADIUS.lg,
+              borderRadius: RADIUS.md,
               borderWidth: 1,
               borderColor: colors.coral,
               backgroundColor: colors.coralWash,
               padding: SPACE.x4,
             }}
           >
-            <AlertTriangle size={18} color={colors.coralText} />
-            <Text style={{ ...TYPE.bodyStrong, color: colors.coralText, flex: 1 }}>{error}</Text>
+            <AlertTriangle size={17} color={colors.coralText} />
+            <Text style={{ ...CONSOLE_TEXT.body, color: colors.coralText, flex: 1 }}>
+              {error}
+            </Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Retry loading the overview"
               onPress={() => void load()}
               style={({ pressed }) => ({
                 minHeight: 32,
-                borderRadius: RADIUS.pill,
+                borderRadius: RADIUS.sm,
                 borderWidth: 1,
                 borderColor: colors.coral,
                 paddingHorizontal: SPACE.x3,
@@ -1178,8 +895,10 @@ export default function AdminOverviewScreen() {
                 opacity: pressed ? 0.8 : 1,
               })}
             >
-              <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.coralText }}>
-                Retry
+              <Text
+                style={{ ...CONSOLE_TEXT.caption, fontWeight: "700", color: colors.coralText }}
+              >
+                Try again
               </Text>
             </Pressable>
           </View>
@@ -1190,66 +909,54 @@ export default function AdminOverviewScreen() {
         ) : data ? (
           <View style={{ gap: SPACE.x5 }}>
             <Reveal>
-              <View
-                style={{
-                  flexDirection: stackMain ? "column" : "row",
-                  alignItems: "stretch",
-                  gap: SPACE.x5,
-                }}
-              >
-                <View
-                  style={{
-                    flex: stackMain ? undefined : 1.55,
-                    width: stackMain ? "100%" : undefined,
-                    minWidth: 0,
-                  }}
-                >
-                  <HeroPulse data={data} colors={colors} />
-                </View>
-                <View
-                  style={{
-                    flex: stackMain ? undefined : 1,
-                    width: stackMain ? "100%" : undefined,
-                    minWidth: 0,
-                  }}
-                >
-                  <AttentionPanel data={data} colors={colors} />
-                </View>
-              </View>
-            </Reveal>
-
-            <Reveal delay={MOTION.stagger}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SPACE.x4 }}>
                 <KpiCard
-                  label="Content library"
-                  value={contentTotal}
-                  detail={`${formatCount(data.content.posts)} posts · ${formatCount(
-                    data.content.theses
-                  )} theses`}
-                  icon={FileText}
+                  label="Accounts"
+                  value={data.users.total}
+                  detail={`${formatCount(data.users.students)} students, ${formatCount(
+                    data.users.faculty
+                  )} faculty`}
+                  icon={Users}
                   tone="brand"
-                  onPress={() => router.push("/(admin)/content" as any)}
+                  onPress={() => router.push("/(admin)/users" as any)}
                   footer={
-                    <View style={{ gap: 6 }}>
-                      <MixBar
-                        segments={[
-                          { label: "Posts", value: data.content.posts, color: colors.brandBright },
-                          { label: "Theses", value: data.content.theses, color: colors.jadeBright },
-                        ]}
-                        height={5}
+                    <Text style={{ ...CONSOLE_TEXT.caption, fontSize: 11.5, color: colors.inkFaint }}>
+                      {formatCount(data.users.new_7d)} joined in the last 7 days
+                    </Text>
+                  }
+                />
+                <KpiCard
+                  label="Active this week"
+                  value={data.users.active_7d}
+                  detail={`${percent(data.users.active_7d, data.users.total)}% of accounts checked in`}
+                  icon={Activity}
+                  tone="jade"
+                  footer={
+                    <View
+                      style={{
+                        height: 5,
+                        borderRadius: 3,
+                        backgroundColor: colors.panelInset,
+                        overflow: "hidden",
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: `${Math.round(activeRatio * 100)}%`,
+                          height: 5,
+                          borderRadius: 3,
+                          backgroundColor: colors.jade,
+                        }}
                       />
-                      <Text style={{ ...TYPE.caption, fontSize: 11, color: colors.inkFaint }}>
-                        {formatCount(data.content.comments)} comments live alongside
-                      </Text>
                     </View>
                   }
                 />
                 <KpiCard
                   label="Open reports"
                   value={openReports}
-                  detail={`${formatCount(data.reports.message_reports)} messages · ${formatCount(
+                  detail={`${formatCount(data.reports.message_reports)} messages, ${formatCount(
                     flaggedTotal
-                  )} flagged`}
+                  )} flagged items`}
                   icon={Flag}
                   tone="coral"
                   onPress={() => router.push("/(admin)/content" as any)}
@@ -1265,98 +972,72 @@ export default function AdminOverviewScreen() {
                       />
                       <Text
                         style={{
-                          ...TYPE.caption,
-                          fontSize: 11,
+                          ...CONSOLE_TEXT.caption,
+                          fontSize: 11.5,
                           color: oldest ? colors.coralText : colors.jadeText,
                         }}
                       >
-                        {oldest ? `Oldest waiting ${ageInfo(oldest.created_at).label}` : "Queue clear"}
+                        {oldest
+                          ? `Oldest waiting ${ageInfo(oldest.created_at).label}`
+                          : "Queue is clear"}
                       </Text>
                     </View>
                   }
                 />
                 <KpiCard
-                  label="Active this week"
-                  value={data.users.active_7d}
-                  detail={`${percent(data.users.active_7d, data.users.total)}% of accounts checked in`}
-                  icon={Activity}
-                  tone="jade"
-                  delta={
-                    data.users.new_7d > 0
-                      ? { value: data.users.new_7d, label: `+${data.users.new_7d} joined` }
-                      : undefined
-                  }
+                  label="Content library"
+                  value={contentTotal}
+                  detail={`${formatCount(data.content.posts)} posts, ${formatCount(
+                    data.content.theses
+                  )} theses`}
+                  icon={FileText}
+                  tone="accent"
+                  onPress={() => router.push("/(admin)/content" as any)}
                   footer={
-                    <View style={{ gap: 6 }}>
-                      <View
-                        style={{
-                          height: 5,
-                          borderRadius: 3,
-                          backgroundColor: colors.panelInset,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: `${Math.round(activeRatio * 100)}%`,
-                            height: 5,
-                            borderRadius: 3,
-                            backgroundColor: colors.jade,
-                          }}
-                        />
-                      </View>
-                      <Text style={{ ...TYPE.caption, fontSize: 11, color: colors.inkFaint }}>
-                        {formatCount(data.users.new_7d)} new accounts in the last 7 days
-                      </Text>
-                    </View>
+                    <Text style={{ ...CONSOLE_TEXT.caption, fontSize: 11.5, color: colors.inkFaint }}>
+                      {formatCount(data.content.comments)} comments published alongside
+                    </Text>
                   }
                 />
               </View>
             </Reveal>
 
-            <Reveal delay={MOTION.stagger * 2}>
-              <LedgerStrip data={data} colors={colors} />
-            </Reveal>
-
-            <Reveal delay={MOTION.stagger * 3}>
+            <Reveal delay={80}>
               <View
                 style={{
-                  flexDirection: stackBottom ? "column" : "row",
-                  alignItems: "stretch",
+                  flexDirection: stackColumns ? "column" : "row",
                   gap: SPACE.x5,
+                  alignItems: "stretch",
                 }}
               >
-                <View
-                  style={{
-                    flex: stackBottom ? undefined : 1.25,
-                    width: stackBottom ? "100%" : undefined,
-                    minWidth: 0,
-                  }}
-                >
-                  <DistributionPanel data={data} colors={colors} />
-                </View>
-                <View
-                  style={{
-                    flex: stackBottom ? undefined : 1,
-                    width: stackBottom ? "100%" : undefined,
-                    minWidth: 0,
-                  }}
-                >
-                  {superadmin ? (
-                    <RecentActionsPanel data={data} colors={colors} />
-                  ) : (
-                    <ShortcutsPanel data={data} colors={colors} />
-                  )}
-                </View>
+                <QueuePanel data={data} colors={colors} />
+                <QuickActionsPanel data={data} colors={colors} />
+              </View>
+            </Reveal>
+
+            <Reveal delay={160}>
+              <View
+                style={{
+                  flexDirection: stackColumns ? "column" : "row",
+                  gap: SPACE.x5,
+                  alignItems: "stretch",
+                }}
+              >
+                <BreakdownPanel data={data} colors={colors} />
+                {superadmin ? (
+                  <ActivityPanel data={data} colors={colors} />
+                ) : (
+                  <SnapshotPanel data={data} colors={colors} />
+                )}
               </View>
             </Reveal>
           </View>
         ) : (
-          <View style={{ ...panelStyle(colors), marginTop: SPACE.x2 }}>
+          <View style={{ ...consoleCard(colors) }}>
             <EmptyState
               icon={WifiOff}
               tone="danger"
-              title="Signal lost"
+              title="Could not load the overview"
               body={
                 error ||
                 "The overview could not reach the campus API. Check the connection and try again."

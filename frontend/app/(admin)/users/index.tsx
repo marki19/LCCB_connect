@@ -59,9 +59,9 @@ function getRoleBadgeStyle(role: string | null, colors: ThemeTokens) {
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "Not set";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Not set";
   return date.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -195,9 +195,9 @@ export default function AdminUsersScreen() {
       showsVerticalScrollIndicator={false}
     >
       <PageHeader
-        eyebrow="Governance / people"
+        eyebrow="Admin console"
         title="Users"
-        description="Profiles, roles, and account sanctions — every change is reason-gated and audited."
+        description="Profiles, roles and account sanctions. Every change is recorded in the audit log."
         onRefresh={() => void fetchUsers(null, false)}
         refreshing={loading}
       />
@@ -354,7 +354,7 @@ export default function AdminUsersScreen() {
             title={hasFilters ? "No accounts match" : "No accounts yet"}
             body={
               hasFilters
-                ? "Try a different role, status, or department — or clear the filters."
+                ? "Try a different role, status or department, or clear the filters."
                 : "New profiles will appear here as people join the campus."
             }
             actionLabel={hasFilters ? "Clear filters" : undefined}
@@ -444,7 +444,7 @@ export default function AdminUsersScreen() {
                   style={{ fontSize: 13, color: tableColors.textSecondary }}
                   numberOfLines={1}
                 >
-                  {user.department_name || "—"}
+                  {user.department_name || "Not set"}
                 </Text>
               );
             case "status":

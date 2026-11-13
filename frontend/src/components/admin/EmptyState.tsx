@@ -3,7 +3,8 @@ import { Pressable, Text, View } from "react-native";
 import { ArrowRight } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { badgeTone, type BadgeTone } from "./StatusBadge";
-import { focusRing, RADIUS, SPACE, TYPE } from "../../lib/tokens";
+import { focusRing, RADIUS, SPACE } from "../../lib/tokens";
+import { CONSOLE_TEXT } from "./consoleTheme";
 
 type EmptyStateProps = {
   title: string;
@@ -16,8 +17,9 @@ type EmptyStateProps = {
 };
 
 /**
- * Icon composition instead of a lonely grey glyph. The stacked tiles give the
- * empty state a little personality without shipping illustration assets.
+ * Quiet empty state: a single tinted glyph, one sentence of context, and an
+ * optional next step. No decorative clutter, so it reads as "nothing to do
+ * here" rather than a missing feature.
  */
 export default function EmptyState({
   title,
@@ -30,8 +32,8 @@ export default function EmptyState({
 }: EmptyStateProps) {
   const { colors } = useTheme();
   const palette = badgeTone(tone, colors);
-  const size = compact ? 78 : 104;
   const [actionFocused, setActionFocused] = useState(false);
+  const glyph = compact ? 46 : 56;
 
   return (
     <View
@@ -39,84 +41,29 @@ export default function EmptyState({
         alignItems: "center",
         justifyContent: "center",
         paddingVertical: compact ? SPACE.x6 : SPACE.x10,
-        paddingHorizontal: SPACE.x6,
+        paddingHorizontal: SPACE.x5,
       }}
     >
       <View
         style={{
-          width: size,
-          height: size,
+          width: glyph,
+          height: glyph,
+          borderRadius: glyph / 2,
           alignItems: "center",
           justifyContent: "center",
-          marginBottom: SPACE.x5,
+          backgroundColor: palette.bg,
         }}
       >
-        <View
-          style={{
-            position: "absolute",
-            width: size * 0.74,
-            height: size * 0.74,
-            borderRadius: 24,
-            backgroundColor: palette.bg,
-            transform: [{ rotate: "-9deg" }],
-          }}
-        />
-        <View
-          style={{
-            position: "absolute",
-            width: size * 0.56,
-            height: size * 0.56,
-            borderRadius: 20,
-            backgroundColor: colors.panelRaised,
-            borderWidth: 1,
-            borderColor: colors.line,
-            transform: [{ rotate: "8deg" }],
-          }}
-        />
-        <View
-          style={{
-            width: size * 0.58,
-            height: size * 0.58,
-            borderRadius: 19,
-            backgroundColor: colors.panel,
-            borderWidth: 1,
-            borderColor: colors.lineStrong,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Icon size={compact ? 24 : 30} color={palette.fg} strokeWidth={1.9} />
-        </View>
-        <View
-          style={{
-            position: "absolute",
-            top: size * 0.08,
-            right: size * 0.04,
-            width: 9,
-            height: 9,
-            borderRadius: 5,
-            backgroundColor: colors.accentBright,
-          }}
-        />
-        <View
-          style={{
-            position: "absolute",
-            bottom: size * 0.12,
-            left: size * 0.02,
-            width: 6,
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: colors.brandBright,
-          }}
-        />
+        <Icon size={compact ? 20 : 24} color={palette.fg} strokeWidth={1.9} />
       </View>
 
       <Text
         style={{
-          ...TYPE.h2,
-          fontSize: compact ? 17 : 20,
+          ...CONSOLE_TEXT.sectionTitle,
+          fontSize: compact ? 15 : 17,
           color: colors.ink,
           textAlign: "center",
+          marginTop: SPACE.x4,
         }}
       >
         {title}
@@ -124,10 +71,10 @@ export default function EmptyState({
       {body ? (
         <Text
           style={{
-            ...TYPE.body,
+            ...CONSOLE_TEXT.caption,
             color: colors.inkSoft,
             textAlign: "center",
-            maxWidth: 360,
+            maxWidth: 340,
             marginTop: SPACE.x2,
           }}
         >
@@ -145,23 +92,25 @@ export default function EmptyState({
           style={({ pressed }) => [
             {
               marginTop: SPACE.x5,
-              minHeight: 40,
+              minHeight: 38,
               flexDirection: "row",
               alignItems: "center",
               gap: SPACE.x2,
-              borderRadius: RADIUS.pill,
+              borderRadius: RADIUS.sm,
               backgroundColor: colors.brandSolid,
-              paddingHorizontal: SPACE.x5,
+              paddingHorizontal: SPACE.x4,
               paddingVertical: SPACE.x2,
               opacity: pressed ? 0.88 : 1,
             },
             focusRing(colors, actionFocused),
           ]}
         >
-          <Text style={{ ...TYPE.bodyStrong, color: colors.textOnBrandSolid }}>
+          <Text
+            style={{ ...CONSOLE_TEXT.strong, fontSize: 13, color: colors.textOnBrandSolid }}
+          >
             {actionLabel}
           </Text>
-          <ArrowRight size={15} color={colors.textOnBrandSolid} />
+          <ArrowRight size={14} color={colors.textOnBrandSolid} />
         </Pressable>
       ) : null}
     </View>

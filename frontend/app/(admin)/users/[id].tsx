@@ -43,9 +43,9 @@ import ActionDialog from "../../../src/components/admin/ActionDialog";
 type DialogKind = "role" | "suspend" | "unsuspend" | "force" | "delete" | null;
 
 function formatDate(value?: string | null, withTime = false) {
-  if (!value) return "—";
+  if (!value) return "Not set";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Not set";
   return date.toLocaleString(undefined, {
     year: "numeric",
     month: "short",
@@ -441,11 +441,11 @@ export default function AdminUserDossierScreen() {
             </View>
 
             <View style={{ marginTop: 28, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 20 }}>
-              <Detail label="Email" value={target.email || "—"} icon={Mail} colors={colors} />
-              <Detail label="Role" value={target.role || "—"} icon={ShieldCheck} colors={colors} />
+              <Detail label="Email" value={target.email || "Not set"} icon={Mail} colors={colors} />
+              <Detail label="Role" value={target.role || "Not set"} icon={ShieldCheck} colors={colors} />
               <Detail
                 label="Department"
-                value={target.department_name || "—"}
+                value={target.department_name || "Not set"}
                 icon={BookOpen}
                 colors={colors}
               />
@@ -454,7 +454,7 @@ export default function AdminUserDossierScreen() {
                 value={
                   [target.course_name || target.course, target.year_level]
                     .filter(Boolean)
-                    .join(" · ") || "—"
+                    .join(" · ") || "Not set"
                 }
                 icon={FileText}
                 colors={colors}

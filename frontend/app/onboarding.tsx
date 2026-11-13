@@ -362,6 +362,13 @@ export default function OnboardingScreen() {
     }
   };
 
+  const handleSkip = () => {
+    // Verification is optional at signup. The feed shows an identity banner
+    // that leads back here, and the server keeps posting locked until the
+    // profile is verified.
+    router.replace("/(tabs)/");
+  };
+
   const fieldError = (name: keyof typeof form) =>
     touched[name] && errors[name] ? errors[name] : undefined;
 
@@ -691,6 +698,29 @@ export default function OnboardingScreen() {
                     disabled={!canEdit || submitting}
                     onPress={() => void handleSubmit()}
                   />
+                </View>
+
+                <View style={{ marginTop: SPACE.x2 }}>
+                  <Button
+                    label="Skip for now"
+                    variant="ghost"
+                    fullWidth
+                    disabled={submitting}
+                    onPress={handleSkip}
+                    accessibilityLabel="Skip identity verification for now"
+                  />
+                  <Text
+                    style={{
+                      ...TYPE.caption,
+                      color: colors.inkFaint,
+                      textAlign: "center",
+                      lineHeight: 18,
+                      marginTop: SPACE.x1,
+                    }}
+                  >
+                    You can verify later. Posting stays locked until a department admin confirms
+                    your identity.
+                  </Text>
                 </View>
               </Card>
             </Reveal>

@@ -70,7 +70,7 @@ export default function ActionDialog({
               label="Suspended until (optional)"
               value={until}
               onChangeText={setUntil}
-              placeholder="YYYY-MM-DD — blank means indefinite"
+              placeholder="YYYY-MM-DD (leave blank for indefinite)"
               hint="Leave blank to suspend indefinitely."
             />
           ) : null}

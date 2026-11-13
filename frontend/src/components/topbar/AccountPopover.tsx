@@ -1,6 +1,6 @@
 /**
  * AccountPopover — Avatar / account menu panel.
- * Shows profile card, admin link (if admin), theme toggle, settings, sign out.
+ * Shows profile card, admin link (if admin), settings, sign out.
  */
 
 import {
@@ -11,7 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Settings, Sun, Moon, Shield, LogOut } from "lucide-react-native";
+import { Settings, Shield, LogOut } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSettingsSidebar } from "../../contexts/SettingsSidebarContext";
@@ -26,7 +26,7 @@ interface AccountPopoverProps {
 }
 
 export default function AccountPopover({ onClose }: AccountPopoverProps) {
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors } = useTheme();
   const { profile, signOut } = useAuth();
   const { openSettingsSidebar } = useSettingsSidebar();
   const router = useRouter();
@@ -112,20 +112,6 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
           }}
         />
       )}
-
-      {/* Theme toggle */}
-      <MenuItem
-        icon={
-          isDark ? (
-            <Sun size={16} color={colors.accentText} strokeWidth={2} />
-          ) : (
-            <Moon size={16} color={colors.inkSoft} strokeWidth={2} />
-          )
-        }
-        label={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-        colors={colors}
-        onPress={() => { toggleTheme(); onClose(); }}
-      />
 
       {/* Settings */}
       <MenuItem

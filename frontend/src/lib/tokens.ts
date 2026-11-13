@@ -191,6 +191,9 @@ export const LIGHT_TOKENS = {
   coralText: "#9E2F24",
   coralWash: "#FAE9E5",
 
+  // ── Editorial layer: iris (Do Not Disturb presence) ──────────────────────
+  irisBright: "#8B5CF6",
+
   // ── Command sidebar ──────────────────────────────────────────────────────
   navBg: "#0A1830",
   navBgAlt: "#0D2144",
@@ -401,6 +404,9 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
   coralBright: "#FFA79D",
   coralText: "#FF9F94",
   coralWash: "rgba(255, 139, 126, 0.14)",
+
+  // ── Editorial layer: iris (Do Not Disturb presence) ──────────────────────
+  irisBright: "#A78BFA",
 
   // ── Command sidebar ──────────────────────────────────────────────────────
   navBg: "#060B14",

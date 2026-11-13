@@ -13,7 +13,7 @@ export const PRESENCE_COLORS: Record<PresenceMode, string> = {
   online: LIGHT_TOKENS.jadeBright,
   away: LIGHT_TOKENS.accentBright,
   busy: LIGHT_TOKENS.coralBright,
-  dnd: LIGHT_TOKENS.coralBright,
+  dnd: LIGHT_TOKENS.irisBright,
   invisible: LIGHT_TOKENS.textDisabled,
 };
 

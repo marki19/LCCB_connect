@@ -39,9 +39,9 @@ const ROLE_OPTIONS = [
 ] as const;
 
 function formatDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "Not set";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Not set";
   return date.toLocaleString(undefined, {
     year: "numeric",
     month: "short",
@@ -235,7 +235,7 @@ export default function AdminAnnouncementsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <PageHeader
-        eyebrow="Governance / broadcast"
+        eyebrow="Admin console"
         title="Announcements"
         description="Send one message to a counted audience. Delivery is in-app."
         onRefresh={() => void loadHistory(null, false)}
@@ -439,7 +439,7 @@ export default function AdminAnnouncementsScreen() {
               <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.primary} />
             ) : (
               <Text style={{ fontSize: 13, fontWeight: "800", color: colors.textPrimary }}>
-                {count ?? "—"} recipient{count === 1 ? "" : "s"}
+                {count ?? "Not set"} recipient{count === 1 ? "" : "s"}
               </Text>
             )}
           </View>

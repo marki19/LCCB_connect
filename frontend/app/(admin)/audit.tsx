@@ -33,9 +33,9 @@ const ACTION_OPTIONS = [
 ];
 
 function formatDate(value?: string | null, withTime = false) {
-  if (!value) return "—";
+  if (!value) return "Not set";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Not set";
   return date.toLocaleString(undefined, {
     year: "numeric",
     month: "short",
@@ -157,7 +157,7 @@ export default function AdminAuditScreen() {
       showsVerticalScrollIndicator={false}
     >
       <PageHeader
-        eyebrow="System / record"
+        eyebrow="Admin console"
         title="Audit log"
         description="The append-only record of governance actions. Superadmin only."
         onRefresh={() => void load(null, false)}
@@ -338,7 +338,7 @@ export default function AdminAuditScreen() {
                 <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>
                   {entry.actor_username || "system"}
                 </Text>
-                <Text style={{ fontSize: 11, color: colors.textTertiary }}>{entry.actor_role || "—"}</Text>
+                <Text style={{ fontSize: 11, color: colors.textTertiary }}>{entry.actor_role || "Not set"}</Text>
               </View>
               <View style={{ width: 176, paddingRight: 8 }}>
                 <View style={{ alignSelf: "flex-start", borderRadius: 9999, backgroundColor: colors.surfaceSunken, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -349,12 +349,12 @@ export default function AdminAuditScreen() {
               </View>
               <View style={{ flex: 1, paddingRight: 12 }}>
                 <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }} numberOfLines={2}>
-                  {entry.target_label || entry.target_id || "—"}
+                  {entry.target_label || entry.target_id || "Not set"}
                 </Text>
                 <Text style={{ fontSize: 11, color: colors.textTertiary }}>{entry.target_type}</Text>
               </View>
               <Text style={{ flex: 1, fontSize: 12, lineHeight: 18, color: colors.textSecondary }} numberOfLines={3}>
-                {entry.reason || "—"}
+                {entry.reason || "No reason recorded"}
               </Text>
             </View>
           ))
