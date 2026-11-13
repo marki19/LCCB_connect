@@ -8,10 +8,10 @@ const { clampLimit } = require("../models/pagination");
 
 const search = async (req, res, next) => {
   try {
-    const q = req.query.q ? String(req.query.q).trim() : "";
+    const q = req.query.q ? String(req.query.q).trim().slice(0, 100) : "";
     const type = req.query.type || "all";
     const limit = clampLimit(req.query.limit);
-    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const offset = Math.min(1000, Math.max(0, parseInt(req.query.offset, 10) || 0));
     const viewerId = req.user?.id || null;
 
     if (!q) {
@@ -49,7 +49,7 @@ const search = async (req, res, next) => {
 
 const suggestions = async (req, res, next) => {
   try {
-    const q = req.query.q ? String(req.query.q).trim() : "";
+    const q = req.query.q ? String(req.query.q).trim().slice(0, 100) : "";
     const viewerId = req.user?.id || null;
     const limit = Math.min(10, Math.max(1, parseInt(req.query.limit, 10) || 6));
 

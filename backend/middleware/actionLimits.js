@@ -1,4 +1,5 @@
 const rateLimit = require("express-rate-limit");
+const { normalizeRole } = require("../utils/roles");
 
 /**
  * Per-user action limits.
@@ -34,6 +35,10 @@ function perUserLimiter({ windowMs, limit, message }) {
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: message },
+    skip: (req) => {
+      const role = normalizeRole(req.profile?.role);
+      return role === "superadmin" || role === "admin";
+    },
     keyGenerator: (req) =>
       req.user?.id ? `user:${req.user.id}` : rateLimit.ipKeyGenerator(req.ip),
   });
@@ -110,8 +115,12 @@ const thesisUploadLimiter = perUserLimiter({
 
 // ---- read-side expensive work ---------------------------------------------
 
-// Search has no per-user limit by design. The global IP limiter in app.js is
-// still the backstop for raw request volume.
+const searchLimiter = perUserLimiter({
+  windowMs: MINUTE,
+  limit: parseLimit(process.env.RATE_LIMIT_SEARCH_MAX, 30),
+  message: "Too many search requests. Please slow down.",
+});
+
 const linkPreviewLimiter = perUserLimiter({
   windowMs: MINUTE,
   limit: parseLimit(process.env.RATE_LIMIT_PREVIEW_MAX, 10),
@@ -147,6 +156,7 @@ module.exports = {
   commentCreateLimiter,
   commentDailyLimiter,
   thesisUploadLimiter,
+  searchLimiter,
   linkPreviewLimiter,
   likeLimiter,
   verificationOtpLimiter,
