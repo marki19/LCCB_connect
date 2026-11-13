@@ -49,3 +49,4 @@ describe("Unified Database Schema (init-schema.sql)", () => {
     assert.strictEqual(Number(migs.rows[0].count), 45, "Should have 45 baseline migrations recorded");
   });
 });
+

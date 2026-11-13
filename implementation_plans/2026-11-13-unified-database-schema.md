@@ -47,3 +47,4 @@ flowchart TD
   - Verify all migrations register as applied.
 - **Task 5: Documentation & Git Commit**
   - Document the Linux setup command for the user and commit changes locally.
+
