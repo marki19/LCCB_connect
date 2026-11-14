@@ -108,7 +108,12 @@ export default function UserProfileScreen() {
       const res = await apiFetch(`/posts?author_id=${id}&limit=30`);
       if (res.ok) {
         const data = await res.json();
-        setPosts((data || []).map(adaptPost));
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.posts)
+          ? data.posts
+          : [];
+        setPosts(list.map(adaptPost));
       }
     } catch (err) {
       console.error("Failed to load user posts:", err);

@@ -83,7 +83,7 @@ export default function SuggestionCarousel() {
             { backgroundColor: colors.surface, borderColor: colors.border },
           ]}
           onPress={() => router.push(`/profile/${item.id}`)}
-          accessibilityRole="button"
+          accessibilityRole="link"
           accessibilityLabel={`View ${item.full_name || item.username || "profile"}`}
         >
           <Avatar name={item.full_name || item.username} size={56} />
@@ -103,7 +103,12 @@ export default function SuggestionCarousel() {
                 backgroundColor: sent ? colors.successSurface : colors.actionSurface,
               },
             ]}
-            onPress={() => !sent && !pendingId && void addFriend(item.id)}
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              if (!sent && !pendingId) {
+                void addFriend(item.id);
+              }
+            }}
             disabled={sent || pendingId === item.id}
             accessibilityRole="button"
             accessibilityLabel={sent ? "Friend request sent" : "Add friend"}

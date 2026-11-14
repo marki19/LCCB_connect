@@ -215,7 +215,8 @@ const getPublicProfile = async (targetId, viewerId = null) => {
       p.department_id,
       p.course_id,
       p.created_at,
-      p.verified_status,
+      p.verification_status,
+      p.verification_status AS verified_status,
       d.name AS department_name,
       c.name AS course_name,
       (
@@ -277,6 +278,7 @@ const getPublicProfile = async (targetId, viewerId = null) => {
     course_name: row.course_name,
     created_at: row.created_at,
     verified_status: row.verified_status,
+    verification_status: row.verification_status,
     friendship,
     is_self: Boolean(viewerId && String(viewerId) === String(row.id)),
     stats: {
