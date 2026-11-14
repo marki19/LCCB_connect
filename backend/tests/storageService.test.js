@@ -221,4 +221,24 @@ describe("withStorageUrls (async, private buckets)", () => {
     const out = await withStorageUrls({ id: "err1", image_url: "failed/key.jpg" });
     assert.equal(out.image_url, "failed/key.jpg");
   });
+
+  it("preserves Date instances without converting them to empty objects", async () => {
+    const now = new Date();
+    const input = {
+      id: "d1",
+      created_at: now,
+      nested: { updated_at: now },
+      items: [{ date: now }],
+    };
+    const outAsync = await withStorageUrls(input);
+    assert.ok(outAsync.created_at instanceof Date);
+    assert.equal(outAsync.created_at.getTime(), now.getTime());
+    assert.ok(outAsync.nested.updated_at instanceof Date);
+    assert.ok(outAsync.items[0].date instanceof Date);
+
+    const outSync = withStorageUrlsSync(input);
+    assert.ok(outSync.created_at instanceof Date);
+    assert.equal(outSync.created_at.getTime(), now.getTime());
+    assert.ok(outSync.nested.updated_at instanceof Date);
+  });
 });

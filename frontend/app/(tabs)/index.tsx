@@ -188,8 +188,12 @@ export default function HomeScreen() {
               preview_metadata: row.preview_metadata || null,
               likes: row.likes || 0,
               comments: row.comments || 0,
-              createdAt: new Date(row.created_at).toLocaleDateString(),
-              rawDate: new Date(row.created_at).getTime(),
+              createdAt: row.created_at && !Number.isNaN(new Date(row.created_at).getTime())
+                ? new Date(row.created_at).toLocaleDateString()
+                : "Just now",
+              rawDate: row.created_at && !Number.isNaN(new Date(row.created_at).getTime())
+                ? new Date(row.created_at).getTime()
+                : Date.now(),
               isLiked: Boolean(row.is_liked),
               visibility: row.visibility,
               repost_count: row.repost_count || 0,

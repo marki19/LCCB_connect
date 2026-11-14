@@ -195,7 +195,7 @@ describe("POST /api/auth/verify-signup", () => {
     const created = createUser.calls[0][0];
     assert.equal(created.id, USER_ID);
     assert.equal(created.email, NEW_EMAIL);
-    assert.equal(created.role, "student", "role never comes from the request");
+    assert.equal(created.role, "user", "role defaults to user at signup");
     assert.equal(created.full_name, "Ana Cruz", "name comes from the pending row");
 
     assert.equal(deletePendingSignup.calls.length, 1, "pending row is cleaned up");

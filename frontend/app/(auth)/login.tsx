@@ -1,9 +1,10 @@
-import { useState, useRef, type ComponentRef } from "react";
-import { Pressable, Text, View, TextInput } from "react-native";
+import { useState, useRef, useEffect, type ComponentRef } from "react";
+import { Pressable, Text, View, TextInput, Platform, ActivityIndicator } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
-import { AtSign, Eye, EyeOff, Globe, KeyRound, Lock, ShieldCheck } from "lucide-react-native";
+import { AtSign, Eye, EyeOff, KeyRound, Lock, ShieldCheck } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
+import { supabase } from "../../src/lib/supabase";
 import {
   signInWithIdentifier,
   signInWithGoogle,
@@ -16,6 +17,7 @@ import MfaSetupModal from "../../src/components/auth/MfaSetupModal";
 import Alert from "../../src/components/ui/Alert";
 import Button from "../../src/components/ui/Button";
 import TextField from "../../src/components/ui/TextField";
+import GoogleIcon from "../../src/components/icons/GoogleIcon";
 import { RADIUS, SPACE } from "../../src/lib/tokens";
 
 function Divider() {
@@ -53,6 +55,19 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const passwordInputRef = useRef<ComponentRef<typeof TextInput>>(null);
 
+  // Synchronously detect if we are returning from Google OAuth so we don't flash the login form
+  const [isOAuthReturning, setIsOAuthReturning] = useState(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return false;
+    const hasError =
+      window.location.hash.includes("error=") || window.location.search.includes("error=");
+    if (hasError) return false;
+    return (
+      window.sessionStorage?.getItem("oauth_google_pending") === "true" ||
+      window.location.hash.includes("access_token") ||
+      window.location.search.includes("code=")
+    );
+  });
+
   // MFA Challenge & Setup state
   const [showMfaChallenge, setShowMfaChallenge] = useState(false);
   const [showMfaEnrollModal, setShowMfaEnrollModal] = useState(false);
@@ -81,12 +96,165 @@ export default function LoginScreen() {
   const showEmailFormatError =
     trimmedIdentifier.length > 0 && !isValidEmailDomain && !isValidStudentId && !isValidUsername;
 
+  // Handle returning from web OAuth redirect
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    let active = true;
+
+    async function handleOAuthReturn() {
+      try {
+        const hash = typeof window !== "undefined" ? window.location.hash : "";
+        const search = typeof window !== "undefined" ? window.location.search : "";
+        const isOAuthPending =
+          typeof window !== "undefined" &&
+          window.sessionStorage?.getItem("oauth_google_pending") === "true";
+        const hasOAuthParam = hash.includes("access_token") || search.includes("code=") || hash.includes("error=") || search.includes("error=");
+
+        // Only run when in an active OAuth flow or returning with OAuth params
+        if (!isOAuthPending && !hasOAuthParam) {
+          setIsOAuthReturning(false);
+          return;
+        }
+
+        // Clean up pending flag so it only runs once per OAuth flow
+        if (typeof window !== "undefined") {
+          window.sessionStorage?.removeItem("oauth_google_pending");
+        }
+
+        // Check if Google / Supabase returned an OAuth error (e.g. domain mismatch / access denied)
+        const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
+        const searchParams = new URLSearchParams(search.replace(/^\?/, ""));
+        const oauthError =
+          hashParams.get("error_description") ||
+          hashParams.get("error") ||
+          searchParams.get("error_description") ||
+          searchParams.get("error");
+
+        if (oauthError) {
+          if (typeof window !== "undefined" && window.history?.replaceState) {
+            window.history.replaceState(null, "", window.location.pathname);
+          }
+          await supabase.auth.signOut().catch(() => {});
+          if (active) {
+            setIsOAuthReturning(false);
+            setGeneralError("Only @lccbonline.edu.ph accounts are allowed. Please sign in with your school Google account.");
+          }
+          return;
+        }
+
+        let accessToken: string | null = null;
+        if (hash.includes("access_token")) {
+          accessToken = hashParams.get("access_token");
+        }
+
+        if (!accessToken) {
+          const { data } = await supabase.auth.getSession();
+          accessToken = data?.session?.access_token || null;
+        }
+
+        // If Supabase hasn't finished parsing the hash yet, wait briefly for auth change
+        if (!accessToken) {
+          accessToken = await new Promise<string | null>((resolve) => {
+            const timer = setTimeout(() => resolve(null), 1000);
+            const {
+              data: { subscription },
+            } = supabase.auth.onAuthStateChange((_event, session) => {
+              if (session?.access_token) {
+                clearTimeout(timer);
+                subscription.unsubscribe();
+                resolve(session.access_token);
+              }
+            });
+          });
+        }
+
+        if (accessToken && active) {
+          setLoading(true);
+          setGeneralError("");
+          clearAuthNotice();
+
+          if (typeof window !== "undefined" && window.history?.replaceState) {
+            window.history.replaceState(null, "", window.location.pathname);
+          }
+
+          const result = await signInWithGoogle(undefined, accessToken);
+          if (result && typeof result === "object" && "mfa_required" in result) {
+            setMfaChallengeToken(result.challenge_token);
+            setShowMfaChallenge(true);
+            setIsOAuthReturning(false);
+            return;
+          }
+          if (result && typeof result === "object" && "mfa_enrollment_required" in result) {
+            setPendingEnrollment(result);
+            setShowMfaEnrollModal(true);
+            setIsOAuthReturning(false);
+            return;
+          }
+
+          // Immediately navigate to main app tabs on successful Google sign-in
+          router.replace("/(tabs)");
+          return;
+        } else {
+          // No access token received - OAuth did not produce a session
+          await supabase.auth.signOut().catch(() => {});
+          if (active) {
+            setIsOAuthReturning(false);
+            setGeneralError("Only @lccbonline.edu.ph accounts are allowed. Please sign in with your school Google account.");
+          }
+        }
+      } catch (err: any) {
+        // Sign out of Supabase client on error (e.g. personal email rejected)
+        await supabase.auth.signOut().catch(() => {});
+        if (active) {
+          setIsOAuthReturning(false);
+          setGeneralError(err?.message || "Only @lccbonline.edu.ph accounts are allowed. Please sign in with your school Google account.");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    handleOAuthReturn();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   async function signInWithGoogleHandler() {
     setLoading(true);
     setGeneralError("");
     clearAuthNotice();
 
     try {
+      if (Platform.OS === "web") {
+        if (typeof window !== "undefined") {
+          window.sessionStorage?.setItem("oauth_google_pending", "true");
+        }
+        const redirectUri =
+          typeof window !== "undefined" ? `${window.location.origin}/(auth)/login` : undefined;
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: redirectUri,
+            queryParams: {
+              prompt: "select_account",
+              hd: "lccbonline.edu.ph",
+            },
+          },
+        });
+        if (error) {
+          if (typeof window !== "undefined") {
+            window.sessionStorage?.removeItem("oauth_google_pending");
+          }
+          throw error;
+        }
+        return;
+      }
+
       // Dynamic import to avoid breaking Expo Go (requires dev build)
       const { GoogleSignin } = await import("@react-native-google-signin/google-signin");
 
@@ -243,7 +411,14 @@ export default function LoginScreen() {
       {successMessage ? <Alert tone="success" message={successMessage} /> : null}
       {errorMessage ? <Alert tone="error" message={errorMessage} /> : null}
 
-      {showMfaChallenge ? (
+      {isOAuthReturning ? (
+        <View style={{ paddingVertical: SPACE.x8, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ marginTop: SPACE.x4, color: colors.textSecondary, fontSize: 14, fontWeight: "500" }}>
+            Signing in with Google...
+          </Text>
+        </View>
+      ) : showMfaChallenge ? (
         <View>
           <View
             style={{
@@ -325,24 +500,6 @@ export default function LoginScreen() {
             error={emailError || (showEmailFormatError ? "Must be an @lccbonline.edu.ph address, a student ID, or a username" : "")}
           />
 
-          {/* Academic Institution Tag */}
-          <View
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 4,
-              borderRadius: 12,
-              backgroundColor: colors.primarySurface,
-              borderWidth: 1,
-              borderColor: colors.primary,
-              marginBottom: SPACE.x4,
-              alignSelf: "center",
-            }}
-          >
-            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.primary, letterSpacing: 1.2, textTransform: "uppercase" }}>
-              La Consolacion College Bacolod
-            </Text>
-          </View>
-
           <TextField
             ref={passwordInputRef}
             label="Password"
@@ -396,7 +553,7 @@ export default function LoginScreen() {
           <Button
             label="Continue with Google"
             variant="secondary"
-            icon={Globe}
+            icon={GoogleIcon}
             onPress={() => void signInWithGoogleHandler()}
             disabled={loading}
             fullWidth

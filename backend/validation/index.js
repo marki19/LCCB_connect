@@ -380,6 +380,7 @@ const updateProfileSchema = z
     ...profileFields,
     role: z
       .enum([
+        "user",
         "student",
         "faculty",
         "departmentAdmin",
@@ -451,6 +452,7 @@ const friendRequestSchema = z.object({ addressee_id: requiredUuid() }).strict();
 
 // ---- admin console (SPEC-superadmin-console.md) ----------------------------
 const CanonicalRole = z.enum([
+  "user",
   "student",
   "faculty",
   "departmentAdmin",

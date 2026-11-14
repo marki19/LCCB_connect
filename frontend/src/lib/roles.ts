@@ -5,6 +5,7 @@
  * mirror its rank rules so controls can be disabled before a request is made.
  */
 export type CanonicalRole =
+  | "user"
   | "student"
   | "faculty"
   | "departmentAdmin"
@@ -12,6 +13,7 @@ export type CanonicalRole =
   | "superadmin";
 
 const RANK: Record<CanonicalRole, number> = {
+  user: 0,
   student: 0,
   faculty: 1,
   departmentAdmin: 2,
@@ -20,6 +22,7 @@ const RANK: Record<CanonicalRole, number> = {
 };
 
 const CANONICAL: Record<string, CanonicalRole> = {
+  user: "user",
   student: "student",
   faculty: "faculty",
   departmentadmin: "departmentAdmin",

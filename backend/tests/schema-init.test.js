@@ -46,7 +46,7 @@ describe("Unified Database Schema (init-schema.sql)", () => {
 
     // Verify _migrations version tracking records
     const migs = await pg.query("SELECT COUNT(*) AS count FROM public._migrations;");
-    assert.strictEqual(Number(migs.rows[0].count), 46, "Should have 46 baseline migrations recorded");
+    assert.strictEqual(Number(migs.rows[0].count), 47, "Should have 47 baseline migrations recorded");
   });
 });
 

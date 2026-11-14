@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   bio TEXT,
   course TEXT,
   year_level TEXT,
-  role TEXT DEFAULT 'student' CHECK (
+  role TEXT DEFAULT 'user' CHECK (
     role IN (
-      'student', 'faculty', 'departmentAdmin', 'department_admin',
+      'user', 'student', 'faculty', 'departmentAdmin', 'department_admin',
       'admin', 'superadmin', 'superAdmin'
     )
   ),

@@ -285,10 +285,11 @@ async function bulkSignBucket(bucket, keys, { expiresIn = DEFAULT_SIGNED_URL_EXP
  * ask the backend for a signed URL. Used by `withStorageUrlsSync`.
  */
 function withStorageUrlsSync(value) {
+  if (value instanceof Date) return value;
   if (Array.isArray(value)) {
     return value.map((item) => withStorageUrlsSync(item));
   }
-  if (value && typeof value === "object" && !Array.isArray(value)) {
+  if (value && typeof value === "object") {
     const output = { ...value };
     for (const [field, bucket] of Object.entries(FILE_FIELD_BUCKETS)) {
       if (typeof output[field] === "string" && !isAbsoluteUrl(output[field])) {
@@ -297,7 +298,7 @@ function withStorageUrlsSync(value) {
         }
       }
     }
-    if (output.author && typeof output.author === "object") {
+    if (output.author && typeof output.author === "object" && !(output.author instanceof Date)) {
       if (typeof output.author.avatar_url === "string" && !isAbsoluteUrl(output.author.avatar_url)) {
         output.author.avatar_url = publicStorageUrl("avatars", output.author.avatar_url);
       }
@@ -308,7 +309,7 @@ function withStorageUrlsSync(value) {
 }
 
 function collectStorageKeys(value, bucketKeys) {
-  if (!value) return;
+  if (!value || value instanceof Date) return;
   if (Array.isArray(value)) {
     for (const item of value) collectStorageKeys(item, bucketKeys);
     return;
@@ -331,7 +332,7 @@ function collectStorageKeys(value, bucketKeys) {
       }
     }
     for (const [k, v] of Object.entries(value)) {
-      if (v && typeof v === "object" && k !== "image_urls") {
+      if (v && typeof v === "object" && !(v instanceof Date) && k !== "image_urls") {
         collectStorageKeys(v, bucketKeys);
       }
     }
@@ -356,6 +357,7 @@ async function resolveAllBuckets(bucketKeys) {
 }
 
 function applyStorageUrls(value, resolvedMap) {
+  if (value instanceof Date) return value;
   if (Array.isArray(value)) {
     return value.map((item) => applyStorageUrls(item, resolvedMap));
   }
@@ -378,14 +380,14 @@ function applyStorageUrls(value, resolvedMap) {
         return key;
       });
     }
-    if (output.author && typeof output.author === "object") {
+    if (output.author && typeof output.author === "object" && !(output.author instanceof Date)) {
       output.author = { ...output.author };
       if (typeof output.author.avatar_url === "string" && !isAbsoluteUrl(output.author.avatar_url)) {
         output.author.avatar_url = publicStorageUrl("avatars", output.author.avatar_url);
       }
     }
     for (const [k, v] of Object.entries(output)) {
-      if (v && typeof v === "object" && k !== "image_urls" && k !== "author") {
+      if (v && typeof v === "object" && !(v instanceof Date) && k !== "image_urls" && k !== "author") {
         output[k] = applyStorageUrls(v, resolvedMap);
       }
     }

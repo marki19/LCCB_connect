@@ -17,6 +17,7 @@ const ROLES = {
   DEPARTMENT_ADMIN: "departmentAdmin",
   FACULTY: "faculty",
   STUDENT: "student",
+  USER: "user",
 };
 
 const ADMIN_ROLES = ["admin", "superadmin", "superAdmin"];
@@ -36,6 +37,7 @@ const FACULTY_ROLES = [
   "superAdmin",
 ];
 const ALL_ROLES = [
+  "user",
   "student",
   "faculty",
   "departmentAdmin",

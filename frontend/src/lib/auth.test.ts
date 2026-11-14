@@ -152,6 +152,18 @@ describe("auth library", () => {
       });
     });
 
+    it("signs in with Supabase access token (web OAuth)", async () => {
+      const mockTokens = { access_token: "test-token", refresh_token: "refresh-token" };
+      mockApiJson.mockResolvedValue(mockTokens);
+
+      await auth.signInWithGoogle(undefined, "supabase-access-token-456");
+
+      expect(mockApiJson).toHaveBeenCalledWith("/auth/google", {
+        method: "POST",
+        body: JSON.stringify({ access_token: "supabase-access-token-456" }),
+      });
+    });
+
     it("throws on Google sign-in failure", async () => {
       mockApiJson.mockRejectedValue(new ApiError("Google sign-in failed", 401));
 

@@ -130,7 +130,7 @@ async function signTokens(user, { aal = "aal1" } = {}) {
     user_metadata: {
       full_name: user.full_name || null,
       username: user.username || null,
-      role: user.role || "student",
+      role: user.role || "user",
     },
     aal,
     iat: nowSec,

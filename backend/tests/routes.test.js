@@ -777,15 +777,15 @@ describe("post list filters", () => {
         assert.equal(call[0].q.length, 100);
       });
 
-  it("rejects a malformed author_id instead of letting Postgres cast it", async () => {
-      const res = await request(app)
-        .get("/api/posts?author_id=not-a-uuid")
-        .set(AUTH);
+  it("passes text author_id filter to visiblePostsFor", async () => {
+    const res = await request(app)
+      .get("/api/posts?author_id=adm_test123")
+      .set(AUTH);
 
-      assert.equal(res.status, 400);
-      assert.deepEqual(res.body, { error: "Invalid author_id" });
-      assert.equal(m.visiblePostsFor.calls.length, 0);
-    });
+    assert.equal(res.status, 200);
+    const call = m.visiblePostsFor.calls.at(-1);
+    assert.equal(call[0].authorId, "adm_test123");
+  });
 });
 
 describe("thesis list filters", () => {

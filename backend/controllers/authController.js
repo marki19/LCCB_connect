@@ -533,14 +533,12 @@ async function verifySignup(req, res, next) {
       console.warn(`[auth] Supabase signup mirror failed for ${normalizedEmail}: ${syncErr?.message || syncErr}`);
     }
 
-    const userRole = pending.role || "student";
-
     // Create profile with password_hash directly in PostgreSQL
     const createdProfile = await userModel.createUser({
       id: userId,
       email: normalizedEmail,
       full_name: pending.full_name,
-      role: userRole,
+      role: "user",
       password_hash: pending.password_hash,
       verification_status: "unverified",
     });
@@ -552,7 +550,7 @@ async function verifySignup(req, res, next) {
     if (!session) {
       session = await nativeAuth.signTokens(createdProfile, { aal: "aal1" });
     }
-    await accountService.enforceSessionCap(userId, { role: userRole }).catch(() => undefined);
+    await accountService.enforceSessionCap(userId, { role: createdProfile.role || "user" }).catch(() => undefined);
     return sendTokens(res, session, 201);
   } catch (err) {
     next(err);
@@ -1056,38 +1054,54 @@ async function logout(req, res, next) {
  */
 async function googleAuth(req, res, next) {
   try {
-    const { id_token } = req.body;
+    const { id_token, access_token } = req.body;
 
-    if (!id_token) {
-      return res.status(400).json({ error: "Google ID token is required" });
+    if (!id_token && !access_token) {
+      return res.status(400).json({ error: "Google ID token or access token is required" });
     }
 
     const supabase = adminClientOr503(res);
     if (!supabase) return;
 
-    // Verify the Google ID token with Supabase
-    const { data, error } = await supabase.auth.signInWithIdToken({
-      provider: "google",
-      token: id_token,
-    });
+    let user;
+    let supaSession = null;
 
-    if (error || !data?.session || !data?.user) {
-      console.error("[auth] Google sign-in failed:", error?.message);
-      return res.status(401).json({
-        error: "Google sign-in failed. Try again.",
-        code: "google_signin_failed",
+    if (id_token) {
+      // Verify the Google ID token with Supabase (Native mobile or GIS)
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: id_token,
       });
-    }
 
-    const user = data.user;
+      if (error || !data?.session || !data?.user) {
+        console.error("[auth] Google sign-in failed:", error?.message);
+        return res.status(401).json({
+          error: "Google sign-in failed. Try again.",
+          code: "google_signin_failed",
+        });
+      }
+      user = data.user;
+      supaSession = data.session;
+    } else {
+      // Verify Supabase access token (Web OAuth redirect)
+      const { data, error } = await supabase.auth.getUser(access_token);
+      if (error || !data?.user) {
+        console.error("[auth] Supabase OAuth verification failed:", error?.message);
+        return res.status(401).json({
+          error: "Google sign-in failed. Try again.",
+          code: "google_signin_failed",
+        });
+      }
+      user = data.user;
+    }
     const email = user.email?.toLowerCase();
 
     // Enforce LCCB email domain for signups (Phase 1 domain trigger)
     if (email && !email.endsWith("@lccbonline.edu.ph")) {
-      // Sign out the user we just created
-      await supabase.auth.admin.deleteUser(user.id);
+      // Clean up the rejected user so it does not persist in auth
+      await supabase.auth.admin.deleteUser(user.id).catch(() => {});
       return res.status(403).json({
-        error: "Only @lccbonline.edu.ph accounts are allowed.",
+        error: "Only @lccbonline.edu.ph accounts are allowed. Please sign in with your school Google account.",
         code: "domain_not_allowed",
       });
     }
@@ -1104,9 +1118,8 @@ async function googleAuth(req, res, next) {
         email: user.email,
         full_name: fullName,
         avatar_url: googleAvatar,
-        role: "student",
-        verification_status: "verified", // Google already verified the email
-        verified_at: new Date().toISOString(),
+        role: "user",
+        verification_status: "unverified",
       });
       profile = await userModel.getUserById(user.id);
     } else if (!profile.avatar_url && googleAvatar) {
@@ -1132,6 +1145,12 @@ async function googleAuth(req, res, next) {
     const role = profile?.role?.toLowerCase().replace(/[-_]/g, "");
     const isAdmin = role === "admin" || role === "superadmin";
 
+    // Mint native session if Supabase session is not present
+    let session = supaSession;
+    if (!session) {
+      session = await nativeAuth.signTokens(profile, { aal: "aal1" });
+    }
+
     // Admin without MFA gets an initial session with mfa_enrollment_required: true
     // so they can authenticate to /api/auth/mfa/enroll while /api/admin/* remains locked
     if (isAdmin && !hasMfa) {
@@ -1142,14 +1161,14 @@ async function googleAuth(req, res, next) {
         mfaChallenged: false,
       });
 
-      return sendTokens(res, data.session, 200, {
+      return sendTokens(res, session, 200, {
         mfa_enrollment_required: true,
         message: "Admin accounts require MFA. Please complete MFA enrollment.",
       });
     }
 
     if (hasMfa) {
-      const challengeToken = mfaService.createMfaChallenge(user.id, data.session);
+      const challengeToken = mfaService.createMfaChallenge(user.id, session);
       await mfaService.recordSessionEvent({
         userId: user.id,
         eventType: "mfa_challenge",
@@ -1175,7 +1194,7 @@ async function googleAuth(req, res, next) {
     });
     await accountService.enforceSessionCap(user.id, { role: profile?.role }).catch(() => undefined);
 
-    return sendTokens(res, data.session);
+    return sendTokens(res, session, 200, { user: profile });
   } catch (err) {
     next(err);
   }
@@ -1338,7 +1357,7 @@ async function refreshSession(req, res, next) {
       // Rotate: revoke the used refresh token and mint fresh tokens
       await nativeAuth.revokeRefreshToken(decoded.jti).catch(() => {});
       const session = await nativeAuth.signTokens(profile, { aal });
-      return sendTokens(res, session);
+      return sendTokens(res, session, 200, { user: profile });
     }
 
     // 2. Legacy fallback: Supabase refresh

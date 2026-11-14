@@ -100,6 +100,9 @@ function shapeAnnouncement(row) {
     allow_reposts: row.allow_reposts,
     repost_count: row.repost_count,
     author_id: row.author_id,
+    author_name: row.author_name || null,
+    actor_username: row.actor_username || null,
+    recipients: Number(row.recipients || 0),
     created_at: row.created_at,
     edited_at: row.edited_at,
   };

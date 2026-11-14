@@ -76,9 +76,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   bio TEXT,
   course TEXT,
   year_level TEXT,
-  role TEXT DEFAULT 'student' CHECK (
+  role TEXT DEFAULT 'user' CHECK (
     role IN (
-      'student', 'faculty', 'departmentAdmin', 'department_admin',
+      'user', 'student', 'faculty', 'departmentAdmin', 'department_admin',
       'admin', 'superadmin', 'superAdmin'
     )
   ),
@@ -135,24 +135,51 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON public.refresh_tokens (
 CREATE TABLE IF NOT EXISTS public.profile_verification_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'student',
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined')),
   full_name TEXT NOT NULL,
   student_id TEXT NOT NULL,
-  department_id UUID NOT NULL REFERENCES public.departments(id),
-  course_id UUID NOT NULL REFERENCES public.courses(id),
-  year_level TEXT NOT NULL,
+  department_id UUID REFERENCES public.departments(id),
+  course_id UUID REFERENCES public.courses(id),
+  year_level TEXT,
   birthdate DATE,
   submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   reviewed_by TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
   reviewed_at TIMESTAMPTZ,
   review_note TEXT,
+  escalated_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_verification_role_shape CHECK (
+    role = ANY (ARRAY['student','faculty','departmentAdmin','admin'])
+    AND (
+      (
+        role = 'student'
+        AND department_id IS NOT NULL
+        AND course_id IS NOT NULL
+        AND year_level IS NOT NULL
+      )
+      OR (
+        role = ANY (ARRAY['faculty','departmentAdmin'])
+        AND department_id IS NOT NULL
+        AND course_id IS NULL
+        AND year_level IS NULL
+      )
+      OR (
+        role = 'admin'
+        AND department_id IS NULL
+        AND course_id IS NULL
+        AND year_level IS NULL
+      )
+    )
+  )
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_verification_one_pending
   ON public.profile_verification_requests (user_id) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_verification_status
   ON public.profile_verification_requests (status, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_verification_escalated
+  ON public.profile_verification_requests (escalated_at) WHERE escalated_at IS NOT NULL;
 
 -- Verification OTPs (for faculty/admin invites)
 CREATE TABLE IF NOT EXISTS public.verification_otp (
@@ -564,5 +591,6 @@ INSERT INTO public._migrations (name) VALUES
   ('043_profiles_role_norm_index.sql'),
   ('044_friendship_suggestions.sql'),
   ('045_native_auth.sql'),
-  ('046_refresh_tokens.sql')
+  ('046_refresh_tokens.sql'),
+  ('047_user_role.sql')
 ON CONFLICT (name) DO NOTHING;

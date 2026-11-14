@@ -1,0 +1,25 @@
+# Task List: Onboarding User Role & Request Routing
+
+- [ ] A.1: Create `backend/migrations/047_user_role.sql`
+- [ ] A.2: Apply migration 047 to live DB
+- [ ] A.3: Mirror changes in `backend/schema.sql` and `backend/init-schema.sql`
+- [ ] B.1: Update `backend/utils/roles.js` (ALL_ROLES gains 'user')
+- [ ] B.2: Update `backend/middleware/auth.js` (ROLE_RANK user: 0)
+- [ ] B.3: Update `backend/validation/index.js` (updateProfileSchema & CanonicalRole gain 'user')
+- [ ] B.4: Update `frontend/src/lib/roles.ts` (CanonicalRole & RANK gain user)
+- [ ] B.5: Update token / user creation fallbacks in `authController.js` and `nativeAuth.js` to 'user'
+- [ ] C.1: Update `verifySignup` to assign 'user' role
+- [ ] C.2: Update `googleAuth` to assign 'user' role
+- [ ] D.1: Update `backend/services/verificationPolicy.js` with SELECTABLE_ROLES & body role validation
+- [ ] D.2: Update `backend/controllers/verificationController.js` (require role on POST, preserve on PUT, return selectable_roles on GET)
+- [ ] D.3: Update `verificationSubmitSchema` in `backend/validation/index.js` to validate selectable role
+- [ ] E.1: Update `backend/models/verificationModel.js` approve() to assign role conditionally from request.role
+- [ ] F.1: Implement escalation mechanism in `verificationController.js` when department has no departmentAdmin
+- [ ] F.2: Update `getQueue` and `canReview` to handle escalated requests
+- [ ] G.1: Update `frontend/app/_layout.tsx` to direct unverified users to onboarding
+- [ ] G.2: Update `frontend/src/components/IdentityBanner.tsx` for 'user'
+- [ ] G.3: Update `frontend/app/create.tsx` and `frontend/app/post/[id].tsx` student checks
+- [ ] G.4: Update `frontend/app/onboarding.tsx` with role selection step
+- [ ] G.5: Update `frontend/src/components/verification/VerificationForm.tsx` to carry role in submit payload
+- [ ] G.6: Update `frontend/app/(admin)/verification.tsx` and `frontend/app/(admin)/users/index.tsx` for 'user'
+- [ ] H.1: Update and run test suites (backend & frontend)

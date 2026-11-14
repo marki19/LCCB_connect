@@ -6,6 +6,7 @@ import {
   type SessionUser,
 } from "./session";
 import { apiJson, ApiError } from "./api";
+import { supabase } from "./supabase";
 
 export type SessionTokens = {
   access_token: string;
@@ -95,14 +96,17 @@ export async function logout(): Promise<void> {
       process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api"
     ).replace(/\/+$/, "");
 
-    await fetch(`${API_URL}/auth/logout`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    }).catch(() => {});
+    await Promise.allSettled([
+      fetch(`${API_URL}/auth/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      }),
+      supabase.auth.signOut(),
+    ]);
   } finally {
     await clearSession();
   }
@@ -155,15 +159,19 @@ export async function requestSignup(email: string, password: string, fullName: s
 }
 
 /**
- * Signs in with Google using an ID token.
- * Requires @react-native-google-signin/google-signin (dev build only).
+ * Signs in with Google using an ID token (native/GIS) or Supabase access token (web OAuth).
  */
 export async function signInWithGoogle(
-  idToken: string
+  idToken?: string,
+  accessToken?: string
 ): Promise<void | MfaChallengeResponse | MfaEnrollmentRequiredResponse> {
+  const body: { id_token?: string; access_token?: string } = {};
+  if (idToken) body.id_token = idToken;
+  if (accessToken) body.access_token = accessToken;
+
   const response = await apiJson<SessionTokens | MfaChallengeResponse | MfaEnrollmentRequiredResponse>("/auth/google", {
     method: "POST",
-    body: JSON.stringify({ id_token: idToken }),
+    body: JSON.stringify(body),
   });
 
   if ("mfa_required" in response && response.mfa_required === true) {

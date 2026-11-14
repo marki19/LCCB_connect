@@ -231,6 +231,7 @@ function isStudent(req) {
  * An unrecognised or absent role ranks -1, so it can never manage anyone.
  */
 const ROLE_RANK = {
+  user: 0,
   student: 0,
   guest: 0,
   faculty: 1,
