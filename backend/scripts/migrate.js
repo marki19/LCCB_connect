@@ -75,15 +75,19 @@ async function runMigrations() {
     console.log(`==> Successfully applied all ${pending.length} migration(s).`);
   } finally {
     client.release();
-    await db.pool.end();
   }
 }
 
 if (require.main === module) {
-  runMigrations().catch((err) => {
-    console.error("Migration execution failed:", err);
-    process.exit(1);
-  });
+  runMigrations()
+    .then(async () => {
+      await db.pool.end();
+    })
+    .catch(async (err) => {
+      console.error("Migration execution failed:", err);
+      await db.pool.end().catch(() => {});
+      process.exit(1);
+    });
 }
 
 module.exports = { runMigrations };

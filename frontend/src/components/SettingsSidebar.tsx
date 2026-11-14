@@ -32,7 +32,6 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useSettingsSidebar } from "../contexts/SettingsSidebarContext";
-import { supabase } from "../lib/supabase";
 import { elevation, focusRing, RADIUS, SPACE, TYPE } from "../lib/tokens";
 import SecuritySettingsModal from "./settings/SecuritySettingsModal";
 
@@ -122,7 +121,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { colors, isDark, toggleTheme } = useTheme();
-  const { profile, isGuest } = useAuth();
+  const { profile, isGuest, signOut } = useAuth();
 
   const sidebarWidth =
     Platform.OS === "web" && width >= 768
@@ -163,7 +162,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
 
   const handleSignOut = async () => {
     onClose();
-    await supabase.auth.signOut();
+    await signOut();
   };
 
   const go = (path: string) => {

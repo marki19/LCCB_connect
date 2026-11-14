@@ -6,6 +6,7 @@ const request = require("supertest");
 const { stub } = require("./stub.helper");
 const auth = require("../middleware/auth");
 const userModel = require("../models/userModel");
+const db = require("../db");
 
 // Stubs for requireAuth & loadProfile
 const getUser = stub(auth.supabase.auth, "getUser", async () => ({
@@ -196,5 +197,42 @@ describe("Backend Local File Storage Service", () => {
 
     assert.strictEqual(res.status, 400);
     assert.ok(res.body.error?.includes("Invalid storage category"));
+  });
+
+  test("GET /api/files/theses/:filename enforces auth and ownership", async () => {
+    const saved = await saveLocalFile({
+      category: "theses",
+      originalName: "thesis.pdf",
+      buffer: Buffer.from("%PDF-1.4 test content"),
+    });
+
+    // 1. Unauthenticated request -> 401
+    const unauthRes = await request(app).get(`/api/files/theses/${saved.filename}`);
+    assert.strictEqual(unauthRes.status, 401);
+
+    // 2. Authenticated as non-owner -> 404
+    getUser.setImpl(async () => ({
+      data: { user: { id: "other-user-id", email: "other@lccbonline.edu.ph" } },
+      error: null,
+    }));
+    stub(db, "query", async () => ({ rows: [{ uploader_id: "owner-user-id" }] }));
+
+    const nonOwnerRes = await request(app)
+      .get(`/api/files/theses/${saved.filename}`)
+      .set("Authorization", "Bearer valid-token");
+    assert.strictEqual(nonOwnerRes.status, 404);
+
+    // 3. Authenticated as owner -> 200
+    getUser.setImpl(async () => ({
+      data: { user: { id: "owner-user-id", email: "owner@lccbonline.edu.ph" } },
+      error: null,
+    }));
+
+    const ownerRes = await request(app)
+      .get(`/api/files/theses/${saved.filename}`)
+      .set("Authorization", "Bearer valid-token");
+    assert.strictEqual(ownerRes.status, 200);
+
+    await deleteLocalFile("theses", saved.filename);
   });
 });

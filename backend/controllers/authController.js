@@ -13,6 +13,7 @@ const { record, ACTIONS } = require("../services/auditService");
 const { lockoutIntervalFor } = require("../utils/lockout");
 const { normalizeRole } = require("../utils/roles");
 const passwordResetModel = require("../models/passwordResetModel");
+const { sanitizeProfile } = require("../utils/profile");
 
 const GENERIC_LOGIN_ERROR = "Invalid email, student ID, or password";
 const GENERIC_CODE_ERROR = "That code is incorrect or has expired. Request a new one.";
@@ -37,10 +38,20 @@ function adminClientOr503(res) {
 }
 
 function sendTokens(res, session, status = 200, extra = {}) {
+  const userId = session.user?.id || session.user_id || extra.user?.id;
+  const user = session.user
+    ? sanitizeProfile(session.user)
+    : extra.user
+    ? sanitizeProfile(extra.user)
+    : userId
+    ? { id: userId }
+    : undefined;
+
   return res.status(status).json({
     access_token: session.access_token,
     refresh_token: session.refresh_token,
     expires_at: session.expires_at,
+    ...(user ? { user } : {}),
     ...extra,
   });
 }
@@ -120,7 +131,7 @@ async function login(req, res, next) {
           aal: "aal1",
           mfaChallenged: false,
         });
-        const session = nativeAuth.signTokens(user, { aal: "aal1" });
+        const session = await nativeAuth.signTokens(user, { aal: "aal1" });
         return sendTokens(res, session, 200, {
           mfa_enrollment_required: true,
           message: "Admin accounts require MFA. Please complete MFA enrollment.",
@@ -128,7 +139,7 @@ async function login(req, res, next) {
       }
 
       if (hasMfa) {
-        const session = nativeAuth.signTokens(user, { aal: "aal1" });
+        const session = await nativeAuth.signTokens(user, { aal: "aal1" });
         const challengeToken = mfaService.createMfaChallenge(user.id, session);
         await mfaService.recordSessionEvent({
           userId: user.id,
@@ -152,7 +163,7 @@ async function login(req, res, next) {
         mfaChallenged: false,
       });
       await accountService.enforceSessionCap(user.id, { role: user.role }).catch(() => undefined);
-      const session = nativeAuth.signTokens(user, { aal: "aal1" });
+      const session = await nativeAuth.signTokens(user, { aal: "aal1" });
       return sendTokens(res, session, 200);
     }
 
@@ -508,24 +519,28 @@ async function verifySignup(req, res, next) {
           userId = supaUser.user.id;
         }
 
-        const { data: sessionData } = await supabase.auth.signInWithPassword({
+        const { data: sessionData, error: signInError } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
           password,
         });
         if (sessionData?.session) {
           session = sessionData.session;
+        } else if (signInError) {
+          console.warn(`[auth] Supabase sign-in mirror failed for ${normalizedEmail}: ${signInError.message}`);
         }
       }
-    } catch {
-      // Standalone on-premise execution
+    } catch (syncErr) {
+      console.warn(`[auth] Supabase signup mirror failed for ${normalizedEmail}: ${syncErr?.message || syncErr}`);
     }
+
+    const userRole = pending.role || "student";
 
     // Create profile with password_hash directly in PostgreSQL
     const createdProfile = await userModel.createUser({
       id: userId,
       email: normalizedEmail,
       full_name: pending.full_name,
-      role: "student",
+      role: userRole,
       password_hash: pending.password_hash,
       verification_status: "unverified",
     });
@@ -535,9 +550,9 @@ async function verifySignup(req, res, next) {
 
     // If Supabase session is not present, mint native self-hosted session (0ms, no cloud dependencies)
     if (!session) {
-      session = nativeAuth.signTokens(createdProfile, { aal: "aal1" });
+      session = await nativeAuth.signTokens(createdProfile, { aal: "aal1" });
     }
-    await accountService.enforceSessionCap(userId, { role: "student" }).catch(() => undefined);
+    await accountService.enforceSessionCap(userId, { role: userRole }).catch(() => undefined);
     return sendTokens(res, session, 201);
   } catch (err) {
     next(err);
@@ -1001,13 +1016,31 @@ async function checkAdminSession(req, res, next) {
  */
 async function logout(req, res, next) {
   try {
-    const userId = req.user.id;
+    let userId = req.user?.id;
+    if (!userId && req.headers?.authorization) {
+      try {
+        const token = req.headers.authorization.replace(/^Bearer\s+/i, "");
+        const payload = nativeAuth.verifyAccessToken(token);
+        userId = payload.sub || payload.id;
+      } catch (_) {}
+    }
+    if (!userId && req.body?.refresh_token) {
+      try {
+        const payload = nativeAuth.verifyRefreshToken(req.body.refresh_token);
+        userId = payload.sub || payload.id;
+      } catch (_) {}
+    }
 
-    // Record logout
-    await mfaService.recordLogout({ userId, req });
+    if (userId) {
+      // Record logout
+      await mfaService.recordLogout({ userId, req }).catch(() => {});
 
-    // Clear session age cache
-    mfaService.clearSessionAgeCache(userId);
+      // Clear session age cache
+      mfaService.clearSessionAgeCache(userId);
+
+      // Revoke all native refresh tokens for this user
+      await nativeAuth.revokeAllUserRefreshTokens(userId).catch(() => {});
+    }
 
     return res.json({ message: "Logged out successfully" });
   } catch (err) {
@@ -1271,9 +1304,15 @@ async function refreshSession(req, res, next) {
       return res.status(400).json({ error: "Refresh token is required" });
     }
 
-    // 1. Verify native refresh token
+    // 1. Verify native refresh token signature & claims
     const decoded = nativeAuth.verifyRefreshToken(refresh_token);
-    if (decoded?.sub) {
+    if (decoded?.sub && decoded?.jti) {
+      // Look up jti in database to enforce revocation
+      const tokenRow = await nativeAuth.getRefreshToken(decoded.jti);
+      if (!tokenRow || tokenRow.revoked_at || new Date(tokenRow.expires_at) < new Date()) {
+        return res.status(401).json({ error: "Invalid or expired refresh token" });
+      }
+
       const profile = await userModel.getUserById(decoded.sub);
       if (!profile) {
         return res.status(401).json({ error: "User not found" });
@@ -1282,10 +1321,23 @@ async function refreshSession(req, res, next) {
         return res.status(401).json({ error: "Account locked" });
       }
       if (isSuspendedProfile(profile)) {
+        await nativeAuth.revokeAllUserRefreshTokens(profile.id).catch(() => {});
         return res.status(403).json({ error: "Account suspended" });
       }
 
-      const session = nativeAuth.signTokens(profile, { aal: "aal1" });
+      // Check admin MFA / AAL2 state
+      const role = normalizeRole(profile.role);
+      let aal = "aal1";
+      if (role === "admin" || role === "superadmin") {
+        const hasTotp = await mfaService.hasVerifiedTotp(profile.id).catch(() => false);
+        if (hasTotp) {
+          aal = "aal2";
+        }
+      }
+
+      // Rotate: revoke the used refresh token and mint fresh tokens
+      await nativeAuth.revokeRefreshToken(decoded.jti).catch(() => {});
+      const session = await nativeAuth.signTokens(profile, { aal });
       return sendTokens(res, session);
     }
 

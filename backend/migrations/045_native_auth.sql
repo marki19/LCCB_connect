@@ -5,7 +5,7 @@
 
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS password_hash TEXT,
-  ADD COLUMN IF NOT EXISTS email_confirmed_at TIMESTAMPTZ DEFAULT NOW();
+  ADD COLUMN IF NOT EXISTS email_confirmed_at TIMESTAMPTZ;
 
 -- Index on email is already present or reinforced for fast login lookup
 CREATE INDEX IF NOT EXISTS idx_profiles_email_lower ON public.profiles (LOWER(email));

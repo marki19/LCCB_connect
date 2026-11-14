@@ -46,6 +46,12 @@ const getLoginEmailByStudentId = stub(
   "getLoginEmailByStudentId",
   async () => null
 );
+const getUserAuthByIdentifier = stub(
+  userModel,
+  "getUserAuthByIdentifier",
+  async () => null
+);
+const incrementFailedLogins = stub(userModel, "incrementFailedLogins", async () => 1);
 const getUserById = stub(userModel, "getUserById", async () => undefined);
 const createUser = stub(userModel, "createUser", async (data) => ({
   id: data.id,

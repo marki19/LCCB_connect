@@ -1,5 +1,6 @@
 import { create, isAxiosError } from "axios";
-import { supabase } from "./supabase";
+import { getSession, isExpired, clearSession } from "./session";
+import { refreshSession } from "./auth";
 import type { ContentVisibility } from "../types";
 
 const API_URL = (
@@ -11,7 +12,7 @@ const API_URL = (
 // Default timeout is 15s to fail fast on stalled backends; uploads extend to 60s.
 const client = create({ baseURL: API_URL, timeout: 15000 });
 
-// Attach the Supabase Bearer token before every request and rewrite
+// Attach the Bearer token before every request and rewrite
 // guest GET paths to the public read-only endpoints.
 client.interceptors.request.use(async (config) => {
   // Allow uploads / FormData to take up to 60s
@@ -21,17 +22,18 @@ client.interceptors.request.use(async (config) => {
   if (isUpload && (config.timeout === undefined || config.timeout === 15000)) {
     config.timeout = 60000;
   }
-  let {
-    data: { session },
-  } = await supabase.auth.getSession();
+
+  let session = await getSession();
 
   // If token is expired or within 60s of expiring, proactively refresh it
-  if (session?.expires_at && session.expires_at * 1000 <= Date.now() + 60000) {
+  // (skip if the request is to /auth/refresh or /auth/logout)
+  const isAuthPath =
+    typeof config.url === "string" &&
+    (config.url.includes("/auth/refresh") || config.url.includes("/auth/logout"));
+  if (!isAuthPath && session?.access_token && isExpired(session, 60)) {
     try {
-      const { data: refreshed, error } = await supabase.auth.refreshSession();
-      if (!error && refreshed?.session) {
-        session = refreshed.session;
-      }
+      await refreshSession();
+      session = await getSession();
     } catch {
       // Continue with current session or fallback
     }
@@ -70,29 +72,32 @@ client.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const isAuthPath =
+      typeof originalRequest?.url === "string" &&
+      (originalRequest.url.includes("/auth/refresh") ||
+        originalRequest.url.includes("/auth/login"));
+
     if (
       error.response?.status === 401 &&
       originalRequest &&
-      !originalRequest._retry
+      !originalRequest._retry &&
+      !isAuthPath
     ) {
       if (error.response?.data?.code === "session_expired") {
         if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
           window.dispatchEvent(new CustomEvent("admin_session_expired"));
         }
       }
-      const errMsg = error.response?.data?.error || "";
-      if (/token|jwt/i.test(errMsg)) {
-        originalRequest._retry = true;
-        try {
-          const { data, error: refreshErr } = await supabase.auth.refreshSession();
-          if (!refreshErr && data?.session?.access_token) {
-            originalRequest.headers = originalRequest.headers || {};
-            originalRequest.headers["Authorization"] = `Bearer ${data.session.access_token}`;
-            return client(originalRequest);
-          }
-        } catch {
-          // Refresh failed
+      originalRequest._retry = true;
+      try {
+        const newAccessToken = await refreshSession();
+        if (newAccessToken) {
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
+          return client(originalRequest);
         }
+      } catch {
+        await clearSession();
       }
     }
     return Promise.reject(error);

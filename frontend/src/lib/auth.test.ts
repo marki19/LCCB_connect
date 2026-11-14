@@ -9,25 +9,31 @@ class ApiError extends Error {
 
 const { mockApiJson, mockSetSession } = vi.hoisted(() => ({
   mockApiJson: vi.fn(),
-  mockSetSession: vi.fn().mockResolvedValue({ data: { session: {} }, error: null }),
+  mockSetSession: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./api", () => ({
   apiJson: mockApiJson,
+  ApiError: class ApiError extends Error {
+    constructor(message: string, public status: number) {
+      super(message);
+      this.name = "ApiError";
+    }
+  },
+}));
+
+vi.mock("./session", () => ({
+  setSession: mockSetSession,
+  getSession: vi.fn().mockResolvedValue(null),
+  clearSession: vi.fn().mockResolvedValue(undefined),
+  getRefreshToken: vi.fn().mockResolvedValue("mock-refresh-token"),
+  getAccessToken: vi.fn().mockResolvedValue("mock-access-token"),
 }));
 
 vi.mock("expo-secure-store", () => ({
   getItemAsync: vi.fn().mockResolvedValue(null),
   setItemAsync: vi.fn().mockResolvedValue(undefined),
   deleteItemAsync: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock("./supabase", () => ({
-  supabase: {
-    auth: {
-      setSession: mockSetSession,
-    },
-  },
 }));
 
 // eslint-disable-next-line import/first
@@ -107,10 +113,12 @@ describe("auth library", () => {
           password: "password123",
         }),
       });
-      expect(mockSetSession).toHaveBeenCalledWith({
-        access_token: "test-token",
-        refresh_token: "refresh-token",
-      });
+      expect(mockSetSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          access_token: "test-token",
+          refresh_token: "refresh-token",
+        })
+      );
     });
   });
 

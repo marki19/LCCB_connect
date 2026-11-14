@@ -2,7 +2,6 @@ import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { apiFetchMultipart } from './api';
-import { supabase } from './supabase';
 
 /**
  * Per-bucket upload policy. Anything not listed here (or not matching the

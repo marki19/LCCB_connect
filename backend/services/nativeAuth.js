@@ -8,17 +8,84 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
+const db = require("../db");
 
 const BCRYPT_COST = 12;
 
 // Persistent or configured JWT secrets
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET || "lccb-native-jwt-secret-local-fallback-change-in-prod";
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || JWT_SECRET + "-refresh";
+if (!process.env.JWT_SECRET && process.env.NODE_ENV !== "test") {
+  throw new Error("FATAL: JWT_SECRET environment variable is required.");
+}
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === "test" ? "test-jwt-secret-for-unit-tests" : "");
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || (JWT_SECRET ? JWT_SECRET + "-refresh" : "");
 
-// Standard expirations
-const ADMIN_ACCESS_TTL_SEC = 24 * 60 * 60; // 24 hours
-const USER_ACCESS_TTL_SEC = 7 * 24 * 60 * 60; // 7 days
+// Standard expirations: 15-minute access token for all roles (refresh handles rotation)
+const ACCESS_TTL_SEC = 15 * 60; // 15 minutes
 const REFRESH_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
+
+/**
+ * Persists a refresh token jti row to the database.
+ */
+async function persistRefreshToken(jti, userId, expiresAt) {
+  try {
+    await db.query(
+      `INSERT INTO public.refresh_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)`,
+      [jti, userId, expiresAt]
+    );
+  } catch (err) {
+    if (process.env.NODE_ENV !== "test") {
+      console.warn(`[nativeAuth] Could not persist refresh token ${jti}: ${err.message}`);
+    }
+  }
+}
+
+/**
+ * Fetches a refresh token record by jti.
+ */
+async function getRefreshToken(jti) {
+  if (!jti) return null;
+  try {
+    const { rows } = await db.query(
+      `SELECT jti, user_id, expires_at, revoked_at FROM public.refresh_tokens WHERE jti = $1`,
+      [jti]
+    );
+    return rows[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Marks a single refresh token as revoked.
+ */
+async function revokeRefreshToken(jti) {
+  if (!jti) return false;
+  try {
+    const result = await db.query(
+      `UPDATE public.refresh_tokens SET revoked_at = NOW() WHERE jti = $1 AND revoked_at IS NULL`,
+      [jti]
+    );
+    return (result.rowCount ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Revokes all active refresh tokens for a user.
+ */
+async function revokeAllUserRefreshTokens(userId) {
+  if (!userId) return 0;
+  try {
+    const result = await db.query(
+      `UPDATE public.refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
+      [userId]
+    );
+    return result.rowCount || 0;
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * Hash a plaintext password with bcrypt.
@@ -46,12 +113,9 @@ async function verifyPassword(plaintext, hash) {
  * Mint access and refresh tokens matching Supabase's payload conventions so
  * existing client apps, components, and middlewares continue working untouched.
  */
-function signTokens(user, { aal = "aal1" } = {}) {
-  const role = user.role ? user.role.toLowerCase().replace(/[-_]/g, "") : "student";
-  const isAdmin = role === "admin" || role === "superadmin";
-  const ttlSec = isAdmin ? ADMIN_ACCESS_TTL_SEC : USER_ACCESS_TTL_SEC;
+async function signTokens(user, { aal = "aal1" } = {}) {
   const nowSec = Math.floor(Date.now() / 1000);
-  const expiresAt = nowSec + ttlSec;
+  const expiresAt = nowSec + ACCESS_TTL_SEC;
 
   const accessPayload = {
     sub: user.id,
@@ -75,21 +139,28 @@ function signTokens(user, { aal = "aal1" } = {}) {
 
   const accessToken = jwt.sign(accessPayload, JWT_SECRET);
 
+  const jti = crypto.randomUUID();
+  const refreshExpiresSec = nowSec + REFRESH_TTL_SEC;
+  const refreshExpiresAt = new Date(refreshExpiresSec * 1000);
+
   const refreshPayload = {
     sub: user.id,
-    jti: crypto.randomUUID(),
+    jti,
     token_type: "refresh",
     iat: nowSec,
-    exp: nowSec + REFRESH_TTL_SEC,
+    exp: refreshExpiresSec,
   };
 
   const refreshToken = jwt.sign(refreshPayload, JWT_REFRESH_SECRET);
+
+  // Persist refresh token row for revocation tracking
+  await persistRefreshToken(jti, user.id, refreshExpiresAt);
 
   return {
     access_token: accessToken,
     refresh_token: refreshToken,
     expires_at: expiresAt,
-    expires_in: ttlSec,
+    expires_in: ACCESS_TTL_SEC,
     token_type: "bearer",
     user: {
       id: user.id,
@@ -151,6 +222,12 @@ module.exports = {
   signTokens,
   verifyAccessToken,
   verifyRefreshToken,
+  persistRefreshToken,
+  getRefreshToken,
+  revokeRefreshToken,
+  revokeAllUserRefreshTokens,
   JWT_SECRET,
+  ACCESS_TTL_SEC,
+  REFRESH_TTL_SEC,
 };
 

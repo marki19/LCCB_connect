@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   message_policy TEXT NOT NULL DEFAULT 'department'
     CHECK (message_policy IN ('everyone', 'department', 'selected', 'nobody')),
   profile_completed BOOLEAN NOT NULL DEFAULT FALSE,
-  profile_banner_url TEXT,
+  profile_banner_dismissed BOOLEAN NOT NULL DEFAULT FALSE,
   last_seen_at TIMESTAMPTZ,
   suspended_at TIMESTAMPTZ,
   suspended_until TIMESTAMPTZ,
@@ -119,6 +119,17 @@ CREATE INDEX IF NOT EXISTS idx_profiles_department ON public.profiles(department
 CREATE INDEX IF NOT EXISTS idx_profiles_course ON public.profiles(course_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 CREATE INDEX IF NOT EXISTS idx_profiles_role_norm ON public.profiles (lower(replace(replace(role, '-', ''), '_', '')));
+
+-- Refresh Tokens (Native Auth Session Lifecycle)
+CREATE TABLE IF NOT EXISTS public.refresh_tokens (
+  jti TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON public.refresh_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON public.refresh_tokens (expires_at);
 
 -- Verification Requests
 CREATE TABLE IF NOT EXISTS public.profile_verification_requests (
@@ -552,5 +563,6 @@ INSERT INTO public._migrations (name) VALUES
   ('042_verification_roles.sql'),
   ('043_profiles_role_norm_index.sql'),
   ('044_friendship_suggestions.sql'),
-  ('045_native_auth.sql')
+  ('045_native_auth.sql'),
+  ('046_refresh_tokens.sql')
 ON CONFLICT (name) DO NOTHING;

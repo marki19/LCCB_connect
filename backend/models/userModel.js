@@ -5,6 +5,42 @@ const { normalizeRole } = require("../utils/roles");
 
 // RAW SQL QUERIES ONLY (NO ORM METHODS)
 
+const PROFILE_COLUMNS = [
+  "id",
+  "username",
+  "full_name",
+  "avatar_url",
+  "bio",
+  "course",
+  "year_level",
+  "role",
+  "skills",
+  "email",
+  "student_id",
+  "email_confirmed_at",
+  "verification_status",
+  "verified_at",
+  "department_id",
+  "course_id",
+  "message_policy",
+  "profile_completed",
+  "profile_banner_dismissed",
+  "last_seen_at",
+  "suspended_at",
+  "suspended_until",
+  "suspension_reason",
+  "suspended_by",
+  "failed_login_attempts",
+  "locked_until",
+  "email_bounced",
+  "bounce_reason",
+  "bounced_at",
+  "created_at",
+  "updated_at",
+];
+const PROFILE_SELECT = PROFILE_COLUMNS.map((col) => `p.${col}`).join(", ");
+const PROFILE_RETURNING = PROFILE_COLUMNS.join(", ");
+
 // Keyset pagination on the (text) primary key. `cursor` is the last `id` seen.
 const getAllUsers = async ({
   limit = DEFAULT_LIMIT,
@@ -48,7 +84,7 @@ const getAllUsers = async ({
   // Joins the catalog so callers can display department/course names without a
   // second round-trip. The ids remain the authorization source of truth.
   const sql = `
-    SELECT p.*, d.name AS department_name, c.name AS course_name
+    SELECT ${PROFILE_SELECT}, d.name AS department_name, c.name AS course_name
     FROM profiles p
     LEFT JOIN public.departments d ON d.id = p.department_id
     LEFT JOIN public.courses c ON c.id = p.course_id
@@ -125,7 +161,7 @@ const getAllUsers = async ({
   // Joins the catalog so callers can display department/course names without a
   // second round-trip. The ids remain the authorization source of truth.
   const sql = `
-    SELECT p.*, d.name AS department_name, c.name AS course_name
+    SELECT ${PROFILE_SELECT}, d.name AS department_name, c.name AS course_name
     FROM profiles p
     LEFT JOIN public.departments d ON d.id = p.department_id
     LEFT JOIN public.courses c ON c.id = p.course_id
@@ -272,7 +308,7 @@ const createUser = async (userData) => {
       email = COALESCE(EXCLUDED.email, profiles.email),
       student_id = COALESCE(profiles.student_id, EXCLUDED.student_id),
       verification_status = COALESCE(EXCLUDED.verification_status, profiles.verification_status)
-    RETURNING *;
+    RETURNING ${PROFILE_RETURNING};
   `;
   const values = [
     id, username, full_name, avatar_url, bio, course, year_level, role || 'student',
@@ -304,7 +340,7 @@ const updateUser = async (id, userData) => {
         student_id = COALESCE($12, student_id),
         verification_status = COALESCE($13, verification_status)
     WHERE id = $14
-    RETURNING *;
+    RETURNING ${PROFILE_RETURNING};
   `;
   const values = [
     username || null,
@@ -327,7 +363,7 @@ const updateUser = async (id, userData) => {
 };
 
 const deleteUser = async (id) => {
-  const sql = `DELETE FROM profiles WHERE id = $1 RETURNING *;`;
+  const sql = `DELETE FROM profiles WHERE id = $1 RETURNING ${PROFILE_RETURNING};`;
   const result = await db.query(sql, [id]);
   return result.rows[0];
 };
@@ -606,6 +642,7 @@ const updatePasswordHash = async (userId, passwordHash) => {
 };
 
 module.exports = {
+  PROFILE_COLUMNS,
   getAllUsers,
   getUserById,
   getPublicProfile,

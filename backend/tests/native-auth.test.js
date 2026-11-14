@@ -47,8 +47,8 @@ describe("Native Auth Service (Self-Hosted)", () => {
       username: "teststudent",
     };
 
-    it("mints valid access and refresh tokens", () => {
-      const tokens = nativeAuth.signTokens(mockUser, { aal: "aal1" });
+    it("mints valid access and refresh tokens", async () => {
+      const tokens = await nativeAuth.signTokens(mockUser, { aal: "aal1" });
       assert.ok(tokens.access_token);
       assert.ok(tokens.refresh_token);
       assert.ok(tokens.expires_at > Date.now() / 1000);
@@ -62,16 +62,16 @@ describe("Native Auth Service (Self-Hosted)", () => {
       assert.strictEqual(verified.user_metadata.full_name, mockUser.full_name);
     });
 
-    it("verifies refresh tokens independently", () => {
-      const tokens = nativeAuth.signTokens(mockUser);
+    it("verifies refresh tokens independently", async () => {
+      const tokens = await nativeAuth.signTokens(mockUser);
       const refreshVerified = nativeAuth.verifyRefreshToken(tokens.refresh_token);
       assert.ok(refreshVerified);
       assert.strictEqual(refreshVerified.sub, mockUser.id);
       assert.strictEqual(refreshVerified.token_type, "refresh");
     });
 
-    it("rejects tampered or forged tokens", () => {
-      const tokens = nativeAuth.signTokens(mockUser);
+    it("rejects tampered or forged tokens", async () => {
+      const tokens = await nativeAuth.signTokens(mockUser);
       const tampered = tokens.access_token.slice(0, -6) + "xxxxxx";
       const verified = nativeAuth.verifyAccessToken(tampered);
       assert.strictEqual(verified, null);
@@ -91,7 +91,7 @@ describe("Native Auth Service (Self-Hosted)", () => {
         return null;
       });
 
-      const tokens = nativeAuth.signTokens(mockUser);
+      const tokens = await nativeAuth.signTokens(mockUser);
       const res = await request(app)
         .get(`/api/users/${mockUser.id}`)
         .set("Authorization", `Bearer ${tokens.access_token}`);
@@ -172,7 +172,7 @@ describe("Native Auth Service (Self-Hosted)", () => {
       stub(userModel, "getUserById", async (id) => (id === user.id ? user : null));
       stub(userModel, "isLocked", async () => false);
 
-      const initial = nativeAuth.signTokens(user);
+      const initial = await nativeAuth.signTokens(user);
       const res = await request(app)
         .post("/api/auth/refresh")
         .send({ refresh_token: initial.refresh_token });
@@ -191,6 +191,35 @@ describe("Native Auth Service (Self-Hosted)", () => {
         .send({ refresh_token: "invalid-token" });
 
       assert.strictEqual(res.status, 401);
+    });
+
+    it("rotates refresh token and rejects reuse of old refresh token", async () => {
+      const user = {
+        id: "77777777-8888-9999-0000-111111111111",
+        email: "rotate.user@lccbonline.edu.ph",
+        role: "student",
+      };
+
+      stub(userModel, "getUserById", async (id) => (id === user.id ? user : null));
+      stub(userModel, "isLocked", async () => false);
+
+      const initial = await nativeAuth.signTokens(user);
+
+      // First refresh succeeds and rotates
+      const res1 = await request(app)
+        .post("/api/auth/refresh")
+        .send({ refresh_token: initial.refresh_token });
+
+      assert.strictEqual(res1.status, 200);
+      assert.ok(res1.body.access_token);
+      assert.ok(res1.body.refresh_token);
+
+      // Replay attempt with old refresh token should be rejected (revoked)
+      const res2 = await request(app)
+        .post("/api/auth/refresh")
+        .send({ refresh_token: initial.refresh_token });
+
+      assert.strictEqual(res2.status, 401);
     });
   });
 });

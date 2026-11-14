@@ -1,8 +1,7 @@
 // Deterministic environment for the test suite. Must be required BEFORE
 // `../app.js` — the app reads these at load time.
-//
-// These are throwaway values: no test contacts Supabase or Postgres (the
-// Supabase token check and every model function are stubbed).
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
+
 process.env.NODE_ENV = "test";
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || "https://test-project.supabase.co";
 process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "test-anon-key";

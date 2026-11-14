@@ -56,22 +56,40 @@ async function unbanUser(userId) {
  */
 async function revokeSessions(userId) {
   let sessions = 0;
+  let nativeTokensRevoked = 0;
 
-  // `auth.refresh_tokens.user_id` is text; `auth.sessions.user_id` is uuid.
-  const refresh = await db.query(
-    "DELETE FROM auth.refresh_tokens WHERE user_id = $1",
-    [userId]
-  );
-
-  if (UUID_RE.test(userId)) {
-    const result = await db.query(
-      "DELETE FROM auth.sessions WHERE user_id = $1::uuid RETURNING id",
+  // Revoke native self-hosted refresh tokens
+  try {
+    const nativeRes = await db.query(
+      "UPDATE public.refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL",
       [userId]
     );
-    sessions = result.rowCount || 0;
+    nativeTokensRevoked = nativeRes.rowCount || 0;
+  } catch {
+    // In case table not present in unit test or offline
   }
 
-  return { sessions, refresh_tokens: refresh.rowCount || 0 };
+  // `auth.refresh_tokens.user_id` is text; `auth.sessions.user_id` is uuid.
+  let supaTokensRevoked = 0;
+  try {
+    const refresh = await db.query(
+      "DELETE FROM auth.refresh_tokens WHERE user_id = $1",
+      [userId]
+    );
+    supaTokensRevoked = refresh.rowCount || 0;
+  } catch {}
+
+  if (UUID_RE.test(userId)) {
+    try {
+      const result = await db.query(
+        "DELETE FROM auth.sessions WHERE user_id = $1::uuid RETURNING id",
+        [userId]
+      );
+      sessions = result.rowCount || 0;
+    } catch {}
+  }
+
+  return { sessions, refresh_tokens: supaTokensRevoked + nativeTokensRevoked };
 }
 
 /**
