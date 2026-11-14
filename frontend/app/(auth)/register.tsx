@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useState, useRef, type ComponentRef } from "react";
+import { Pressable, Text, View, TextInput } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { Eye, EyeOff, Lock, Mail, User } from "lucide-react-native";
 import { useTheme } from "../../src/contexts/ThemeContext";
@@ -21,6 +21,10 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const fullNameRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const confirmPasswordRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   const [emailError, setEmailError] = useState("");
   const [fullNameError, setFullNameError] = useState("");
@@ -119,6 +123,7 @@ export default function RegisterScreen() {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+      {...({ tabIndex: -1 } as any)}
       onPress={() => setShowPassword((v) => !v)}
       hitSlop={8}
       style={({ pressed }) => ({ padding: SPACE.x1, opacity: pressed ? 0.6 : 1 })}
@@ -165,28 +170,36 @@ export default function RegisterScreen() {
         placeholder="student@lccbonline.edu.ph"
         keyboardType="email-address"
         autoComplete="email"
+        nextRef={fullNameRef}
+        returnKeyType="next"
         leadingIcon={({ size, color }) => <Mail size={size} color={color} strokeWidth={2.1} />}
         error={emailError || (showEmailFormatError ? "Must use an @lccbonline.edu.ph address" : "")}
       />
 
       <TextField
+        ref={fullNameRef}
         label="Full name"
         value={fullName}
         onChangeText={handleFullNameChange}
         placeholder="Juan Dela Cruz"
         autoCapitalize="words"
         autoComplete="name"
+        nextRef={passwordRef}
+        returnKeyType="next"
         leadingIcon={({ size, color }) => <User size={size} color={color} strokeWidth={2.1} />}
         error={fullNameError}
       />
 
       <TextField
+        ref={passwordRef}
         label="Password"
         value={password}
         onChangeText={handlePasswordChange}
         placeholder="At least 8 characters"
         secureTextEntry={!showPassword}
         autoComplete="new-password"
+        nextRef={confirmPasswordRef}
+        returnKeyType="next"
         leadingIcon={({ size, color }) => <Lock size={size} color={color} strokeWidth={2.1} />}
         error={passwordError}
         hint="Use at least 8 characters"
@@ -194,6 +207,7 @@ export default function RegisterScreen() {
       />
 
       <TextField
+        ref={confirmPasswordRef}
         label="Confirm password"
         value={confirmPassword}
         onChangeText={handleConfirmChange}

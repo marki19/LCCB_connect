@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useState, useRef, type ComponentRef } from "react";
+import { Pressable, Text, View, TextInput } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { AtSign, Eye, EyeOff, Globe, KeyRound, Lock, ShieldCheck } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -51,6 +51,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const passwordInputRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   // MFA Challenge & Setup state
   const [showMfaChallenge, setShowMfaChallenge] = useState(false);
@@ -318,6 +319,8 @@ export default function LoginScreen() {
             placeholder="student@lccbonline.edu.ph"
             keyboardType={identifierIsEmail ? "email-address" : "default"}
             autoComplete="username"
+            nextRef={passwordInputRef}
+            returnKeyType="next"
             leadingIcon={({ size, color }) => <AtSign size={size} color={color} strokeWidth={2.1} />}
             error={emailError || (showEmailFormatError ? "Must be an @lccbonline.edu.ph address, a student ID, or a username" : "")}
           />
@@ -341,6 +344,7 @@ export default function LoginScreen() {
           </View>
 
           <TextField
+            ref={passwordInputRef}
             label="Password"
             value={password}
             onChangeText={handlePasswordChange}
@@ -355,6 +359,7 @@ export default function LoginScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                {...({ tabIndex: -1 } as any)}
                 onPress={() => setShowPassword((v) => !v)}
                 hitSlop={8}
                 style={({ pressed }) => ({ padding: SPACE.x1, opacity: pressed ? 0.6 : 1 })}

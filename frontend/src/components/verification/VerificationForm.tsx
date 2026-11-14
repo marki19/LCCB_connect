@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AlertCircle } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -99,10 +99,20 @@ export default function VerificationForm({
 
   const isSuperadmin = role === "superadmin";
 
+  const textInputRefs = useRef<Record<string, ComponentRef<typeof TextInput> | null>>({});
+
   const fieldDefs = useMemo(
     () =>
       buildFieldDefs(fields, role as any, departments, courses, academicLevels.map((l) => l.value), fullNameLocked),
     [fields, role, departments, courses, academicLevels, fullNameLocked]
+  );
+
+  const textKeys = useMemo(
+    () =>
+      fieldDefs
+        .filter((d) => !d.options?.length && d.key !== "birthdate" && !d.locked)
+        .map((d) => d.key),
+    [fieldDefs]
   );
 
   const canEdit = requestStatus === "declined" || requestStatus === "unverified" || requestStatus === null;
@@ -563,9 +573,16 @@ export default function VerificationForm({
                     );
                   }
 
+                  const textIndex = textKeys.indexOf(def.key);
+                  const nextKey =
+                    textIndex >= 0 && textIndex < textKeys.length - 1 ? textKeys[textIndex + 1] : null;
+
                   return (
                     <TextField
                       key={def.key}
+                      ref={(node) => {
+                        textInputRefs.current[def.key] = node;
+                      }}
                       label={def.label}
                       value={form[def.key] ?? ""}
                       onChangeText={(v) => handleChange(def.key, v)}
@@ -577,6 +594,15 @@ export default function VerificationForm({
                       editable={canEdit && !def.locked}
                       error={fieldError(def.key)}
                       hint={def.locked ? def.lockHint : def.patternHint}
+                      returnKeyType={nextKey ? "next" : "done"}
+                      blurOnSubmit={false}
+                      onSubmitEditing={() => {
+                        if (nextKey) {
+                          textInputRefs.current[nextKey]?.focus();
+                        } else if (otpSent && canEdit && !submitting) {
+                          void handleSubmit();
+                        }
+                      }}
                       right={
                         def.key === "otp_code" && !otpSent ? (
                           <Button
