@@ -918,7 +918,12 @@ export default function AdminContentScreen() {
                       </Text>
                     </View>
                     <Text style={{ flex: 1, paddingRight: 8, fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
-                      {item.author_name || item.author_username || item.author || "Unknown"}
+                      {item.author_name ||
+                        item.author_username ||
+                        (typeof item.author === "string"
+                          ? item.author
+                          : item.author?.full_name || item.author?.username) ||
+                        "Unknown"}
                     </Text>
                     <Text style={{ flex: 1, paddingRight: 8, fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
                       {item.department_name || "—"}

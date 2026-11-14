@@ -139,7 +139,11 @@ export type AdminContentItem = {
   author_id: string;
   author_name: string | null;
   author_username: string | null;
-  author?: string | null;
+  author?: {
+    id: string;
+    username?: string | null;
+    full_name?: string | null;
+  } | string | null;
   department_name: string | null;
   created_at: string;
 };
