@@ -1,27 +1,29 @@
 const express = require("express");
 const router = express.Router();
-const auth = require("../middleware/auth");
-const { localUpload } = require("../middleware/localUpload");
-const { saveLocalFile, CATEGORIES } = require("../services/localStorage");
+const { uploadFor, uploadConcurrencyGuard, respondToUploadError } = require("../middleware/upload");
+const { CATEGORIES } = require("../services/filePolicy");
+const { storeUpload } = require("../services/uploadService");
 
 /**
  * POST /api/upload/:category
- * Uploads a file to the categorized local storage folder.
  *
- * Supported categories: avatars, posts, theses, documents, videos.
- * Database stores the returned `filename` (e.g. "posts/a1b2c3d4.jpg").
+ * Stores a file under `<category>/<hashed-name>` and returns that key, which is
+ * what PostgreSQL records. Mounted behind authentication, so `req.user` is
+ * always present.
  */
 router.post(
   "/:category",
+  uploadConcurrencyGuard,
   (req, res, next) => {
     const category = (req.params.category || "").toLowerCase();
+
     if (!CATEGORIES.includes(category)) {
       return res.status(400).json({
         error: `Invalid storage category "${req.params.category}". Allowed: ${CATEGORIES.join(", ")}`,
       });
     }
 
-    localUpload.single("file")(req, res, (err) => {
+    uploadFor(category).single("file")(req, res, (err) => {
       if (err) {
         return res.status(400).json({
           error: err.message || "File upload failed",
@@ -36,27 +38,20 @@ router.post(
         return res.status(400).json({ error: "No file was uploaded" });
       }
 
-      const category = req.params.category.toLowerCase();
-      const result = await saveLocalFile({
-        category,
+      const stored = await storeUpload({
+        category: req.params.category.toLowerCase(),
         originalName: req.file.originalname,
         buffer: req.file.buffer,
       });
 
       return res.status(201).json({
         success: true,
-        filename: result.relativeKey,
-        url: result.url,
-        size: result.size,
+        filename: stored.key,
+        url: `/api/files/${stored.key}`,
+        size: stored.size,
       });
     } catch (err) {
-      if (
-        err.message.includes("exceeds category maximum") ||
-        err.message.includes("not allowed in category") ||
-        err.message.includes("do not match the expected format")
-      ) {
-        return res.status(400).json({ error: err.message });
-      }
+      if (respondToUploadError(res, err)) return;
       next(err);
     }
   }

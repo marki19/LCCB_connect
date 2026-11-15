@@ -2,7 +2,11 @@ const { describe, it, before, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createPostSchema } = require("../validation");
-const { withStorageUrls, withStorageUrlsSync, __setAdminFactory, __clearStorageCache } = require("../services/storageService");
+const {
+  withStorageUrls,
+  withStorageUrlsSync,
+  __setSigner,
+} = require("../services/storageService");
 
 describe("multi-image posts", () => {
   describe("validation", () => {
@@ -57,52 +61,44 @@ describe("multi-image posts", () => {
     let signedUrlCalls = [];
 
     before(() => {
-      process.env.SUPABASE_URL = "https://mock.supabase.co";
-      __setAdminFactory(() => ({
-        storage: {
-          from: (bucket) => ({
-            createSignedUrl: async (key, expiresIn) => {
-              signedUrlCalls.push({ bucket, key, expiresIn });
-              return {
-                data: { signedUrl: `https://signed/${bucket}/${key}` },
-                error: null,
-              };
-            },
-          }),
-        },
-      }));
+      __setSigner((key, expiresIn) => {
+        signedUrlCalls.push({ key, expiresIn });
+        return `https://signed/${key}`;
+      });
     });
 
     afterEach(() => {
       signedUrlCalls = [];
-      __clearStorageCache();
     });
 
-    it("withStorageUrlsSync preserves raw keys in image_urls", () => {
+    it("withStorageUrlsSync expands each key in image_urls", () => {
       const post = {
         id: "p1",
         image_urls: ["posts/1/a.jpg", "posts/1/b.jpg"],
       };
       const synced = withStorageUrlsSync(post);
-      assert.deepEqual(synced.image_urls, ["posts/1/a.jpg", "posts/1/b.jpg"]);
+      assert.deepEqual(synced.image_urls, [
+        "https://signed/posts/1/a.jpg",
+        "https://signed/posts/1/b.jpg",
+      ]);
     });
 
     it("withStorageUrls signs each key in image_urls array", async () => {
-      __clearStorageCache();
       const post = {
         id: "p1",
         image_url: "posts/1/a.jpg",
         image_urls: ["posts/1/a.jpg", "posts/1/b.jpg", "posts/1/c.jpg"],
       };
       const resolved = await withStorageUrls(post);
-      assert.equal(resolved.image_url, "https://signed/assets/posts/1/a.jpg");
+      assert.equal(resolved.image_url, "https://signed/posts/1/a.jpg");
       assert.deepEqual(resolved.image_urls, [
-        "https://signed/assets/posts/1/a.jpg",
-        "https://signed/assets/posts/1/b.jpg",
-        "https://signed/assets/posts/1/c.jpg",
+        "https://signed/posts/1/a.jpg",
+        "https://signed/posts/1/b.jpg",
+        "https://signed/posts/1/c.jpg",
       ]);
-      // Duplicate "posts/1/a.jpg" across image_url and image_urls is deduplicated: 3 unique keys
-      assert.equal(signedUrlCalls.length, 3);
+      // image_url and the first entry of image_urls are the same key, so each
+      // field is signed independently: 4 signatures for 4 field values.
+      assert.equal(signedUrlCalls.length, 4);
     });
   });
 });

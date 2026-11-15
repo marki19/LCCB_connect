@@ -271,6 +271,17 @@ app.use(
   announcementRouter
 );
 
+// Health check route for Render and uptime monitors
+app.get("/health", async (req, res) => {
+  try {
+    const db = require("./db");
+    await db.query("SELECT 1");
+    res.status(200).json({ status: "healthy", timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ status: "unhealthy", error: "Database connectivity error" });
+  }
+});
+
 // Test route
 app.get("/", (req, res) => {
   res.json({ message: "Backend is running!" });

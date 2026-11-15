@@ -1,244 +1,215 @@
-// Unit tests for the storage-URL service. This works purely at the service
-// boundary: given a stored object key, it infers the public URL and expands
-// any *_url field it recognises. No mocking is necessary for the synchronous
-// pass; the async pass (private buckets) is exercised with an injected admin
-// factory so the test never touches the network.
+/**
+ * Storage-URL expansion tests.
+ *
+ * The signer is injected, so these run without credentials and without a
+ * network. What is under test is the mapping from stored keys to object keys
+ * and the shape of the expanded payload — the signature itself is covered by
+ * `sigv4.test.js` and by the live smoke test.
+ */
 require("./env.helper");
 
 const { describe, it, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 
-process.env.SUPABASE_URL = "https://test-project.supabase.co";
 const {
+  isAbsoluteUrl,
+  objectKey,
   publicStorageUrl,
-  withStorageUrlsSync,
+  signedStorageUrl,
+  resolveStorageUrl,
   withStorageUrls,
-  __setAdminFactory,
-  __clearStorageCache,
+  withStorageUrlsSync,
+  __setSigner,
+  __resetSigner,
 } = require("../services/storageService");
 
-const BASE = "https://test-project.supabase.co/storage/v1/object/public";
+let signed;
 
 beforeEach(() => {
-  process.env.SUPABASE_URL = "https://test-project.supabase.co";
+  signed = [];
+  __setSigner((key, expiresIn) => {
+    signed.push({ key, expiresIn });
+    return `https://r2.example/${key}?sig=abc`;
+  });
+});
+
+describe("objectKey", () => {
+  it("prefixes a bare filename with the bucket's category", () => {
+    assert.equal(objectKey("avatars", "abc.jpg"), "avatars/abc.jpg");
+    assert.equal(objectKey("theses", "abc.pdf"), "theses/abc.pdf");
+  });
+
+  it("maps the legacy assets bucket onto the posts category", () => {
+    assert.equal(objectKey("assets", "abc.jpg"), "posts/abc.jpg");
+  });
+
+  it("leaves a key that already carries its category alone", () => {
+    assert.equal(objectKey("assets", "posts/abc.jpg"), "posts/abc.jpg");
+    assert.equal(objectKey("theses", "theses/abc.pdf"), "theses/abc.pdf");
+  });
+
+  it("strips the local-disk uploads prefix", () => {
+    assert.equal(objectKey("assets", "uploads/1794567913184-j2hvi1f.jpg"), "posts/1794567913184-j2hvi1f.jpg");
+  });
+
+  it("tolerates a leading slash", () => {
+    assert.equal(objectKey("avatars", "/abc.jpg"), "avatars/abc.jpg");
+  });
+});
+
+describe("isAbsoluteUrl", () => {
+  it("recognises every scheme a client can render directly", () => {
+    assert.equal(isAbsoluteUrl("https://example.com/a.jpg"), true);
+    assert.equal(isAbsoluteUrl("http://example.com/a.jpg"), true);
+    assert.equal(isAbsoluteUrl("data:image/png;base64,AAA"), true);
+    assert.equal(isAbsoluteUrl("blob:abc"), true);
+    assert.equal(isAbsoluteUrl("file:///tmp/a.jpg"), true);
+  });
+
+  it("treats stored keys as relative", () => {
+    assert.equal(isAbsoluteUrl("posts/a.jpg"), false);
+    assert.equal(isAbsoluteUrl("a.jpg"), false);
+  });
+});
+
+describe("signedStorageUrl", () => {
+  it("signs a stored key and reports the URL", async () => {
+    const { url } = await signedStorageUrl("assets", "abc.jpg");
+
+    assert.equal(url, "https://r2.example/posts/abc.jpg?sig=abc");
+    assert.equal(signed.length, 1);
+    assert.equal(signed[0].key, "posts/abc.jpg");
+  });
+
+  it("honours a caller-supplied lifetime", async () => {
+    await signedStorageUrl("theses", "abc.pdf", { expiresIn: 60 });
+    assert.equal(signed[0].expiresIn, 60);
+  });
+
+  it("returns null for an empty key instead of signing", async () => {
+    assert.deepEqual(await signedStorageUrl("assets", ""), { url: null });
+    assert.equal(signed.length, 0);
+  });
+
+  it("passes an absolute URL through untouched", async () => {
+    const { url } = await signedStorageUrl("avatars", "https://lh3.googleusercontent.com/a.jpg");
+    assert.equal(url, "https://lh3.googleusercontent.com/a.jpg");
+    assert.equal(signed.length, 0);
+  });
+
+  it("hands back the raw key when signing is impossible", async () => {
+    __setSigner(() => {
+      throw new Error("not configured");
+    });
+
+    const { url } = await signedStorageUrl("assets", "abc.jpg");
+    assert.equal(url, "abc.jpg");
+  });
+});
+
+describe("resolveStorageUrl", () => {
+  it("returns just the URL", async () => {
+    assert.equal(await resolveStorageUrl("avatars", "abc.jpg"), "https://r2.example/avatars/abc.jpg?sig=abc");
+  });
 });
 
 describe("publicStorageUrl", () => {
-  it("builds a public URL for an avatars key", () => {
-    assert.equal(
-      publicStorageUrl("avatars", "avatars/1/2.jpg"),
-      `${BASE}/avatars/avatars/1/2.jpg`
-    );
+  it("expands a key synchronously", () => {
+    assert.equal(publicStorageUrl("avatars", "abc.jpg"), "https://r2.example/avatars/abc.jpg?sig=abc");
+  });
+});
+
+describe("withStorageUrls", () => {
+  it("expands the recognised file columns", async () => {
+    const resolved = await withStorageUrls({
+      id: "p1",
+      image_url: "abc.jpg",
+      avatar_url: "me.png",
+      pdf_url: "paper.pdf",
+    });
+
+    assert.equal(resolved.image_url, "https://r2.example/posts/abc.jpg?sig=abc");
+    assert.equal(resolved.avatar_url, "https://r2.example/avatars/me.png?sig=abc");
+    assert.equal(resolved.pdf_url, "https://r2.example/theses/paper.pdf?sig=abc");
   });
 
-  it("builds a public URL for an assets key", () => {
-    assert.equal(
-      publicStorageUrl("assets", "posts/1/2.jpg"),
-      `${BASE}/assets/posts/1/2.jpg`
-    );
+  it("expands every entry of image_urls", async () => {
+    const resolved = await withStorageUrls({
+      id: "p1",
+      image_urls: ["a.jpg", "b.jpg"],
+    });
+
+    assert.deepEqual(resolved.image_urls, [
+      "https://r2.example/posts/a.jpg?sig=abc",
+      "https://r2.example/posts/b.jpg?sig=abc",
+    ]);
   });
 
-  it("builds a public URL for a theses key", () => {
-    assert.equal(
-      publicStorageUrl("theses", "1/2.pdf"),
-      `${BASE}/theses/1/2.pdf`
-    );
+  it("expands nested authors and arrays of rows", async () => {
+    const resolved = await withStorageUrls([
+      { id: "p1", image_url: "a.jpg", author: { id: "u1", avatar_url: "me.png" } },
+    ]);
+
+    assert.equal(resolved[0].image_url, "https://r2.example/posts/a.jpg?sig=abc");
+    assert.equal(resolved[0].author.avatar_url, "https://r2.example/avatars/me.png?sig=abc");
   });
 
-  it("does not re-encode an already absolute URL", () => {
-    assert.equal(
-      publicStorageUrl("assets", `${BASE}/posts/1/2.jpg`),
-      `${BASE}/posts/1/2.jpg`
-    );
+  it("leaves absolute URLs, nulls, and non-strings alone", async () => {
+    const resolved = await withStorageUrls({
+      image_url: "https://cdn.example/a.jpg",
+      avatar_url: null,
+      pdf_url: 42,
+    });
+
+    assert.equal(resolved.image_url, "https://cdn.example/a.jpg");
+    assert.equal(resolved.avatar_url, null);
+    assert.equal(resolved.pdf_url, 42);
+    assert.equal(signed.length, 0);
   });
 
-  it("returns null for missing values", () => {
-    assert.equal(publicStorageUrl("assets", null), null);
-    assert.equal(publicStorageUrl("assets", ""), null);
+  it("passes primitives and dates through unchanged", async () => {
+    assert.equal(await withStorageUrls("hello"), "hello");
+    assert.equal(await withStorageUrls(null), null);
+
+    const when = new Date();
+    assert.equal(await withStorageUrls(when), when);
+  });
+
+  it("does not mutate the input object", async () => {
+    const post = { id: "p1", image_url: "a.jpg" };
+    await withStorageUrls(post);
+    assert.equal(post.image_url, "a.jpg");
+  });
+
+  it("never throws when the signer fails", async () => {
+    __setSigner(() => {
+      throw new Error("boom");
+    });
+
+    const resolved = await withStorageUrls({ image_url: "a.jpg" });
+    assert.equal(resolved.image_url, "a.jpg");
   });
 });
 
 describe("withStorageUrlsSync", () => {
-  // `assets` and `theses` are private (migration 015): the stored key is left
-  // intact and the client must ask the backend for a signed URL. Only
-  // `avatars` is expanded inline.
-  it("leaves a private assets key as the raw key", () => {
-    assert.deepEqual(
-      withStorageUrlsSync({ id: "p1", image_url: "posts/1/2.jpg" }),
-      { id: "p1", image_url: "posts/1/2.jpg" }
-    );
+  it("expands the same fields synchronously", () => {
+    const resolved = withStorageUrlsSync({ image_url: "a.jpg", avatar_url: "me.png" });
+
+    assert.equal(resolved.image_url, "https://r2.example/posts/a.jpg?sig=abc");
+    assert.equal(resolved.avatar_url, "https://r2.example/avatars/me.png?sig=abc");
   });
 
-  it("leaves a private theses key as the raw key", () => {
-    assert.deepEqual(
-      withStorageUrlsSync({ id: "t1", pdf_url: "1/2.pdf" }),
-      { id: "t1", pdf_url: "1/2.pdf" }
-    );
-  });
-
-  it("expands a nested avatar key (avatars is public)", () => {
-    assert.deepEqual(
-      withStorageUrlsSync({
-        id: "p2",
-        author: { avatar_url: "avatars/1/2.jpg" },
-      }),
-      {
-        id: "p2",
-        author: {
-          avatar_url: `${BASE}/avatars/avatars/1/2.jpg`,
-        },
-      }
-    );
-  });
-
-  it("expands keys inside arrays", () => {
-    assert.deepEqual(
-      withStorageUrlsSync([
-        { id: "p3", image_url: "posts/3/4.jpg" },
-        { id: "p4", image_url: `${BASE}/posts/5/6.jpg` },
-      ]),
-      [
-        { id: "p3", image_url: "posts/3/4.jpg" },
-        { id: "p4", image_url: `${BASE}/posts/5/6.jpg` },
-      ]
-    );
-  });
-
-  it("does not touch unrelated fields", () => {
-    assert.deepEqual(
-      withStorageUrlsSync({ id: "p5", github_url: "https://github.com/x" }),
-      { id: "p5", github_url: "https://github.com/x" }
-    );
-  });
-
-  it("passes through opaque JSON metadata untouched", () => {
-    assert.deepEqual(
-      withStorageUrlsSync({
-        id: "a1",
-        action: "user.suspend",
-        metadata: {
-          reason_code: 42,
-          extra: { deep: { nested: {} } },
-        },
-      }),
-      {
-        id: "a1",
-        action: "user.suspend",
-        metadata: {
-          reason_code: 42,
-          extra: { deep: { nested: {} } },
-        },
-      }
-    );
+  it("matches the asynchronous result", async () => {
+    const post = { image_url: "a.jpg", image_urls: ["a.jpg", "b.jpg"] };
+    assert.deepEqual(withStorageUrlsSync(post), await withStorageUrls(post));
   });
 });
 
-describe("withStorageUrls (async, private buckets)", () => {
-  let bulkCalls;
-
-  beforeEach(() => {
-    __clearStorageCache();
-    bulkCalls = [];
-    __setAdminFactory(() => ({
-      storage: {
-        from: (bucket) => ({
-          createSignedUrls: async (paths) => {
-            bulkCalls.push({ bucket, paths });
-            return {
-              data: paths.map((p) => ({
-                path: p,
-                signedUrl: `https://signed/${bucket}/${p}`,
-                error: null,
-              })),
-              error: null,
-            };
-          },
-          createSignedUrl: async (key) => {
-            return {
-              data: { signedUrl: `https://signed/${bucket}/${key}` },
-              error: null,
-            };
-          },
-        }),
-      },
-    }));
-  });
-
-  it("resolves a private assets key to a signed URL", async () => {
-    const out = await withStorageUrls({ id: "p1", image_url: "posts/1/2.jpg" });
-    assert.deepEqual(out, { id: "p1", image_url: "https://signed/assets/posts/1/2.jpg" });
-    assert.deepEqual(bulkCalls, [{ bucket: "assets", paths: ["posts/1/2.jpg"] }]);
-  });
-
-  it("resolves a private theses key to a signed URL", async () => {
-    const out = await withStorageUrls({ id: "t1", pdf_url: "1/2.pdf" });
-    assert.deepEqual(out, { id: "t1", pdf_url: "https://signed/theses/1/2.pdf" });
-    assert.deepEqual(bulkCalls, [{ bucket: "theses", paths: ["1/2.pdf"] }]);
-  });
-
-  it("leaves public avatars keys as plain URLs (no admin call)", async () => {
-    const out = await withStorageUrls({ id: "u1", avatar_url: "avatars/1/2.jpg" });
-    assert.equal(out.avatar_url, `${BASE}/avatars/avatars/1/2.jpg`);
-    assert.deepEqual(bulkCalls, []);
-  });
-
-  it("batches multiple keys in the same bucket into a single bulk call", async () => {
-    const out = await withStorageUrls([
-      { id: "a", image_url: "a/1.jpg" },
-      { id: "b", image_url: "b/2.jpg", image_urls: ["b/3.jpg", "b/4.jpg"] },
-      { id: "c", image_url: "c/5.jpg" },
-    ]);
-    assert.equal(out[0].image_url, "https://signed/assets/a/1.jpg");
-    assert.equal(out[1].image_urls[0], "https://signed/assets/b/3.jpg");
-    assert.equal(out[1].image_urls[1], "https://signed/assets/b/4.jpg");
-    // All 5 distinct assets keys batched into 1 call for bucket 'assets'
-    assert.equal(bulkCalls.length, 1);
-    assert.equal(bulkCalls[0].bucket, "assets");
-    assert.equal(bulkCalls[0].paths.length, 5);
-  });
-
-  it("uses the LRU cache on repeat resolution without hitting storage again", async () => {
-    await withStorageUrls({ id: "p1", image_url: "posts/cached/1.jpg" });
-    assert.equal(bulkCalls.length, 1);
-
-    // Second call with same key should hit cache
-    const out2 = await withStorageUrls({ id: "p2", image_url: "posts/cached/1.jpg" });
-    assert.equal(out2.image_url, "https://signed/assets/posts/cached/1.jpg");
-    assert.equal(bulkCalls.length, 1, "Cache hit must not invoke bulk signing again");
-  });
-
-  it("never throws and returns raw keys when storage fails or times out", async () => {
-    __setAdminFactory(() => ({
-      storage: {
-        from: () => ({
-          createSignedUrls: async () => {
-            throw new Error("Supabase storage down");
-          },
-        }),
-      },
-    }));
-
-    const out = await withStorageUrls({ id: "err1", image_url: "failed/key.jpg" });
-    assert.equal(out.image_url, "failed/key.jpg");
-  });
-
-  it("preserves Date instances without converting them to empty objects", async () => {
-    const now = new Date();
-    const input = {
-      id: "d1",
-      created_at: now,
-      nested: { updated_at: now },
-      items: [{ date: now }],
-    };
-    const outAsync = await withStorageUrls(input);
-    assert.ok(outAsync.created_at instanceof Date);
-    assert.equal(outAsync.created_at.getTime(), now.getTime());
-    assert.ok(outAsync.nested.updated_at instanceof Date);
-    assert.ok(outAsync.items[0].date instanceof Date);
-
-    const outSync = withStorageUrlsSync(input);
-    assert.ok(outSync.created_at instanceof Date);
-    assert.equal(outSync.created_at.getTime(), now.getTime());
-    assert.ok(outSync.nested.updated_at instanceof Date);
+describe("__resetSigner", () => {
+  it("restores the real object-storage signer", () => {
+    __resetSigner();
+    // Unconfigured in tests, so the key survives rather than a URL appearing.
+    assert.equal(publicStorageUrl("avatars", "abc.jpg"), "abc.jpg");
+    __setSigner((key) => `https://r2.example/${key}`);
   });
 });

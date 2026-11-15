@@ -1014,21 +1014,7 @@ async function checkAdminSession(req, res, next) {
  */
 async function logout(req, res, next) {
   try {
-    let userId = req.user?.id;
-    if (!userId && req.headers?.authorization) {
-      try {
-        const token = req.headers.authorization.replace(/^Bearer\s+/i, "");
-        const payload = nativeAuth.verifyAccessToken(token);
-        userId = payload.sub || payload.id;
-      } catch (_) {}
-    }
-    if (!userId && req.body?.refresh_token) {
-      try {
-        const payload = nativeAuth.verifyRefreshToken(req.body.refresh_token);
-        userId = payload.sub || payload.id;
-      } catch (_) {}
-    }
-
+    const userId = req.user?.id;
     if (userId) {
       // Record logout
       await mfaService.recordLogout({ userId, req }).catch(() => {});
@@ -1097,7 +1083,7 @@ async function googleAuth(req, res, next) {
     const email = user.email?.toLowerCase();
 
     // Enforce LCCB email domain for signups (Phase 1 domain trigger)
-    if (email && !email.endsWith("@lccbonline.edu.ph")) {
+    if (!email || !email.endsWith("@lccbonline.edu.ph")) {
       // Clean up the rejected user so it does not persist in auth
       await supabase.auth.admin.deleteUser(user.id).catch(() => {});
       return res.status(403).json({
@@ -1358,21 +1344,6 @@ async function refreshSession(req, res, next) {
       await nativeAuth.revokeRefreshToken(decoded.jti).catch(() => {});
       const session = await nativeAuth.signTokens(profile, { aal });
       return sendTokens(res, session, 200, { user: profile });
-    }
-
-    // 2. Legacy fallback: Supabase refresh
-    try {
-      const supabase = getSupabaseAdmin();
-      if (supabase) {
-        const { data, error } = await supabase.auth.refreshSession({
-          refresh_token,
-        });
-        if (!error && data?.session) {
-          return sendTokens(res, data.session);
-        }
-      }
-    } catch {
-      // Fall through to 401
     }
 
     return res.status(401).json({ error: "Invalid or expired refresh token" });

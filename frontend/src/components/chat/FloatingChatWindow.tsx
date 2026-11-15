@@ -132,7 +132,7 @@ function FloatingChatInner({
     if (attachedImage) {
       setUploading(true);
       try {
-        const key = await uploadChatImage(attachedImage.uri, conversationId);
+        const key = await uploadChatImage(attachedImage.uri);
         if (!key) {
           Alert.alert("Upload failed", "Could not upload image. Please try again.");
           setUploading(false);

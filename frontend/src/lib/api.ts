@@ -324,6 +324,21 @@ export async function getPostImageUrls(id: string | number): Promise<string[]> {
   return [];
 }
 
+/**
+ * Absolute URL for a stored file key.
+ *
+ * The backend authorises the request and answers with a redirect to a
+ * short-lived presigned URL, so the client never holds storage credentials and
+ * the URL it renders stays valid as long as it keeps being requested. That is
+ * why this is a plain string rather than a signed URL fetched ahead of time.
+ *
+ * @param key A `<category>/<filename>` key, as returned by `uploadToStorage`.
+ */
+export function fileUrl(key: string): string {
+  const origin = API_URL.replace(/\/api$/, "");
+  return `${origin}/api/files/${key.replace(/^\/+/, "")}`;
+}
+
 // ============================================================================
 // Repost endpoints
 // ============================================================================

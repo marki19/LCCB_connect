@@ -1,9 +1,9 @@
 /**
  * chatMedia.ts — Chat media utilities for photo/image upload, message body
- * serialization, parsing, signed URL resolution, and preview formatting.
+ * serialization, parsing, URL resolution, and preview formatting.
  */
 
-import { supabase } from "./supabase";
+import { fileUrl } from "./api";
 import { uploadToStorage, MAX_UPLOAD_BYTES } from "./upload";
 
 export interface ParsedMessageContent {
@@ -12,10 +12,6 @@ export interface ParsedMessageContent {
   mediaUrl?: string;
   text?: string;
 }
-
-// In-memory cache for resolved signed URLs to avoid redundant signing requests
-const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
-const CACHE_TTL_MS = 20 * 60 * 60 * 1000; // 20 hours (signed for 24h)
 
 /**
  * Parses message body string into structured media content or plain text.
@@ -88,75 +84,37 @@ export function formatMessagePreview(body: string | null | undefined): string {
 }
 
 /**
- * Resolves a storage key or URL into a viewable signed URL for private bucket `assets`.
+ * Resolves a stored media key into a URL the app can render.
+ *
+ * Media messages carry the object key returned at upload time, never a URL.
+ * Files are served by the backend, which authorises the request and redirects
+ * to a short-lived presigned URL — so resolution is a string join: no network
+ * call, no cache, and no expiry to track.
+ *
+ * @returns The key unchanged when it is already a local or remote URL, or
+ *          `null` when there is nothing to render.
  */
-export async function getResolvedMediaUrl(keyOrUrl: string | null | undefined): Promise<string | null> {
+export function resolveMediaUrl(keyOrUrl: string | null | undefined): string | null {
   if (!keyOrUrl) return null;
 
-  // Local file or blob URI (e.g. freshly picked image before upload)
-  if (
-    keyOrUrl.startsWith("file://") ||
-    keyOrUrl.startsWith("blob:") ||
-    keyOrUrl.startsWith("data:")
-  ) {
+  if (/^(file|blob|data):/i.test(keyOrUrl) || /^https?:\/\//i.test(keyOrUrl)) {
     return keyOrUrl;
   }
 
-  // Remote full URL that already has token or is public
-  if (keyOrUrl.startsWith("http://") || keyOrUrl.startsWith("https://")) {
-    return keyOrUrl;
-  }
-
-  // Check in-memory cache
-  const cached = signedUrlCache.get(keyOrUrl);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.url;
-  }
-
-  // Clean key: strip leading 'assets/' if included
-  const cleanPath = keyOrUrl.replace(/^assets\//, "");
-
-  try {
-    const { data, error } = await supabase.storage
-      .from("assets")
-      .createSignedUrl(cleanPath, 86400); // 24 hours
-
-    if (!error && data?.signedUrl) {
-      signedUrlCache.set(keyOrUrl, {
-        url: data.signedUrl,
-        expiresAt: Date.now() + CACHE_TTL_MS,
-      });
-      return data.signedUrl;
-    }
-
-    // Fallback: public url
-    const { data: pubData } = supabase.storage.from("assets").getPublicUrl(cleanPath);
-    if (pubData?.publicUrl) {
-      return pubData.publicUrl;
-    }
-  } catch (err) {
-    console.error("[chatMedia] Failed to sign storage URL:", err);
-  }
-
-  return null;
+  return fileUrl(keyOrUrl);
 }
 
 /**
- * Uploads a picked local chat image to the `assets` bucket.
- * Returns the stored relative key on success (e.g. `chat/{conversationId}/{timestamp}-{random}.jpg`).
+ * Uploads a picked local chat image.
+ *
+ * Chat photos go to the `posts` category, which is where every user-supplied
+ * image lands; the server derives the key. Returns that key on success.
  */
-export async function uploadChatImage(
-  localUri: string,
-  conversationId?: string | null
-): Promise<string | null> {
-  const folder = conversationId ? `chat/${conversationId}` : "chat/dm";
-  const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
-  const storagePath = `${folder}/${filename}`;
-
+export async function uploadChatImage(localUri: string): Promise<string | null> {
   const result = await uploadToStorage(
     localUri,
-    "assets",
-    storagePath,
+    "posts",
+    undefined,
     "image/jpeg",
     MAX_UPLOAD_BYTES.image
   );
