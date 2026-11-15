@@ -41,41 +41,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_student_id
   ON public.profiles (upper(student_id))
   WHERE student_id IS NOT NULL;
 
--- 1b. Identity verification requests (migration 016). Holds a snapshot of what
--- the student submitted, so a later edit cannot change what the reviewer saw.
-CREATE TABLE IF NOT EXISTS public.profile_verification_requests (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending','approved','declined')),
-  full_name TEXT NOT NULL,
-  student_id TEXT NOT NULL,
-  department_id UUID NOT NULL REFERENCES public.departments(id),
-  course_id UUID NOT NULL REFERENCES public.courses(id),
-  year_level TEXT NOT NULL,
-  birthdate DATE,
-  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  reviewed_by TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
-  reviewed_at TIMESTAMPTZ,
-  review_note TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_verification_one_pending
-  ON public.profile_verification_requests (user_id)
-  WHERE status = 'pending';
-CREATE INDEX IF NOT EXISTS idx_verification_status
-  ON public.profile_verification_requests (status, submitted_at DESC);
-CREATE INDEX IF NOT EXISTS idx_verification_department
-  ON public.profile_verification_requests (department_id, status);
-
-DROP TRIGGER IF EXISTS set_verification_updated_at
-  ON public.profile_verification_requests;
-CREATE TRIGGER set_verification_updated_at
-  BEFORE UPDATE ON public.profile_verification_requests
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
 -- 2. Posts table
 CREATE TABLE IF NOT EXISTS public.posts (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -326,6 +291,70 @@ DROP TRIGGER IF EXISTS set_device_tokens_updated_at ON public.device_tokens;
 CREATE TRIGGER set_device_tokens_updated_at
   BEFORE UPDATE ON public.device_tokens
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- 6d. Identity verification requests (migration 016, 042). Holds a snapshot of what
+-- the requester submitted, so a later edit cannot change what the reviewer saw.
+CREATE TABLE IF NOT EXISTS public.profile_verification_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'student',
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'approved', 'declined')),
+  full_name TEXT NOT NULL,
+  student_id TEXT NOT NULL,
+  department_id UUID REFERENCES public.departments(id),
+  course_id UUID REFERENCES public.courses(id),
+  year_level TEXT,
+  birthdate DATE,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reviewed_by TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  review_note TEXT,
+  escalated_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_verification_role_shape CHECK (
+    role = ANY (ARRAY['student','faculty','departmentAdmin','admin'])
+    AND (
+      (
+        role = 'student'
+        AND department_id IS NOT NULL
+        AND course_id IS NOT NULL
+        AND year_level IS NOT NULL
+      )
+      OR (
+        role = ANY (ARRAY['faculty','departmentAdmin'])
+        AND department_id IS NOT NULL
+        AND course_id IS NULL
+        AND year_level IS NULL
+      )
+      OR (
+        role = 'admin'
+        AND department_id IS NULL
+        AND course_id IS NULL
+        AND year_level IS NULL
+      )
+    )
+  )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_verification_one_pending
+  ON public.profile_verification_requests (user_id)
+  WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_verification_status
+  ON public.profile_verification_requests (status, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_verification_department
+  ON public.profile_verification_requests (department_id, status);
+CREATE INDEX IF NOT EXISTS idx_verification_escalated
+  ON public.profile_verification_requests (escalated_at)
+  WHERE escalated_at IS NOT NULL;
+
+DROP TRIGGER IF EXISTS set_verification_updated_at
+  ON public.profile_verification_requests;
+CREATE TRIGGER set_verification_updated_at
+  BEFORE UPDATE ON public.profile_verification_requests
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_updated_at();
 
 -- Filtered UPDATE delivery (delivered/seen) for Postgres Changes.
 ALTER TABLE public.messages REPLICA IDENTITY FULL;
