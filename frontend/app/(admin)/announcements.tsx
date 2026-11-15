@@ -436,7 +436,7 @@ export default function AdminAnnouncementsScreen() {
               {audienceLabel}
             </Text>
             {countLoading ? (
-              <ActivityIndicator size="small" color={colors.primary} />
+              <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.primary} />
             ) : (
               <Text style={{ fontSize: 13, fontWeight: "800", color: colors.textPrimary }}>
                 {count ?? "—"} recipient{count === 1 ? "" : "s"}
@@ -491,7 +491,7 @@ export default function AdminAnnouncementsScreen() {
 
           {historyLoading ? (
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 48 }}>
-              <ActivityIndicator size="large" color={colors.primary} />
+              <ActivityIndicator accessibilityLabel="Loading" size="large" color={colors.primary} />
             </View>
           ) : history.length === 0 ? (
             <Text style={{ paddingVertical: 40, textAlign: "center", fontSize: 13, color: colors.textTertiary }}>
@@ -516,7 +516,7 @@ export default function AdminAnnouncementsScreen() {
                   {item.recipients} recipient{item.recipients === 1 ? "" : "s"} ·{" "}
                   {formatDate(item.created_at)} · {item.actor_username || "system"}
                 </Text>
-                <Text style={{ marginTop: 2, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, color: colors.textMuted }}>
+                <Text style={{ marginTop: 2, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, color: colors.textTertiary }}>
                   {item.audience?.type === "role"
                     ? `Role: ${item.audience.role}`
                     : item.audience?.type === "department"
@@ -544,7 +544,7 @@ export default function AdminAnnouncementsScreen() {
               }}
             >
               {historyMore ? (
-                <ActivityIndicator size="small" color={colors.primary} />
+                <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.primary} />
               ) : (
                 <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textSecondary }}>Load more</Text>
               )}

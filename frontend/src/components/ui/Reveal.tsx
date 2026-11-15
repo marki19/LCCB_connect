@@ -25,6 +25,11 @@ type RevealProps = {
  * `entering` animations can leave an element at `visibility: hidden` when the
  * layout animation never starts, which hides real content. A timed shared
  * value is deterministic on web, iOS, and Android.
+ *
+ * Only the transform animates. Fading text through partial opacity drops its
+ * effective contrast mid-flight, which both hurts readability for the first
+ * frames and makes automated contrast audits flaky (axe samples the live DOM
+ * while the entrance is still running). The rise alone still reads as motion.
  */
 export default function Reveal({ children, delay = 0, style, distance = 10 }: RevealProps) {
   const reduced = useReducedMotion();
@@ -44,7 +49,6 @@ export default function Reveal({ children, delay = 0, style, distance = 10 }: Re
   }, [delay, progress, reduced]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
     transform: [{ translateY: (1 - progress.value) * distance }],
   }));
 

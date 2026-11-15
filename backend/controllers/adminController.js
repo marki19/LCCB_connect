@@ -309,39 +309,8 @@ const forceSignOut = async (req, res, next) => {
   }
 };
 
-const deleteUser = async (req, res, next) => {
-  try {
-    const target = await authorizeTarget(req, res, req.params.id, {
-      superadminOnly: true,
-    });
-    if (!target) return;
-
-    // Auth first so the account cannot sign in while its profile is being
-    // removed. A missing Auth user is treated as success for retries.
-    await accountService.deleteAuthUser(target.id);
-    const deleted = await userModel.deleteUser(target.id);
-    if (!deleted) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    await auditService.recordRequest(req, {
-      action: ACTIONS.USER_DELETE,
-      targetType: "user",
-      targetId: target.id,
-      targetLabel: targetLabel(target),
-      reason: req.body.reason,
-      metadata: {
-        username: target.username,
-        full_name: target.full_name,
-        role: target.role,
-      },
-    });
-
-    res.json({ message: "User deleted", id: target.id });
-  } catch (error) {
-    sendServiceError(error, res, next);
-  }
-};
+// Account deletion removed per policy: permanent deletion is manual DB query only.
+// Admins/superadmins can only suspend/disable accounts via POST /admin/users/:id/suspend.
 
 const listContent = async (req, res, next) => {
   try {
@@ -493,6 +462,64 @@ const listAnnouncements = async (req, res, next) => {
   }
 };
 
+const generateImpersonation = async (req, res, next) => {
+  try {
+    const target = await authorizeTarget(req, res, req.params.id, {
+      superadminOnly: true,
+    });
+    if (!target) return;
+
+    const result = await accountService.generateImpersonationLink(target.id);
+    await auditService.recordRequest(req, {
+      action: ACTIONS.ADMIN_IMPERSONATE,
+      targetType: "user",
+      targetId: target.id,
+      targetLabel: targetLabel(target),
+      reason: req.body.reason,
+      metadata: { email: result.email },
+    });
+
+    res.json({
+      message: "Impersonation link generated",
+      link: result.link,
+      email: result.email,
+      expires_at: result.expires_at,
+    });
+  } catch (error) {
+    sendServiceError(error, res, next);
+  }
+};
+
+/**
+ * Unlock a user's account (remove lockout, reset failed attempts).
+ * Superadmin only.
+ */
+const unlockUser = async (req, res, next) => {
+  try {
+    const target = await authorizeTarget(req, res, req.params.id, {
+      superadminOnly: true,
+    });
+    if (!target) return;
+
+    const result = await userModel.unlockAccount(target.id);
+    await auditService.recordRequest(req, {
+      action: ACTIONS.USER_UNSUSPEND, // Reuse closest action; could add specific if needed
+      targetType: "user",
+      targetId: target.id,
+      targetLabel: targetLabel(target),
+      reason: req.body.reason,
+      metadata: {
+        was_locked: !!target.locked_until,
+        failed_attempts_cleared: target.failed_login_attempts,
+      },
+    });
+
+    res.json({ message: "Account unlocked", user: await adminModel.getUserById(target.id) });
+  } catch (error) {
+    sendServiceError(error, res, next);
+  }
+};
+
 module.exports = {
   getOverview,
   listUsers,
@@ -501,10 +528,11 @@ module.exports = {
   suspendUser,
   unsuspendUser,
   forceSignOut,
-  deleteUser,
   listContent,
   listAudit,
   getAudienceCount,
   sendAnnouncement,
   listAnnouncements,
+  generateImpersonation,
+  unlockUser,
 };

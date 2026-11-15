@@ -64,9 +64,40 @@ const markAllAsRead = async (userId) => {
   return result.rows;
 };
 
+/**
+ * Create a repost notification.
+ * Skips if the original author is the same as the reposter.
+ * 
+ * @param {string} originalAuthorId - User ID of original post author
+ * @param {string} reposterId - User ID of person who reposted
+ * @param {string} repostId - UUID of the repost
+ * @returns {Promise<Object|null>} Created notification or null if skipped
+ */
+const createRepostNotification = async (originalAuthorId, reposterId, repostId) => {
+  if (originalAuthorId === reposterId) {
+    return null;
+  }
+  
+  const result = await db.query(
+    `INSERT INTO notifications (user_id, actor_id, type, target_id, repost_id, message, department_id)
+     VALUES ($1, $2, 'repost', $3, $3, $4, $5)
+     RETURNING *`,
+    [
+      originalAuthorId,
+      reposterId,
+      repostId,
+      `${reposterId} reposted your post`,
+      null // department_id will be fetched from actor's profile if needed
+    ]
+  );
+  
+  return result.rows[0];
+};
+
 module.exports = {
   getUserNotifications,
   getUnreadCount,
   markAsRead,
   markAllAsRead,
+  createRepostNotification,
 };

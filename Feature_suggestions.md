@@ -1,10 +1,10 @@
 # Feature & Tool Suggestions — LCCB Connect
 
 **Status:** Proposed
-**Related:** `Feature_plan.md`, `Security_plan.md`
+**Related:** `implementation_plans/Feature_plan.md`, `implementation_plans/Security_plan.md`
 
 Ideas are grouped and tagged. Each has a one-line rationale. Nothing here is committed work — pick items
-and they can be turned into a `Feature_plan.md`-style breakdown.
+and they can be turned into a `implementation_plans/Feature_plan.md`-style breakdown.
 
 Legend: 🟢 quick win (low effort, high value) · 🔵 high-value feature · 🧰 developer tooling.
 
@@ -46,7 +46,7 @@ ownership checks, and Realtime so the screen works with real users. *Rationale:*
 ### A8. 🔵 Verified LCCB student onboarding (security + product)
 Restrict signups to the LCCB email domain, require email confirmation, and mark profiles
 `verified`. Gate thesis upload and posting behind verification. *Rationale:* trust, spam control, and it
-satisfies part of `Security_plan.md` Phase 10.
+satisfies part of `implementation_plans/Security_plan.md` Phase 10.
 
 ### A9. 🔵 Admin & moderation toolkit
 The `role` column (`student`/`admin`/`superadmin`) and `app/(admin)/*` screens exist client-side. Add
@@ -91,11 +91,11 @@ the schema you already wrote; catches column/type drift instantly.
 
 ### B2. 🧰 Real migrations with `node-pg-migrate`
 Replace the ad-hoc `scripts/migrate-*.js` with versioned migrations run against `DIRECT_URL`.
-*Rationale:* reproducible schema; supports `Security_plan.md` Phase 3/8.
+*Rationale:* reproducible schema; supports `implementation_plans/Security_plan.md` Phase 3/8.
 
 ### B3. 🧰 Backend tests: Vitest/Jest + Supertest
 Cover auth (401/403), ownership, validation, and the like/comment flows. *Rationale:* makes the security
-changes in `Security_plan.md` safe to refactor.
+changes in `implementation_plans/Security_plan.md` safe to refactor.
 
 ### B4. 🧰 Frontend tests: React Native Testing Library
 Auth flows, guest-session removal, and critical screens. *Rationale:* mobile regressions are easy to ship
@@ -115,7 +115,7 @@ style across the monorepo.
 ### B8. 🧰 API docs + typed client
 Generate OpenAPI/Swagger (or adopt `tRPC`/typed fetch wrappers) and serve docs (Scalar/Redoc).
 *Rationale:* the scattered `fetch()` calls in the frontend would become one typed client
-(also required by `Security_plan.md` Phase 9).
+(also required by `implementation_plans/Security_plan.md` Phase 9).
 
 ### B9. 🧰 Structured logging + error tracking
 `pino`/`pino-http` on the backend (no tokens/PII) and Sentry on both tiers. *Rationale:* you currently
@@ -123,7 +123,7 @@ Generate OpenAPI/Swagger (or adopt `tRPC`/typed fetch wrappers) and serve docs (
 
 ### B10. 🧰 Environment validation & examples
 Add `.env.example` files and validate required env at boot with zod. *Rationale:* fail fast; supports
-`Security_plan.md` Phase 0/5.
+`implementation_plans/Security_plan.md` Phase 0/5.
 
 ### B11. 🧰 Dependabot + dependency hygiene
 Enable Dependabot for npm in both packages. *Rationale:* keeps `express`/`pg`/`@supabase/supabase-js` patched.
@@ -145,7 +145,7 @@ endpoints, including 401/403 cases.
 
 | Priority | Items | Why now |
 |----------|-------|---------|
-| **P0 (with security work)** | B1, B2, B3, B5, B6, B10 | Enable safe delivery of `Security_plan.md`; stop secret leaks |
+| **P0 (with security work)** | B1, B2, B3, B5, B6, B10 | Enable safe delivery of `implementation_plans/Security_plan.md`; stop secret leaks |
 | **P1 (core UX)** | A1, A2, A4, A8, A9 | Search, scale, complete interactions, trust & moderation |
 | **P2 (engagement)** | A3, A5, A6, A7, A12 | Notifications, saves, social graph, realtime |
 | **P3 (differentiators)** | A10, A11, A13, A14 | Thesis tooling, portfolio, analytics, trust & safety |

@@ -47,6 +47,21 @@ const getConversations = async (req, res, next) => {
   }
 };
 
+const getConversationById = async (req, res, next) => {
+  try {
+    const conversation = await messageModel.getConversationForParticipant(
+      req.params.id,
+      req.user.id
+    );
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+    res.json(conversation);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getRequests = async (req, res, next) => {
   try {
     const requests = await messageModel.listRequests(req.user.id, {
@@ -76,6 +91,15 @@ const createConversation = async (req, res, next) => {
     const { peer_id } = req.body;
     if (peer_id === req.user.id) {
       return res.status(400).json({ error: "You can't message yourself" });
+    }
+
+    // Verify user profile is complete before allowing messaging
+    if (!req.profile?.profile_completed) {
+      return res.status(403).json({
+        error: "Profile incomplete",
+        message: "Complete your profile (full name, student ID, department, and course) before messaging.",
+        code: "PROFILE_INCOMPLETE",
+      });
     }
 
     const decision = await messageModel.canMessage(req.user.id, peer_id);
@@ -272,6 +296,7 @@ const reportMessage = async (req, res, next) => {
 
 module.exports = {
   getConversations,
+  getConversationById,
   getRequests,
   getUnreadCount,
   createConversation,

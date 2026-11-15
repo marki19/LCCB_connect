@@ -41,6 +41,9 @@ stub(auth, "loadProfile", (req, res, next) => {
   };
   return next();
 });
+// Stub new admin middleware (checkSessionAge, requireAal2) to pass through
+stub(auth, "checkSessionAge", (req, res, next) => next());
+stub(auth, "requireAal2", (req, res, next) => next());
 
 const model = {
   getOverview: stub(adminModel, "getOverview"),
@@ -203,11 +206,11 @@ describe("user governance", () => {
 
   it("returns a dossier with the auth email", async () => {
     model.getUserDossier.setImpl(async () => ({ ...targetUser(), email: undefined }));
-    accounts.getAuthUser.setImpl(async () => ({ email: "student@lccb.edu.ph" }));
+    accounts.getAuthUser.setImpl(async () => ({ email: "student@lccbonline.edu.ph" }));
 
     const res = await request(app).get(`/api/admin/users/${TARGET}`).set(AUTH);
     assert.equal(res.status, 200);
-    assert.equal(res.body.email, "student@lccb.edu.ph");
+    assert.equal(res.body.email, "student@lccbonline.edu.ph");
   });
 
   it("rejects self-management", async () => {
@@ -308,19 +311,13 @@ describe("user governance", () => {
     assert.equal(audit.calls.at(-1)[1].action, "user.force_signout");
   });
 
-  it("deletes the auth user and profile, then audits", async () => {
-    model.getUserByIdText.setImpl(async () => targetUser("student"));
-    model.deleteUser.setImpl(async () => targetUser("student"));
-
+  it("returns 404 for deleted user route per policy (manual DB query only)", async () => {
     const res = await request(app)
       .delete(`/api/admin/users/${TARGET}`)
       .set(AUTH)
       .send({ reason: "duplicate account" });
 
-    assert.equal(res.status, 200);
-    assert.equal(accounts.deleteAuthUser.calls.length, 1);
-    assert.equal(model.deleteUser.calls.length, 1);
-    assert.equal(audit.calls.at(-1)[1].action, "user.delete");
+    assert.equal(res.status, 404);
   });
 });
 

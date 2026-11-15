@@ -1,4 +1,7 @@
-export type PostType = "text" | "image" | "project" | "capstone" | "website" | "thesis";
+export type PostType = "text" | "image" | "project" | "capstone" | "website" | "thesis" | "discussion";
+
+/** Who may read a post or thesis. Enforced in Postgres (see migration 014). */
+export type ContentVisibility = "public" | "department" | "friends" | "custom" | "private";
 
 export type User = {
   id: string;
@@ -17,14 +20,22 @@ export type User = {
   department_name?: string | null;
 };
 
+export type RepostInfo = {
+  caption?: string | null;
+  reposter: User;
+  created_at: string;
+};
+
 export type Post = {
   id: string;
   author: User;
   title: string;
   description: string;
+  content?: string;          // For text/image/discussion types — the main body
   type: PostType;
   previewUrl?: string;
   imageUrl?: string;
+  image_urls?: string[];
   preview_metadata?: {
     title?: string | null;
     description?: string | null;
@@ -35,9 +46,19 @@ export type Post = {
   tags: string[];
   likes: number;
   comments: number;
+  repost_count: number;
   createdAt: string;
   rawDate?: number;
   isLiked?: boolean;
+  is_saved?: boolean;
+  visibility?: ContentVisibility;
+  allow_reposts: boolean;
+  edited_at?: string | null;
+  deleted_at?: string | null;
+  kind: "post" | "repost";
+  repost?: RepostInfo;
+  author_department_id?: string | null;
+  author_course_id?: string | null;
 };
 
 export type Thesis = {
@@ -53,6 +74,7 @@ export type Thesis = {
   pdf_url: string;
   created_at: string;
   uploader?: User;
+  visibility?: ContentVisibility;
 };
 
 // Admin-managed catalog (Messaging_plan.md §3). Runtime data, never hardcoded.

@@ -1,32 +1,16 @@
 const db = require("../db");
 
 /**
- * Social settings (Messaging_plan.md §1, §5, §7, §8): blocks, the "who can
+ * Social settings (Messaging_plan.md §1, §5, §7, §8): the "who can
  * message me" policy + allow-list, presence, and device tokens.
+ *
+ * Block *writes* moved to `blockModel` (2026-11-10) — that module owns the
+ * bidirectional block path and the ALREADY_BLOCKED / CANNOT_BLOCK_SELF codes
+ * the client handles. `isBlocked` stays here because the messaging and friend
+ * request paths call it directly.
  */
 
-// ---- blocks (§7) -----------------------------------------------------------
-
-const block = async (blockerId, blockedId) => {
-  const result = await db.query(
-    `INSERT INTO public.blocks (blocker_id, blocked_id)
-     VALUES ($1, $2)
-     ON CONFLICT (blocker_id, blocked_id) DO NOTHING
-     RETURNING blocker_id, blocked_id, created_at;`,
-    [blockerId, blockedId]
-  );
-  return result.rows[0] || { blocker_id: blockerId, blocked_id: blockedId };
-};
-
-const unblock = async (blockerId, blockedId) => {
-  const result = await db.query(
-    `DELETE FROM public.blocks
-      WHERE blocker_id = $1 AND blocked_id = $2
-      RETURNING blocker_id, blocked_id;`,
-    [blockerId, blockedId]
-  );
-  return result.rows[0];
-};
+// ---- block check (§7) -------------------------------------------------------
 
 const isBlocked = async (blockerId, blockedId) => {
   const result = await db.query(
@@ -34,20 +18,6 @@ const isBlocked = async (blockerId, blockedId) => {
     [blockerId, blockedId]
   );
   return result.rowCount > 0;
-};
-
-const listBlocked = async (blockerId) => {
-  const result = await db.query(
-    `SELECT b.blocked_id, b.created_at,
-       json_build_object('id', pr.id, 'username', pr.username, 'full_name', pr.full_name,
-                         'avatar_url', pr.avatar_url) AS peer
-     FROM public.blocks b
-     LEFT JOIN public.profiles pr ON pr.id = b.blocked_id
-     WHERE b.blocker_id = $1
-     ORDER BY b.created_at DESC;`,
-    [blockerId]
-  );
-  return result.rows;
 };
 
 // ---- "who can message me" policy (§4) -------------------------------------
@@ -181,11 +151,21 @@ const deleteDeviceTokens = async (tokens) => {
   return result.rowCount;
 };
 
+// ---- profile banner --------------------------------------------------------
+
+const dismissProfileBanner = async (userId) => {
+  const result = await db.query(
+    `UPDATE public.profiles SET profile_banner_dismissed = TRUE
+     WHERE id = $1
+     RETURNING profile_banner_dismissed`,
+    [userId]
+  );
+  return result.rows[0]?.profile_banner_dismissed ?? true;
+};
+
 module.exports = {
-  block,
-  unblock,
   isBlocked,
-  listBlocked,
+  dismissProfileBanner,
   getMessagePolicy,
   setMessagePolicy,
   setPresenceMode,

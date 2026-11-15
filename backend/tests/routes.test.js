@@ -14,6 +14,12 @@ const userModel = require("../models/userModel");
 const notificationService = require("../services/notificationService");
 const moderationService = require("../services/moderationService");
 const auditService = require("../services/auditService");
+const accountService = require("../services/accountService");
+const repostModel = require("../models/repostModel");
+const notificationModel = require("../models/notificationModel");
+const reportModel = require("../models/reportModel");
+const blockModel = require("../models/blockModel");
+const socialModel = require("../models/socialModel");
 
 // The controllers fire off background notification/moderation work after
 // responding. Stub it so the suite stays hermetic (and quiet).
@@ -26,6 +32,33 @@ stub(moderationService, "scanComment", async () => ({ flagged: false }));
 stub(moderationService, "scanThesis", async () => ({ flagged: false }));
 stub(thesisModel, "getFlaggedTheses", async () => []);
 stub(auditService, "recordRequest", async () => undefined);
+
+// Account deletion must also remove the Supabase Auth user. Stub it so the
+// route stays hermetic and the call can be asserted.
+const revokeSessions = stub(accountService, "revokeSessions", async () => ({
+  sessions: 0,
+  refresh_tokens: 0,
+}));
+const deleteAuthUser = stub(accountService, "deleteAuthUser", async () => true);
+
+// The response middleware resolves private storage keys through Supabase. In
+// the test suite there is no Supabase, so the resolution is a no-op: the body
+// is shipped as-is. This keeps the HTTP contract assertions hermetic.
+const storageService = require("../services/storageService");
+stub(storageService, "withStorageUrls", async (body) => body);
+
+// The thesis upload path calls getSupabaseAdmin() to push bytes into Storage.
+// The model is stubbed, so the upload itself never runs in these tests — but
+// the factory must still resolve, otherwise the controller throws.
+const supabaseAdmin = require("../services/supabaseAdmin");
+stub(supabaseAdmin, "getSupabaseAdmin", () => ({
+  storage: {
+    from: () => ({
+      upload: async () => ({ error: null }),
+      remove: async () => ({ error: null }),
+    }),
+  },
+}));
 
 const STORAGE_URL = "https://test-project.supabase.co/storage/v1/object/public";
 
@@ -40,19 +73,22 @@ const defaultRequireAuth = (req, res, next) => {
   return next();
 };
 const defaultLoadProfile = (req, res, next) => {
-  req.profile = { id: session.id, role: session.role, department_id: session.department_id };
+  req.profile = { id: session.id, role: session.role, department_id: session.department_id, profile_completed: true, identity_complete: true };
   return next();
 };
 
 stub(auth, "requireAuth", defaultRequireAuth);
 stub(auth, "loadProfile", defaultLoadProfile);
+stub(auth, "requireVerified", (req, res, next) => next());
 
 // Every model method the routes touch.
 const m = {
+  visiblePostsFor: stub(postModel, "visiblePostsFor"),
   getAllPosts: stub(postModel, "getAllPosts"),
   getPostById: stub(postModel, "getPostById"),
   createPost: stub(postModel, "createPost"),
   updatePost: stub(postModel, "updatePost"),
+  softDeletePost: stub(postModel, "softDeletePost"),
   deletePost: stub(postModel, "deletePost"),
   toggleLike: stub(postModel, "toggleLike"),
   getCommentById: stub(postModel, "getCommentById"),
@@ -72,6 +108,17 @@ const m = {
   createUser: stub(userModel, "createUser"),
   updateUser: stub(userModel, "updateUser"),
   deleteUser: stub(userModel, "deleteUser"),
+  createRepost: stub(repostModel, "createRepost"),
+  undoRepost: stub(repostModel, "undoRepost"),
+  getVisibleRepostsForPost: stub(repostModel, "getVisibleRepostsForPost"),
+  createRepostNotification: stub(notificationModel, "createRepostNotification"),
+  createReport: stub(reportModel, "createReport"),
+  listReports: stub(reportModel, "listReports"),
+  updateReportStatus: stub(reportModel, "updateReportStatus"),
+  blockUser: stub(blockModel, "blockUser"),
+  unblockUser: stub(blockModel, "unblockUser"),
+  listBlocked: stub(blockModel, "listBlocked"),
+  dismissProfileBanner: stub(socialModel, "dismissProfileBanner"),
 };
 
 // Imported only after the stubs are installed.
@@ -117,12 +164,13 @@ describe("identity comes from the token, never the body", () => {
   });
 
   it("stamps the liker from the token", async () => {
-    m.toggleLike.setImpl(async () => ({ liked: true }));
+      m.getPostById.setImpl(async (id) => ({ id, visibility: "public" }));
+      m.toggleLike.setImpl(async () => ({ liked: true }));
 
-    await request(app).post("/api/posts/p1/like").set(AUTH).send({ user_id: "u9" });
+      await request(app).post("/api/posts/p1/like").set(AUTH).send({ user_id: "u9" });
 
-    assert.deepEqual(m.toggleLike.calls, [["p1", "u1"]]);
-  });
+      assert.deepEqual(m.toggleLike.calls, [["p1", "u1"]]);
+    });
 });
 
 describe("ownership is enforced in SQL (404, not 403)", () => {
@@ -136,13 +184,13 @@ describe("ownership is enforced in SQL (404, not 403)", () => {
   });
 
   it("404 when deleting a post that is not owned", async () => {
-    m.deletePost.setImpl(async () => undefined);
+      m.softDeletePost.setImpl(async () => undefined);
 
-    const res = await request(app).delete("/api/posts/abc").set(AUTH);
+      const res = await request(app).delete("/api/posts/abc").set(AUTH);
 
-    assert.equal(res.status, 404);
-    assert.deepEqual(m.deletePost.calls, [["abc", "u1"]]);
-  });
+      assert.equal(res.status, 404);
+      assert.deepEqual(m.softDeletePost.calls, [["abc", "u1"]]);
+    });
 
   it("404 when updating a thesis that is not owned", async () => {
     m.updateThesis.setImpl(async () => undefined);
@@ -314,11 +362,14 @@ describe("profile writes: self-or-admin only", () => {
     assert.equal(m.createUser.calls.length, 0);
   });
 
-  it("403 when a student deletes another account", async () => {
+  it("returns 404 for deleted user route per policy (manual DB query only)", async () => {
     const res = await request(app).delete("/api/users/u9").set(AUTH);
+    assert.equal(res.status, 404);
+  });
 
-    assert.equal(res.status, 403);
-    assert.equal(m.deleteUser.calls.length, 0);
+  it("self-delete route removed per policy", async () => {
+    const res = await request(app).delete("/api/users/u1").set(AUTH);
+    assert.equal(res.status, 404);
   });
 });
 
@@ -389,18 +440,18 @@ describe("role escalation is closed", () => {
     assert.equal(m.updateUser.calls.length, 0);
   });
 
-  it("403 when an admin deletes a superadmin", async () => {
+  it("404 for delete route per policy (manual DB query only)", async () => {
     session.id = "admin1";
     session.role = "admin";
     m.getUserById.setImpl(async () => ({ id: "super1", role: "superadmin" }));
 
     const res = await request(app).delete("/api/users/super1").set(AUTH);
 
-    assert.equal(res.status, 403);
-    assert.equal(m.deleteUser.calls.length, 0);
+    assert.equal(res.status, 404);
+    assert.equal(m.getUserById.calls.length, 0);
   });
 
-  it("does not let an admin delete a lower-ranked account through the legacy route", async () => {
+  it("404 for delete route per policy (manual DB query only)", async () => {
     session.id = "admin1";
     session.role = "admin";
     m.getUserById.setImpl(async () => ({ id: "s1", role: "student" }));
@@ -408,14 +459,14 @@ describe("role escalation is closed", () => {
 
     const res = await request(app).delete("/api/users/s1").set(AUTH);
 
-    assert.equal(res.status, 403);
-    assert.equal(m.deleteUser.calls.length, 0);
+    assert.equal(res.status, 404);
+    assert.equal(m.getUserById.calls.length, 0);
   });
 
   it("never looks up the target for a non-admin (no id probing)", async () => {
     const res = await request(app).delete("/api/users/ghost").set(AUTH);
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 404);
     assert.equal(m.getUserById.calls.length, 0);
   });
 });
@@ -551,6 +602,9 @@ describe("file uploads use storage object keys", () => {
   });
 
   it("rejects an external URL on a thesis pdf", async () => {
+    // Manuscripts now arrive as multipart/form-data, not a JSON `pdf_url`
+    // field — the JSON body is rejected by the schema before the file is
+    // even seen.
     const res = await request(app).post("/api/theses").set(AUTH).send({
       title: "t",
       abstract: "a",
@@ -563,20 +617,27 @@ describe("file uploads use storage object keys", () => {
   });
 
   it("accepts a bucket-relative storage key on a thesis pdf", async () => {
-    m.createThesis.setImpl(async (data) => ({ id: "t2" }));
+    m.createThesis.setImpl(async (data) => ({ id: "t2", ...data }));
 
-    const res = await request(app).post("/api/theses").set(AUTH).send({
-      title: "t",
-      abstract: "a",
-      category: "c",
-      pdf_url: "u1/2.pdf",
-    });
+    const res = await request(app)
+      .post("/api/theses")
+      .set(AUTH)
+      .field("title", "t")
+      .field("abstract", "a")
+      .field("category", "c")
+      .attach("pdf", Buffer.from("%PDF-1.4 fake manuscript"), "u1/2.pdf");
 
     assert.equal(res.status, 201);
-    assert.deepEqual(m.createThesis.calls.at(-1)[0].pdf_url, "u1/2.pdf");
+    // The path is `theses/<uid>/<timestamp>.pdf`; the filename comes from the
+    // upload, the prefix from the caller's identity.
+    const storedKey = m.createThesis.calls.at(-1)[0].pdf_url;
+    assert.ok(
+      storedKey.startsWith("theses/u1/") && storedKey.endsWith(".pdf"),
+      `unexpected stored key: ${storedKey}`
+    );
   });
 
-  it("returns the created image as a public URL", async () => {
+  it("returns the created image as a raw key (assets is private)", async () => {
     m.createPost.setImpl(async () => ({
       id: "p2",
       image_url: "posts/a/b.jpg",
@@ -588,7 +649,9 @@ describe("file uploads use storage object keys", () => {
       .send({ content: "x", type: "image", image_url: "posts/a/b.jpg" });
 
     assert.equal(res.status, 201);
-    assert.deepEqual(res.body.image_url, `${STORAGE_URL}/assets/posts/a/b.jpg`);
+    // `assets` is private (migration 015): the client must ask the backend
+    // for a signed URL, so the stored key is returned as-is.
+    assert.deepEqual(res.body.image_url, "posts/a/b.jpg");
   });
 
   it("rejects a client-supplied department on a thesis (server-derived)", async () => {
@@ -625,27 +688,35 @@ describe("errors and pagination limits", () => {
   });
 
   it("clamps ?limit and passes ?cursor through to the model", async () => {
-    m.getAllPosts.setImpl(async () => []);
+      m.visiblePostsFor.setImpl(async () => ({ posts: [] }));
 
-    await request(app).get("/api/posts?limit=500").set(AUTH);
-    assert.deepEqual(m.getAllPosts.calls.at(-1), [
-      { limit: 100, cursor: null, q: null, authorId: null, userId: "u1" },
-    ]);
+      await request(app).get("/api/posts?limit=500").set(AUTH);
+      const call1 = m.visiblePostsFor.calls.at(-1);
+      assert.equal(call1.length, 1, "visiblePostsFor takes one options object");
+      assert.deepEqual(call1[0], {
+        viewerId: "u1",
+        limit: 100,
+        cursor: null,
+        q: null,
+        authorId: null,
+        visibility: null,
+      });
 
-    await request(app)
-      .get("/api/posts")
-      .query({ limit: 2, cursor: "2026-01-01T00:00:00.000Z|abc" })
-      .set(AUTH);
-    assert.deepEqual(m.getAllPosts.calls.at(-1), [
-      {
+      await request(app)
+        .get("/api/posts")
+        .query({ limit: 2, cursor: "2026-01-01T00:00:00.000Z|abc" })
+        .set(AUTH);
+      const call2 = m.visiblePostsFor.calls.at(-1);
+      assert.equal(call2.length, 1, "visiblePostsFor takes one options object");
+      assert.deepEqual(call2[0], {
+        viewerId: "u1",
         limit: 2,
         cursor: "2026-01-01T00:00:00.000Z|abc",
         q: null,
         authorId: null,
-        userId: "u1",
-      },
-    ]);
-  });
+        visibility: null,
+      });
+    });
 
   it("applies the same clamping to theses and users", async () => {
     session.role = "admin";
@@ -660,6 +731,7 @@ describe("errors and pagination limits", () => {
         q: null,
         uploaderId: null,
         categories: null,
+        viewerId: "u1",
       },
     ]);
 
@@ -672,39 +744,47 @@ describe("post list filters", () => {
   const AUTHOR = "11111111-1111-4111-8111-111111111111";
 
   it("passes a trimmed search term and author id to the model", async () => {
-    m.getAllPosts.setImpl(async () => []);
+      m.visiblePostsFor.setImpl(async () => ({ posts: [] }));
 
-    const res = await request(app)
-      .get("/api/posts")
-      .query({ q: "  react  ", author_id: AUTHOR, limit: 5 })
-      .set(AUTH);
+      const res = await request(app)
+        .get("/api/posts")
+        .query({ q: "  react  ", author_id: AUTHOR, limit: 5 })
+        .set(AUTH);
 
-    assert.equal(res.status, 200);
-    assert.deepEqual(m.getAllPosts.calls.at(-1), [
-      { limit: 5, cursor: null, q: "react", authorId: AUTHOR, userId: "u1" },
-    ]);
-  });
+      assert.equal(res.status, 200);
+      const call = m.visiblePostsFor.calls.at(-1);
+      assert.equal(call.length, 1, "visiblePostsFor takes one options object");
+      assert.deepEqual(call[0], {
+        viewerId: "u1",
+        limit: 5,
+        cursor: null,
+        q: "react",
+        authorId: AUTHOR,
+        visibility: null,
+      });
+    });
 
-  it("caps an overlong search term at 100 characters", async () => {
-    m.getAllPosts.setImpl(async () => []);
+    it("caps an overlong search term at 100 characters", async () => {
+        m.visiblePostsFor.setImpl(async () => ({ posts: [] }));
 
-    await request(app)
-      .get("/api/posts")
-      .query({ q: "x".repeat(150) })
-      .set(AUTH);
+        await request(app)
+          .get("/api/posts")
+          .query({ q: "x".repeat(150) })
+          .set(AUTH);
 
-    assert.equal(m.getAllPosts.calls.at(-1)[0].q.length, 100);
-  });
+        const call = m.visiblePostsFor.calls.at(-1);
+        assert.equal(call[0].q.length, 100);
+      });
 
   it("rejects a malformed author_id instead of letting Postgres cast it", async () => {
-    const res = await request(app)
-      .get("/api/posts?author_id=not-a-uuid")
-      .set(AUTH);
+      const res = await request(app)
+        .get("/api/posts?author_id=not-a-uuid")
+        .set(AUTH);
 
-    assert.equal(res.status, 400);
-    assert.deepEqual(res.body, { error: "Invalid author_id" });
-    assert.equal(m.getAllPosts.calls.length, 0);
-  });
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, { error: "Invalid author_id" });
+      assert.equal(m.visiblePostsFor.calls.length, 0);
+    });
 });
 
 describe("thesis list filters", () => {
@@ -731,6 +811,7 @@ describe("thesis list filters", () => {
         q: "ai",
         uploaderId: UPLOADER,
         categories: ["Graduate Dissertation"],
+        viewerId: "u1",
       },
     ]);
   });
@@ -757,5 +838,131 @@ describe("thesis list filters", () => {
     assert.equal(res.status, 400);
     assert.deepEqual(res.body, { error: "Invalid uploader_id" });
     assert.equal(m.getAllTheses.calls.length, 0);
+  });
+});
+
+describe("reposts", () => {
+  it("creates exactly one notification, for the original author", async () => {
+    m.createRepost.setImpl(async () => ({
+      id: "r1",
+      original_post: { id: "p1", author_id: "author-1" },
+    }));
+    m.createRepostNotification.setImpl(async () => ({ id: "n1" }));
+
+    const res = await request(app).post("/api/posts/p1/repost").set(AUTH);
+
+    assert.equal(res.status, 201);
+    assert.equal(
+      m.createRepostNotification.calls.length,
+      1,
+      "a repost must produce exactly one notification"
+    );
+    assert.deepEqual(m.createRepostNotification.calls[0], ["author-1", "u1", "r1"]);
+  });
+
+  it("returns 409 for a duplicate repost", async () => {
+    m.createRepost.setImpl(async () => {
+      const err = new Error("Already reposted");
+      err.code = "ALREADY_REPOSTED";
+      throw err;
+    });
+
+    const res = await request(app).post("/api/posts/p1/repost").set(AUTH);
+
+    assert.equal(res.status, 409);
+    assert.deepEqual(res.body, { error: "Already reposted this post" });
+  });
+
+  it("returns 403 when the author disabled reposts", async () => {
+    m.createRepost.setImpl(async () => {
+      const err = new Error("disabled");
+      err.code = "REPOSTS_NOT_ALLOWED";
+      throw err;
+    });
+
+    const res = await request(app).post("/api/posts/p1/repost").set(AUTH);
+
+    assert.equal(res.status, 403);
+  });
+});
+
+describe("reports and blocks", () => {
+  it("POST /api/reports reaches createReport", async () => {
+    m.createReport.setImpl(async () => ({ id: "r1" }));
+
+    const res = await request(app)
+      .post("/api/reports")
+      .set(AUTH)
+      .send({ targetType: "post", targetId: "p1", reason: "spam" });
+
+    assert.equal(res.status, 201);
+    assert.deepEqual(m.createReport.calls[0], ["u1", "post", "p1", "spam", undefined]);
+  });
+
+  it("POST /api/blocks reaches blockUser", async () => {
+    m.blockUser.setImpl(async () => ({ id: "b1" }));
+
+    const res = await request(app)
+      .post("/api/blocks")
+      .set(AUTH)
+      .send({ blockedId: "u2" });
+
+    assert.equal(res.status, 201);
+  });
+
+  it("GET /api/blocks reaches listBlocked", async () => {
+    m.listBlocked.setImpl(async () => []);
+
+    const res = await request(app).get("/api/blocks").set(AUTH);
+
+    assert.equal(res.status, 200);
+  });
+
+  it("GET /api/reports is admin-only", async () => {
+    m.listReports.setImpl(async () => []);
+
+    const asStudent = await request(app).get("/api/reports").set(AUTH);
+    assert.equal(asStudent.status, 403);
+
+    session.role = "admin";
+    const asAdmin = await request(app).get("/api/reports").set(AUTH);
+    assert.equal(asAdmin.status, 200);
+  });
+});
+
+describe("profile banner", () => {  it("PATCH /api/users/me/banner-dismissed hides the banner", async () => {
+    m.dismissProfileBanner.setImpl(async () => true);
+
+    const res = await request(app)
+      .patch("/api/users/me/banner-dismissed")
+      .set(AUTH);
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { profile_banner_dismissed: true });
+    assert.deepEqual(m.dismissProfileBanner.calls[0], ["u1"]);
+  });
+});
+
+describe("allow_reposts", () => {
+  it("accepts allow_reposts on create", async () => {
+    m.createPost.setImpl(async (data) => ({ id: "p1", ...data }));
+
+    const res = await request(app)
+      .post("/api/posts")
+      .set(AUTH)
+      .send({ content: "hi", type: "text", allow_reposts: false });
+
+    assert.equal(res.status, 201);
+    assert.equal(m.createPost.calls[0][0].allow_reposts, false);
+  });
+
+  it("still rejects fields the schema does not know", async () => {
+    const res = await request(app)
+      .post("/api/posts")
+      .set(AUTH)
+      .send({ content: "hi", type: "text", nonsense: true });
+
+    assert.equal(res.status, 400);
+    assert.equal(m.createPost.calls.length, 0);
   });
 });

@@ -2,7 +2,7 @@
 
 Current-state reference for the PostgreSQL database behind LCCB Connect, plus an audit of the live Supabase schema supplied on **2026-10-19** and the governance and Storage setup applied on **2026-10-20**.
 
-> **Live status (audited 2026-10-20):** the database matches the repo schema end to end — all 17 tables, unique keys, check constraints, NOT NULLs, cascade/set-null foreign keys, RLS, indexes, and triggers are in place. Migration `010_superadmin_console.sql` added account suspension and the append-only `admin_audit_log`; migration `011_storage_buckets.sql` created the `assets` and `theses` buckets with their policies. The database was wiped to a clean state before the governance work: 0 rows in every content table and 0 Supabase Auth users, then five verified role accounts were seeded. See [§7](#7-live-supabase-vs-repo-audit).
+> **Live status (audited 2026-11-07):** the database matches the repo schema end to end — all 19 tables, unique keys, check constraints, NOT NULLs, cascade/set-null foreign keys, RLS, indexes, and triggers are in place. Migration `010_superadmin_console.sql` added account suspension and the append-only `admin_audit_log`; migration `011_storage_buckets.sql` created the `assets` and `theses` buckets with their policies; migration `016_identity_verification.sql` added identity verification columns (`email`, `student_id`, `verification_status`, `verified_at`) and the `profile_verification_requests` table; migration `017_verification_birthdate.sql` added `birthdate` to verification requests. The database was wiped to a clean state before the governance work: 0 rows in every content table and 0 Supabase Auth users, then five verified role accounts were seeded. See [§7](#7-live-supabase-vs-repo-audit).
 
 ---
 
@@ -11,7 +11,7 @@ Current-state reference for the PostgreSQL database behind LCCB Connect, plus an
 | Source | Purpose |
 |---|---|
 | `backend/schema.sql` | Fresh-install schema. Creates all tables, constraints, indexes, RLS posture, and Realtime policies. |
-| `backend/migrations/001…011_*.sql` | Upgrade path for an existing database. Idempotent scripts applied with `node scripts/run-sql.js`. |
+|| `backend/migrations/001…017_*.sql` | Upgrade path for an existing database. Idempotent scripts applied with `node scripts/run-sql.js`. Migrations 016–017 add identity verification columns and the `profile_verification_requests` table with `birthdate`. |
 | `backend/migrations/011_storage_buckets.sql` | Creates the `assets` and `theses` Storage buckets and their read/upload policies. |
 | `backend/scripts/migrate-websites.js` | One-off migration that adds `posts.preview_metadata` and extends `posts.type` with `website`. |
 | `ERD_specification.md` | High-level ERD. Useful for relationships, but out of date in several places (see §7.4). |

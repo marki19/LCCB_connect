@@ -6,6 +6,10 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 import { PresenceProvider } from "../src/contexts/PresenceContext";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
+import { FloatingChatProvider } from "../src/contexts/FloatingChatContext";
+import { SettingsSidebarProvider } from "../src/contexts/SettingsSidebarContext";
+import { FeedFilterProvider } from "../src/contexts/FeedFilterContext";
+import SettingsSidebar from "../src/components/SettingsSidebar";
 import {
   isAdminRole,
   isModeratorRole,
@@ -36,7 +40,7 @@ LogBox.ignoreLogs([
 ]);
 
 function RouteGuard() {
-  const { session, profile, initialized, isGuest } = useAuth();
+  const { session, profile, profileStatus, initialized, isGuest } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -63,81 +67,75 @@ function RouteGuard() {
   }, [initialized, userId, isGuest, router]);
 
   useEffect(() => {
-    if (!initialized) return;
+      if (!initialized) return;
 
-    const inAuth = segments[0] === "(auth)";
-    const inComplete = segments[0] === "complete-profile";
-    const inAdmin = segments[0] === "(admin)";
-    const inModeration = segments[0] === "(moderation)";
-    const inTabs = segments[0] === "(tabs)";
-    const inSuspended = segments[0] === "suspended";
-    const adminUser = isAdminRole(profile?.role);
-    const moderatorUser = isModeratorRole(profile?.role);
-    const suspended = !!profile && isSuspendedProfile(profile);
-    const isAuthenticated = !!session || isGuest;
+      const inAuth = segments[0] === "(auth)";
+      const inAdmin = segments[0] === "(admin)";
+      const inModeration = segments[0] === "(moderation)";
+      const inTabs = segments[0] === "(tabs)";
+      const inSuspended = segments[0] === "suspended";
+      const adminUser = isAdminRole(profile?.role);
+      const moderatorUser = isModeratorRole(profile?.role);
+      const suspended = !!profile && isSuspendedProfile(profile);
+      const isAuthenticated = !!session || isGuest;
 
-    // A fresh sign-in always starts panel-first for desktop admins.
-    if (inAuth) setAdminAppPreview(false);
+      // A fresh sign-in always starts panel-first for desktop admins.
+      if (inAuth) setAdminAppPreview(false);
 
-    // A real (non-guest, non-campus-admin) account missing a department must
-    // finish the one-time profile-completion gate before using the app.
-    const needsProfile =
-      !!session &&
-      !isGuest &&
-      !!profile &&
-      !adminUser &&
-      !profile.department_id;
-
-    if (!isAuthenticated && !inAuth) {
-      // Not logged in - send to login
-      router.replace("/(auth)/login");
-    } else if (isAuthenticated && suspended && !inSuspended) {
-      router.replace("/suspended");
-    } else if (isAuthenticated && !suspended && inSuspended) {
-      router.replace(adminUser && isDesktop ? "/(admin)/" : "/(tabs)/");
-    } else if (isAuthenticated && needsProfile && !inComplete) {
-      router.replace("/complete-profile");
-    } else if (isAuthenticated && inAuth) {
-      // Panel-first on desktop for campus admins; everyone else (and admins on
-      // mobile) goes to the normal app.
-      if (adminUser && isDesktop) {
+      if (!isAuthenticated && !inAuth) {
+        // Not logged in - send to login
+        router.replace("/(auth)/login");
+      } else if (isAuthenticated && suspended && !inSuspended) {
+        router.replace("/suspended");
+      } else if (isAuthenticated && !suspended && inSuspended) {
+        router.replace(adminUser && isDesktop ? "/(admin)/" : "/(tabs)/");
+      } else if (isAuthenticated && inAuth) {
+        // Panel-first on desktop for campus admins; everyone else (and admins on
+        // mobile) goes to the normal app.
+        if (adminUser && isDesktop) {
+          router.replace("/(admin)/");
+        } else if (profileStatus === "loading") {
+          return; // profile still loading — decide on the next pass
+        } else if (profileStatus === "error") {
+          router.replace("/(tabs)/"); // fail open; let the app render degraded
+        } else if (
+          profile?.role === "student" &&
+          profile.verification_status !== "verified"
+        ) {
+          // One-time post-login hop: unverified students complete identity
+          // before they reach the feed. After that, IdentityBanner prompts
+          // them inside the app instead — so "Back to App" from onboarding
+          // lands on the feed and stays there.
+          router.replace("/onboarding");
+        } else {
+          router.replace("/(tabs)/");
+        }
+      } else if (
+        isAuthenticated &&
+        adminUser &&
+        isDesktop &&
+        inTabs &&
+        !isAdminAppPreview()
+      ) {
+        // The profile can arrive one render after the session, so the auth-screen
+        // branch above may already have sent the admin to the feed. Catch that
+        // case unless they explicitly chose "Back to App".
         router.replace("/(admin)/");
-      } else {
+      } else if (isAuthenticated && inAdmin && (!adminUser || !isDesktop)) {
+        // The panel is a desktop console. Never strand a mobile or non-admin
+        // session on a screen it cannot use.
+        router.replace("/(tabs)/");
+      } else if (
+        isAuthenticated &&
+        inModeration &&
+        profile &&
+        (!moderatorUser || !isDesktop)
+      ) {
+        // The moderation console is also desktop-only and limited to
+        // department admins and above.
         router.replace("/(tabs)/");
       }
-    } else if (
-      isAuthenticated &&
-      adminUser &&
-      isDesktop &&
-      inTabs &&
-      !isAdminAppPreview()
-    ) {
-      // The profile can arrive one render after the session, so the auth-screen
-      // branch above may already have sent the admin to the feed. Catch that
-      // case unless they explicitly chose "Back to App".
-      router.replace("/(admin)/");
-    } else if (isAuthenticated && inComplete && !needsProfile) {
-      // Finished the gate - send home.
-      if (adminUser && isDesktop) {
-        router.replace("/(admin)/");
-      } else {
-        router.replace("/(tabs)/");
-      }
-    } else if (isAuthenticated && inAdmin && (!adminUser || !isDesktop)) {
-      // The panel is a desktop console. Never strand a mobile or non-admin
-      // session on a screen it cannot use.
-      router.replace("/(tabs)/");
-    } else if (
-      isAuthenticated &&
-      inModeration &&
-      profile &&
-      (!moderatorUser || !isDesktop)
-    ) {
-      // The moderation console is also desktop-only and limited to
-      // department admins and above.
-      router.replace("/(tabs)/");
-    }
-  }, [session, profile, initialized, segments, isGuest, isDesktop, router]);
+    }, [session, profile, profileStatus, initialized, segments, isGuest, isDesktop, router]);
 
   const { isDark, colors } = useTheme();
 
@@ -155,15 +153,25 @@ function RouteGuard() {
         <Stack.Screen name="(admin)" />
         <Stack.Screen name="(moderation)" />
         <Stack.Screen name="suspended" />
-        <Stack.Screen name="complete-profile" options={{ presentation: "modal" }} />
-        <Stack.Screen name="create" options={{ presentation: "modal" }} />
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="verify-requests" />
+        <Stack.Screen
+          name="create"
+          options={{
+            presentation: "transparentModal",
+            contentStyle: { backgroundColor: "transparent" },
+          }}
+        />
         <Stack.Screen name="edit-profile" options={{ presentation: "modal" }} />
+        <Stack.Screen name="profile/[id]" />
         <Stack.Screen name="post/[id]" />
         <Stack.Screen name="messages/index" />
         <Stack.Screen name="messages/[id]" />
         <Stack.Screen name="friends" />
+        <Stack.Screen name="saved" />
         <Stack.Screen name="settings" options={{ presentation: "modal" }} />
       </Stack>
+      <SettingsSidebar />
     </>
   );
 }
@@ -174,7 +182,13 @@ export default function RootLayout() {
       <ThemeProvider>
         <AuthProvider>
           <PresenceProvider>
-            <RouteGuard />
+            <FloatingChatProvider>
+              <SettingsSidebarProvider>
+                <FeedFilterProvider>
+                  <RouteGuard />
+                </FeedFilterProvider>
+              </SettingsSidebarProvider>
+            </FloatingChatProvider>
           </PresenceProvider>
         </AuthProvider>
       </ThemeProvider>

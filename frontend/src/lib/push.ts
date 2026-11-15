@@ -1,7 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
+import { IosAuthorizationStatus } from "expo-notifications/build/NotificationPermissions.types";
+import { AndroidImportance } from "expo-notifications/build/NotificationChannelManager.types";
 import { Platform } from "react-native";
+import { LIGHT_TOKENS } from "./tokens";
 import { registerDeviceToken, unregisterDeviceToken } from "./messages";
 
 /**
@@ -62,7 +65,7 @@ if (Platform.OS !== "web") {
 /** Permission is "granted" if allowed outright or provisionally (iOS quiet mode). */
 const hasPermission = (settings: Notifications.NotificationPermissionsStatus): boolean =>
   settings.granted ||
-  settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+  settings.ios?.status === IosAuthorizationStatus.PROVISIONAL;
 
 /**
  * Requests permission, obtains the Expo push token, and registers it with the
@@ -76,9 +79,9 @@ export async function registerForPush(): Promise<string | null> {
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("default", {
         name: "Messages",
-        importance: Notifications.AndroidImportance.MAX,
+        importance: AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#1D4ED8",
+        lightColor: LIGHT_TOKENS.primary,
       });
     }
 
@@ -100,7 +103,7 @@ export async function registerForPush(): Promise<string | null> {
     await registerDeviceToken(token, Platform.OS as "ios" | "android");
     await AsyncStorage.setItem(TOKEN_KEY, token);
     return token;
-  } catch (err) {
+  } catch {
     // Expected in Expo Go on Android and whenever Expo can't reach its servers.
     return null;
   }

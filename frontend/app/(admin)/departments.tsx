@@ -7,11 +7,19 @@ import {
   TextInput,
   ActivityIndicator,
 } from "react-native";
-import { Building2, GraduationCap, Plus, Power, Check } from "lucide-react-native";
+import { Building2, GraduationCap, Plus, Power, Check, Layers, Trash2 } from "lucide-react-native";
 import { apiFetch } from "../../src/lib/api";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import type { Department, Course } from "../../src/types";
 import PageHeader from "../../src/components/admin/PageHeader";
+
+interface AcademicLevel {
+  id: string;
+  name: string;
+  code?: string | null;
+  sort_order?: number;
+  is_active: boolean;
+}
 
 /**
  * Admin catalog management (Messaging_plan.md §3).
@@ -24,6 +32,7 @@ export default function AdminDepartmentsScreen() {
   const { colors } = useTheme();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -33,6 +42,8 @@ export default function AdminDepartmentsScreen() {
   const [newDeptCode, setNewDeptCode] = useState("");
   const [newCourse, setNewCourse] = useState("");
   const [newCourseCode, setNewCourseCode] = useState("");
+  const [newLevel, setNewLevel] = useState("");
+  const [newLevelCode, setNewLevelCode] = useState("");
 
   const adminJson = async (path: string, init: RequestInit) => {
     const res = await apiFetch(path, init);
@@ -49,6 +60,14 @@ export default function AdminDepartmentsScreen() {
     }
   }, []);
 
+  const loadAcademicLevels = useCallback(async () => {
+    const res = await apiFetch("/admin/academic-levels");
+    if (res.ok) {
+      const list = await res.json();
+      setAcademicLevels(Array.isArray(list) ? list : []);
+    }
+  }, []);
+
   const loadCourses = useCallback(async (deptId: string) => {
     const res = await apiFetch(`/admin/courses?department_id=${deptId}`);
     setCourses(res.ok ? await res.json() : []);
@@ -56,10 +75,15 @@ export default function AdminDepartmentsScreen() {
 
   useEffect(() => {
     let active = true;
-    apiFetch("/admin/departments")
-      .then((res) => (res.ok ? res.json() : []))
-      .then((list) => {
-        if (active) setDepartments(Array.isArray(list) ? list : []);
+    Promise.all([
+      apiFetch("/admin/departments").then((res) => (res.ok ? res.json() : [])),
+      apiFetch("/admin/academic-levels").then((res) => (res.ok ? res.json() : [])),
+    ])
+      .then(([deptList, levelsList]) => {
+        if (active) {
+          setDepartments(Array.isArray(deptList) ? deptList : []);
+          setAcademicLevels(Array.isArray(levelsList) ? levelsList : []);
+        }
       })
       .catch(() => {
         if (active) setError("Could not load the catalog.");
@@ -168,6 +192,46 @@ export default function AdminDepartmentsScreen() {
       if (selectedId) await loadCourses(selectedId);
     });
 
+  const addAcademicLevel = () =>
+    run(async () => {
+      if (!newLevel.trim()) return;
+      await adminJson("/admin/academic-levels", {
+        method: "POST",
+        body: JSON.stringify({ name: newLevel.trim(), code: newLevelCode.trim() || null }),
+      });
+      setNewLevel("");
+      setNewLevelCode("");
+      await loadAcademicLevels();
+    });
+
+  const toggleAcademicLevel = (l: AcademicLevel) =>
+    run(async () => {
+      await adminJson(`/admin/academic-levels/${l.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ is_active: !l.is_active }),
+      });
+      await loadAcademicLevels();
+    });
+
+  const renameAcademicLevel = (l: AcademicLevel, name: string) =>
+    run(async () => {
+      const trimmed = name.trim();
+      if (!trimmed || trimmed === l.name) return;
+      await adminJson(`/admin/academic-levels/${l.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ name: trimmed }),
+      });
+      await loadAcademicLevels();
+    });
+
+  const deleteAcademicLevel = (l: AcademicLevel) =>
+    run(async () => {
+      await adminJson(`/admin/academic-levels/${l.id}`, {
+        method: "DELETE",
+      });
+      await loadAcademicLevels();
+    });
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surfacePage }}
@@ -266,7 +330,7 @@ export default function AdminDepartmentsScreen() {
           </View>
 
           {loading ? (
-            <ActivityIndicator color={colors.primary} />
+            <ActivityIndicator accessibilityLabel="Loading" color={colors.primary} />
           ) : departments.length === 0 ? (
             <Text style={{ fontSize: 13, fontStyle: "italic", color: colors.textTertiary }}>
               No departments yet.
@@ -432,6 +496,130 @@ export default function AdminDepartmentsScreen() {
                 ))
               )}
             </>
+          )}
+        </View>
+
+        {/* Academic Levels */}
+        <View
+          style={{
+            width: 380,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            padding: 24,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+            <Layers color={colors.primary} size={20} />
+            <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary, marginLeft: 8 }}>
+              Academic Levels
+            </Text>
+          </View>
+
+          <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 14, lineHeight: 18 }}>
+            Configurable year levels and specialized programs (e.g. 1st-5th Year, IBED, Integrated Studies) shown in registration and onboarding.
+          </Text>
+
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+            <TextInput
+              style={{
+                flex: 1,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.inputBorder,
+                backgroundColor: colors.inputBg,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                fontSize: 13,
+                color: colors.textPrimary,
+              }}
+              placeholder="Level name (e.g. IBED)"
+              placeholderTextColor={colors.textMuted}
+              value={newLevel}
+              onChangeText={setNewLevel}
+            />
+            <TextInput
+              style={{
+                width: 80,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.inputBorder,
+                backgroundColor: colors.inputBg,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                fontSize: 13,
+                color: colors.textPrimary,
+              }}
+              placeholder="Code"
+              placeholderTextColor={colors.textMuted}
+              value={newLevelCode}
+              onChangeText={setNewLevelCode}
+            />
+            <TouchableOpacity
+              onPress={addAcademicLevel}
+              disabled={busy}
+              style={{
+                borderRadius: 12,
+                backgroundColor: colors.primary,
+                paddingHorizontal: 14,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: busy ? 0.5 : 1,
+              }}
+            >
+              <Plus color={colors.textOnPrimary} size={18} />
+            </TouchableOpacity>
+          </View>
+
+          {academicLevels.length === 0 ? (
+            <Text style={{ fontSize: 13, fontStyle: "italic", color: colors.textTertiary }}>
+              No academic levels configured.
+            </Text>
+          ) : (
+            academicLevels.map((l) => (
+              <View
+                key={l.id}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  marginBottom: 6,
+                  borderWidth: 1,
+                  borderColor: colors.divider,
+                  backgroundColor: colors.surfaceSunken,
+                  opacity: l.is_active ? 1 : 0.5,
+                }}
+              >
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <TextInput
+                    style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}
+                    defaultValue={l.name}
+                    onEndEditing={(e) => renameAcademicLevel(l, e.nativeEvent.text)}
+                  />
+                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 2 }}>
+                    {l.code ? (
+                      <Text style={{ fontSize: 11, color: colors.textTertiary, marginRight: 8 }}>
+                        {l.code}
+                      </Text>
+                    ) : null}
+                    {l.is_active ? <Check color={colors.success} size={12} /> : null}
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <TouchableOpacity onPress={() => toggleAcademicLevel(l)} style={{ padding: 6 }}>
+                    <Power color={l.is_active ? colors.success : colors.textDisabled} size={17} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => deleteAcademicLevel(l)} style={{ padding: 6 }}>
+                    <Trash2 color={colors.destructive} size={16} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
           )}
         </View>
       </View>

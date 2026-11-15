@@ -113,10 +113,46 @@ async function getAuthUser(userId) {
   }
 }
 
+/**
+ * Generates an impersonation link for a target user.
+ * Only superadmins can use this. Returns a magic link that signs in as the target user.
+ */
+async function generateImpersonationLink(userId) {
+  const supabase = getSupabaseAdmin();
+
+  // Get the target user's email
+  const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+  if (userError || !userData?.user?.email) {
+    const err = new Error("Target user not found or has no email");
+    err.status = 404;
+    throw err;
+  }
+
+  // Generate a magic link (recovery type) for the target user
+  const { data, error } = await supabase.auth.admin.generateLink({
+    type: "recovery",
+    email: userData.user.email,
+  });
+
+  if (error || !data?.properties?.action_link) {
+    console.error("[admin-auth] Failed to generate impersonation link:", error?.message);
+    const err = new Error("Could not generate impersonation link");
+    err.status = 502;
+    throw err;
+  }
+
+  return {
+    link: data.properties.action_link,
+    email: userData.user.email,
+    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // Magic links typically expire in 30 min
+  };
+}
+
 module.exports = {
   banUser,
   unbanUser,
   revokeSessions,
   deleteAuthUser,
   getAuthUser,
+  generateImpersonationLink,
 };

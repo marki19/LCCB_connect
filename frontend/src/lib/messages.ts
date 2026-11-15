@@ -24,6 +24,10 @@ export function listConversations(limit?: number): Promise<Conversation[]> {
   return apiJson<Conversation[]>(`/conversations${query}`);
 }
 
+export function getConversation(id: string): Promise<Conversation> {
+  return apiJson<Conversation>(`/conversations/${id}`);
+}
+
 export function listRequests(limit?: number): Promise<MessageRequests> {
   const query = limit ? `?limit=${limit}` : "";
   return apiJson<MessageRequests>(`/conversations/requests${query}`);
@@ -200,15 +204,18 @@ export type BlockedUser = {
 };
 
 export function listBlocked(): Promise<BlockedUser[]> {
-  return apiJson(`/users/me/blocks`);
+  return apiJson(`/blocks`);
 }
 
 export function blockUser(userId: string): Promise<unknown> {
-  return apiJson(`/users/${userId}/block`, { method: "POST" });
+  return apiJson(`/blocks`, {
+    method: "POST",
+    body: JSON.stringify({ blockedId: userId }),
+  });
 }
 
 export function unblockUser(userId: string): Promise<unknown> {
-  return apiJson(`/users/${userId}/block`, { method: "DELETE" });
+  return apiJson(`/blocks/${userId}`, { method: "DELETE" });
 }
 
 // ---- device tokens (push, §10) ---------------------------------------------

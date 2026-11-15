@@ -31,6 +31,9 @@ stub(auth, "loadProfile", (req, res, next) => {
   req.profile = { id: session.id, role: session.role, department_id: session.department_id };
   return next();
 });
+// Stub new admin middleware (checkSessionAge, requireAal2) to pass through
+stub(auth, "checkSessionAge", (req, res, next) => next());
+stub(auth, "requireAal2", (req, res, next) => next());
 
 const m = {
   listDepartments: stub(departmentModel, "listDepartments"),

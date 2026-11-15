@@ -1,8 +1,13 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { LogOut, ShieldAlert } from "lucide-react-native";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
+import Button from "../src/components/ui/Button";
+import Card from "../src/components/ui/Card";
+import Reveal from "../src/components/ui/Reveal";
 
 function formatUntil(value?: string | null) {
   if (!value) return "Until an administrator restores the account";
@@ -22,95 +27,69 @@ export default function SuspendedScreen() {
   };
 
   return (
-    <View
-      style={{
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: colors.surfacePage,
-        padding: 24,
-      }}
-    >
-      <View
-        style={{
-          width: "100%",
-          maxWidth: 560,
-          borderRadius: 24,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surface,
-          padding: 32,
-          shadowColor: colors.shadowStrong,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.1,
-          shadowRadius: 16,
-          elevation: 4,
-        }}
-      >
-        <View
-          style={{
-            marginBottom: 20,
-            height: 56,
-            width: 56,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 16,
-            backgroundColor: colors.destructiveSurface,
-          }}
-        >
-          <ShieldAlert size={28} color={colors.destructiveText} />
-        </View>
-        <Text style={{ fontSize: 24, fontWeight: "900", letterSpacing: -0.5, color: colors.textPrimary }}>
-          Account suspended
-        </Text>
-        <Text style={{ marginTop: 8, fontSize: 15, lineHeight: 22, color: colors.textSecondary }}>
-          This account cannot use LCCB Connect while the suspension is active.
-        </Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }} edges={["top"]}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: SPACE.x6 }}>
+        <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
+          <Card style={{ padding: SPACE.x8 }}>
+            <View
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: RADIUS.lg,
+                backgroundColor: colors.coralWash,
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: SPACE.x5,
+              }}
+            >
+              <ShieldAlert size={28} color={colors.coralText} />
+            </View>
 
-        <View
-          style={{
-            marginTop: 24,
-            borderRadius: 16,
-            backgroundColor: colors.surfaceSunken,
-            padding: 16,
-          }}
-        >
-          <Text style={{ fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
-            Reason
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 14, lineHeight: 20, color: colors.textPrimary }}>
-            {profile?.suspension_reason || "No reason was recorded."}
-          </Text>
-          <Text style={{ marginTop: 16, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, color: colors.textTertiary }}>
-            Duration
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 14, lineHeight: 20, color: colors.textPrimary }}>
-            {formatUntil(profile?.suspended_until)}
-          </Text>
-        </View>
+            <Text style={{ ...TYPE.h1, color: colors.ink }}>Account suspended</Text>
+            <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>
+              This account cannot use LCCB Connect while the suspension is active.
+            </Text>
 
-        <TouchableOpacity
-          onPress={() => void handleSignOut()}
-          style={{
-            marginTop: 24,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.borderStrong,
-            backgroundColor: colors.surface,
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-          }}
-        >
-          <LogOut size={18} color={colors.textSecondary} />
-          <Text style={{ marginLeft: 8, fontSize: 14, fontWeight: "700", color: colors.textSecondary }}>
-            Sign out
-          </Text>
-        </TouchableOpacity>
+            <View
+              style={{
+                marginTop: SPACE.x6,
+                borderRadius: RADIUS.md,
+                borderWidth: 1,
+                borderColor: colors.line,
+                backgroundColor: colors.panelInset,
+                padding: SPACE.x4,
+              }}
+            >
+              <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Reason</Text>
+              <Text style={{ ...TYPE.body, color: colors.ink, marginTop: SPACE.x1 }}>
+                {profile?.suspension_reason || "No reason was recorded."}
+              </Text>
+              <Text
+                style={{
+                  ...TYPE.micro,
+                  color: colors.inkFaint,
+                  marginTop: SPACE.x4,
+                }}
+              >
+                Duration
+              </Text>
+              <Text style={{ ...TYPE.body, color: colors.ink, marginTop: SPACE.x1 }}>
+                {formatUntil(profile?.suspended_until)}
+              </Text>
+            </View>
+
+            <View style={{ marginTop: SPACE.x6 }}>
+              <Button
+                label="Sign out"
+                icon={LogOut}
+                variant="secondary"
+                fullWidth
+                onPress={() => void handleSignOut()}
+              />
+            </View>
+          </Card>
+        </Reveal>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
-

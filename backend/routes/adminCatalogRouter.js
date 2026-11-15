@@ -26,4 +26,10 @@ router.put("/courses/:id", validate(updateCourseSchema), catalogController.updat
 router.post("/courses/:id/activate", catalogController.activateCourse);
 router.post("/courses/:id/deactivate", catalogController.deactivateCourse);
 
+// Academic Levels (customizable year levels)
+router.get("/academic-levels", catalogController.adminListAcademicLevels);
+router.post("/academic-levels", catalogController.adminCreateAcademicLevel);
+router.put("/academic-levels/:id", catalogController.adminUpdateAcademicLevel);
+router.delete("/academic-levels/:id", catalogController.adminDeleteAcademicLevel);
+
 module.exports = router;

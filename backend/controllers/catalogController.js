@@ -1,4 +1,5 @@
 const departmentModel = require("../models/departmentModel");
+const academicLevelModel = require("../models/academicLevelModel");
 const auditService = require("../services/auditService");
 const { ACTIONS } = auditService;
 
@@ -214,6 +215,59 @@ const setCourseActive = async (req, res, next, isActive) => {
 const activateCourse = (req, res, next) => setCourseActive(req, res, next, true);
 const deactivateCourse = (req, res, next) => setCourseActive(req, res, next, false);
 
+// ---- Academic Levels (Public reads + Admin CRUD) ---------------------------
+
+const getAcademicLevels = async (req, res, next) => {
+  try {
+    res.json(await academicLevelModel.listActive());
+  } catch (error) {
+    next(error);
+  }
+};
+
+const adminListAcademicLevels = async (req, res, next) => {
+  try {
+    res.json(await academicLevelModel.listAll());
+  } catch (error) {
+    next(error);
+  }
+};
+
+const adminCreateAcademicLevel = async (req, res, next) => {
+  try {
+    const { name, code, sort_order } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: "Name is required" });
+    const created = await academicLevelModel.create({ name, code, sort_order });
+    res.status(201).json(created);
+  } catch (error) {
+    handleCatalogError(error, res, next);
+  }
+};
+
+const adminUpdateAcademicLevel = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!isUuid(id)) return sendBadId(res);
+    const updated = await academicLevelModel.update(id, req.body);
+    if (!updated) return res.status(404).json({ error: "Academic level not found" });
+    res.json(updated);
+  } catch (error) {
+    handleCatalogError(error, res, next);
+  }
+};
+
+const adminDeleteAcademicLevel = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!isUuid(id)) return sendBadId(res);
+    const deleted = await academicLevelModel.remove(id);
+    if (!deleted) return res.status(404).json({ error: "Academic level not found" });
+    res.json({ message: "Academic level deleted successfully", id });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getDepartments,
   getCourses,
@@ -227,4 +281,9 @@ module.exports = {
   updateCourse,
   activateCourse,
   deactivateCourse,
+  getAcademicLevels,
+  adminListAcademicLevels,
+  adminCreateAcademicLevel,
+  adminUpdateAcademicLevel,
+  adminDeleteAcademicLevel,
 };

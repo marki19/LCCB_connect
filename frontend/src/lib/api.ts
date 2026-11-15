@@ -1,5 +1,6 @@
-import axios from "axios";
+import { create, isAxiosError } from "axios";
 import { supabase } from "./supabase";
+import type { ContentVisibility } from "../types";
 
 const API_URL = (
   process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api"
@@ -7,14 +8,26 @@ const API_URL = (
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
 // One shared instance so the interceptor is registered once.
-const client = axios.create({ baseURL: API_URL });
+const client = create({ baseURL: API_URL });
 
 // Attach the Supabase Bearer token before every request and rewrite
 // guest GET paths to the public read-only endpoints.
 client.interceptors.request.use(async (config) => {
-  const {
+  let {
     data: { session },
   } = await supabase.auth.getSession();
+
+  // If token is expired or within 60s of expiring, proactively refresh it
+  if (session?.expires_at && session.expires_at * 1000 <= Date.now() + 60000) {
+    try {
+      const { data: refreshed, error } = await supabase.auth.refreshSession();
+      if (!error && refreshed?.session) {
+        session = refreshed.session;
+      }
+    } catch {
+      // Continue with current session or fallback
+    }
+  }
 
   const method = (config.method || "get").toUpperCase();
 
@@ -33,11 +46,45 @@ client.interceptors.request.use(async (config) => {
     }
   }
 
-  if (session?.access_token) {
+  const existingAuth =
+    typeof (config.headers as any)?.get === "function"
+      ? (config.headers as any).get("Authorization")
+      : (config.headers as any)?.["Authorization"];
+
+  if (!existingAuth && session?.access_token) {
     config.headers["Authorization"] = `Bearer ${session.access_token}`;
   }
   return config;
 });
+
+// Auto-refresh token and retry on 401 token errors
+client.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry
+    ) {
+      const errMsg = error.response?.data?.error || "";
+      if (/token|jwt/i.test(errMsg)) {
+        originalRequest._retry = true;
+        try {
+          const { data, error: refreshErr } = await supabase.auth.refreshSession();
+          if (!refreshErr && data?.session?.access_token) {
+            originalRequest.headers = originalRequest.headers || {};
+            originalRequest.headers["Authorization"] = `Bearer ${data.session.access_token}`;
+            return client(originalRequest);
+          }
+        } catch {
+          // Refresh failed
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 /**
  * Axios-backed drop-in for the old `fetch` wrapper. Returns a Fetch-Response-
@@ -48,6 +95,30 @@ client.interceptors.request.use(async (config) => {
  * authorize the caller — the server derives identity from the token, not from
  * the request body.
  */
+/**
+ * POST multipart/form-data through the authenticated client.
+ *
+ * Axios sets the `Content-Type` boundary itself when given a FormData object,
+ * so the caller must NOT set a Content-Type header — doing so would drop the
+ * boundary and the server would reject the upload.
+ */
+export async function apiFetchMultipart(
+  path: string,
+  formData: FormData
+): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
+  const res = await client.request({
+    url: path,
+    method: "POST",
+    data: formData,
+    validateStatus: () => true,
+  });
+  return {
+    ok: res.status >= 200 && res.status < 300,
+    status: res.status,
+    json: async () => res.data,
+  };
+}
+
 export async function apiFetch(
   path: string,
   init: RequestInit = {}
@@ -80,19 +151,24 @@ export async function apiJson<T = any>(
   init: RequestInit = {}
 ): Promise<T> {
   try {
+    const headers = { ...(init.headers || {}) as Record<string, string> };
+    if (typeof init.body === "string") {
+      headers["Content-Type"] = "application/json";
+    }
     const res = await client.request<T>({
       url: path,
       method: (init.method as any) || "GET",
       data: init.body,
-      headers: init.headers as any,
+      headers,
     });
     return res.data;
   } catch (err) {
-    if (axios.isAxiosError(err) && err.response) {
+      if (isAxiosError(err) && err.response) {
       const body = err.response.data as any;
       throw new ApiError(
         body?.error || body?.message || `Request failed (${err.response.status})`,
-        err.response.status
+        err.response.status,
+        body?.code
       );
     }
     throw err;
@@ -106,10 +182,12 @@ export async function apiJson<T = any>(
  */
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  code?: string;
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -123,6 +201,9 @@ export async function updatePost(
     image_url?: string | null;
     type?: string;
     preview_metadata?: any;
+    visibility?: ContentVisibility;
+    audience?: string[];
+    allow_reposts?: boolean;
   }
 ): Promise<void> {
   return apiJson(`/posts/${id}`, {
@@ -160,6 +241,8 @@ export async function updateThesis(
     abstract?: string;
     category?: string;
     pdf_url?: string | null;
+    visibility?: ContentVisibility;
+    audience?: string[];
   }
 ): Promise<void> {
   return apiJson(`/theses/${id}`, {
@@ -170,4 +253,271 @@ export async function updateThesis(
 
 export async function deleteThesis(id: string | number): Promise<void> {
   return apiJson(`/theses/${id}`, { method: "DELETE" });
+}
+
+/**
+ * Fetches a short-lived signed URL for a thesis' manuscript.
+ *
+ * Manuscripts live in a private bucket (migration 015), so the client never
+ * receives a usable URL directly — it asks the backend, which checks
+ * visibility first, and gets back a URL that expires after 5 minutes.
+ */
+export async function getThesisFileUrl(id: string | number): Promise<string> {
+  const data = await apiJson<{ url?: string }>(`/theses/${id}/file`);
+  if (!data?.url) {
+    throw new ApiError("Could not generate file URL", 404);
+  }
+  return data.url;
+}
+
+/**
+ * Fetches a short-lived signed URL for a post's image.
+ *
+ * Post images live in the private `assets` bucket (migration 015), so the
+ * client asks the backend, which checks visibility first, and gets back a
+ * URL that expires after 5 minutes.
+ */
+export async function getPostImageUrl(id: string | number): Promise<string> {
+  const data = await apiJson<{ url?: string; urls?: string[] }>(`/posts/${id}/file`);
+  if (!data?.url) {
+    throw new ApiError("Could not generate image URL", 404);
+  }
+  return data.url;
+}
+
+export async function getPostImageUrls(id: string | number): Promise<string[]> {
+  const data = await apiJson<{ url?: string; urls?: string[] }>(`/posts/${id}/file`);
+  if (data?.urls && Array.isArray(data.urls) && data.urls.length > 0) {
+    return data.urls;
+  }
+  if (data?.url) {
+    return [data.url];
+  }
+  return [];
+}
+
+// ============================================================================
+// Repost endpoints
+// ============================================================================
+
+export async function createRepost(postId: string | number, caption?: string): Promise<any> {
+  return apiJson(`/posts/${postId}/repost`, {
+    method: "POST",
+    body: JSON.stringify({ caption }),
+  });
+}
+
+export async function undoRepost(postId: string | number): Promise<any> {
+  return apiJson(`/posts/${postId}/repost`, { method: "DELETE" });
+}
+
+export async function getReposts(postId: string | number): Promise<any[]> {
+  return apiJson(`/posts/${postId}/reposts`);
+}
+
+// ============================================================================
+// Report endpoints
+// ============================================================================
+
+export async function createReport(
+  targetType: string,
+  targetId: string | number,
+  reason: string,
+  note?: string
+): Promise<any> {
+  return apiJson("/reports", {
+    method: "POST",
+    body: JSON.stringify({ targetType, targetId, reason, note }),
+  });
+}
+
+// ============================================================================
+// Block endpoints
+// ============================================================================
+
+export async function blockUser(userId: string | number): Promise<any> {
+  return apiJson("/blocks", {
+    method: "POST",
+    body: JSON.stringify({ blockedId: userId }),
+  });
+}
+
+export async function unblockUser(userId: string | number): Promise<any> {
+  return apiJson(`/blocks/${userId}`, { method: "DELETE" });
+}
+
+export async function listBlocked(): Promise<any[]> {
+  return apiJson("/blocks");
+}
+
+// ============================================================================
+// Profile endpoints
+// ============================================================================
+
+export async function dismissBanner(): Promise<any> {
+  return apiJson("/users/me/banner-dismissed", { method: "PATCH" });
+}
+
+// ============================================================================
+// Saved Posts endpoints
+// ============================================================================
+
+export async function savePost(postId: string | number): Promise<{ saved: boolean }> {
+  return apiJson<{ saved: boolean }>(`/posts/${postId}/save`, { method: "POST" });
+}
+
+export async function unsavePost(postId: string | number): Promise<{ saved: boolean }> {
+  return apiJson<{ saved: boolean }>(`/posts/${postId}/save`, { method: "DELETE" });
+}
+
+export async function getSavedPosts(
+  limit: number = 20,
+  cursor?: string | null
+): Promise<{ posts: any[]; nextCursor: string | null }> {
+  const params = new URLSearchParams();
+  if (limit) params.set("limit", String(limit));
+  if (cursor) params.set("cursor", cursor);
+  const q = params.toString();
+  return apiJson<{ posts: any[]; nextCursor: string | null }>(`/posts/saved${q ? `?${q}` : ""}`);
+}
+
+// ============================================================================
+// Search endpoints
+// ============================================================================
+
+export async function searchEverything(
+  query: string,
+  type: "all" | "people" | "posts" | "theses" = "all",
+  limit: number = 20
+): Promise<any> {
+  const params = new URLSearchParams();
+  params.set("q", query);
+  params.set("type", type);
+  params.set("limit", String(limit));
+  return apiJson(`/search?${params.toString()}`);
+}
+
+export async function getSearchSuggestions(query: string, limit: number = 6): Promise<any[]> {
+  const params = new URLSearchParams();
+  params.set("q", query);
+  params.set("limit", String(limit));
+  return apiJson<any[]>(`/search/suggestions?${params.toString()}`);
+}
+
+// ============================================================================
+// Post Adapter Helper
+// ============================================================================
+
+export function adaptPost(row: any): any {
+  if (!row) return null;
+  const authorName = row.author?.full_name || row.author?.name || "Unknown Author";
+  const initials = (authorName.split(" ").map((n: string) => n[0]).join("").substring(0, 2) || "LC").toUpperCase();
+  return {
+    id: String(row.id),
+    author: {
+      id: row.author?.id || row.author_id,
+      name: authorName,
+      initials,
+      avatarColor: row.author?.avatarColor || "#BFDBFE",
+      course: row.author?.department_name || row.department_name || "—",
+      yearLevel: row.author?.year_level || "—",
+      username: row.author?.username,
+    },
+    title: row.title || "Post Update",
+    description: row.content || row.description || "",
+    content: row.content || undefined,
+    type: row.type || "text",
+    tags: row.technologies || row.tags || [],
+    previewUrl: row.github_url || row.preview_url || row.previewUrl,
+    imageUrl: row.image_url || row.imageUrl,
+    preview_metadata: row.preview_metadata || null,
+    likes: Number(row.like_count ?? row.likes ?? 0),
+    comments: Number(row.comment_count ?? row.comments ?? 0),
+    createdAt: row.created_at ? new Date(row.created_at).toLocaleDateString() : (row.createdAt || "Just now"),
+    rawDate: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    isLiked: Boolean(row.is_liked ?? row.isLiked),
+    is_saved: Boolean(row.is_saved),
+    visibility: row.visibility || "public",
+    repost_count: row.repost_count || 0,
+    allow_reposts: row.allow_reposts !== false,
+    edited_at: row.edited_at || null,
+    deleted_at: row.deleted_at || null,
+    kind: row.kind || "post",
+  };
+}
+
+// ============================================================================
+// User Profile endpoints
+// ============================================================================
+
+export interface UserProfileData {
+  id: string;
+  username: string;
+  full_name: string;
+  avatar_url?: string | null;
+  bio?: string | null;
+  year_level?: string | null;
+  role: string;
+  skills: string[];
+  department_id?: string | null;
+  course_id?: string | null;
+  department_name?: string | null;
+  course_name?: string | null;
+  created_at: string;
+  verified_status?: string | null;
+  friendship: "friend" | "pending_out" | "pending_in" | "none";
+  is_self: boolean;
+  stats: {
+    posts_count: number;
+    theses_count: number;
+    friends_count: number;
+  };
+}
+
+export async function getUserProfile(userId: string): Promise<UserProfileData> {
+  return apiJson<UserProfileData>(`/users/${userId}/profile`);
+}
+
+// ============================================================================
+// Saved Collections endpoints
+// ============================================================================
+
+export interface SavedCollection {
+  id: string;
+  name: string;
+  is_private: boolean;
+  item_count: number;
+  cover_image?: string | null;
+  created_at: string;
+}
+
+export async function getSavedCollections(): Promise<SavedCollection[]> {
+  const data = await apiJson<SavedCollection[]>("/posts/saved/collections");
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createSavedCollection(name: string, isPrivate = true): Promise<SavedCollection> {
+  return apiJson<SavedCollection>("/posts/saved/collections", {
+    method: "POST",
+    body: JSON.stringify({ name, is_private: isPrivate }),
+  });
+}
+
+export async function addItemToCollection(collectionId: string, postId: string): Promise<any> {
+  return apiJson(`/posts/saved/collections/${collectionId}/items`, {
+    method: "POST",
+    body: JSON.stringify({ postId }),
+  });
+}
+
+export async function removeItemFromCollection(collectionId: string, postId: string): Promise<any> {
+  return apiJson(`/posts/saved/collections/${collectionId}/items/${postId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteSavedCollection(collectionId: string): Promise<any> {
+  return apiJson(`/posts/saved/collections/${collectionId}`, {
+    method: "DELETE",
+  });
 }

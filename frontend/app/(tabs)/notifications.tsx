@@ -3,8 +3,7 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
+  Pressable,
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,6 +18,13 @@ import {
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { apiFetch } from "../../src/lib/api";
+import { RADIUS, SPACE, TYPE } from "../../src/lib/tokens";
+import Button from "../../src/components/ui/Button";
+import Card from "../../src/components/ui/Card";
+import Reveal from "../../src/components/ui/Reveal";
+import { Skeleton } from "../../src/components/ui/Skeleton";
+import EmptyState from "../../src/components/admin/EmptyState";
+import StatusBadge, { badgeTone, type BadgeTone } from "../../src/components/admin/StatusBadge";
 
 type NotificationItem = {
   id: string;
@@ -38,7 +44,7 @@ type NotificationItem = {
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -164,38 +170,18 @@ export default function NotificationsScreen() {
       .toUpperCase();
   };
 
-  const renderIcon = (type: string) => {
+  const renderIcon = (type: string): { Icon: any; tone: BadgeTone } => {
     switch (type) {
       case "flagged_post":
       case "flagged_comment":
-        return {
-          Icon: AlertTriangle,
-          color: "#DC2626",
-          bg: "#FEE2E2",
-          badgeColor: "#EF4444",
-        };
+        return { Icon: AlertTriangle, tone: "danger" };
       case "post_action":
-        return {
-          Icon: ShieldCheck,
-          color: "#D97706",
-          bg: "#FEF3C7",
-          badgeColor: "#F59E0B",
-        };
+        return { Icon: ShieldCheck, tone: "warning" };
       case "new_thesis":
-        return {
-          Icon: BookOpen,
-          color: "#7C3AED",
-          bg: "#EDE9FE",
-          badgeColor: "#8B5CF6",
-        };
+        return { Icon: BookOpen, tone: "accent" };
       case "new_post":
       default:
-        return {
-          Icon: FileText,
-          color: "#1A56DB",
-          bg: "#DBEAFE",
-          badgeColor: "#3B82F6",
-        };
+        return { Icon: FileText, tone: "brand" };
     }
   };
 
@@ -216,249 +202,243 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
-      {/* Header */}
       <View
         style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 16,
-          paddingVertical: 14,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
-          backgroundColor: colors.surface,
+          width: "100%",
+          maxWidth: 760,
+          alignSelf: "center",
+          paddingHorizontal: SPACE.x4,
+          paddingTop: SPACE.x5,
+          paddingBottom: SPACE.x3,
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={{ fontSize: 22, fontWeight: "800", color: colors.textPrimary }}>
-            Notifications
-          </Text>
-          {unreadCount > 0 && (
-            <View
-              style={{
-                marginLeft: 8,
-                backgroundColor: colors.destructive,
-                paddingHorizontal: 7,
-                paddingVertical: 2,
-                borderRadius: 10,
-              }}
-            >
-              <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "800" }}>
-                {unreadCount}
-              </Text>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: SPACE.x3,
+            marginBottom: SPACE.x4,
+          }}
+        >
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Inbox</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x2 }}>
+              <Text style={{ ...TYPE.h1, color: colors.ink }}>Notifications</Text>
+              {unreadCount > 0 ? (
+                <StatusBadge label={`${unreadCount} new`} tone="brand" />
+              ) : null}
             </View>
-          )}
-        </View>
-
-        {unreadCount > 0 && (
-          <TouchableOpacity
-            onPress={handleMarkAllRead}
-            activeOpacity={0.7}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              paddingVertical: 6,
-              paddingHorizontal: 10,
-              borderRadius: 8,
-              backgroundColor: colors.actionSurface,
-            }}
-          >
-            <CheckCheck size={15} color={colors.action} />
-            <Text
-              style={{
-                color: colors.action,
-                fontWeight: "700",
-                fontSize: 13,
-                marginLeft: 5,
-              }}
-            >
-              Mark all read
+            <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x1 }}>
+              Replies, requests, deposits, and moderation updates.
             </Text>
-          </TouchableOpacity>
-        )}
+          </View>
+
+          {unreadCount > 0 ? (
+            <Button
+              label="Mark all read"
+              variant="secondary"
+              size="sm"
+              icon={CheckCheck}
+              onPress={handleMarkAllRead}
+            />
+          ) : null}
+        </View>
       </View>
 
-      {/* Main Content */}
       {loading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="small" color={colors.action} />
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 760,
+            alignSelf: "center",
+            paddingHorizontal: SPACE.x4,
+            gap: SPACE.x2,
+          }}
+        >
+          {[0, 1, 2, 3].map((i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection: "row",
+                gap: SPACE.x3,
+                backgroundColor: colors.panel,
+                borderRadius: RADIUS.lg,
+                borderWidth: 1,
+                borderColor: colors.line,
+                padding: SPACE.x4,
+              }}
+            >
+              <Skeleton width={44} height={44} radius={22} />
+              <View style={{ flex: 1, gap: SPACE.x2 }}>
+                <Skeleton width="55%" height={12} radius={6} />
+                <Skeleton height={11} radius={6} />
+                <Skeleton width="72%" height={11} radius={6} />
+              </View>
+            </View>
+          ))}
         </View>
       ) : (
         <FlatList
           data={notifications}
           keyExtractor={(item) => item.id}
+          contentContainerStyle={{
+            width: "100%",
+            maxWidth: 760,
+            alignSelf: "center",
+            paddingHorizontal: SPACE.x4,
+            paddingBottom: SPACE.x10,
+            gap: SPACE.x2,
+            flexGrow: 1,
+          }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[colors.action]}
-              tintColor={colors.action}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
           ListEmptyComponent={
-            <View style={{ alignItems: "center", paddingTop: 80, paddingHorizontal: 32 }}>
-              <View
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
-                  backgroundColor: colors.surfaceSunken,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: 16,
-                }}
-              >
-                <Bell size={26} color={colors.textTertiary} />
-              </View>
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: "700",
-                  color: colors.textPrimary,
-                  marginBottom: 6,
-                }}
-              >
-                No notifications yet
-              </Text>
-              <Text
-                style={{
-                  fontSize: 13,
-                  color: colors.textTertiary,
-                  textAlign: "center",
-                  lineHeight: 18,
-                }}
-              >
-                When classmates post updates, submit research, or moderation actions occur, you&apos;ll see them here.
-              </Text>
-            </View>
+            <Card style={{ marginTop: SPACE.x4 }}>
+              <EmptyState
+                icon={Bell}
+                tone="brand"
+                title="No notifications yet"
+                body="When classmates post updates, submit research, or moderation actions occur, you'll see them here."
+              />
+            </Card>
           }
-          renderItem={({ item }) => {
-            const { Icon, color, bg, badgeColor } = renderIcon(item.type);
+          renderItem={({ item, index }) => {
+            const { Icon, tone } = renderIcon(item.type);
+            const palette = badgeTone(tone, colors);
             const initials = getInitials(item.actor_name);
 
             return (
-              <TouchableOpacity
-                onPress={() => handleMarkAsRead(item)}
-                activeOpacity={0.7}
-                style={{
-                  flexDirection: "row",
-                  padding: 14,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border,
-                  backgroundColor: item.is_read ? colors.surface : (isDark ? "hsl(215, 30%, 20%)" : "#EFF6FF"),
-                }}
-              >
-                {/* Avatar with Type Icon Badge */}
-                <View style={{ position: "relative", marginRight: 12 }}>
-                  <View
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
-                      backgroundColor: bg,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Text style={{ fontSize: 14, fontWeight: "700", color }}>
-                      {initials}
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      position: "absolute",
-                      bottom: -2,
-                      right: -2,
-                      width: 20,
-                      height: 20,
-                      borderRadius: 10,
-                      backgroundColor: badgeColor,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 2,
-                      borderColor: colors.surface,
-                    }}
-                  >
-                    <Icon size={10} color="#FFFFFF" />
-                  </View>
-                </View>
-
-                {/* Content */}
-                <View style={{ flex: 1, justifyContent: "center" }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: 2,
-                    }}
-                  >
-                    <Text
-                      numberOfLines={1}
+              <Reveal delay={Math.min(index, 8) * 35}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.title}. ${item.message}`}
+                  onPress={() => handleMarkAsRead(item)}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    gap: SPACE.x3,
+                    padding: SPACE.x4,
+                    borderRadius: RADIUS.lg,
+                    borderWidth: 1,
+                    borderColor: item.is_read ? colors.line : colors.primarySurfaceAlt,
+                    backgroundColor: item.is_read
+                      ? colors.panel
+                      : colors.primarySurface,
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  {/* Avatar with type badge */}
+                  <View style={{ position: "relative" }}>
+                    <View
                       style={{
-                        fontSize: 14,
-                        fontWeight: item.is_read ? "600" : "700",
-                        color: colors.textPrimary,
-                        flex: 1,
-                        marginRight: 6,
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        backgroundColor: palette.bg,
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
-                      {item.title}
-                    </Text>
-                    <Text
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: palette.fg }}>
+                        {initials}
+                      </Text>
+                    </View>
+                    <View
                       style={{
-                        fontSize: 11,
-                        color: item.is_read ? colors.textTertiary : colors.action,
-                        fontWeight: item.is_read ? "400" : "600",
+                        position: "absolute",
+                        bottom: -2,
+                        right: -2,
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        backgroundColor: palette.dot,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderWidth: 2,
+                        borderColor: item.is_read ? colors.panel : colors.primarySurface,
                       }}
                     >
-                      {formatTime(item.created_at)}
-                    </Text>
+                      <Icon size={10} color={colors.textOnPrimary} />
+                    </View>
                   </View>
 
-                  <Text
-                    numberOfLines={2}
-                    style={{
-                      fontSize: 13,
-                      color: colors.textSecondary,
-                      lineHeight: 18,
-                    }}
-                  >
-                    {item.message}
-                  </Text>
-
-                  {item.actor_department && (
-                    <Text
+                  {/* Content */}
+                  <View style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
+                    <View
                       style={{
-                        fontSize: 11,
-                        color: colors.textTertiary,
-                        marginTop: 4,
-                        fontWeight: "500",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: SPACE.x2,
+                        marginBottom: 2,
                       }}
                     >
-                      Dept: {item.actor_department}
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          ...TYPE.bodyStrong,
+                          fontWeight: item.is_read ? "600" : "700",
+                          color: colors.ink,
+                          flex: 1,
+                        }}
+                      >
+                        {item.title}
+                      </Text>
+                      <Text
+                        style={{
+                          ...TYPE.caption,
+                          color: item.is_read ? colors.textTertiary : colors.primary,
+                          fontWeight: item.is_read ? "400" : "600",
+                        }}
+                      >
+                        {formatTime(item.created_at)}
+                      </Text>
+                    </View>
+
+                    <Text
+                      numberOfLines={2}
+                      style={{ ...TYPE.caption, color: colors.inkSoft, lineHeight: 18 }}
+                    >
+                      {item.message}
                     </Text>
+
+                    {item.actor_department && (
+                      <Text
+                        style={{
+                          ...TYPE.caption,
+                          color: colors.textTertiary,
+                          marginTop: SPACE.x1,
+                          fontWeight: "500",
+                        }}
+                      >
+                        Dept: {item.actor_department}
+                      </Text>
+                    )}
+                  </View>
+
+                  {!item.is_read && (
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: colors.primary,
+                        alignSelf: "center",
+                      }}
+                    />
                   )}
-                </View>
-
-                {/* Unread indicator dot */}
-                {!item.is_read && (
-                  <View
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: colors.action,
-                      marginLeft: 8,
-                      alignSelf: "center",
-                    }}
-                  />
-                )}
-              </TouchableOpacity>
+                </Pressable>
+              </Reveal>
             );
           }}
         />
       )}
     </SafeAreaView>
   );
-}
+}

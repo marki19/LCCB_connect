@@ -2,6 +2,7 @@ import { View, Text } from "react-native";
 import type { PresenceMode } from "../types";
 
 import { useTheme } from "../contexts/ThemeContext";
+import { LIGHT_TOKENS } from "../lib/tokens";
 
 /**
  * Shared avatar + presence dot. `mode === null` means "not tracked" (offline or
@@ -9,11 +10,11 @@ import { useTheme } from "../contexts/ThemeContext";
  */
 
 export const PRESENCE_COLORS: Record<PresenceMode, string> = {
-  online: "#22C55E",
-  away: "#F59E0B",
-  busy: "#EF4444",
-  dnd: "#EF4444",
-  invisible: "#CBD5E1",
+  online: LIGHT_TOKENS.jadeBright,
+  away: LIGHT_TOKENS.accentBright,
+  busy: LIGHT_TOKENS.coralBright,
+  dnd: LIGHT_TOKENS.coralBright,
+  invisible: LIGHT_TOKENS.textDisabled,
 };
 
 export const PRESENCE_LABELS: Record<PresenceMode, string> = {
@@ -71,7 +72,7 @@ export default function Avatar({ name, size = 48, mode = null, showPresence = fa
             width: dot,
             height: dot,
             borderRadius: dot / 2,
-            backgroundColor: PRESENCE_COLORS[mode] ?? "#CBD5E1",
+            backgroundColor: PRESENCE_COLORS[mode] ?? LIGHT_TOKENS.textDisabled,
             borderWidth: ring,
             borderColor: colors.surface,
           }}
