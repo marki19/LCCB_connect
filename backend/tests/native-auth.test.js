@@ -222,4 +222,28 @@ describe("Native Auth Service (Self-Hosted)", () => {
       assert.strictEqual(res2.status, 401);
     });
   });
+
+  describe("POST /api/auth/logout", () => {
+    it("requires authentication and returns 401 without bearer token", async () => {
+      const res = await request(app).post("/api/auth/logout");
+      assert.strictEqual(res.status, 401);
+    });
+
+    it("logs out successfully and revokes tokens when authenticated", async () => {
+      const user = {
+        id: "88888888-8888-8888-8888-888888888888",
+        email: "logout.user@lccbonline.edu.ph",
+        role: "student",
+      };
+      stub(userModel, "getUserById", async (id) => (id === user.id ? user : null));
+      const tokens = await nativeAuth.signTokens(user);
+
+      const res = await request(app)
+        .post("/api/auth/logout")
+        .set("Authorization", `Bearer ${tokens.access_token}`);
+
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.body.message, "Logged out successfully");
+    });
+  });
 });

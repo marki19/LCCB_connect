@@ -7,6 +7,10 @@ const { normalizeRole } = require("../utils/roles");
 
 const PRIVATE_CATEGORIES = ["theses", "documents"];
 
+function escapeLike(str) {
+  return String(str).replace(/([%_\\])/g, "\\$1");
+}
+
 /**
  * Checks whether the authenticated caller owns the referenced file or is an administrator.
  */
@@ -17,7 +21,7 @@ async function verifyFileOwnership(category, filename, user) {
     return true;
   }
 
-  const likePattern = `%${filename}`;
+  const likePattern = `%${escapeLike(filename)}`;
 
   if (category === "theses") {
     const { rows } = await db.query(
@@ -62,10 +66,14 @@ async function verifyFileOwnership(category, filename, user) {
   return true;
 }
 
-function serveLocalFile(res, filePath) {
+function serveLocalFile(res, filePath, isPrivate = false) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  if (isPrivate) {
+    res.setHeader("Cache-Control", "private, no-store");
+  } else {
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  }
 
   return res.sendFile(filePath, {
     acceptRanges: true,
@@ -101,7 +109,7 @@ router.get("/:category/:filename", (req, res, next) => {
           if (!allowed) {
             return res.status(404).json({ error: "File not found" });
           }
-          return serveLocalFile(res, filePath);
+          return serveLocalFile(res, filePath, true);
         } catch {
           return res.status(404).json({ error: "File not found" });
         }
@@ -109,7 +117,7 @@ router.get("/:category/:filename", (req, res, next) => {
     });
   }
 
-  return serveLocalFile(res, filePath);
+  return serveLocalFile(res, filePath, false);
 });
 
 module.exports = router;

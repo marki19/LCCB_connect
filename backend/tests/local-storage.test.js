@@ -232,6 +232,7 @@ describe("Backend Local File Storage Service", () => {
       .get(`/api/files/theses/${saved.filename}`)
       .set("Authorization", "Bearer valid-token");
     assert.strictEqual(ownerRes.status, 200);
+    assert.strictEqual(ownerRes.headers["cache-control"], "private, no-store");
 
     await deleteLocalFile("theses", saved.filename);
   });

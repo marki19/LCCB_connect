@@ -1,7 +1,14 @@
 require("dotenv").config();
 
 // --- boot-time environment validation (fail fast) ---------------------------
-const REQUIRED_ENV = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_ANON_KEY", "MFA_CHALLENGE_SECRET"];
+const REQUIRED_ENV = [
+  "DATABASE_URL",
+  "SUPABASE_URL",
+  "SUPABASE_ANON_KEY",
+  "JWT_SECRET",
+  "JWT_REFRESH_SECRET",
+  "MFA_CHALLENGE_SECRET",
+];
 const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
 if (missingEnv.length > 0) {
   console.error(`[boot] Missing required environment variable(s): ${missingEnv.join(", ")}`);

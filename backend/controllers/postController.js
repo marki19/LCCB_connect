@@ -8,6 +8,8 @@ const { resolveAudience } = require("../services/visibilityService");
 const { signedStorageUrl } = require("../services/storageService");
 const { normalizeRole } = require("../utils/roles");
 
+const STAFF_ROLES = new Set(["faculty", "departmentadmin", "admin", "superadmin"]);
+
 /**
  * A custom-visibility write must name accepted friends. Returns the normalized
  * audience, or a `{ error, invalid }` payload the controller returns as 400.
@@ -78,8 +80,8 @@ const getPost = async (req, res, next) => {
 const createPost = async (req, res, next) => {
   try {
     const role = normalizeRole(req.profile?.role);
-    // Students must complete their academic profile before creating posts (verified students are exempt)
-    if (role === "student" && !req.profile?.profile_completed && req.profile?.verification_status !== "verified") {
+    // Non-staff must complete their academic profile before creating posts (verified users are exempt)
+    if (!STAFF_ROLES.has(role) && !req.profile?.profile_completed && req.profile?.verification_status !== "verified") {
       return res.status(403).json({
         error: "Profile incomplete",
         message: "Complete your profile (full name, student ID, department, and course) before creating posts.",

@@ -198,6 +198,6 @@ router.post("/refresh", refreshSession);
  * Records logout event and returns success.
  * Requires authenticated user.
  */
-router.post("/logout", logout);
+router.post("/logout", requireAuth, logout);
 
 module.exports = router;

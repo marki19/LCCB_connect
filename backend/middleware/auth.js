@@ -292,9 +292,16 @@ function requireRole(...allowedRoles) {
  * without this middleware, and profile edits stay open because bio, avatar,
  * and year level remain editable after approval (D11).
  */
+const STAFF_VERIFICATION_EXEMPT = new Set([
+  "faculty",
+  "departmentadmin",
+  "admin",
+  "superadmin",
+]);
+
 function requireVerified(req, res, next) {
   const role = normalizeRole(getRole(req));
-  if (role !== "student") return next();
+  if (STAFF_VERIFICATION_EXEMPT.has(role)) return next();
   if (req.profile?.verification_status === "verified") return next();
   return res.status(403).json({
     error: "Verify your identity to do that",
