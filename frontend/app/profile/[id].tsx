@@ -35,6 +35,7 @@ import { useTheme } from "../../src/contexts/ThemeContext";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { usePresence } from "../../src/contexts/PresenceContext";
 import { useFloatingChat } from "../../src/contexts/FloatingChatContext";
+import { useToast } from "../../src/contexts/ToastContext";
 import {
   getUserProfile,
   UserProfileData,
@@ -65,6 +66,7 @@ export default function UserProfileScreen() {
   const { profile: myProfile } = useAuth();
   const { isOnline, modeOf } = usePresence();
   const { openChat } = useFloatingChat();
+  const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 768;
 
@@ -106,7 +108,12 @@ export default function UserProfileScreen() {
       const res = await apiFetch(`/posts?author_id=${id}&limit=30`);
       if (res.ok) {
         const data = await res.json();
-        setPosts((data || []).map(adaptPost));
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.posts)
+          ? data.posts
+          : [];
+        setPosts(list.map(adaptPost));
       }
     } catch (err) {
       console.error("Failed to load user posts:", err);
@@ -175,6 +182,7 @@ export default function UserProfileScreen() {
     try {
       if (userData.friendship === "none") {
         await sendFriendRequest(userData.id);
+        showToast({ message: "Friend request sent.", tone: "success" });
         setUserData((prev) => (prev ? { ...prev, friendship: "pending_out" } : null));
       } else if (userData.friendship === "friend") {
         Alert.alert(
@@ -187,6 +195,7 @@ export default function UserProfileScreen() {
               style: "destructive",
               onPress: async () => {
                 await removeFriend(userData.id);
+                showToast({ message: "Friend removed.", tone: "info" });
                 setUserData((prev) =>
                   prev
                     ? {
@@ -205,6 +214,7 @@ export default function UserProfileScreen() {
         const match = reqs.incoming.find((r) => r.requester.id === userData.id);
         if (match) {
           await acceptFriendRequest(match.id);
+          showToast({ message: "Friend request accepted.", tone: "success" });
           setUserData((prev) =>
             prev
               ? {

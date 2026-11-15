@@ -3,6 +3,7 @@ const departmentModel = require("../models/departmentModel");
 const accountService = require("../services/accountService");
 const { AdminAuthUnavailableError } = require("../services/supabaseAdmin");
 const { clampLimit } = require("../models/pagination");
+const { sanitizeProfile } = require("../utils/profile");
 const {
   isAdmin,
   canManage,
@@ -20,7 +21,7 @@ const getUsers = async (req, res, next) => {
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
     });
-    res.json(users);
+    res.json(users.map(sanitizeProfile));
   } catch (error) {
     next(error);
   }
@@ -84,7 +85,7 @@ const getUser = async (req, res, next) => {
     const identity_complete = Boolean(
       user.full_name && user.student_id && user.department_id && user.course_id
     );
-    res.json({ ...user, identity_complete });
+    res.json({ ...sanitizeProfile(user), identity_complete });
   } catch (error) {
     next(error);
   }
@@ -149,7 +150,7 @@ const createUser = async (req, res, next) => {
     // is used in updateUser for admin updates and profile completion.
 
     const newUser = await userModel.createUser(payload);
-    res.status(201).json(newUser);
+    res.status(201).json(sanitizeProfile(newUser));
   } catch (error) {
     next(error);
   }
@@ -250,7 +251,7 @@ const updateUser = async (req, res, next) => {
     if (!updatedUser) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.json(updatedUser);
+    res.json(sanitizeProfile(updatedUser));
   } catch (error) {
     next(error);
   }
@@ -279,7 +280,7 @@ const disableUser = async (req, res, next) => {
     if (!disabledUser) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.json({ message: "Account disabled successfully", user: disabledUser });
+    res.json({ message: "Account disabled successfully", user: sanitizeProfile(disabledUser) });
   } catch (error) {
     if (
       error instanceof AdminAuthUnavailableError ||

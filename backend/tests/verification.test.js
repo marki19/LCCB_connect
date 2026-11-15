@@ -1,3 +1,6 @@
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://postgres:postgrespassword@127.0.0.1:5432/lcc_connect_test";
 
@@ -10,11 +13,26 @@ const userModel = require("../models/userModel");
 const departmentModel = require("../models/departmentModel");
 const auditService = require("../services/auditService");
 const notificationService = require("../services/notificationService");
+const verificationOtpModel = require("../models/verificationOtpModel");
+
+const TEST_EMAIL = "ana@lccbonline.edu.ph";
+
+// Verification needs control of a school mailbox, proven by the emailed code.
+// The code itself is covered by verificationOtp.test.js; here it always passes.
+function stubOtpOk() {
+  return test.mock.method(verificationOtpModel, "verifyAndConsume", async () => ({ ok: true }));
+}
 
 function makeReq(overrides = {}) {
   return {
     user: { id: overrides.userId || "11111111-1111-1111-1111-111111111111" },
-    profile: overrides.profile || { role: "student", department_id: null, id: overrides.userId || "11111111-1111-1111-1111-111111111111" },
+    profile: {
+      role: "student",
+      department_id: null,
+      email: TEST_EMAIL,
+      id: overrides.userId || "11111111-1111-1111-1111-111111111111",
+      ...(overrides.profile || {}),
+    },
     body: overrides.body || {},
     params: overrides.params || {},
     query: overrides.query || {},
@@ -22,7 +40,7 @@ function makeReq(overrides = {}) {
 }
 
 function makeRes() {
-  const res = {};
+  const res = { statusCode: 200 }; // Express defaults to 200 when only json() is called
   res.status = (code) => {
     res.statusCode = code;
     return res;
@@ -51,6 +69,12 @@ function datePart(val) {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
+async function getTestCatalog() {
+  const dept = await db.query(`SELECT id, code FROM public.departments WHERE is_active = true LIMIT 1`);
+  const course = await db.query(`SELECT id FROM public.courses WHERE department_id = $1 AND is_active = true LIMIT 1`, [dept.rows[0].id]);
+  return { deptId: dept.rows[0].id, courseId: course.rows[0].id };
+}
+
 async function cleanupTestData(studentId, adminId) {
   await db.query(`DELETE FROM public.profile_verification_requests WHERE user_id = $1`, [studentId]);
   await db.query(`DELETE FROM public.profiles WHERE id = $1`, [studentId]);
@@ -62,18 +86,11 @@ async function cleanupTestData(studentId, adminId) {
 test("verification: submit creates pending request and mirrors identity to profile", async () => {
   const auditStub = test.mock.method(auditService, "recordRequest", async () => undefined);
   const notifyStub = test.mock.method(notificationService, "createNotifications", async () => undefined);
+  const otpStub = stubOtpOk();
 
+  const { deptId, courseId } = await getTestCatalog();
   const studentId = uniq("stu");
   const email = `${uniq("test")}@lccbonline.edu.ph`;
-  const deptCode = uniq("TD");
-  const dept = await db.query(
-    `INSERT INTO public.departments (name, code) VALUES ($1, $2) RETURNING id`,
-    [`Test Dept ${deptCode}`, deptCode]
-  );
-  const course = await db.query(
-    `INSERT INTO public.courses (name, department_id) VALUES ($1, $2) RETURNING id`,
-    [`Test Course ${deptCode}`, dept.rows[0].id]
-  );
   await db.query(
     `INSERT INTO public.profiles (id, email, full_name, role, verification_status)
      VALUES ($1, $2, 'Test Student', 'student', 'unverified')`,
@@ -88,10 +105,11 @@ test("verification: submit creates pending request and mirrors identity to profi
     body: {
       full_name: "Test Student",
       student_id: studentIdValue,
-      department_id: dept.rows[0].id,
-      course_id: course.rows[0].id,
+      department_id: deptId,
+      course_id: courseId,
       year_level: "1st Year",
       birthdate: "2000-01-15",
+      otp_code: "123456",
     },
   });
   const res = makeRes();
@@ -112,6 +130,7 @@ test("verification: submit creates pending request and mirrors identity to profi
   assert.strictEqual(profile.student_id, studentIdValue);
 
   await cleanupTestData(studentId);
+  otpStub.mock.restore();
   auditStub.mock.restore();
   notifyStub.mock.restore();
 });
@@ -119,36 +138,30 @@ test("verification: submit creates pending request and mirrors identity to profi
 test("verification: submit rejects when already verified with complete identity", async () => {
   const auditStub = test.mock.method(auditService, "recordRequest", async () => undefined);
   const notifyStub = test.mock.method(notificationService, "createNotifications", async () => undefined);
+  const otpStub = stubOtpOk();
 
+  const { deptId, courseId } = await getTestCatalog();
   const studentId = uniq("stu");
   const email = `${uniq("test2")}@lccbonline.edu.ph`;
-  const deptCode = uniq("TD");
-  const dept = await db.query(
-    `INSERT INTO public.departments (name, code) VALUES ($1, $2) RETURNING id`,
-    [`Test Dept ${deptCode}`, deptCode]
-  );
-  const course = await db.query(
-    `INSERT INTO public.courses (name, department_id) VALUES ($1, $2) RETURNING id`,
-    [`Test Course ${deptCode}`, dept.rows[0].id]
-  );
   const studentIdValue = `2022-${uniq("11111")}`;
   await db.query(
     `INSERT INTO public.profiles (id, email, full_name, student_id, department_id, course_id, role, verification_status)
      VALUES ($1, $2, 'Verified Student', $3, $4, $5, 'student', 'verified')`,
-    [studentId, email, studentIdValue, dept.rows[0].id, course.rows[0].id]
+    [studentId, email, studentIdValue, deptId, courseId]
   );
 
   const req = makeReq({
     userId: studentId,
     // Must include course_id for identityComplete check
-    profile: { role: "student", department_id: dept.rows[0].id, full_name: "Verified Student", student_id: studentIdValue, course_id: course.rows[0].id, id: studentId, verification_status: "verified" },
+    profile: { role: "student", department_id: deptId, full_name: "Verified Student", student_id: studentIdValue, course_id: courseId, year_level: "2nd Year", id: studentId, verification_status: "verified" },
     body: {
       full_name: "Verified Student",
       student_id: studentIdValue,
-      department_id: dept.rows[0].id,
-      course_id: course.rows[0].id,
+      department_id: deptId,
+      course_id: courseId,
       year_level: "2nd Year",
       birthdate: "2001-02-20",
+      otp_code: "123456",
     },
   });
   const res = makeRes();
@@ -160,6 +173,7 @@ test("verification: submit rejects when already verified with complete identity"
   assert.strictEqual(res.body.error, "Your account is already verified");
 
   await cleanupTestData(studentId);
+  otpStub.mock.restore();
   auditStub.mock.restore();
   notifyStub.mock.restore();
 });
@@ -167,18 +181,11 @@ test("verification: submit rejects when already verified with complete identity"
 test("verification: submit allows resubmit when verified but identity incomplete", async () => {
   const auditStub = test.mock.method(auditService, "recordRequest", async () => undefined);
   const notifyStub = test.mock.method(notificationService, "createNotifications", async () => undefined);
+  const otpStub = stubOtpOk();
 
+  const { deptId, courseId } = await getTestCatalog();
   const studentId = uniq("stu");
   const email = `${uniq("legacy")}@lccbonline.edu.ph`;
-  const deptCode = uniq("TD");
-  const dept = await db.query(
-    `INSERT INTO public.departments (name, code) VALUES ($1, $2) RETURNING id`,
-    [`Test Dept ${deptCode}`, deptCode]
-  );
-  const course = await db.query(
-    `INSERT INTO public.courses (name, department_id) VALUES ($1, $2) RETURNING id`,
-    [`Test Course ${deptCode}`, dept.rows[0].id]
-  );
   await db.query(
     `INSERT INTO public.profiles (id, email, role, verification_status)
      VALUES ($1, $2, 'student', 'verified')`,
@@ -191,10 +198,11 @@ test("verification: submit allows resubmit when verified but identity incomplete
     body: {
       full_name: "Legacy Student",
       student_id: `2020-${uniq("99999")}`,
-      department_id: dept.rows[0].id,
-      course_id: course.rows[0].id,
+      department_id: deptId,
+      course_id: courseId,
       year_level: "4th Year",
       birthdate: "1999-12-31",
+      otp_code: "123456",
     },
   });
   const res = makeRes();
@@ -207,6 +215,7 @@ test("verification: submit allows resubmit when verified but identity incomplete
   assert.strictEqual(res.body.status, "pending");
 
   await cleanupTestData(studentId);
+  otpStub.mock.restore();
   auditStub.mock.restore();
   notifyStub.mock.restore();
 });
@@ -215,42 +224,35 @@ test("verification: decline resets profile to unverified", async () => {
   const auditStub = test.mock.method(auditService, "recordRequest", async () => undefined);
   const notifyStub = test.mock.method(notificationService, "notifyUser", async () => undefined);
 
+  const { deptId, courseId } = await getTestCatalog();
   const studentId = uniq("stu");
   const adminId = uniq("adm");
   const email = `${uniq("todecline")}@lccbonline.edu.ph`;
   const adminEmail = `${uniq("admin")}@lccbonline.edu.ph`;
-  const deptCode = uniq("TD");
-  const dept = await db.query(
-    `INSERT INTO public.departments (name, code) VALUES ($1, $2) RETURNING id`,
-    [`Test Dept ${deptCode}`, deptCode]
-  );
-  const course = await db.query(
-    `INSERT INTO public.courses (name, department_id) VALUES ($1, $2) RETURNING id`,
-    [`Test Course ${deptCode}`, dept.rows[0].id]
-  );
   const studentIdValue = `2023-${uniq("55555")}`;
   await db.query(
     `INSERT INTO public.profiles (id, email, full_name, student_id, department_id, course_id, role, verification_status)
      VALUES ($1, $2, 'To Decline', $3, $4, $5, 'student', 'pending')`,
-    [studentId, email, studentIdValue, dept.rows[0].id, course.rows[0].id]
+    [studentId, email, studentIdValue, deptId, courseId]
   );
-  // Admin must exist in profiles for FK constraint on reviewed_by
+  // The reviewer must exist in profiles for the FK on reviewed_by, and must be a
+  // department admin of the requester's own department to be in scope.
   await db.query(
-    `INSERT INTO public.profiles (id, email, full_name, role, verification_status)
-     VALUES ($1, $2, 'Admin User', 'admin', 'verified')`,
-    [adminId, adminEmail]
+    `INSERT INTO public.profiles (id, email, full_name, role, department_id, verification_status)
+     VALUES ($1, $2, 'Admin User', 'departmentAdmin', $3, 'verified')`,
+    [adminId, adminEmail, deptId]
   );
 
   const request = await db.query(
     `INSERT INTO public.profile_verification_requests (user_id, full_name, student_id, department_id, course_id, year_level, status)
      VALUES ($1, 'To Decline', $2, $3, $4, '2nd Year', 'pending')
      RETURNING *`,
-    [studentId, studentIdValue, dept.rows[0].id, course.rows[0].id]
+    [studentId, studentIdValue, deptId, courseId]
   );
 
   const req = makeReq({
     userId: adminId,
-    profile: { role: "admin", department_id: null, id: adminId },
+    profile: { role: "departmentAdmin", department_id: deptId, id: adminId },
     params: { id: request.rows[0].id },
     body: { note: "Student ID format is incorrect" },
   });
@@ -272,17 +274,9 @@ test("verification: decline resets profile to unverified", async () => {
 });
 
 test("verification: getLatestForUser joins department and course names", async () => {
+  const { deptId, courseId } = await getTestCatalog();
   const studentId = uniq("stu");
   const email = `${uniq("join")}@lccbonline.edu.ph`;
-  const deptCode = uniq("TD");
-  const dept = await db.query(
-    `INSERT INTO public.departments (name, code) VALUES ($1, $2) RETURNING id`,
-    [`Test Dept ${deptCode}`, deptCode]
-  );
-  const course = await db.query(
-    `INSERT INTO public.courses (name, department_id) VALUES ($1, $2) RETURNING id`,
-    [`Test Course ${deptCode}`, dept.rows[0].id]
-  );
   await db.query(
     `INSERT INTO public.profiles (id, email, role, verification_status)
      VALUES ($1, $2, 'student', 'unverified')`,
@@ -297,7 +291,7 @@ test("verification: getLatestForUser joins department and course names", async (
   await db.query(
     `INSERT INTO public.profile_verification_requests (user_id, full_name, student_id, department_id, course_id, year_level, status, birthdate)
      VALUES ($1, 'Join Test', $2, $3, $4, '3rd Year', 'pending', '2000-06-15')`,
-    [studentId, `2023-${uniq("66666")}`, dept.rows[0].id, course.rows[0].id]
+    [studentId, `2023-${uniq("66666")}`, deptId, courseId]
   );
 
   const result = await verificationModel.getLatestForUser(studentId);
@@ -308,6 +302,10 @@ test("verification: getLatestForUser joins department and course names", async (
   assert.strictEqual(datePart(result.birthdate), "2000-06-15");
 
   await cleanupTestData(studentId);
+});
+
+test.after(async () => {
+  await db.pool.end();
 });
 
 console.log("All verification tests passed");

@@ -6,7 +6,7 @@ import {
   Platform,
   useWindowDimensions,
 } from "react-native";
-import { AlignJustify, Search, MessageSquare, Sun, Moon } from "lucide-react-native";
+import { AlignJustify, Search, MessageSquare, Sun, Moon, UserPlus } from "lucide-react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
@@ -165,6 +165,13 @@ export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
           onPress={() => router.push("/(tabs)/search")}
           label="Search the repository"
           icon={Search}
+          iconColor={colors.inkSoft}
+          backgroundColor={colors.panelInset}
+        />
+        <IconButton
+          onPress={() => router.push("/find-friends")}
+          label="Find friends"
+          icon={UserPlus}
           iconColor={colors.inkSoft}
           backgroundColor={colors.panelInset}
         />

@@ -14,16 +14,24 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
         run: cd backend && npm ci
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Verify repository secrets
+        run: |
+          missing=()
+          [ -z "${{ secrets.DATABASE_URL }}" ] && missing+=("DATABASE_URL")
+          [ -z "${{ secrets.SUPABASE_URL }}" ] && missing+=("SUPABASE_URL")
+          [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ] && missing+=("SUPABASE_SERVICE_ROLE_KEY")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing GitHub Actions repository secrets: ${missing[*]}"
+            echo "Please go to Repository Settings -> Secrets and variables -> Actions, and add the missing secrets."
+            exit 1
+          fi
 
       - name: Run scheduled cleanup
         run: cd backend && node scripts/scheduled-cleanup.js

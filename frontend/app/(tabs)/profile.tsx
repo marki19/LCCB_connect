@@ -29,7 +29,7 @@ function formatPostRows(rows: any[], user: any) {
       course: user.department_name,
       yearLevel: user.year_level,
     },
-    title: row.title || "Post Update",
+    title: row.title || "",
     description: row.content || row.description || "",
     type: row.type || "text",
     tags: row.technologies || row.tags || [],
@@ -84,16 +84,15 @@ export default function ProfileScreen() {
           return;
         }
 
-        const rows = await res.json();
+        // `/posts` returns `{ posts, next_cursor }`; the cursor is built by the
+        // server so the client never has to mirror the keyset format.
+        const payload = await res.json();
         if (cancelled) return;
 
-        const list = Array.isArray(rows) ? rows : [];
+        const list = Array.isArray(payload) ? payload : payload?.posts ?? [];
         setMyPosts(formatPostRows(list, user));
-
-        const last = list[list.length - 1];
-        const canLoadMore = list.length === 100 && Boolean(last?.created_at && last?.id);
-        setHasMore(canLoadMore);
-        setNextCursor(canLoadMore ? `${last.created_at}|${last.id}` : null);
+        setNextCursor(payload?.next_cursor ?? null);
+        setHasMore(Boolean(payload?.next_cursor));
       } catch (err) {
         console.error("Failed to load user posts from SQL backend:", err);
         if (!cancelled) {
@@ -121,8 +120,8 @@ export default function ProfileScreen() {
       );
       if (!res.ok) return;
 
-      const rows = await res.json();
-      const list = Array.isArray(rows) ? rows : [];
+      const payload = await res.json();
+      const list = Array.isArray(payload) ? payload : payload?.posts ?? [];
       if (list.length === 0) {
         setHasMore(false);
         setNextCursor(null);
@@ -130,11 +129,8 @@ export default function ProfileScreen() {
       }
 
       setMyPosts((prev) => [...prev, ...formatPostRows(list, currentUser)]);
-
-      const last = list[list.length - 1];
-      const canLoadMore = list.length === 100 && Boolean(last?.created_at && last?.id);
-      setHasMore(canLoadMore);
-      setNextCursor(canLoadMore ? `${last.created_at}|${last.id}` : null);
+      setNextCursor(payload?.next_cursor ?? null);
+      setHasMore(Boolean(payload?.next_cursor));
     } catch (err) {
       console.error("Failed to load more user posts:", err);
     } finally {

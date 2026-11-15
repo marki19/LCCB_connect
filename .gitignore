@@ -34,5 +34,13 @@ Thumbs.db
 supabase/.temp/
 frontend/supabase/.temp/
 
+# Test artifacts
+.vitest/
+*/.vitest/
+
+# Local uploaded files (keep directory structure, ignore binary files)
+backend/uploads/*
+!backend/uploads/**/.gitkeep
+
 # desloppify local state
 .desloppify/

@@ -128,6 +128,100 @@ const respond = async (id, addresseeId, status) => {
   return result.rows[0];
 };
 
+/**
+ * Friend suggestions for the feed carousel and Find Friends.
+ *
+ * Ranking (Messaging_plan.md §5):
+ *   1. mutual friends, count descending
+ *   2. same department
+ *   3. full score: course match, year-level match, department match, mutuals
+ *
+ * Excludes: self, any friendship row (pending or accepted, both directions),
+ * blocked in either direction, suspended accounts, and guests.
+ *
+ * `reason` labels which tier produced the placement: 'mutual' | 'department' |
+ * 'campus'. It is a presentation hint, not an authorization input.
+ */
+const listSuggestions = async (userId, { limit = 8 } = {}) => {
+  const sql = `
+    WITH me AS (
+      SELECT $1::text AS id
+    ),
+    my_friends AS (
+      SELECT CASE WHEN requester_id = $1 THEN addressee_id
+                  ELSE requester_id END AS peer_id
+      FROM public.friendships
+      WHERE status = 'accepted'
+        AND (requester_id = $1 OR addressee_id = $1)
+    ),
+    excluded AS (
+      SELECT $1::text AS peer_id
+      UNION ALL
+      SELECT CASE WHEN requester_id = $1 THEN addressee_id
+                  ELSE requester_id END
+      FROM public.friendships
+      WHERE requester_id = $1 OR addressee_id = $1
+      UNION ALL
+      SELECT blocked_id FROM public.blocks WHERE blocker_id = $1
+      UNION ALL
+      SELECT blocker_id FROM public.blocks WHERE blocked_id = $1
+    ),
+    candidates AS (
+      SELECT p.id, p.full_name, p.username, p.avatar_url,
+             d.name AS department_name, c.name AS course_name,
+             p.department_id, p.course_id, p.year_level
+      FROM public.profiles p
+      LEFT JOIN public.departments d ON d.id = p.department_id
+      LEFT JOIN public.courses c ON c.id = p.course_id
+      WHERE p.id <> $1
+        AND p.suspended_at IS NULL
+        AND (p.suspended_until IS NULL OR p.suspended_until <= NOW())
+        AND NOT EXISTS (SELECT 1 FROM excluded e WHERE e.peer_id = p.id)
+    ),
+    mutuals AS (
+      SELECT cand.id AS candidate_id, COUNT(*) AS n
+      FROM candidates cand
+      JOIN public.friendships f
+        ON f.status = 'accepted'
+        AND (f.requester_id = cand.id OR f.addressee_id = cand.id)
+        AND f.requester_id <> $1 AND f.addressee_id <> $1
+      JOIN my_friends mf
+        ON mf.peer_id = CASE WHEN f.requester_id = cand.id
+                            THEN f.addressee_id ELSE f.requester_id END
+      GROUP BY cand.id
+    )
+    SELECT
+      cand.id,
+      cand.full_name,
+      cand.username,
+      cand.avatar_url,
+      cand.department_name,
+      cand.course_name,
+      cand.department_id,
+      cand.course_id,
+      cand.year_level,
+      COALESCE(m.n, 0) AS mutual_count,
+      CASE
+        WHEN COALESCE(m.n, 0) > 0 THEN 'mutual'
+        WHEN cand.department_id = (SELECT department_id FROM public.profiles WHERE id = $1)
+          THEN 'department'
+        ELSE 'campus'
+      END AS reason
+    FROM candidates cand
+    LEFT JOIN mutuals m ON m.candidate_id = cand.id
+    ORDER BY
+      COALESCE(m.n, 0) DESC,
+      (cand.department_id = (SELECT department_id FROM public.profiles WHERE id = $1)) DESC,
+      (cand.course_id = (SELECT course_id FROM public.profiles WHERE id = $1)) DESC,
+      (cand.year_level = (SELECT year_level FROM public.profiles WHERE id = $1)) DESC,
+      COALESCE(m.n, 0) DESC,
+      cand.full_name ASC NULLS LAST
+    LIMIT $2;
+  `;
+  const result = await db.query(sql, [userId, limit]);
+  return result.rows;
+};
+
 /** Unfriend, or cancel a request you sent — from either side. */
 const removePair = async (userId, otherId) => {
   const result = await db.query(
@@ -148,4 +242,5 @@ module.exports = {
   listOutgoingRequests,
   respond,
   removePair,
+  listSuggestions,
 };

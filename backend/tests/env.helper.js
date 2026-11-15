@@ -1,8 +1,7 @@
 // Deterministic environment for the test suite. Must be required BEFORE
 // `../app.js` — the app reads these at load time.
-//
-// These are throwaway values: no test contacts Supabase or Postgres (the
-// Supabase token check and every model function are stubbed).
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
+
 process.env.NODE_ENV = "test";
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || "https://test-project.supabase.co";
 process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "test-anon-key";
@@ -34,6 +33,8 @@ process.env.RATE_LIMIT_COMMENT_DAILY_MAX = process.env.RATE_LIMIT_COMMENT_DAILY_
 process.env.RATE_LIMIT_THESIS_MAX = process.env.RATE_LIMIT_THESIS_MAX || "1000000";
 process.env.RATE_LIMIT_PREVIEW_MAX = process.env.RATE_LIMIT_PREVIEW_MAX || "1000000";
 process.env.RATE_LIMIT_LIKE_MAX = process.env.RATE_LIMIT_LIKE_MAX || "1000000";
+process.env.RATE_LIMIT_VERIFICATION_OTP_MAX =
+  process.env.RATE_LIMIT_VERIFICATION_OTP_MAX || "1000000";
 
 // Push is best-effort and would otherwise try to reach Postgres/Expo; the
 // service short-circuits when disabled. push.test.js re-enables it locally.

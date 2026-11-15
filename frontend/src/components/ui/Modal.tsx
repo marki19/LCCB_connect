@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  Animated,
+  Easing,
   Modal as RNModal,
   Platform,
   Pressable,
@@ -9,14 +11,6 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import Animated, {
-  Easing,
-  runOnJS,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
 import { useTheme } from "../../contexts/ThemeContext";
 import { elevation, MOTION, RADIUS, SPACE } from "../../lib/tokens";
 
@@ -28,22 +22,27 @@ type ModalProps = {
   maxWidth?: number;
   /** Close when the backdrop is pressed. Default true. */
   dismissOnBackdrop?: boolean;
-  /** Accessible name for the dialog. */
-  accessibilityLabel?: string;
-  /** Present as a bottom sheet on narrow screens. Default true. */
+  /**
+   * On mobile viewports (<640px), dock the modal to the bottom of the screen
+   * as a sheet with rounded top corners. Defaults to true. Set false for
+   * alert-style confirmation dialogs that should stay centered.
+   */
   sheetOnMobile?: boolean;
-  /** Extra styles for the content surface. */
+  /** Accessible label for the dialog. Used by screen readers. */
+  accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
 };
 
 /**
- * One animated, accessible dialog surface for the whole app.
+ * Design-system modal container.
  *
- * - Backdrop fades; the panel fades + lifts (scales slightly on desktop).
- * - Bottom sheet on narrow screens, centered card on tablet/desktop.
- * - Backdrop blur on web, scrim everywhere.
- * - Escape / backdrop / Android back close it; focus returns on web.
- * - Honors reduced motion.
+ * Implements the modal rules from docs/UI_UX_DESIGN_SYSTEM.md:
+ *   - Centers on tablet / desktop with bounded max-width (default 520).
+ *   - Slides up from the bottom as a sheet on small screens by default.
+ *   - Surface: surfaceElevated with border + lg elevation.
+ *   - Backdrop: surfaceOverlay with subtle blur on web.
+ *   - Traps Escape on web and restores previous focus on unmount.
+ *   - Built-in Animated without Reanimated warnings on web.
  */
 export default function Modal({
   visible,
@@ -51,48 +50,43 @@ export default function Modal({
   children,
   maxWidth = 520,
   dismissOnBackdrop = true,
-  accessibilityLabel,
   sheetOnMobile = true,
+  accessibilityLabel = "Dialog",
   style,
 }: ModalProps) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
-  const reduced = useReducedMotion();
 
   // Mount while visible, and stay mounted until the exit animation finishes.
   const [shown, setShown] = useState(visible);
   if (visible && !shown) setShown(true);
-  if (reduced && !visible && shown) setShown(false);
-  const shouldRender = reduced ? visible : shown;
+  const shouldRender = visible || shown;
 
-  const progress = useSharedValue(visible ? 1 : 0);
+  const progressAnim = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const contentRef = useRef<View>(null);
   const previouslyFocused = useRef<any>(null);
 
   useEffect(() => {
     if (visible) {
-      if (reduced) {
-        progress.value = 1;
-        return;
-      }
-      progress.value = 0;
-      progress.value = withTiming(1, { duration: MOTION.base, easing: Easing.out(Easing.cubic) });
+      setShown(true);
+      Animated.timing(progressAnim, {
+        toValue: 1,
+        duration: MOTION.base,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
       return;
     }
 
-    if (reduced) {
-      progress.value = 0;
-      return;
-    }
-
-    progress.value = withTiming(
-      0,
-      { duration: MOTION.fast, easing: Easing.in(Easing.cubic) },
-      (finished) => {
-        if (finished) runOnJS(setShown)(false);
-      }
-    );
-  }, [visible, reduced, progress]);
+    Animated.timing(progressAnim, {
+      toValue: 0,
+      duration: MOTION.fast,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) setShown(false);
+    });
+  }, [visible, progressAnim]);
 
   // Escape to close + focus management (web only).
   useEffect(() => {
@@ -125,16 +119,14 @@ export default function Modal({
   const isMobile = width < 640;
   const asSheet = isMobile && sheetOnMobile;
 
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
-  const contentStyle = useAnimatedStyle(() => {
-    const p = progress.value;
-    return {
-      opacity: p,
-      transform: [
-        { translateY: (1 - p) * (asSheet ? 28 : 10) },
-        { scale: asSheet ? 1 : 0.97 + p * 0.03 },
-      ],
-    };
+  const backdropOpacity = progressAnim;
+  const contentTranslateY = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [asSheet ? 28 : 10, 0],
+  });
+  const contentScale = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [asSheet ? 1 : 0.97, 1],
   });
 
   if (!shouldRender) return null;
@@ -166,9 +158,8 @@ export default function Modal({
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: colors.surfaceOverlay },
+            { backgroundColor: colors.surfaceOverlay, opacity: backdropOpacity },
             webBlur,
-            backdropStyle,
           ]}
         >
           <Pressable
@@ -207,9 +198,13 @@ export default function Modal({
                 borderBottomLeftRadius: asSheet ? 0 : RADIUS.xl,
                 borderBottomRightRadius: asSheet ? 0 : RADIUS.xl,
                 ...elevation("lg", colors),
+                opacity: progressAnim,
+                transform: [
+                  { translateY: contentTranslateY },
+                  { scale: contentScale },
+                ],
               },
               webOutline,
-              contentStyle,
               style,
             ]}
           >

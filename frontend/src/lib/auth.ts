@@ -1,10 +1,18 @@
-import { supabase } from "./supabase";
+import {
+  setSession,
+  clearSession,
+  getRefreshToken,
+  getAccessToken,
+  type SessionUser,
+} from "./session";
 import { apiJson, ApiError } from "./api";
+import { supabase } from "./supabase";
 
-type SessionTokens = {
+export type SessionTokens = {
   access_token: string;
   refresh_token: string;
   expires_at?: number;
+  user?: SessionUser;
 };
 
 /**
@@ -16,11 +24,92 @@ type SessionTokens = {
  * carries the user-facing explanation, so callers can show `err.message`.
  */
 export async function installSession(tokens: SessionTokens): Promise<void> {
-  const { error } = await supabase.auth.setSession({
+  if (!tokens || !tokens.access_token) {
+    throw new ApiError("Invalid session payload", 401);
+  }
+  await setSession({
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
+    expires_at: tokens.expires_at,
+    user: tokens.user,
   });
-  if (error) throw new ApiError(error.message, 401);
+}
+
+let refreshPromise: Promise<string> | null = null;
+
+/**
+ * Proactively or reactively refreshes the access token using the stored refresh token.
+ * Deduplicates concurrent refresh attempts so multiple 401s don't race.
+ */
+export async function refreshSession(): Promise<string> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = await getRefreshToken();
+      if (!refreshToken) {
+        await clearSession();
+        throw new ApiError("No refresh token available", 401);
+      }
+
+      const API_URL = (
+        process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api"
+      ).replace(/\/+$/, "");
+
+      const res = await fetch(`${API_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!res.ok) {
+        await clearSession();
+        let message = "Session expired";
+        try {
+          const body = await res.json();
+          if (body?.error) message = body.error;
+        } catch {}
+        throw new ApiError(message, res.status);
+      }
+
+      const tokens = (await res.json()) as SessionTokens;
+      await installSession(tokens);
+      return tokens.access_token;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+/**
+ * Revokes refresh tokens on the server and clears client storage.
+ */
+export async function logout(): Promise<void> {
+  try {
+    const refreshToken = await getRefreshToken();
+    const token = await getAccessToken();
+    const API_URL = (
+      process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api"
+    ).replace(/\/+$/, "");
+
+    await Promise.allSettled([
+      fetch(`${API_URL}/auth/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      }),
+      supabase.auth.signOut(),
+    ]);
+  } finally {
+    await clearSession();
+  }
 }
 
 /**
@@ -70,15 +159,19 @@ export async function requestSignup(email: string, password: string, fullName: s
 }
 
 /**
- * Signs in with Google using an ID token.
- * Requires @react-native-google-signin/google-signin (dev build only).
+ * Signs in with Google using an ID token (native/GIS) or Supabase access token (web OAuth).
  */
 export async function signInWithGoogle(
-  idToken: string
-): Promise<void | MfaChallengeResponse | MfaEnrollmentRequiredResponse> {
+  idToken?: string,
+  accessToken?: string
+): Promise<SessionTokens | MfaChallengeResponse | MfaEnrollmentRequiredResponse> {
+  const body: { id_token?: string; access_token?: string } = {};
+  if (idToken) body.id_token = idToken;
+  if (accessToken) body.access_token = accessToken;
+
   const response = await apiJson<SessionTokens | MfaChallengeResponse | MfaEnrollmentRequiredResponse>("/auth/google", {
     method: "POST",
-    body: JSON.stringify({ id_token: idToken }),
+    body: JSON.stringify(body),
   });
 
   if ("mfa_required" in response && response.mfa_required === true) {
@@ -90,6 +183,7 @@ export async function signInWithGoogle(
   }
 
   await installSession(response as SessionTokens);
+  return response as SessionTokens;
 }
 
 /**

@@ -1,8 +1,45 @@
 const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
 const { escapeLike } = require("../utils/queryFilters");
+const { normalizeRole } = require("../utils/roles");
 
 // RAW SQL QUERIES ONLY (NO ORM METHODS)
+
+const PROFILE_COLUMNS = [
+  "id",
+  "username",
+  "full_name",
+  "avatar_url",
+  "bio",
+  "course",
+  "year_level",
+  "role",
+  "skills",
+  "email",
+  "student_id",
+  "email_confirmed_at",
+  "verification_status",
+  "verified_at",
+  "department_id",
+  "course_id",
+  "message_policy",
+  "profile_completed",
+  "profile_banner_dismissed",
+  "last_seen_at",
+  "suspended_at",
+  "suspended_until",
+  "suspension_reason",
+  "suspended_by",
+  "failed_login_attempts",
+  "locked_until",
+  "email_bounced",
+  "bounce_reason",
+  "bounced_at",
+  "created_at",
+  "updated_at",
+];
+const PROFILE_SELECT = PROFILE_COLUMNS.map((col) => `p.${col}`).join(", ");
+const PROFILE_RETURNING = PROFILE_COLUMNS.join(", ");
 
 // Keyset pagination on the (text) primary key. `cursor` is the last `id` seen.
 const getAllUsers = async ({
@@ -47,7 +84,7 @@ const getAllUsers = async ({
   // Joins the catalog so callers can display department/course names without a
   // second round-trip. The ids remain the authorization source of truth.
   const sql = `
-    SELECT p.*, d.name AS department_name, c.name AS course_name
+    SELECT ${PROFILE_SELECT}, d.name AS department_name, c.name AS course_name
     FROM profiles p
     LEFT JOIN public.departments d ON d.id = p.department_id
     LEFT JOIN public.courses c ON c.id = p.course_id
@@ -124,14 +161,26 @@ const getAllUsers = async ({
   // Joins the catalog so callers can display department/course names without a
   // second round-trip. The ids remain the authorization source of truth.
   const sql = `
-    SELECT p.*, d.name AS department_name, c.name AS course_name
+    SELECT ${PROFILE_SELECT}, d.name AS department_name, c.name AS course_name
     FROM profiles p
     LEFT JOIN public.departments d ON d.id = p.department_id
     LEFT JOIN public.courses c ON c.id = p.course_id
     WHERE p.id = $1;
   `;
   const result = await db.query(sql, [id]);
-  return result.rows[0];
+  const row = result.rows[0];
+  if (!row) return null;
+  const role = normalizeRole(row.role);
+  if (
+    role === "superadmin" ||
+    role === "admin" ||
+    role === "faculty" ||
+    role === "departmentadmin" ||
+    row.verification_status === "verified"
+  ) {
+    row.profile_completed = true;
+  }
+  return row;
 };
 
 const getPublicProfile = async (targetId, viewerId = null) => {
@@ -166,7 +215,8 @@ const getPublicProfile = async (targetId, viewerId = null) => {
       p.department_id,
       p.course_id,
       p.created_at,
-      p.verified_status,
+      p.verification_status,
+      p.verification_status AS verified_status,
       d.name AS department_name,
       c.name AS course_name,
       (
@@ -228,6 +278,7 @@ const getPublicProfile = async (targetId, viewerId = null) => {
     course_name: row.course_name,
     created_at: row.created_at,
     verified_status: row.verified_status,
+    verification_status: row.verification_status,
     friendship,
     is_self: Boolean(viewerId && String(viewerId) === String(row.id)),
     stats: {
@@ -241,14 +292,15 @@ const getPublicProfile = async (targetId, viewerId = null) => {
 const createUser = async (userData) => {
   const {
     id, username, full_name, avatar_url, bio, course, year_level, role,
-    department_id, course_id, email, student_id, verification_status,
+    department_id, course_id, email, student_id, verification_status, password_hash,
   } = userData;
   const sql = `
-    INSERT INTO profiles (id, username, full_name, avatar_url, bio, course, year_level, role, department_id, course_id, email, student_id, verification_status)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    INSERT INTO profiles (id, username, full_name, avatar_url, bio, course, year_level, role, department_id, course_id, email, student_id, verification_status, password_hash)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     ON CONFLICT (id) DO UPDATE SET
       full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
       username = COALESCE(EXCLUDED.username, profiles.username),
+      password_hash = COALESCE(EXCLUDED.password_hash, profiles.password_hash),
       -- Department/course are CLAIM-ONCE: fill them only while still unset, so a
       -- repeat POST can never move a user into a different department.
       department_id = COALESCE(profiles.department_id, EXCLUDED.department_id),
@@ -258,11 +310,12 @@ const createUser = async (userData) => {
       email = COALESCE(EXCLUDED.email, profiles.email),
       student_id = COALESCE(profiles.student_id, EXCLUDED.student_id),
       verification_status = COALESCE(EXCLUDED.verification_status, profiles.verification_status)
-    RETURNING *;
+    RETURNING ${PROFILE_RETURNING};
   `;
   const values = [
     id, username, full_name, avatar_url, bio, course, year_level, role || 'student',
     department_id || null, course_id || null, email || null, student_id || null, verification_status || 'unverified',
+    password_hash || null,
   ];
   const result = await db.query(sql, values);
   return result.rows[0];
@@ -289,7 +342,7 @@ const updateUser = async (id, userData) => {
         student_id = COALESCE($12, student_id),
         verification_status = COALESCE($13, verification_status)
     WHERE id = $14
-    RETURNING *;
+    RETURNING ${PROFILE_RETURNING};
   `;
   const values = [
     username || null,
@@ -312,7 +365,7 @@ const updateUser = async (id, userData) => {
 };
 
 const deleteUser = async (id) => {
-  const sql = `DELETE FROM profiles WHERE id = $1 RETURNING *;`;
+  const sql = `DELETE FROM profiles WHERE id = $1 RETURNING ${PROFILE_RETURNING};`;
   const result = await db.query(sql, [id]);
   return result.rows[0];
 };
@@ -537,7 +590,61 @@ const updateBouncedEmail = async (email, bounceReason, bouncedAt) => {
   return result.rows[0] || null;
 };
 
+/**
+ * Resolves full auth credentials (including password_hash) by email, student_id, or username.
+ */
+const getUserAuthByIdentifier = async (identifier) => {
+  if (!identifier || typeof identifier !== "string") return null;
+  const clean = identifier.trim();
+  const isEmail = clean.includes("@");
+  const isStudentId = /^\d{4}-\d{4,}$/.test(clean);
+
+  let sql;
+  let params;
+  if (isEmail) {
+    sql = `
+      SELECT p.*, d.name AS department_name, c.name AS course_name
+      FROM public.profiles p
+      LEFT JOIN public.departments d ON d.id = p.department_id
+      LEFT JOIN public.courses c ON c.id = p.course_id
+      WHERE lower(p.email) = $1
+      LIMIT 1;
+    `;
+    params = [clean.toLowerCase()];
+  } else if (isStudentId) {
+    sql = `
+      SELECT p.*, d.name AS department_name, c.name AS course_name
+      FROM public.profiles p
+      LEFT JOIN public.departments d ON d.id = p.department_id
+      LEFT JOIN public.courses c ON c.id = p.course_id
+      WHERE upper(p.student_id) = $1
+      LIMIT 1;
+    `;
+    params = [clean.toUpperCase()];
+  } else {
+    sql = `
+      SELECT p.*, d.name AS department_name, c.name AS course_name
+      FROM public.profiles p
+      LEFT JOIN public.departments d ON d.id = p.department_id
+      LEFT JOIN public.courses c ON c.id = p.course_id
+      WHERE lower(p.username) = $1
+      LIMIT 1;
+    `;
+    params = [clean.toLowerCase()];
+  }
+
+  const result = await db.query(sql, params);
+  return result.rows[0] || null;
+};
+
+const updatePasswordHash = async (userId, passwordHash) => {
+  const sql = `UPDATE public.profiles SET password_hash = $1 WHERE id = $2 RETURNING id;`;
+  const result = await db.query(sql, [passwordHash, userId]);
+  return (result.rowCount ?? 0) > 0;
+};
+
 module.exports = {
+  PROFILE_COLUMNS,
   getAllUsers,
   getUserById,
   getPublicProfile,
@@ -548,6 +655,8 @@ module.exports = {
   getLoginEmailByStudentId,
   getLoginEmailByUsername,
   getUserByEmailForLockout,
+  getUserAuthByIdentifier,
+  updatePasswordHash,
   findProfileIdByEmail,
   createPendingSignup,
   getPendingSignupByEmail,
@@ -557,8 +666,8 @@ module.exports = {
   deleteExpiredPendingSignups,
   incrementFailedLogins,
   resetFailedLogins,
-    isLocked,
-    lockAccount,
-    unlockAccount,
-    updateBouncedEmail,
-  };
+  isLocked,
+  lockAccount,
+  unlockAccount,
+  updateBouncedEmail,
+};

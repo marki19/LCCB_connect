@@ -56,22 +56,117 @@ async function unbanUser(userId) {
  */
 async function revokeSessions(userId) {
   let sessions = 0;
+  let nativeTokensRevoked = 0;
 
-  // `auth.refresh_tokens.user_id` is text; `auth.sessions.user_id` is uuid.
-  const refresh = await db.query(
-    "DELETE FROM auth.refresh_tokens WHERE user_id = $1",
-    [userId]
-  );
-
-  if (UUID_RE.test(userId)) {
-    const result = await db.query(
-      "DELETE FROM auth.sessions WHERE user_id = $1::uuid RETURNING id",
+  // Revoke native self-hosted refresh tokens
+  try {
+    const nativeRes = await db.query(
+      "UPDATE public.refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL",
       [userId]
     );
-    sessions = result.rowCount || 0;
+    nativeTokensRevoked = nativeRes.rowCount || 0;
+  } catch {
+    // In case table not present in unit test or offline
   }
 
-  return { sessions, refresh_tokens: refresh.rowCount || 0 };
+  // `auth.refresh_tokens.user_id` is text; `auth.sessions.user_id` is uuid.
+  let supaTokensRevoked = 0;
+  try {
+    const refresh = await db.query(
+      "DELETE FROM auth.refresh_tokens WHERE user_id = $1",
+      [userId]
+    );
+    supaTokensRevoked = refresh.rowCount || 0;
+  } catch {}
+
+  if (UUID_RE.test(userId)) {
+    try {
+      const result = await db.query(
+        "DELETE FROM auth.sessions WHERE user_id = $1::uuid RETURNING id",
+        [userId]
+      );
+      sessions = result.rowCount || 0;
+    } catch {}
+  }
+
+  return { sessions, refresh_tokens: supaTokensRevoked + nativeTokensRevoked };
+}
+
+/**
+ * Limits concurrent active sessions per user account.
+ * When the count exceeds maxSessions, the oldest sessions are evicted (FIFO).
+ */
+async function enforceSessionCap(userId, { maxSessions, role } = {}) {
+  if (!UUID_RE.test(userId)) {
+    return { evicted: 0, sessionIds: [] };
+  }
+
+  // Determine cap: env override or role-based default (3 for admin/superadmin, 5 for others)
+  let cap = maxSessions;
+  if (!cap) {
+    const isPrivileged = role === "admin" || role === "superadmin";
+    const envCap = parseInt(process.env.MAX_CONCURRENT_SESSIONS, 10);
+    cap = Number.isInteger(envCap) && envCap > 0
+      ? envCap
+      : (isPrivileged ? 3 : 5);
+  }
+
+  try {
+    // Find all sessions for user ordered by newest first
+    const res = await db.query(
+      `SELECT id FROM auth.sessions 
+       WHERE user_id = $1::uuid 
+       ORDER BY created_at DESC 
+       OFFSET $2`,
+      [userId, cap]
+    );
+
+    if (!res.rows || res.rows.length === 0) {
+      return { evicted: 0, sessionIds: [] };
+    }
+
+    const excessIds = res.rows.map((r) => r.id);
+
+    // Delete corresponding refresh tokens
+    await db.query(
+      `DELETE FROM auth.refresh_tokens WHERE session_id = ANY($1::uuid[])`,
+      [excessIds]
+    );
+
+    // Delete excess sessions
+    const deleted = await db.query(
+      `DELETE FROM auth.sessions WHERE id = ANY($1::uuid[]) RETURNING id`,
+      [excessIds]
+    );
+
+    // Audit force_signout in session_events
+    try {
+      await db.query(
+        `INSERT INTO public.session_events (user_id, event_type, metadata)
+         VALUES ($1::uuid, 'force_signout', $2::jsonb)`,
+        [
+          userId,
+          JSON.stringify({
+            reason: "session_cap_exceeded",
+            cap,
+            evicted_count: deleted.rowCount || 0,
+            evicted_session_ids: excessIds,
+          }),
+        ]
+      );
+    } catch {
+      // non-critical audit log
+    }
+
+    return {
+      evicted: deleted.rowCount || 0,
+      sessionIds: excessIds,
+    };
+  } catch (err) {
+    // Do not fail login if session cap query encounters an error
+    console.error("[account] Failed to enforce session cap:", err.message);
+    return { evicted: 0, sessionIds: [] };
+  }
 }
 
 async function deleteAuthUser(userId) {
@@ -152,6 +247,7 @@ module.exports = {
   banUser,
   unbanUser,
   revokeSessions,
+  enforceSessionCap,
   deleteAuthUser,
   getAuthUser,
   generateImpersonationLink,

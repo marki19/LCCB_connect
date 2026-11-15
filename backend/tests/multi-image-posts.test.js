@@ -2,7 +2,7 @@ const { describe, it, before, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createPostSchema } = require("../validation");
-const { withStorageUrls, withStorageUrlsSync, __setAdminFactory } = require("../services/storageService");
+const { withStorageUrls, withStorageUrlsSync, __setAdminFactory, __clearStorageCache } = require("../services/storageService");
 
 describe("multi-image posts", () => {
   describe("validation", () => {
@@ -75,6 +75,7 @@ describe("multi-image posts", () => {
 
     afterEach(() => {
       signedUrlCalls = [];
+      __clearStorageCache();
     });
 
     it("withStorageUrlsSync preserves raw keys in image_urls", () => {
@@ -87,6 +88,7 @@ describe("multi-image posts", () => {
     });
 
     it("withStorageUrls signs each key in image_urls array", async () => {
+      __clearStorageCache();
       const post = {
         id: "p1",
         image_url: "posts/1/a.jpg",
@@ -99,7 +101,8 @@ describe("multi-image posts", () => {
         "https://signed/assets/posts/1/b.jpg",
         "https://signed/assets/posts/1/c.jpg",
       ]);
-      assert.equal(signedUrlCalls.length, 4); // 1 for image_url + 3 for image_urls
+      // Duplicate "posts/1/a.jpg" across image_url and image_urls is deduplicated: 3 unique keys
+      assert.equal(signedUrlCalls.length, 3);
     });
   });
 });

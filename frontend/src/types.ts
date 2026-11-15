@@ -181,6 +181,22 @@ export type FriendRequests = {
   outgoing: { id: string; addressee: ConversationPeer; created_at: string }[];
 };
 
+/** A "people you may know" row from GET /api/friends/suggestions. */
+export type FriendSuggestion = {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  department_name: string | null;
+  course_name: string | null;
+  department_id: string | null;
+  course_id: string | null;
+  year_level: string | null;
+  mutual_count: number;
+  /** Which ranking tier placed this row: 'mutual' | 'department' | 'campus'. */
+  reason: "mutual" | "department" | "campus";
+};
+
 export function messageStatus(message: Message): MessageStatus {
   if (message.read_at) return 'seen';
   if (message.delivered_at) return 'delivered';

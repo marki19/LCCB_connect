@@ -1,4 +1,5 @@
 const rateLimit = require("express-rate-limit");
+const { normalizeRole } = require("../utils/roles");
 
 /**
  * Per-user action limits.
@@ -26,14 +27,24 @@ const DAY = 24 * HOUR;
 /**
  * Builds a limiter keyed by the authenticated user. Falls back to the client IP
  * for any route that somehow reaches it unauthenticated.
+ *
+ * `skipAdmins` is opt-in. Exempting admins from *write* budgets removes
+ * flood protection from the accounts with the most privilege, so only read-side
+ * budgets (search) should set it.
  */
-function perUserLimiter({ windowMs, limit, message }) {
+function perUserLimiter({ windowMs, limit, message, skipAdmins = false }) {
   return rateLimit({
     windowMs,
     limit,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: message },
+    skip: skipAdmins
+      ? (req) => {
+          const role = normalizeRole(req.profile?.role);
+          return role === "superadmin" || role === "admin";
+        }
+      : undefined,
     keyGenerator: (req) =>
       req.user?.id ? `user:${req.user.id}` : rateLimit.ipKeyGenerator(req.ip),
   });
@@ -110,8 +121,14 @@ const thesisUploadLimiter = perUserLimiter({
 
 // ---- read-side expensive work ---------------------------------------------
 
-// Search has no per-user limit by design. The global IP limiter in app.js is
-// still the backstop for raw request volume.
+const searchLimiter = perUserLimiter({
+  windowMs: MINUTE,
+  limit: parseLimit(process.env.RATE_LIMIT_SEARCH_MAX, 30),
+  message: "Too many search requests. Please slow down.",
+  // Read-side budget: admins browsing the console should not be throttled.
+  skipAdmins: true,
+});
+
 const linkPreviewLimiter = perUserLimiter({
   windowMs: MINUTE,
   limit: parseLimit(process.env.RATE_LIMIT_PREVIEW_MAX, 10),
@@ -122,6 +139,17 @@ const likeLimiter = perUserLimiter({
   windowMs: MINUTE,
   limit: parseLimit(process.env.RATE_LIMIT_LIKE_MAX, 60),
   message: "You're reacting too quickly. Please slow down.",
+});
+
+// ---- identity verification -------------------------------------------------
+
+// Each send is an email to a real mailbox, so the budget is deliberately tight.
+// Three per quarter hour covers "I typed it wrong" and "it never arrived"; the
+// per-code attempt cap (utils/otp.js) handles guessing.
+const verificationOtpLimiter = perUserLimiter({
+  windowMs: 15 * MINUTE,
+  limit: parseLimit(process.env.RATE_LIMIT_VERIFICATION_OTP_MAX, 3),
+  message: "You've requested too many codes. Try again in 15 minutes.",
 });
 
 module.exports = {
@@ -136,6 +164,8 @@ module.exports = {
   commentCreateLimiter,
   commentDailyLimiter,
   thesisUploadLimiter,
+  searchLimiter,
   linkPreviewLimiter,
   likeLimiter,
+  verificationOtpLimiter,
 };

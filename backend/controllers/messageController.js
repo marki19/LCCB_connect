@@ -2,6 +2,7 @@ const messageModel = require("../models/messageModel");
 const notificationService = require("../services/notificationService");
 const pushService = require("../services/pushService");
 const { clampLimit } = require("../models/pagination");
+const { normalizeRole } = require("../utils/roles");
 
 /**
  * Messaging controller (Messaging_plan.md §6, §9, §11).
@@ -93,8 +94,9 @@ const createConversation = async (req, res, next) => {
       return res.status(400).json({ error: "You can't message yourself" });
     }
 
-    // Verify user profile is complete before allowing messaging
-    if (!req.profile?.profile_completed) {
+    // Verify student profile is complete before allowing messaging (verified students are exempt)
+    const role = normalizeRole(req.profile?.role);
+    if (role === "student" && !req.profile?.profile_completed && req.profile?.verification_status !== "verified") {
       return res.status(403).json({
         error: "Profile incomplete",
         message: "Complete your profile (full name, student ID, department, and course) before messaging.",
@@ -129,23 +131,9 @@ const acceptRequest = async (req, res, next) => {
     if (!conversation) {
       return res.status(404).json({ error: "Conversation not found" });
     }
+    // No notification row: accepting is a messaging event. The requester sees
+    // the thread go active in Messages.
     res.json(conversation);
-
-    // Tell the requester their request was accepted (quiet, best-effort).
-    const requesterId = conversation.requester_id;
-    if (requesterId) {
-      Promise.resolve()
-        .then(() =>
-          notificationService.notifyUser({
-            userId: requesterId,
-            actorId: req.user.id,
-            type: "new_message",
-            targetId: conversation.id,
-            message: "Your message request was accepted.",
-          })
-        )
-        .catch((err) => console.error("[messaging] accept notification failed:", err));
-    }
   } catch (error) {
     next(error);
   }
@@ -181,7 +169,6 @@ const sendMessage = async (req, res, next) => {
       senderId: req.user.id,
       body: req.body.body,
       clientMsgId: req.body.client_msg_id,
-      senderName,
     });
 
     res.status(result.deduped ? 200 : 201).json(result.message);

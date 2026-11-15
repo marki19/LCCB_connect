@@ -43,6 +43,8 @@ async function geminiScan(text, context = "post") {
     return null; // triggers fallback to local rule scan
   }
 
+  const cleanText = String(text || "").slice(0, 5000);
+
   const prompt = `You are an academic content moderation filter for an institutional university portal (LCCB Connect).
 Evaluate the following student ${context} content for violations:
 - Hate speech or identity-based attacks
@@ -51,7 +53,7 @@ Evaluate the following student ${context} content for violations:
 - Commercial spam or academic fraud
 
 Content to evaluate:
-"""${text.replace(/"/g, '\\"')}"""
+"""${cleanText.replace(/"/g, '\\"')}"""
 
 Respond with valid JSON only in this format:
 {
@@ -62,10 +64,14 @@ Respond with valid JSON only in this format:
 }`;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      signal: AbortSignal.timeout(5000),
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {

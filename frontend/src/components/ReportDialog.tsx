@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, ScrollView } from "react-native";
 import { X, Flag, AlertTriangle } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
+import { useToast } from "../contexts/ToastContext";
 import { RADIUS, SPACE } from "../lib/tokens";
 import { createReport } from "../lib/api";
 
@@ -160,6 +161,7 @@ const createStyles = (colors: any) => StyleSheet.create({
 
 export default function ReportDialog({ targetType, targetId, isOpen, onClose, onSuccess }: ReportDialogProps) {
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const styles = createStyles(colors);
 
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
@@ -178,6 +180,10 @@ export default function ReportDialog({ targetType, targetId, isOpen, onClose, on
     setLoading(true);
     try {
       await createReport(targetType, targetId, selectedReason, note.trim() || undefined);
+      showToast({
+        message: "Report submitted. Thank you for keeping our community safe.",
+        tone: "success",
+      });
       onSuccess();
       onClose();
     } catch (e: any) {

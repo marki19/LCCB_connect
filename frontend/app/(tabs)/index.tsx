@@ -43,6 +43,7 @@ import StatusBadge from "../../src/components/admin/StatusBadge";
 import EmptyState from "../../src/components/admin/EmptyState";
 import { Skeleton } from "../../src/components/ui/Skeleton";
 import IdentityBanner from "../../src/components/IdentityBanner";
+import SuggestionCarousel from "../../src/components/SuggestionCarousel";
 import { useFeedFilter, type FeedCategory } from "../../src/contexts/FeedFilterContext";
 
 type FilterValue = FeedCategory;
@@ -176,7 +177,7 @@ export default function HomeScreen() {
                 course: row.author?.department_name || "—",
                 yearLevel: row.author?.year_level || "—",
               },
-              title: row.title || "Post Update",
+              title: row.title || "",
               description: row.content || row.description || "",
               content: row.content || undefined,
               type: row.type || "text",
@@ -187,8 +188,12 @@ export default function HomeScreen() {
               preview_metadata: row.preview_metadata || null,
               likes: row.likes || 0,
               comments: row.comments || 0,
-              createdAt: new Date(row.created_at).toLocaleDateString(),
-              rawDate: new Date(row.created_at).getTime(),
+              createdAt: row.created_at && !Number.isNaN(new Date(row.created_at).getTime())
+                ? new Date(row.created_at).toLocaleDateString()
+                : "Just now",
+              rawDate: row.created_at && !Number.isNaN(new Date(row.created_at).getTime())
+                ? new Date(row.created_at).getTime()
+                : Date.now(),
               isLiked: Boolean(row.is_liked),
               visibility: row.visibility,
               repost_count: row.repost_count || 0,
@@ -535,6 +540,8 @@ export default function HomeScreen() {
                     </View>
                   </View>
                 )}
+
+                {!isGuest && <SuggestionCarousel />}
               </View>
             }
             ListEmptyComponent={

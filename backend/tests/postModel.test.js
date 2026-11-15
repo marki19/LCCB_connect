@@ -47,11 +47,31 @@ describe("post list filters", () => {
     });
 
     const [sql, params] = query.calls.at(-1);
-    assert.match(sql, /p\.created_at < \$3::timestamptz/i);
-    assert.match(sql, /p\.id < \$4::uuid/i);
+    assert.match(sql, /p\.created_at < \$4::timestamptz/i);
+    assert.match(sql, /p\.id < \$5::uuid/i);
     assert.deepEqual(params, [
       "%ai%",
       AUTHOR,
+      false,
+      "2026-10-20T00:00:00.000Z",
+      "22222222-2222-4222-8222-222222222222",
+      null,
+      5,
+    ]);
+  });
+
+  it("handles 3-part cursor with pinned status", async () => {
+    await postModel.getAllPosts({
+      limit: 5,
+      cursor: `true|${CURSOR}`,
+    });
+
+    const [sql, params] = query.calls.at(-1);
+    assert.match(sql, /COALESCE\(p\.pinned, false\) = \$1::boolean/i);
+    assert.match(sql, /p\.created_at < \$2::timestamptz/i);
+    assert.match(sql, /p\.id < \$3::uuid/i);
+    assert.deepEqual(params, [
+      true,
       "2026-10-20T00:00:00.000Z",
       "22222222-2222-4222-8222-222222222222",
       null,

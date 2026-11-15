@@ -8,6 +8,7 @@ const { validate, friendRequestSchema } = require("../validation");
 // Mounted at /api/friends behind requireAuth + loadProfile.
 
 router.get("/", friendController.listFriends);
+router.get("/suggestions", friendController.getSuggestions);
 router.get("/requests", friendController.getRequests);
 router.post(
   "/",

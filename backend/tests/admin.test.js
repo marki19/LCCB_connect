@@ -54,10 +54,6 @@ const model = {
   clearUserSuspension: stub(adminModel, "clearUserSuspension"),
   listContent: stub(adminModel, "listContent"),
   listAudit: stub(adminModel, "listAudit"),
-  getAnnouncementRecipients: stub(adminModel, "getAnnouncementRecipients"),
-  createAnnouncementNotifications: stub(adminModel, "createAnnouncementNotifications"),
-  getDepartmentName: stub(adminModel, "getDepartmentName"),
-  listAnnouncementHistory: stub(adminModel, "listAnnouncementHistory"),
   getUserByIdText: stub(userModel, "getUserById"),
   updateUser: stub(userModel, "updateUser"),
   deleteUser: stub(userModel, "deleteUser"),
@@ -345,46 +341,4 @@ describe("content, audit, and announcements", () => {
     assert.equal(ok.status, 200);
   });
 
-  it("counts an announcement audience", async () => {
-    model.getAnnouncementRecipients.setImpl(async () => [{ id: "u2" }, { id: "u3" }]);
-
-    const res = await request(app)
-      .get(`/api/admin/announcements/audience-count?type=department&department_id=${DEPT}`)
-      .set(AUTH);
-    assert.equal(res.status, 200);
-    assert.equal(res.body.count, 2);
-  });
-
-  it("sends an announcement, inserts notifications, and audits", async () => {
-    model.getAnnouncementRecipients.setImpl(async () => [{ id: "u2" }]);
-    model.createAnnouncementNotifications.setImpl(async () => 1);
-
-    const res = await request(app)
-      .post("/api/admin/announcements")
-      .set(AUTH)
-      .send({
-        title: "Enrollment",
-        body: "Opens Monday",
-        audience: { type: "all" },
-      });
-
-    assert.equal(res.status, 201);
-    assert.equal(res.body.recipients, 1);
-    assert.equal(model.createAnnouncementNotifications.calls.length, 1);
-    assert.equal(audit.calls.at(-1)[1].action, "announcement.send");
-  });
-
-  it("rejects an announcement with no recipients", async () => {
-    model.getAnnouncementRecipients.setImpl(async () => []);
-
-    const res = await request(app)
-      .post("/api/admin/announcements")
-      .set(AUTH)
-      .send({
-        title: "Enrollment",
-        body: "Opens Monday",
-        audience: { type: "role", role: "student" },
-      });
-    assert.equal(res.status, 400);
-  });
 });

@@ -1,6 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import {
+  getSession,
+  subscribe,
+  type Session,
+  type SessionUser as User,
+} from '../lib/session';
+import { logout } from '../lib/auth';
 import { apiJson, ApiError } from '../lib/api';
 import { unregisterForPush } from '../lib/push';
 
@@ -110,52 +115,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-      // Drop this device's push token first (while the session still authorizes the
-      // request) so a shared device stops getting the previous account's pushes.
-      await unregisterForPush();
-      setIsGuest(false);
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      setProfileStatus("idle");
-      await supabase.auth.signOut();
-    };
+    // Drop this device's push token first (while the session still authorizes the
+    // request) so a shared device stops getting the previous account's pushes.
+    await unregisterForPush();
+    setIsGuest(false);
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setProfileStatus("idle");
+    await logout();
+  };
 
   const fetchProfile = async (userId: string) => {
-      setProfileStatus("loading");
-      try {
-        const data = await apiJson<Profile>(`/users/${userId}`);
-        setProfile(data);
-        setProfileStatus("ready");
-        return;
-      } catch (e) {
-        // 404 = the profile is gone. Signup now creates the profile during OTP
-        // verification and login refuses profile-less accounts, so this is not a
-        // signup in progress: the account was deleted. End the session and say so.
-        if (e instanceof ApiError && e.status === 404) {
-          setAuthNotice(
-            "This account has been deleted. Contact the administrator if you think this is a mistake."
-          );
-          setProfile(null);
-          setProfileStatus("error");
-          await supabase.auth.signOut();
-          return;
-        }
-
-        // 4xx (except 404) = permanent auth/profile error — log with status
-        if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
-          console.error(`Profile fetch failed (${e.status}):`, e.message);
-          setProfile(null);
-          setProfileStatus("error");
-          return;
-        }
-
-        // Network or 5xx = transient — log for debugging, set null to retry
-        console.error("Network failure fetching profile:", e);
+    setProfileStatus("loading");
+    try {
+      const data = await apiJson<Profile>(`/users/${userId}`);
+      const role = data?.role?.toLowerCase().replace(/[-_]/g, "");
+      if (
+        role === "superadmin" ||
+        role === "admin" ||
+        role === "faculty" ||
+        role === "departmentadmin" ||
+        data?.verification_status === "verified"
+      ) {
+        data.profile_completed = true;
+      }
+      setProfile(data);
+      setProfileStatus("ready");
+      return;
+    } catch (e) {
+      // 404 = the profile is gone. Signup now creates the profile during OTP
+      // verification and login refuses profile-less accounts, so this is not a
+      // signup in progress: the account was deleted. End the session and say so.
+      if (e instanceof ApiError && e.status === 404) {
+        setAuthNotice(
+          "This account has been deleted. Contact the administrator if you think this is a mistake."
+        );
         setProfile(null);
         setProfileStatus("error");
+        await logout();
+        return;
       }
-    };
+
+      // 4xx (except 404) = permanent auth/profile error — log with status
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
+        console.error(`Profile fetch failed (${e.status}):`, e.message);
+        setProfile(null);
+        setProfileStatus("error");
+        return;
+      }
+
+      // Network or 5xx = transient — log for debugging, set null to retry
+      console.error("Network failure fetching profile:", e);
+      setProfile(null);
+      setProfileStatus("error");
+    }
+  };
 
   const refreshProfile = async () => {
     if (user?.id) {
@@ -164,34 +179,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          fetchProfile(session.user.id).finally(() => setInitialized(true));
-        } else {
-          setProfileStatus("idle");
-          setInitialized(true);
-        }
-      });
+    getSession().then((initialSession) => {
+      setSession(initialSession);
+      setUser(initialSession?.user ?? null);
+      if (initialSession?.user?.id) {
+        fetchProfile(initialSession.user.id).finally(() => setInitialized(true));
+      } else {
+        setProfileStatus("idle");
+        setInitialized(true);
+      }
+    });
 
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        (_event, session) => {
-          setSession(session);
-          setUser(session?.user ?? null);
-          if (session?.user) {
-            fetchProfile(session.user.id);
-          } else {
-            setProfile(null);
-            setProfileStatus("idle");
-          }
-        }
-      );
+    const unsubscribe = subscribe((currentSession) => {
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      if (currentSession?.user?.id) {
+        fetchProfile(currentSession.user.id);
+      } else {
+        setProfile(null);
+        setProfileStatus("idle");
+      }
+    });
 
-      return () => {
-        subscription.unsubscribe();
-      };
-    }, []);
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   return (
       <AuthContext.Provider value={{ session, user, profile, profileStatus, initialized, isGuest, signInAsGuest, signOut, refreshProfile, authNotice, clearAuthNotice }}>

@@ -421,7 +421,7 @@ async function requireAal2(req, res, next) {
               aal = "aal2";
             }
           } catch (err) {
-            console.error("[mfa] Failed to check AAL from session events:", err.message);
+            console.error(`[mfa][${req.id?.slice(0, 8) ?? "no-req"}] Failed to check AAL from session events:`, err.message);
           }
         }
     }
@@ -446,11 +446,30 @@ async function requireAal2(req, res, next) {
 async function checkSessionAge(req, res, next) {
   if (!req.user?.id) return next();
 
-  // Cache session lookup in memory for 60s per user
+  // Cache session lookup in memory for 60s per user, bounded to 1000 entries.
+  // Expired entries are swept at most once per TTL window; doing a full scan on
+  // every request once the cache is full would add O(n) work to each request.
   const now = Date.now();
   const cache = checkSessionAge.cache || (checkSessionAge.cache = new Map());
+  const CACHE_MAX = 1000;
+  const CACHE_TTL = 60000;
+
+  if (cache.size > CACHE_MAX) {
+    if (now - (checkSessionAge.lastSweep || 0) >= CACHE_TTL) {
+      checkSessionAge.lastSweep = now;
+      for (const [uid, item] of cache) {
+        if (now - item.ts >= CACHE_TTL) cache.delete(uid);
+      }
+    }
+    // Still full after the sweep (or the sweep was skipped): drop the oldest.
+    if (cache.size > CACHE_MAX) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey) cache.delete(oldestKey);
+    }
+  }
+
   const cached = cache.get(req.user.id);
-  if (cached && now - cached.ts < 60000) {
+  if (cached && now - cached.ts < CACHE_TTL) {
     if (!cached.valid) {
       return res.status(401).json({
         error: cached.error || "Session expired",
@@ -518,7 +537,7 @@ async function checkSessionAge(req, res, next) {
     next();
   } catch (err) {
     // On error, allow through but log
-    console.error("[session-age] Check failed:", err.message);
+    console.error(`[session-age][${req.id?.slice(0, 8) ?? "no-req"}] Check failed:`, err.message);
     next();
   }
 }
@@ -779,6 +798,7 @@ function _clearPendingMfaChallenges() {
 module.exports = {
   generateTotpSecret,
   verifyTotp,
+  verifyTotpTimingSafe,
   decryptTotpSecret,
   createTotpFactor,
   verifyTotpFactor,

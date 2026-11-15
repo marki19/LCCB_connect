@@ -5,12 +5,16 @@ const { mockGetSession, mockRequest } = vi.hoisted(() => ({
   mockRequest: vi.fn(),
 }));
 
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getSession: mockGetSession,
-    },
-  })),
+vi.mock("./session", () => ({
+  getSession: mockGetSession,
+  isExpired: vi.fn().mockReturnValue(false),
+  clearSession: vi.fn().mockResolvedValue(undefined),
+  getRefreshToken: vi.fn().mockResolvedValue("mock-refresh"),
+  getAccessToken: vi.fn().mockResolvedValue("mock-access"),
+}));
+
+vi.mock("./auth", () => ({
+  refreshSession: vi.fn().mockResolvedValue("new-mock-access-token"),
 }));
 
 vi.mock("axios", () => ({
@@ -39,7 +43,7 @@ describe("api library", () => {
   describe("apiFetch", () => {
     it("attaches Bearer token for authenticated requests", async () => {
       const mockSession = { access_token: "test-token-123" };
-      mockGetSession.mockResolvedValue({ data: { session: mockSession }, error: null });
+      mockGetSession.mockResolvedValue(mockSession);
       mockRequest.mockResolvedValue({ data: { success: true }, status: 200 });
 
       const result = await api.apiFetch("/test", { method: "GET" });
@@ -55,7 +59,7 @@ describe("api library", () => {
     });
 
     it("does not attach token for guest GET requests", async () => {
-      mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
+      mockGetSession.mockResolvedValue(null);
       mockRequest.mockResolvedValue({ data: { success: true }, status: 200 });
 
       const result = await api.apiFetch("/public/test", { method: "GET" });
@@ -73,7 +77,7 @@ describe("api library", () => {
     });
 
     it("returns ok=false for 4xx response", async () => {
-      mockGetSession.mockResolvedValue({ data: { session: { access_token: "token" } }, error: null });
+      mockGetSession.mockResolvedValue({ access_token: "token" });
       mockRequest.mockResolvedValue({ data: { error: "Bad request" }, status: 400 });
 
       const result = await api.apiFetch("/test", { method: "POST" });
@@ -82,7 +86,7 @@ describe("api library", () => {
     });
 
     it("returns ok=false for 5xx response", async () => {
-      mockGetSession.mockResolvedValue({ data: { session: { access_token: "token" } }, error: null });
+      mockGetSession.mockResolvedValue({ access_token: "token" });
       mockRequest.mockResolvedValue({ data: { error: "Internal server error" }, status: 500 });
 
       const result = await api.apiFetch("/test", { method: "GET" });
@@ -91,7 +95,7 @@ describe("api library", () => {
     });
 
     it("throws on network error", async () => {
-      mockGetSession.mockResolvedValue({ data: { session: { access_token: "token" } }, error: null });
+      mockGetSession.mockResolvedValue({ access_token: "token" });
       const networkError = new Error("Network error");
       (networkError as any).isAxiosError = false;
       mockRequest.mockRejectedValue(networkError);
@@ -102,7 +106,7 @@ describe("api library", () => {
 
   describe("apiJson", () => {
     it("returns parsed JSON on success", async () => {
-      mockGetSession.mockResolvedValue({ data: { session: { access_token: "token" } }, error: null });
+      mockGetSession.mockResolvedValue({ access_token: "token" });
       mockRequest.mockResolvedValue({ data: { success: true } });
 
       const result = await api.apiFetch("/test", { method: "GET" });
@@ -112,7 +116,7 @@ describe("api library", () => {
     });
 
     it("throws ApiError on 4xx response", async () => {
-      mockGetSession.mockResolvedValue({ data: { session: { access_token: "token" } }, error: null });
+      mockGetSession.mockResolvedValue({ access_token: "token" });
       const axiosError = new Error("Request failed") as any;
       axiosError.isAxiosError = true;
       axiosError.response = { status: 400, data: { error: "Bad request", code: "validation_error" } };
@@ -122,7 +126,7 @@ describe("api library", () => {
     });
 
     it("throws ApiError on 5xx response", async () => {
-      mockGetSession.mockResolvedValue({ data: { session: { access_token: "token" } }, error: null });
+      mockGetSession.mockResolvedValue({ access_token: "token" });
       const axiosError = new Error("Server error") as any;
       axiosError.isAxiosError = true;
       axiosError.response = { status: 500, data: { error: "Internal server error" } };

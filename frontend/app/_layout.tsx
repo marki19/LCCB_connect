@@ -9,6 +9,7 @@ import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { FloatingChatProvider } from "../src/contexts/FloatingChatContext";
 import { SettingsSidebarProvider } from "../src/contexts/SettingsSidebarContext";
 import { FeedFilterProvider } from "../src/contexts/FeedFilterContext";
+import { ToastProvider } from "../src/contexts/ToastContext";
 import SettingsSidebar from "../src/components/SettingsSidebar";
 import {
   isAdminRole,
@@ -56,12 +57,21 @@ function RouteGuard() {
     return () => offTokenRefresh();
   }, [userId, isGuest]);
 
-  // Deep-link a tapped push to its thread. Waits for auth so a cold-start tap
-  // isn't dropped (the last response is consumed once, in `push.ts`).
+  // Deep-link a tapped push or local notification to its destination.
   useEffect(() => {
     if (!initialized || !userId || isGuest) return;
-    const offTap = observeNotificationTaps((conversationId) => {
-      router.push(`/messages/${conversationId}`);
+    const offTap = observeNotificationTaps((payload) => {
+      if (typeof payload === "string") {
+        router.push(`/messages/${payload}`);
+      } else if (payload?.conversationId) {
+        router.push(`/messages/${payload.conversationId}`);
+      } else if (payload?.type === "announcement" && payload?.targetId) {
+        router.push(`/post/${payload.targetId}`);
+      } else if (payload?.type === "friend_request" || payload?.type === "friend_accepted") {
+        router.push("/friends");
+      } else {
+        router.push("/(tabs)/notifications");
+      }
     });
     return () => offTap();
   }, [initialized, userId, isGuest, router]);
@@ -99,13 +109,15 @@ function RouteGuard() {
         } else if (profileStatus === "error") {
           router.replace("/(tabs)/"); // fail open; let the app render degraded
         } else if (
-          profile?.role === "student" &&
-          profile.verification_status !== "verified"
+          // A new account starts at 'user' and has to say what it is before the
+          // feed makes sense for it. Unverified students are the legacy case.
+          profile?.role == null ||
+          profile.role === "user" ||
+          (profile.role === "student" && profile.verification_status !== "verified")
         ) {
-          // One-time post-login hop: unverified students complete identity
-          // before they reach the feed. After that, IdentityBanner prompts
-          // them inside the app instead — so "Back to App" from onboarding
-          // lands on the feed and stays there.
+          // One-time post-login hop: complete identity before reaching the feed.
+          // After that, IdentityBanner prompts them inside the app instead — so
+          // "Back to App" from onboarding lands on the feed and stays there.
           router.replace("/onboarding");
         } else {
           router.replace("/(tabs)/");
@@ -154,7 +166,6 @@ function RouteGuard() {
         <Stack.Screen name="(moderation)" />
         <Stack.Screen name="suspended" />
         <Stack.Screen name="onboarding" />
-        <Stack.Screen name="verify-requests" />
         <Stack.Screen
           name="create"
           options={{
@@ -168,6 +179,7 @@ function RouteGuard() {
         <Stack.Screen name="messages/index" />
         <Stack.Screen name="messages/[id]" />
         <Stack.Screen name="friends" />
+        <Stack.Screen name="find-friends" />
         <Stack.Screen name="saved" />
         <Stack.Screen name="settings" options={{ presentation: "modal" }} />
       </Stack>
@@ -185,7 +197,9 @@ export default function RootLayout() {
             <FloatingChatProvider>
               <SettingsSidebarProvider>
                 <FeedFilterProvider>
-                  <RouteGuard />
+                  <ToastProvider>
+                    <RouteGuard />
+                  </ToastProvider>
                 </FeedFilterProvider>
               </SettingsSidebarProvider>
             </FloatingChatProvider>

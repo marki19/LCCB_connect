@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useState, useRef, type ComponentRef } from "react";
+import { Pressable, Text, View, TextInput } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
 import { Eye, EyeOff, KeyRound, Lock } from "lucide-react-native";
 import { useTheme } from "../../src/contexts/ThemeContext";
@@ -28,6 +28,9 @@ export default function ResetPasswordScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const confirmRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   async function submit() {
     let hasError = false;
@@ -84,6 +87,7 @@ export default function ResetPasswordScreen() {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+      {...({ tabIndex: -1 } as any)}
       onPress={() => setShowPassword((v) => !v)}
       hitSlop={8}
       style={({ pressed }) => ({ padding: SPACE.x1, opacity: pressed ? 0.6 : 1 })}
@@ -131,11 +135,14 @@ export default function ResetPasswordScreen() {
         keyboardType="number-pad"
         maxLength={6}
         autoFocus
+        nextRef={passwordRef}
+        returnKeyType="next"
         leadingIcon={({ size, color }) => <KeyRound size={size} color={color} strokeWidth={2.1} />}
         inputStyle={{ letterSpacing: 8, textAlign: "center", fontWeight: "700", fontSize: 18 }}
       />
 
       <TextField
+        ref={passwordRef}
         label="New password"
         value={password}
         onChangeText={(v) => {
@@ -145,12 +152,15 @@ export default function ResetPasswordScreen() {
         placeholder="At least 8 characters"
         secureTextEntry={!showPassword}
         autoComplete="new-password"
+        nextRef={confirmRef}
+        returnKeyType="next"
         leadingIcon={({ size, color }) => <Lock size={size} color={color} strokeWidth={2.1} />}
         hint="Use at least 8 characters"
         right={eyeToggle}
       />
 
       <TextField
+        ref={confirmRef}
         label="Confirm new password"
         value={confirm}
         onChangeText={(v) => {
