@@ -107,29 +107,38 @@ Remediate security and operational defects identified in post-verification audit
 - **Acceptance criteria:**
   - `backend/controllers/authController.js.bak` removed from repository.
   - `escapeLike` applied to filename parameters in `fileRouter.js`.
-- **Verification:** Git status clean; `node --test backend/tests/local-storage.test.js` passes.
+- **Verification:** `git ls-files | grep -c '\.bak$'` returns 0; the file-serving tests in `backend/tests/fileRoutes.test.js` pass.
 - **Files touched:** `backend/controllers/authController.js.bak` (delete), `backend/routes/fileRouter.js`.
 - **Scope:** S (2 files).
 
 ### Checkpoint 2: Auth & Hygiene
-- [ ] All 614 backend tests pass
-- [ ] No `.bak` files remaining in tracked tree
-- [ ] Logout requires authentication
+- [x] All 667 backend tests pass
+- [x] No `.bak` files remaining in tracked tree
+- [x] Logout requires authentication
 
 ---
 
 ### Phase 3: Storage Consolidation Decision
 
 #### Task 11: Consolidate Upload Storage Architecture
-- **Description:** Implement the chosen storage architecture:
-  - *Path A (Render Disk)*: Configure persistent disk mount at `/var/data/uploads` in `render.yaml`, retain `localStorage.js`.
-  - *Path B (Supabase Storage)*: Migrate upload writes in `uploadRouter.js` to `storageService.js` Supabase Storage buckets (`avatars`, `assets`, `theses`) and deprecate ephemeral local disk writes.
+- **Description:** Implement the chosen storage architecture.
+  - *Path A (Render Disk)*: rejected. The free plan offers no persistent disk, and a paid disk costs more than the project's budget for 1 GB.
+  - *Path B (Supabase Storage)*: rejected. It is the paid tier past 1 GB, and the bucket-level policies it depends on do not exist on the target provider.
+  - **Path C (Cloudflare R2) — chosen.** 10 GB-month, 1M Class A / 10M Class B operations, and free egress. Its S3 API is small enough to sign with Node's `crypto` and global `fetch`, so it adds **no dependency**.
+- **Decision record (R2):**
+  - One private bucket (`lccb-connect`); public access stays off. R2 has no ACLs or bucket policies, so every read is a presigned URL.
+  - SigV4 is hand-rolled in `backend/services/sigv4.js`; region is `auto`, endpoint is `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`, with an `R2_ENDPOINT` override for tests.
+  - Every category is signed, so a stored key expands to an absolute URL. Relative keys would break `<Image>` on React Native.
+  - One key shape for all categories: `<category>/<hash>.<ext>`. Thesis keys no longer carry `<uid>/<timestamp>` — ownership is on the row, and a nested path is unroutable by `/api/files/:category/:filename`.
+  - `GET /api/files/:category/:filename` authorises, then 302s to a presigned URL: `public, max-age=31536000, immutable` for `avatars`/`posts`/`videos`, `private, no-store` for `theses`/`documents`.
+  - Chat images use the `posts` category. No new category, no data migration, and no storage credential ever reaches the device.
+  - Storage is required to boot: `R2_*` are in `REQUIRED_ENV`. A server without storage renders no images, so it is not half-broken, it is broken.
 - **Acceptance criteria:**
   - Storage method cleanly supports persistent file uploads in production.
   - Zero split-brain between local disk and cloud storage.
-- **Verification:** Upload test suite passes.
-- **Files touched:** Dependent on choice (`render.yaml` OR `uploadRouter.js`, `storageService.js`).
-- **Scope:** M (2-4 files).
+- **Verification:** Backend suite green (667 tests). `npm run storage:check` does a live PUT → presigned GET (bytes match) → DELETE → 404 against the real bucket.
+- **Files touched:** `backend/services/{sigv4,objectStorage,filePolicy,uploadService}.js`, `backend/middleware/upload.js`, `backend/routes/{uploadRouter,fileRouter,thesisRouter}.js`, `backend/controllers/thesisController.js`, `backend/scripts/check-storage.js`; deleted `backend/services/localStorage.js` and `backend/middleware/localUpload.js`.
+- **Scope:** L (15 files).
 
 ---
 
@@ -144,17 +153,19 @@ Remediate security and operational defects identified in post-verification audit
 - **Scope:** XS (1 file).
 
 #### Task 13: Add Vercel SPA Configuration (`frontend/vercel.json`)
-- **Description:** Create `frontend/vercel.json` with rewrite rule `[{"source": "/(.*)", "destination": "/index.html"}]` for Expo Router SPA routing.
+- **Description:** Create `frontend/vercel.json` following the configuration Expo documents for Vercel: `expo export -p web`, `outputDirectory: "dist"`, `framework: null`, `cleanUrls`, and a catch-all rewrite to `/`.
 - **Acceptance criteria:**
-  - `frontend/vercel.json` maps all client routes to `/index.html`.
-- **Verification:** Validate JSON schema.
+  - `frontend/vercel.json` maps all client routes to the SPA entry point.
+  - `app.json` has `web.output: "single"`, so the catch-all rewrite is required rather than optional.
+- **Verification:** Validate JSON syntax; `npx expo export -p web` produces `dist/index.html`.
 - **Files touched:** `frontend/vercel.json`.
 - **Scope:** XS (1 file).
 
 #### Task 14: Final Pre-Deploy Verification Suite
-- **Description:** Run full test suites (backend 614 tests, frontend vitest 38 tests, frontend `npx tsc --noEmit`).
+- **Description:** Run the full suites (backend 667 tests, frontend vitest 38 tests, frontend `npx tsc --noEmit`) plus `npx expo export -p web`, so the exact artefact Vercel will build is produced locally first.
 - **Acceptance criteria:**
   - 100% test pass rate across backend and frontend.
   - 0 TypeScript compiler errors.
-- **Verification:** `npm --prefix backend test` && `npm --prefix frontend run test` && `npm --prefix frontend run typecheck`.
+  - `dist/index.html` exists after export.
+- **Verification:** `npm --prefix backend test` && `npm --prefix frontend run test` && `npx tsc --noEmit` (in `frontend/`) && `npx expo export -p web` (in `frontend/`).
 - **Scope:** S (0 code changes, validation only).
