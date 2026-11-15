@@ -20,9 +20,9 @@
 - [x] Task 10: Delete `backend/controllers/authController.js.bak` & escape ILIKE in `fileRouter.js`
 
 ## Checkpoint 2: Auth & Hygiene
-- [ ] All 614 backend tests pass
-- [ ] No `.bak` files remaining in tracked tree
-- [ ] Logout requires authentication
+- [x] All 616 backend tests pass
+- [x] No `.bak` files remaining in tracked tree
+- [x] Logout requires authentication
 
 ## Phase 3: Storage Consolidation Decision
 - [ ] Task 11: Consolidate storage architecture (Render Disk vs Supabase Storage)
