@@ -25,9 +25,9 @@
 - [x] Logout requires authentication
 
 ## Phase 3: Storage Consolidation Decision
-- [ ] Task 11: Consolidate storage architecture (Render Disk vs Supabase Storage)
+- [x] Task 11: Consolidate storage architecture (Cloudflare R2 configured in .env & code, zero Render disk writes)
 
 ## Phase 4: Production Deployment Configs
-- [ ] Task 12: Add Render deployment spec (`render.yaml`)
-- [ ] Task 13: Add Vercel SPA configuration (`frontend/vercel.json`)
-- [ ] Task 14: Final pre-deploy verification suite (Backend 614 tests, Frontend typecheck & vitest)
+- [x] Task 12: Add Render deployment spec (`render.yaml`)
+- [x] Task 13: Add Vercel SPA configuration (`frontend/vercel.json`)
+- [x] Task 14: Final pre-deploy verification suite (Backend 616 tests, Frontend export & 38 vitest tests)
