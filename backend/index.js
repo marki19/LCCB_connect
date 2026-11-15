@@ -8,6 +8,12 @@ const REQUIRED_ENV = [
   "JWT_SECRET",
   "JWT_REFRESH_SECRET",
   "MFA_CHALLENGE_SECRET",
+  // Object storage. Every upload and every rendered image depends on it, so a
+  // server without these is half-broken; refuse to boot instead.
+  "R2_ACCOUNT_ID",
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "R2_BUCKET",
 ];
 const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
 if (missingEnv.length > 0) {

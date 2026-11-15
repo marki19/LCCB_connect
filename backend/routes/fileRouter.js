@@ -1,26 +1,38 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../db");
-const { getLocalFilePath, CATEGORIES } = require("../services/localStorage");
 const { requireAuth, loadProfile } = require("../middleware/auth");
 const { normalizeRole } = require("../utils/roles");
+const { escapeLike } = require("../utils/queryFilters");
+const { isCategory, isPublicCategory } = require("../services/filePolicy");
+const objectStorage = require("../services/objectStorage");
 
-const PRIVATE_CATEGORIES = ["theses", "documents"];
+/** Filenames are generated hex digests; this also rejects traversal attempts. */
+const FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-function escapeLike(str) {
-  return String(str).replace(/([%_\\])/g, "\\$1");
+function isSafeFilename(filename) {
+  return (
+    typeof filename === "string" &&
+    filename.length <= 128 &&
+    FILENAME_PATTERN.test(filename) &&
+    !filename.includes("..")
+  );
 }
 
 /**
- * Checks whether the authenticated caller owns the referenced file or is an administrator.
+ * Checks whether the authenticated caller owns the referenced file or is an
+ * administrator.
  */
 async function verifyFileOwnership(category, filename, user) {
   if (!user || !user.id) return false;
+
   const role = normalizeRole(user.role);
   if (role === "admin" || role === "superadmin") {
     return true;
   }
 
+  // Filenames are hashed, but escape anyway: this value is interpolated into
+  // an ILIKE pattern, and an unescaped `%` or `_` would widen the match.
   const likePattern = `%${escapeLike(filename)}`;
 
   if (category === "theses") {
@@ -33,91 +45,92 @@ async function verifyFileOwnership(category, filename, user) {
   }
 
   if (category === "documents") {
-    // 1. Check theses
-    const thesisRes = await db.query(
-      `SELECT uploader_id FROM public.theses WHERE pdf_url ILIKE $1 LIMIT 1`,
+    const { rows } = await db.query(
+      `SELECT user_id FROM public.user_documents WHERE file_url ILIKE $1 LIMIT 1`,
       [likePattern]
     );
-    if (thesisRes.rows.length && String(thesisRes.rows[0].uploader_id) === String(user.id)) {
-      return true;
-    }
-
-    // 2. Check posts
-    const postRes = await db.query(
-      `SELECT author_id FROM public.posts WHERE image_url ILIKE $1 OR $2 = ANY(image_urls) LIMIT 1`,
-      [likePattern, filename]
-    );
-    if (postRes.rows.length && String(postRes.rows[0].author_id) === String(user.id)) {
-      return true;
-    }
-
-    // 3. Check profiles
-    const profileRes = await db.query(
-      `SELECT id FROM public.profiles WHERE avatar_url ILIKE $1 LIMIT 1`,
-      [likePattern]
-    );
-    if (profileRes.rows.length && String(profileRes.rows[0].id) === String(user.id)) {
-      return true;
-    }
-
-    return false;
+    if (!rows.length) return false;
+    return String(rows[0].user_id) === String(user.id);
   }
 
-  return true;
+  const postRes = await db.query(
+    `SELECT author_id FROM public.posts WHERE image_url ILIKE $1 OR $2 = ANY(image_urls) LIMIT 1`,
+    [likePattern, filename]
+  );
+  if (postRes.rows.length && String(postRes.rows[0].author_id) === String(user.id)) {
+    return true;
+  }
+
+  const profileRes = await db.query(
+    `SELECT id FROM public.profiles WHERE avatar_url ILIKE $1 LIMIT 1`,
+    [likePattern]
+  );
+  if (profileRes.rows.length && String(profileRes.rows[0].id) === String(user.id)) {
+    return true;
+  }
+
+  return false;
 }
 
-function serveLocalFile(res, filePath, isPrivate = false) {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  if (isPrivate) {
-    res.setHeader("Cache-Control", "private, no-store");
-  } else {
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-  }
+/**
+ * Redirects to a short-lived presigned URL.
+ *
+ * The bytes never traverse this process: R2 serves them directly, which keeps
+ * file traffic off the API instance and costs nothing because R2 charges no
+ * egress. Private categories must not be stored by shared caches, so they get
+ * `no-store`; public ones are content-addressed by hash and never change.
+ */
+function redirectToObject(res, key, { isPublic }) {
+  const url = objectStorage.presignGet(key);
 
-  return res.sendFile(filePath, {
-    acceptRanges: true,
-    dotfiles: "deny",
-  });
+  res.setHeader(
+    "Cache-Control",
+    isPublic ? "public, max-age=31536000, immutable" : "private, no-store"
+  );
+  res.setHeader("X-Content-Type-Options", "nosniff");
+
+  return res.redirect(302, url);
 }
 
 /**
  * GET /api/files/:category/:filename
- * Safely serves locally stored files.
- * avatars/posts are public.
+ *
+ * avatars/posts/videos are public.
  * theses/documents require auth + ownership (or admin) and return 404 otherwise.
  */
 router.get("/:category/:filename", (req, res, next) => {
-  const category = req.params.category?.toLowerCase();
+  const category = (req.params.category || "").toLowerCase();
   const { filename } = req.params;
 
-  if (!CATEGORIES.includes(category)) {
+  if (!isCategory(category) || !isSafeFilename(filename)) {
     return res.status(404).json({ error: "File not found" });
   }
 
-  const filePath = getLocalFilePath(category, filename);
-  if (!filePath) {
-    return res.status(404).json({ error: "File not found" });
+  if (!objectStorage.isConfigured()) {
+    return res.status(503).json({ error: "File storage is not configured" });
   }
 
-  if (PRIVATE_CATEGORIES.includes(category)) {
-    return requireAuth(req, res, () => {
-      return loadProfile(req, res, async () => {
-        try {
-          const user = req.profile || req.user;
-          const allowed = await verifyFileOwnership(category, filename, user);
-          if (!allowed) {
-            return res.status(404).json({ error: "File not found" });
-          }
-          return serveLocalFile(res, filePath, true);
-        } catch {
+  const key = `${category}/${filename}`;
+  const isPublic = isPublicCategory(category);
+
+  if (isPublic) {
+    return redirectToObject(res, key, { isPublic });
+  }
+
+  return requireAuth(req, res, () => {
+    return loadProfile(req, res, async () => {
+      try {
+        const user = req.profile || req.user;
+        const allowed = await verifyFileOwnership(category, filename, user);
+        if (!allowed) {
           return res.status(404).json({ error: "File not found" });
         }
-      });
+        return redirectToObject(res, key, { isPublic });
+      } catch (err) {
+        return next(err);
+      }
     });
-  }
-
-  return serveLocalFile(res, filePath, false);
+  });
 });
 
 module.exports = router;
