@@ -106,12 +106,15 @@ const updatePending = async (userId, snapshot) => {
  *
  * The caller passes the roles this reviewer may act on (from
  * `verificationPolicy.reviewableRolesFor`) and, for department-scoped reviewers,
- * their own department. `status` filters by request status. Cursor is the last
- * `submitted_at` seen (keyset pagination on a timestamp column).
+ * their own department. `escalatedRoles` are extra roles this reviewer picks up
+ * once a request carries an escalation stamp — campus reviewers only. `status`
+ * filters by request status. Cursor is the last `submitted_at` seen (keyset
+ * pagination on a timestamp column).
  */
 const listQueue = async ({
   roles,
   departmentId = null,
+  escalatedRoles = [],
   status = null,
   limit = 50,
   cursor = null,
@@ -121,6 +124,10 @@ const listQueue = async ({
   const params = [roles];
   const conditions = [`r.role = ANY($1::text[])`];
 
+  if (Array.isArray(escalatedRoles) && escalatedRoles.length > 0) {
+    params.push(escalatedRoles);
+    conditions[0] = `(${conditions[0]} OR (r.escalated_at IS NOT NULL AND r.role = ANY($${params.length}::text[])))`;
+  }
   if (departmentId) {
     params.push(departmentId);
     conditions.push(`r.department_id = $${params.length}::uuid`);
@@ -141,7 +148,7 @@ const listQueue = async ({
     SELECT r.id, r.user_id, r.role, r.status, r.full_name, r.student_id,
            r.department_id, r.course_id, r.year_level, r.birthdate,
            r.submitted_at, r.reviewed_at, r.review_note,
-           r.reviewed_by,
+           r.reviewed_by, r.escalated_at,
            p.email AS user_email,
            d.name AS department_name,
            c.name AS course_name
@@ -155,6 +162,24 @@ const listQueue = async ({
   `;
   const result = await db.query(sql, params);
   return result.rows;
+};
+
+/**
+ * Stamps a request as stranded so campus reviewers pick it up.
+ *
+ * `escalated_at IS NULL` makes this idempotent: a second submit racing the first
+ * gets no row back and must not re-notify. Returns the request, or null when it
+ * was already escalated.
+ */
+const markEscalated = async (id) => {
+  const result = await db.query(
+    `UPDATE public.profile_verification_requests
+        SET escalated_at = NOW()
+      WHERE id = $1::uuid AND escalated_at IS NULL
+      RETURNING *;`,
+    [id]
+  );
+  return result.rows[0] || null;
 };
 
 /**
@@ -184,12 +209,17 @@ const resolveReviewers = async ({ campusRoles = [], departmentRoles = [], depart
 /**
  * Approve a request in one transaction:
  *   1. lock the row FOR UPDATE; 409 if not pending
- *   2. write the identity fields onto the profile
+ *   2. write the identity fields and the granted role onto the profile
  *   3. mark the request approved
  *
  * Catalog columns are written with COALESCE: a staff form does not carry a
  * course, and an admin form carries no catalog fields at all, so an absent value
  * must leave whatever the profile already had rather than clearing it.
+ *
+ * `role` is written only when the profile has not been granted one yet — a
+ * reviewer confirms the role the requester asked for, and can never promote or
+ * demote an account that already holds a role. That keeps approval from being an
+ * escalation path.
  *
  * Returns the updated request. The caller is responsible for audit + notify.
  */
@@ -222,6 +252,7 @@ const approve = async (id, reviewerId) => {
                          ELSE (SELECT name FROM public.courses WHERE id = $5::uuid)
                        END,
               year_level = COALESCE($6, year_level),
+              role = CASE WHEN role IS NULL OR role = 'user' THEN $7 ELSE role END,
               verification_status = 'verified',
               verified_at = NOW()
         WHERE id = $1;`,
@@ -232,6 +263,7 @@ const approve = async (id, reviewerId) => {
         request.department_id,
         request.course_id,
         request.year_level,
+        request.role,
       ]
     );
 
@@ -298,6 +330,7 @@ module.exports = {
   updatePending,
   listQueue,
   resolveReviewers,
+  markEscalated,
   approve,
   decline,
 };

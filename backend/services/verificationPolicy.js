@@ -1,4 +1,4 @@
-const { normalizeRole, ROLES } = require("../utils/roles");
+const { normalizeRole, ROLES, SELECTABLE_ROLES } = require("../utils/roles");
 
 /**
  * Verification policy: who may be verified, what each role must prove, and who
@@ -52,6 +52,58 @@ function fieldsFor(role) {
   return ROLE_FIELDS[canonicalRole(role)] || null;
 }
 
+// ---- choosing a role --------------------------------------------------------
+
+/**
+ * True when this account has not picked what it is yet.
+ *
+ * New accounts start at `'user'` (migration 047) precisely so the choice is made
+ * during onboarding, with a verification request behind it, rather than guessed
+ * at signup. A null role is the same state: nothing chosen.
+ */
+function needsRoleChoice(role) {
+  const canonical = canonicalRole(role);
+  return canonical === null || canonical === ROLES.USER;
+}
+
+/** True when `role` is one a new account is allowed to choose. */
+function isSelectable(role) {
+  return SELECTABLE_ROLES.includes(canonicalRole(role));
+}
+
+/**
+ * True when this account has a verification path ahead of it, whether or not it
+ * has chosen the role yet. Used by the OTP gate, which runs before the role is
+ * known: the code proves control of the mailbox either way.
+ */
+function canVerify(role) {
+  return needsRoleChoice(role) || Boolean(fieldsFor(role));
+}
+
+/**
+ * The role a verification request is filed under.
+ *
+ * A `'user'` account supplies the role it wants; every other account is fixed by
+ * its profile, so a request may repeat that role but never change it.
+ *
+ * Returns `{ role }` or `{ error }`.
+ */
+function resolveRequestRole(profileRole, requestedRole) {
+  if (!needsRoleChoice(profileRole)) {
+    const fixed = canonicalRole(profileRole);
+    if (requestedRole != null && canonicalRole(requestedRole) !== fixed) {
+      return { error: "Your account type is already set" };
+    }
+    return { role: fixed };
+  }
+
+  const chosen = canonicalRole(requestedRole);
+  if (!chosen || !isSelectable(chosen)) {
+    return { error: "Choose an account type to verify" };
+  }
+  return { role: chosen };
+}
+
 /**
  * Who reviews whom.
  *
@@ -100,18 +152,55 @@ function reviewsByDepartment(reviewerRole) {
   return scope ? scope.byDepartment : false;
 }
 
+/**
+ * Requests that fall through to campus reviewers when their department has no
+ * one who can decide them.
+ */
+const ESCALATABLE_ROLES = Object.freeze([ROLES.STUDENT, ROLES.FACULTY]);
+
+/** Campus roles that pick up an escalated request. */
+const ESCALATION_REVIEWER_ROLES = Object.freeze([ROLES.ADMIN, ROLES.SUPER_ADMIN]);
+
 /** May this reviewer act on a request raised by `requestRole`? */
-function canReview({ reviewerRole, reviewerDepartmentId, requestRole, requestDepartmentId }) {
+function canReview({
+  reviewerRole,
+  reviewerDepartmentId,
+  requestRole,
+  requestDepartmentId,
+  requestEscalated = false,
+}) {
   const scope = scopeFor(reviewerRole);
   if (!scope) return false;
 
   const target = canonicalRole(requestRole);
-  if (!target || !scope.roles.includes(target)) return false;
+  if (!target) return false;
 
-  if (scope.byDepartment) {
-    return Boolean(reviewerDepartmentId) && reviewerDepartmentId === requestDepartmentId;
+  if (scope.roles.includes(target)) {
+    if (scope.byDepartment) {
+      return Boolean(reviewerDepartmentId) && reviewerDepartmentId === requestDepartmentId;
+    }
+    return true;
   }
-  return true;
+
+  // A request stranded by an unstaffed department climbs to campus reviewers.
+  // Without the escalation stamp it stays out of their queue and out of their
+  // reach, so a department that never hired an admin cannot silently swallow it.
+  return (
+    requestEscalated &&
+    ESCALATABLE_ROLES.includes(target) &&
+    ESCALATION_REVIEWER_ROLES.includes(canonicalRole(reviewerRole))
+  );
+}
+
+/**
+ * The extra request roles this reviewer picks up once a request is escalated.
+ * Empty for everyone who is not a campus reviewer, and for department admins,
+ * whose own queue already holds their department's requests.
+ */
+function escalationRolesFor(reviewerRole) {
+  return ESCALATION_REVIEWER_ROLES.includes(canonicalRole(reviewerRole))
+    ? ESCALATABLE_ROLES
+    : [];
 }
 
 /**
@@ -140,10 +229,18 @@ module.exports = {
   canonicalRole,
   ROLE_FIELDS,
   fieldsFor,
+  SELECTABLE_ROLES,
+  needsRoleChoice,
+  isSelectable,
+  canVerify,
+  resolveRequestRole,
   REVIEWER_SCOPE,
   scopeFor,
   reviewableRolesFor,
   reviewsByDepartment,
   canReview,
+  ESCALATABLE_ROLES,
+  ESCALATION_REVIEWER_ROLES,
+  escalationRolesFor,
   reviewersForRequest,
 };

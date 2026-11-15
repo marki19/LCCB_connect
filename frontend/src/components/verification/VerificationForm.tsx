@@ -7,6 +7,7 @@ import { fetchDepartments, fetchCourses } from "../../lib/catalog";
 import { buildFieldDefs, validateAll } from "../../lib/verification";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import type { Department, Course } from "../../types";
+import type { SelectableRole, VerificationRole } from "../../lib/verification";
 import Button from "../ui/Button";
 import Card from "../ui/Card";
 import Modal from "../ui/Modal";
@@ -16,8 +17,8 @@ import TextField from "../ui/TextField";
 import DatePickerField from "../ui/DatePickerField";
 
 type Props = {
-  /** The caller's role from the server — determines which fields render. */
-  role: string;
+  /** The role the form renders for — the chosen role, or the profile's own. */
+  role: VerificationRole;
   /** Field shape from GET /verification/mine (the authoritative `fields` object). */
   fields: { department: boolean; course: boolean; yearLevel: boolean } | null;
   /** Whether the caller's email ends with @lccbonline.edu.ph. */
@@ -41,6 +42,7 @@ type Props = {
   onSendOtp: () => Promise<{ ok: boolean; expires_at?: string; error?: string }>;
   /** Called when the user submits — should POST /verification or PUT /verification/mine. */
   onSubmit: (payload: {
+    role: SelectableRole;
     full_name: string;
     student_id: string;
     department_id: string | null;
@@ -259,6 +261,7 @@ export default function VerificationForm({
       }
 
       const payload = {
+        role: role as SelectableRole,
         full_name: form.full_name?.trim() ?? "",
         student_id: form.student_id?.trim().toUpperCase() ?? "",
         department_id: form.department_id || null,

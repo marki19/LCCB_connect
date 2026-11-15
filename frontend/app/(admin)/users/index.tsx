@@ -29,6 +29,7 @@ import EmptyState from "../../../src/components/admin/EmptyState";
 
 const ROLE_OPTIONS = [
   { value: "", label: "All roles" },
+  { value: "user", label: "User" },
   { value: "student", label: "Student" },
   { value: "faculty", label: "Faculty" },
   { value: "departmentAdmin", label: "Dept. admin" },
@@ -52,6 +53,8 @@ function getRoleBadgeStyle(role: string | null, colors: ThemeTokens) {
       return { bg: colors.primarySurface, text: colors.primary };
     case "superadmin":
       return { bg: colors.goldSurface, text: colors.goldText };
+    case "user":
+      return { bg: colors.surfaceSunken, text: colors.textSecondary };
     case "student":
     default:
       return { bg: colors.surfaceSunken, text: colors.textSecondary };

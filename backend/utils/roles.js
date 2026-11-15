@@ -47,6 +47,13 @@ const ALL_ROLES = [
   "superAdmin",
 ];
 
+/**
+ * The roles a brand-new account may choose during onboarding, in the order the
+ * picker shows them. `superadmin` is absent on purpose: it is never
+ * self-selectable, and no verification request may carry it.
+ */
+const SELECTABLE_ROLES = ["student", "faculty", "departmentAdmin", "admin"];
+
 module.exports = {
   normalizeRole,
   ROLES,
@@ -54,4 +61,5 @@ module.exports = {
   DEPARTMENT_ADMIN_ROLES,
   FACULTY_ROLES,
   ALL_ROLES,
+  SELECTABLE_ROLES,
 };

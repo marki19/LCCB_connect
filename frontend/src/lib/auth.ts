@@ -164,7 +164,7 @@ export async function requestSignup(email: string, password: string, fullName: s
 export async function signInWithGoogle(
   idToken?: string,
   accessToken?: string
-): Promise<void | MfaChallengeResponse | MfaEnrollmentRequiredResponse> {
+): Promise<SessionTokens | MfaChallengeResponse | MfaEnrollmentRequiredResponse> {
   const body: { id_token?: string; access_token?: string } = {};
   if (idToken) body.id_token = idToken;
   if (accessToken) body.access_token = accessToken;
@@ -183,6 +183,7 @@ export async function signInWithGoogle(
   }
 
   await installSession(response as SessionTokens);
+  return response as SessionTokens;
 }
 
 /**

@@ -671,7 +671,7 @@ export default function CreatePostModal() {
         )}
 
         {/* Profile Incomplete Banner */}
-        {profile?.role === "student" && !profile?.profile_completed && profile?.verification_status !== "verified" && (
+        {(profile?.role === "student" || profile?.role === "user") && !profile?.profile_completed && profile?.verification_status !== "verified" && (
           <View
             style={{
               flexDirection: "row",

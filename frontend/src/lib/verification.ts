@@ -11,11 +11,15 @@ import type { Department, Course } from "../types";
 
 /** The canonical role vocabulary the server uses. */
 export type VerificationRole =
+  | "user"
   | "student"
   | "faculty"
   | "departmentAdmin"
   | "admin"
   | "superadmin";
+
+/** The roles a new account may choose during onboarding. */
+export type SelectableRole = "student" | "faculty" | "departmentAdmin" | "admin";
 
 /** Which fields a role's form carries. Mirrors `ROLE_FIELDS` on the server. */
 export interface VerificationFields {
@@ -28,8 +32,12 @@ export interface VerificationFields {
 export interface VerificationMineResponse {
   request: VerificationRequest | null;
   can_resubmit: boolean;
-  /** The authoritative form shape for the caller's role. */
+  /** The role the form renders for, or null while the role is still unchosen. */
+  role: VerificationRole | null;
+  /** The authoritative form shape for `role`. */
   fields: VerificationFields | null;
+  /** The roles this account may still pick, or null once one is set. */
+  selectable_roles: SelectableRole[] | null;
   /** True when the caller's email ends with @lccbonline.edu.ph. */
   school_account: boolean;
 }
@@ -56,6 +64,8 @@ export interface VerificationRequest {
 
 /** Submit payload (body for POST /verification and PUT /verification/mine). */
 export interface VerificationSubmitPayload {
+  /** The role being asked for. Required while the account has not chosen one. */
+  role?: SelectableRole;
   full_name: string;
   student_id: string;
   department_id?: string | null;

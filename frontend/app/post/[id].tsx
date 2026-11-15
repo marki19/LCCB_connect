@@ -229,7 +229,7 @@ export default function PostDetailScreen() {
   const handleComment = async () => {
     if (!commentText.trim() || !profile?.id) return;
 
-    const isStudent = profile?.role === "student";
+    const isStudent = profile?.role === "student" || profile?.role === "user";
     const isProfileIncomplete = !profile?.profile_completed && profile?.verification_status !== "verified";
     if (isStudent && isProfileIncomplete) {
       setNotice("Please complete your student profile (full name, student ID, department, course) before commenting.");
@@ -962,7 +962,7 @@ export default function PostDetailScreen() {
           backgroundColor: colors.panel,
         }}
       >
-        {profile?.role === "student" && !profile?.profile_completed && profile?.verification_status !== "verified" ? (
+        {(profile?.role === "student" || profile?.role === "user") && !profile?.profile_completed && profile?.verification_status !== "verified" ? (
           <View
             style={{
               backgroundColor: colors.brandWash,
@@ -1492,7 +1492,7 @@ export default function PostDetailScreen() {
             </Text>
 
             {/* Composer */}
-            {profile?.role === "student" && !profile?.profile_completed && profile?.verification_status !== "verified" ? (
+            {(profile?.role === "student" || profile?.role === "user") && !profile?.profile_completed && profile?.verification_status !== "verified" ? (
               <View style={{ backgroundColor: colors.brandWash, borderRadius: RADIUS.md, padding: SPACE.x3, marginBottom: SPACE.x4 }}>
                 <Text style={{ ...TYPE.caption, color: colors.brand, fontWeight: "700" }}>Complete your profile to comment</Text>
                 <Button label="Go to Profile" size="sm" onPress={() => router.push("/onboarding")} style={{ marginTop: 8 }} />

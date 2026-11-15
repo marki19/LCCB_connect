@@ -1,5 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { getAccessToken } from "./session";
 import type { Conversation, Message, PresenceMode } from "../types";
 
 /**
@@ -164,9 +165,28 @@ export async function setPresenceMode(mode: PresenceMode) {
 // ---- lifecycle -------------------------------------------------------------
 
 /**
+ * Hands Realtime a way to read the current token rather than a token.
+ *
+ * Every channel join and every heartbeat is authorized with it, so a token
+ * captured once goes stale the moment the session refreshes and the socket
+ * starts rejecting frames. With a callback, realtime-js re-reads it on each
+ * heartbeat and stays in sync with `refreshSession()` on its own.
+ */
+async function applyRealtimeAuth() {
+  supabase.realtime.accessToken = () => getAccessToken();
+  await supabase.realtime.setAuth().catch(() => undefined);
+}
+
+/** Stops Realtime from reading — and holding — a token after sign-out. */
+async function clearRealtimeAuth() {
+  supabase.realtime.accessToken = null;
+  await supabase.realtime.setAuth(null).catch(() => undefined);
+}
+
+/**
  * Start (or re-target) the client for `userId`. Idempotent for the same user —
  * a re-mount only updates the mode. Private channels + RLS need the current JWT
- * on the Realtime client, so `setAuth` runs first.
+ * on the Realtime client, so the token is wired up first.
  */
 export async function startRealtime(
   userId: string,
@@ -181,7 +201,7 @@ export async function startRealtime(
   currentUserId = userId;
   currentMode = options.mode ?? "online";
 
-  await supabase.realtime.setAuth().catch(() => undefined);
+  await applyRealtimeAuth();
 
   dbChannel = supabase
     .channel(`db:${userId}`)
@@ -240,6 +260,7 @@ export async function stopRealtime() {
   presenceChannel = null;
   currentUserId = null;
   emitStatus("disconnected");
+  await clearRealtimeAuth();
 }
 
 // ---- typing (per conversation) ---------------------------------------------

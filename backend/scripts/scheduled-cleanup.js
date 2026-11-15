@@ -21,6 +21,16 @@ const { cleanupGhostAuthUsers } = require("./cleanup-ghost-auth-users");
 const { prune } = require("./prune");
 
 async function runScheduledCleanup() {
+  const requiredEnv = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
+  const missing = requiredEnv.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    console.error(
+      `[cleanup] Missing required environment variable(s): ${missing.join(", ")}.\n` +
+        `[cleanup] Ensure these are set in .env (for local runs) or in GitHub Repository Secrets (for GitHub Actions).`
+    );
+    process.exit(1);
+  }
+
   const dryRun = process.argv.includes("--dry-run");
   if (dryRun) {
     console.log("[cleanup] DRY RUN — scheduled cleanup starting");

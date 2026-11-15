@@ -218,3 +218,133 @@ describe("identity completeness follows the role", () => {
     );
   });
 });
+
+describe("choosing a role", () => {
+  it("a new account has not chosen yet", () => {
+    assert.equal(policy.needsRoleChoice("user"), true);
+    assert.equal(policy.needsRoleChoice(null), true);
+    assert.equal(policy.needsRoleChoice(undefined), true);
+  });
+
+  it("a granted role is already chosen", () => {
+    for (const role of ["student", "faculty", "departmentAdmin", "admin", "superadmin"]) {
+      assert.equal(policy.needsRoleChoice(role), false, role);
+    }
+  });
+
+  it("offers exactly the four self-selectable roles, never superadmin", () => {
+    assert.deepEqual(policy.SELECTABLE_ROLES, [
+      "student",
+      "faculty",
+      "departmentAdmin",
+      "admin",
+    ]);
+    assert.equal(policy.isSelectable("superadmin"), false);
+    assert.equal(policy.isSelectable("intern"), false);
+  });
+
+  it("a 'user' account files the request under the role it picked", () => {
+    assert.deepEqual(policy.resolveRequestRole("user", "faculty"), { role: "faculty" });
+  });
+
+  it("a 'user' account cannot pick superadmin or nothing", () => {
+    assert.equal(
+      policy.resolveRequestRole("user", "superadmin").error,
+      "Choose an account type to verify"
+    );
+    assert.equal(
+      policy.resolveRequestRole("user", undefined).error,
+      "Choose an account type to verify"
+    );
+  });
+
+  it("a granted account may repeat its role but never change it", () => {
+    assert.deepEqual(policy.resolveRequestRole("student", "student"), { role: "student" });
+    assert.deepEqual(policy.resolveRequestRole("student", undefined), { role: "student" });
+    assert.equal(
+      policy.resolveRequestRole("student", "admin").error,
+      "Your account type is already set"
+    );
+  });
+
+  it("every account that has not been granted a role can still get a code", () => {
+    assert.equal(policy.canVerify("user"), true);
+    assert.equal(policy.canVerify("student"), true);
+    assert.equal(policy.canVerify("superadmin"), false);
+  });
+});
+
+describe("stranded requests climb to campus reviewers", () => {
+  const review = (reviewerRole, requestRole, extra = {}) =>
+    policy.canReview({
+      reviewerRole,
+      reviewerDepartmentId: "dept-1",
+      requestRole,
+      requestDepartmentId: "dept-1",
+      ...extra,
+    });
+
+  it("a campus admin decides an escalated student request", () => {
+    assert.equal(review("admin", "student", { requestEscalated: true }), true);
+    assert.equal(review("superadmin", "faculty", { requestEscalated: true }), true);
+  });
+
+  it("a campus admin decides nothing that was not escalated", () => {
+    assert.equal(review("admin", "student"), false);
+    assert.equal(review("superadmin", "faculty"), false);
+  });
+
+  it("escalation does not widen a department admin", () => {
+    assert.equal(
+      policy.canReview({
+        reviewerRole: "departmentAdmin",
+        reviewerDepartmentId: "dept-2",
+        requestRole: "student",
+        requestDepartmentId: "dept-1",
+        requestEscalated: true,
+      }),
+      false
+    );
+  });
+
+  it("only campus reviewers pick up escalated roles", () => {
+    assert.deepEqual(policy.escalationRolesFor("admin"), ["student", "faculty"]);
+    assert.deepEqual(policy.escalationRolesFor("superadmin"), ["student", "faculty"]);
+    assert.deepEqual(policy.escalationRolesFor("departmentAdmin"), []);
+    assert.deepEqual(policy.escalationRolesFor("student"), []);
+  });
+});
+
+describe("submission resolves the role before building the snapshot", () => {
+  const schoolProfile = (role) => ({ role, email: "ana@lccbonline.edu.ph" });
+
+  it("a 'user' account gets the shape of the role it picked", () => {
+    assert.deepEqual(controller.resolveSubmission(schoolProfile("user"), "student"), {
+      role: "student",
+    });
+    assert.deepEqual(controller.resolveSubmission(schoolProfile("user"), "admin"), {
+      role: "admin",
+    });
+  });
+
+  it("a 'user' account is told to choose", () => {
+    assert.equal(
+      controller.resolveSubmission(schoolProfile("user"), undefined).error,
+      "Choose an account type to verify"
+    );
+  });
+
+  it("a non-school account is refused before the role is even considered", () => {
+    assert.equal(
+      controller.resolveSubmission({ role: "user", email: "ana@gmail.com" }, "student").error,
+      `Verification is only available to ${policy.SCHOOL_EMAIL_DOMAIN} accounts`
+    );
+  });
+
+  it("a superadmin has no verification path", () => {
+    assert.equal(
+      controller.resolveSubmission(schoolProfile("superadmin"), undefined).error,
+      "This account does not verify"
+    );
+  });
+});

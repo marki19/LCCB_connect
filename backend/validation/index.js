@@ -1,5 +1,5 @@
 const { z } = require("zod");
-const { normalizeRole } = require("../utils/roles");
+const { normalizeRole, SELECTABLE_ROLES } = require("../utils/roles");
 
 /**
  * Request body schemas + a `validate` middleware.
@@ -209,6 +209,10 @@ const staffIdSchema = z
  */
 const verificationSubmitSchema = z
   .object({
+    // Which role the requester is asking for. Required in practice for a
+    // 'user' account (the controller enforces it); optional for an account
+    // whose profile already fixes the role.
+    role: z.enum(SELECTABLE_ROLES).optional(),
     full_name: z.string().trim().min(2, "Full name must be at least 2 characters").max(200),
     student_id: studentIdSchema,
     department_id: requiredUuid().optional(),

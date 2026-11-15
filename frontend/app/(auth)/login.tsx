@@ -153,19 +153,37 @@ export default function LoginScreen() {
           accessToken = data?.session?.access_token || null;
         }
 
-        // If Supabase hasn't finished parsing the hash yet, wait briefly for auth change
+        // Wait up to 5 seconds with polling for Supabase to finish PKCE exchange or hash parsing
         if (!accessToken) {
           accessToken = await new Promise<string | null>((resolve) => {
-            const timer = setTimeout(() => resolve(null), 1000);
+            let settled = false;
+            const finish = (token: string | null) => {
+              if (settled) return;
+              settled = true;
+              clearInterval(pollInterval);
+              clearTimeout(timeoutId);
+              subscription.unsubscribe();
+              resolve(token);
+            };
+
+            const timeoutId = setTimeout(() => finish(null), 5000);
+
             const {
               data: { subscription },
             } = supabase.auth.onAuthStateChange((_event, session) => {
               if (session?.access_token) {
-                clearTimeout(timer);
-                subscription.unsubscribe();
-                resolve(session.access_token);
+                finish(session.access_token);
               }
             });
+
+            const pollInterval = setInterval(async () => {
+              try {
+                const { data } = await supabase.auth.getSession();
+                if (data?.session?.access_token) {
+                  finish(data.session.access_token);
+                }
+              } catch {}
+            }, 250);
           });
         }
 
@@ -173,10 +191,6 @@ export default function LoginScreen() {
           setLoading(true);
           setGeneralError("");
           clearAuthNotice();
-
-          if (typeof window !== "undefined" && window.history?.replaceState) {
-            window.history.replaceState(null, "", window.location.pathname);
-          }
 
           const result = await signInWithGoogle(undefined, accessToken);
           if (result && typeof result === "object" && "mfa_required" in result) {
@@ -192,8 +206,22 @@ export default function LoginScreen() {
             return;
           }
 
-          // Immediately navigate to main app tabs on successful Google sign-in
-          router.replace("/(tabs)");
+          // Determine destination based on the active session role
+          const userRole = (result as any)?.user?.role;
+          const isDesktop =
+            Platform.OS === "web" && typeof window !== "undefined" && window.innerWidth >= 768;
+          const isAdmin =
+            userRole === "admin" || userRole === "superadmin" || userRole === "superAdmin";
+
+          setIsOAuthReturning(false);
+
+          if (isAdmin && isDesktop) {
+            router.replace("/(admin)/");
+          } else if (userRole === "user" || userRole == null) {
+            router.replace("/onboarding");
+          } else {
+            router.replace("/(tabs)/");
+          }
           return;
         } else {
           // No access token received - OAuth did not produce a session
