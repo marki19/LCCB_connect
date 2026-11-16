@@ -155,6 +155,7 @@ describe("GET /api/files/:category/:filename", () => {
     assert.equal(res.headers.location, `${SIGNED}/${publicFile}?X-Amz-Signature=deadbeef`);
     assert.match(res.headers["cache-control"], /max-age=240/);
     assert.equal(res.headers["x-content-type-options"], "nosniff");
+    assert.equal(res.headers["cross-origin-resource-policy"], "cross-origin");
   });
 
   test("serves post images without authentication", async () => {
