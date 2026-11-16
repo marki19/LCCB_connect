@@ -108,9 +108,9 @@ export default function EditProfileScreen() {
               await deleteAvatar();
               setAvatarUri(null);
               await refreshProfile();
-              showToast("Profile photo removed", "success");
+              showToast({ message: "Profile photo removed", tone: "success" });
             } catch (err: any) {
-              showToast(err.message || "Failed to remove photo", "error");
+              showToast({ message: err.message || "Failed to remove photo", tone: "error" });
             } finally {
               setRemovingAvatar(false);
             }
@@ -293,7 +293,7 @@ export default function EditProfileScreen() {
                       opacity: pressed || removingAvatar ? 0.6 : 1,
                     })}
                   >
-                    <Text style={{ ...TYPE.caption, color: colors.danger, fontWeight: "600" }}>
+                    <Text style={{ ...TYPE.caption, color: colors.coral, fontWeight: "600" }}>
                       {removingAvatar ? "Removing..." : "Remove"}
                     </Text>
                   </Pressable>
