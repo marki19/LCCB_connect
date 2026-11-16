@@ -128,7 +128,6 @@ describe("googleAvatar service", () => {
     const originalQuery = db.query;
     const originalFetch = global.fetch;
     const uploadService = require("../services/uploadService");
-    const originalStoreUpload = uploadService.storeUpload;
 
     let updateParams = null;
     db.query = async (sql, params) => {
