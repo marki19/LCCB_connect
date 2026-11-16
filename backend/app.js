@@ -87,7 +87,11 @@ const isWrite = (req) => ["POST", "PUT", "PATCH", "DELETE"].includes(req.method)
 // --- global middleware ------------------------------------------------------
 app.disable("x-powered-by");
 app.use(compression());
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(cors(corsOptions));
 app.use(requestId);
 

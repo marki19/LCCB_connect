@@ -88,6 +88,7 @@ function redirectToObject(res, key, { isPublic }) {
     isPublic ? "private, max-age=240" : "private, no-store"
   );
   res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
 
   return res.redirect(302, url);
 }
