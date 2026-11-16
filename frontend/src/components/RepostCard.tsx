@@ -6,7 +6,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { RADIUS } from "../lib/tokens";
 import Avatar from "./Avatar";
 import { resolveFileUrl } from "../lib/files";
-import AppImage from "./AppImage";
+import { AppImage } from "./AppImage";
 
 interface RepostCardProps {
   post: Post;

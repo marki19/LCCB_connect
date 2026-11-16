@@ -75,5 +75,3 @@ export const AppImage = forwardRef<ExpoImage, AppImageProps>(function AppImage(
     />
   );
 });
-
-export default AppImage;

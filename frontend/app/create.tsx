@@ -15,7 +15,7 @@ import {
   Pressable,
   StyleSheet,
 } from "react-native";
-import AppImage from "../src/components/AppImage";
+import { AppImage } from "../src/components/AppImage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {

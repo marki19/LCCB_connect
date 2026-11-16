@@ -34,7 +34,7 @@ import {
   Users,
 } from "lucide-react-native";
 import Avatar from "../../src/components/Avatar";
-import AppImage from "../../src/components/AppImage";
+import { AppImage } from "../../src/components/AppImage";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { elevation, focusRing, RADIUS, SPACE, TYPE, type ThemeTokens } from "../../src/lib/tokens";

@@ -4,7 +4,7 @@ import type { PresenceMode } from "../types";
 import { useTheme } from "../contexts/ThemeContext";
 import { LIGHT_TOKENS } from "../lib/tokens";
 import { resolveFileUrl } from "../lib/files";
-import AppImage from "./AppImage";
+import { AppImage } from "./AppImage";
 
 /**
  * Shared avatar + presence dot. `mode === null` means "not tracked" (offline or

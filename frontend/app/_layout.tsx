@@ -26,7 +26,13 @@ import {
   registerForPush,
 } from "../src/lib/push";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
+import { Image as ExpoImage } from "expo-image";
 import "../global.css";
+
+// Cap iOS image disk cache at 200 MB (Android Glide caps at 250 MB automatically)
+if (Platform.OS === "ios") {
+  ExpoImage.configureCache({ maxDiskSize: 200 * 1024 * 1024 });
+}
 
 
 

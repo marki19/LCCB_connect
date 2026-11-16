@@ -27,7 +27,7 @@ import PostCard from "../../src/components/PostCard";
 import RepostCard from "../../src/components/RepostCard";
 import SettingsSidebar from "../../src/components/SettingsSidebar";
 import Avatar from "../../src/components/Avatar";
-import usePrefetchImages from "../../src/hooks/usePrefetchImages";
+import { usePrefetchImages } from "../../src/hooks/usePrefetchImages";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -88,6 +88,10 @@ function getInitials(name?: string | null) {
     .toUpperCase();
 }
 
+
+const FEED_VIEWABILITY_CONFIG = {
+  itemVisiblePercentThreshold: 20,
+};
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -320,30 +324,35 @@ export default function HomeScreen() {
 
   // Prefetch images ahead of viewport scroll
   const prefetchImages = usePrefetchImages();
+  const postsRef = useRef(posts);
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
 
-  const handleViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    if (!viewableItems || viewableItems.length === 0) return;
-    const lastVisibleIndex = viewableItems[viewableItems.length - 1]?.index ?? 0;
-    const lookaheadItems = posts.slice(lastVisibleIndex + 1, lastVisibleIndex + 7);
-    const urlsToPrefetch: string[] = [];
-    for (const p of lookaheadItems) {
-      if (p.image_urls && p.image_urls.length > 0) {
-        urlsToPrefetch.push(...p.image_urls);
-      } else if (p.imageUrl) {
-        urlsToPrefetch.push(p.imageUrl);
+  const handleViewableItemsChanged = useCallback(
+    ({ viewableItems }: any) => {
+      if (!viewableItems || viewableItems.length === 0) return;
+      const lastVisibleIndex = viewableItems[viewableItems.length - 1]?.index ?? 0;
+      const currentPosts = postsRef.current;
+      const lookaheadItems = currentPosts.slice(lastVisibleIndex + 1, lastVisibleIndex + 7);
+      const urlsToPrefetch: string[] = [];
+      for (const p of lookaheadItems) {
+        if (p.image_urls && p.image_urls.length > 0) {
+          urlsToPrefetch.push(...p.image_urls);
+        } else if (p.imageUrl) {
+          urlsToPrefetch.push(p.imageUrl);
+        }
+        const authorAvatar = p.author?.avatarUrl || p.author?.avatar_url;
+        if (authorAvatar) {
+          urlsToPrefetch.push(authorAvatar);
+        }
       }
-      if (p.author?.avatar_url) {
-        urlsToPrefetch.push(p.author.avatar_url);
+      if (urlsToPrefetch.length > 0) {
+        prefetchImages(urlsToPrefetch);
       }
-    }
-    if (urlsToPrefetch.length > 0) {
-      prefetchImages(urlsToPrefetch);
-    }
-  }).current;
-
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 20,
-  }).current;
+    },
+    [prefetchImages]
+  );
 
   // Swipe from left edge (<45px) to right to open sidebar drawer
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -391,7 +400,7 @@ export default function HomeScreen() {
             data={posts}
             keyExtractor={(item) => String(item.id)}
             onViewableItemsChanged={handleViewableItemsChanged}
-            viewabilityConfig={viewabilityConfig}
+            viewabilityConfig={FEED_VIEWABILITY_CONFIG}
             renderItem={({ item, index }) => {
               const showSuggestions =
                 !isGuest &&

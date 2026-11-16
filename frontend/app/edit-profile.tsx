@@ -8,7 +8,7 @@ import {
   Pressable,
   Alert,
 } from "react-native";
-import AppImage from "../src/components/AppImage";
+import { AppImage } from "../src/components/AppImage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 /* router unused - back navigation happens via safeBack() */

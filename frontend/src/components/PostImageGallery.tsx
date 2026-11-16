@@ -12,7 +12,7 @@ import {
 import { X, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import { resolveFileUrl, resolveFileUrls } from "../lib/files";
-import AppImage from "./AppImage";
+import { AppImage } from "./AppImage";
 
 interface PostImageGalleryProps {
   images?: string[];

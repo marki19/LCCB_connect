@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import AppImage from "../../../src/components/AppImage";
+import { AppImage } from "../../../src/components/AppImage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeft,

@@ -14,7 +14,7 @@ import {
   Platform,
 } from "react-native";
 import { X } from "lucide-react-native";
-import AppImage from "../AppImage";
+import { AppImage } from "../AppImage";
 
 interface ChatImageLightboxProps {
   visible: boolean;

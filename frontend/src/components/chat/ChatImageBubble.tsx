@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { resolveMediaUrl } from "../../lib/chatMedia";
 import { useTheme } from "../../contexts/ThemeContext";
-import AppImage from "../AppImage";
+import { AppImage } from "../AppImage";
 
 interface ChatImageBubbleProps {
   mediaUrl: string;

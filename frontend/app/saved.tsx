@@ -14,7 +14,7 @@ import {
   Pressable,
   Alert,
 } from "react-native";
-import AppImage from "../src/components/AppImage";
+import { AppImage } from "../src/components/AppImage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import {
@@ -48,7 +48,7 @@ import {
   type SavedCollection,
 } from "../src/lib/api";
 import { resolveFileUrl } from "../src/lib/files";
-import usePrefetchImages from "../src/hooks/usePrefetchImages";
+import { usePrefetchImages } from "../src/hooks/usePrefetchImages";
 import DesktopTopBar, { TOP_BAR_HEIGHT } from "../src/components/topbar/DesktopTopBar";
 import Avatar from "../src/components/Avatar";
 import { RADIUS, SPACE, elevation } from "../src/lib/tokens";

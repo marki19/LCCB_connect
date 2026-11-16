@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fileKeyFromUrl, fileUrl, resolveFileUrl, resolveFileUrls } from "./files";
+import { fileKeyFromUrl, fileUrl, resolveFileUrl } from "./files";
 
 describe("files utility", () => {
   it("resolves storage keys to api URLs", () => {

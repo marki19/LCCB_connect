@@ -18,7 +18,7 @@ import Button from "./ui/Button";
 import Modal from "./ui/Modal";
 import Avatar from "./Avatar";
 import { resolveFileUrl, resolveFileUrls } from "../lib/files";
-import AppImage from "./AppImage";
+import { AppImage } from "./AppImage";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
   const configs: Record<string, { label: string; bg: string; text: string }> = {
