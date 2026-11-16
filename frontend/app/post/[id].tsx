@@ -6,7 +6,6 @@ import {
   Pressable,
   Linking,
   TextInput,
-  Image,
   ActivityIndicator,
   Platform,
   useWindowDimensions,
@@ -35,6 +34,7 @@ import {
   Users,
 } from "lucide-react-native";
 import Avatar from "../../src/components/Avatar";
+import AppImage from "../../src/components/AppImage";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { elevation, focusRing, RADIUS, SPACE, TYPE, type ThemeTokens } from "../../src/lib/tokens";
@@ -43,8 +43,6 @@ import {
   deletePost,
   updateComment,
   deleteComment,
-  getPostImageUrl,
-  getPostImageUrls,
 } from "../../src/lib/api";
 import { safeBack } from "../../src/lib/navigation";
 import Button, { IconButton } from "../../src/components/ui/Button";
@@ -154,25 +152,6 @@ export default function PostDetailScreen() {
             setImageUrls(initialUrls);
             setLikeCount(postData.likes || 0);
             setLiked(Boolean(postData.is_liked));
-
-            // Fetch signed URLs for private post images
-            const hasImages = initialUrls.length > 0 || Boolean(postData.image_url);
-            if (hasImages) {
-              getPostImageUrls(postData.id)
-                .then((urls) => {
-                  if (urls.length > 0) {
-                    setImageUrls(urls);
-                    setImageUrl(urls[0]);
-                  }
-                })
-                .catch(() => {
-                  if (postData.image_url) {
-                    getPostImageUrl(postData.id)
-                      .then(setImageUrl)
-                      .catch(() => setImageUrl(undefined));
-                  }
-                });
-            }
           }
         }
 
@@ -589,10 +568,10 @@ export default function PostDetailScreen() {
             })}
           >
             {post.preview_metadata.image ? (
-              <Image
+              <AppImage
                 source={{ uri: post.preview_metadata.image }}
                 style={{ width: "100%", height: 160, backgroundColor: colors.surfaceSunken }}
-                resizeMode="cover"
+                contentFit="cover"
               />
             ) : null}
             <View style={{ padding: SPACE.x3 }}>
@@ -1197,14 +1176,14 @@ export default function PostDetailScreen() {
 
           {/* Centered Media */}
           <View style={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center" }}>
-            <Image
+            <AppImage
               source={{ uri: currentMedia }}
               style={{
                 width: "92%",
                 height: "90%",
                 maxHeight: "92%",
               }}
-              resizeMode="contain"
+              contentFit="contain"
             />
 
             {/* Prev / Next controls if multiple images */}

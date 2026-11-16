@@ -5,10 +5,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
   Pressable,
   Alert,
 } from "react-native";
+import AppImage from "../src/components/AppImage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 /* router unused - back navigation happens via safeBack() */
@@ -248,7 +248,7 @@ export default function EditProfileScreen() {
                 })}
               >
                 {avatarUri ? (
-                  <Image source={{ uri: resolveFileUrl(avatarUri) || avatarUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                  <AppImage source={{ uri: resolveFileUrl(avatarUri) || avatarUri }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
                 ) : (
                   <Camera color={colors.inkFaint} size={32} />
                 )}

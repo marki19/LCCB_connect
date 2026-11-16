@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, Image, Linking } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Linking } from "react-native";
 import { MessageCircle, Share2, Heart, ExternalLink } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
@@ -6,6 +6,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { RADIUS } from "../lib/tokens";
 import Avatar from "./Avatar";
 import { resolveFileUrl } from "../lib/files";
+import AppImage from "./AppImage";
 
 interface RepostCardProps {
   post: Post;
@@ -272,10 +273,10 @@ export default function RepostCard({ post, repostInfo, onDeleted }: RepostCardPr
 
           {/* Original image */}
           {post.imageUrl && (
-            <Image
+            <AppImage
               source={{ uri: resolveFileUrl(post.imageUrl) || post.imageUrl }}
               style={styles.originalImage}
-              resizeMode="cover"
+              contentFit="cover"
             />
           )}
 

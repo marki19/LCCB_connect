@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, Pressable, Linking, Image, Alert, Animated, Platform } from "react-native";
+import { useState, useRef } from "react";
+import { View, Text, TouchableOpacity, Pressable, Linking, Alert, Animated, Platform } from "react-native";
 import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical, Building2, Megaphone } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
@@ -7,7 +7,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
 import { ThemeTokens, elevation, RADIUS, SPACE, TYPE } from "../lib/tokens";
-import { apiJson, deletePost, deleteThesis, getThesisFileUrl, getPostImageUrl, getPostImageUrls, savePost, unsavePost } from "../lib/api";
+import { apiJson, deletePost, deleteThesis, getThesisFileUrl, savePost, unsavePost } from "../lib/api";
 import PostMenu from "./PostMenu";
 import RepostDialog from "./RepostDialog";
 import ReportDialog from "./ReportDialog";
@@ -18,6 +18,7 @@ import Button from "./ui/Button";
 import Modal from "./ui/Modal";
 import Avatar from "./Avatar";
 import { resolveFileUrl, resolveFileUrls } from "../lib/files";
+import AppImage from "./AppImage";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
   const configs: Record<string, { label: string; bg: string; text: string }> = {
@@ -113,25 +114,6 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const { profile } = useAuth();
   const { colors } = useTheme();
   const isOwner = !!profile?.id && profile.id === post.author.id;
-
-  // Fetch signed URLs for private post images (assets bucket is private per migration 015)
-  useEffect(() => {
-    const hasImages = (post.image_urls && post.image_urls.length > 0) || Boolean(post.imageUrl);
-    if (hasImages) {
-      getPostImageUrls(post.id)
-        .then((urls) => {
-          if (urls.length > 0) {
-            setImageUrls(urls);
-            setImageUrl(urls[0]);
-          }
-        })
-        .catch(() => {
-          if (post.imageUrl) {
-            getPostImageUrl(post.id).then(setImageUrl).catch(() => setImageUrl(undefined));
-          }
-        });
-    }
-  }, [post.id, post.imageUrl, post.image_urls]);
 
   const handleEdit = () => {
     if (post.type === "thesis") {
@@ -365,10 +347,10 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           }}
         >
           {post.preview_metadata.image ? (
-            <Image
+            <AppImage
               source={{ uri: post.preview_metadata.image }}
               style={{ width: "100%", height: 160, backgroundColor: colors.surfaceSunken }}
-              resizeMode="cover"
+              contentFit="cover"
             />
           ) : null}
           <View style={{ padding: 12 }}>

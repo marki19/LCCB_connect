@@ -15,6 +15,7 @@ import {
   Pressable,
   StyleSheet,
 } from "react-native";
+import AppImage from "../src/components/AppImage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -657,7 +658,7 @@ export default function CreatePostModal() {
                 }}
               >
                 {previewData.image && (
-                  <Image source={{ uri: previewData.image }} style={{ width: "100%", height: 120 }} resizeMode="cover" />
+                  <AppImage source={{ uri: previewData.image }} style={{ width: "100%", height: 120 }} contentFit="cover" />
                 )}
                 <View style={{ padding: 10 }}>
                   <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>

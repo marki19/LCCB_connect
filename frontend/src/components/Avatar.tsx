@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { View, Text, Image, type StyleProp, type ViewStyle } from "react-native";
+import { View, Text, type StyleProp, type ViewStyle } from "react-native";
 import type { PresenceMode } from "../types";
 import { useTheme } from "../contexts/ThemeContext";
 import { LIGHT_TOKENS } from "../lib/tokens";
 import { resolveFileUrl } from "../lib/files";
+import AppImage from "./AppImage";
 
 /**
  * Shared avatar + presence dot. `mode === null` means "not tracked" (offline or
@@ -78,10 +79,10 @@ export default function Avatar({
             backgroundColor: colors.surfaceSunken,
           }}
         >
-          <Image
+          <AppImage
             source={{ uri: resolvedUrl }}
             style={{ width: size, height: size }}
-            resizeMode="cover"
+            contentFit="cover"
             onError={() => setFailedUrl(resolvedUrl)}
           />
         </View>

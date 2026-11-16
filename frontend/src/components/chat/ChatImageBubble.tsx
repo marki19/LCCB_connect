@@ -8,13 +8,13 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
 import { resolveMediaUrl } from "../../lib/chatMedia";
 import { useTheme } from "../../contexts/ThemeContext";
+import AppImage from "../AppImage";
 
 interface ChatImageBubbleProps {
   mediaUrl: string;
@@ -82,10 +82,10 @@ export default function ChatImageBubble({
       >
         {resolvedUrl && !loadError ? (
           <>
-            <Image
+            <AppImage
               source={{ uri: resolvedUrl }}
               style={styles.image}
-              resizeMode="cover"
+              contentFit="cover"
               onLoadStart={() => setImageLoading(true)}
               onLoadEnd={() => setImageLoading(false)}
               onError={() => {
