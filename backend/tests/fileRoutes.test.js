@@ -148,13 +148,12 @@ describe("POST /api/upload/:category", () => {
 describe("GET /api/files/:category/:filename", () => {
   const publicFile = "avatars/9f83ab24e10c71a39bd5.jpg";
 
-  test("redirects public files with a long-lived immutable cache", async () => {
+  test("redirects public files with a short-lived cache under signature lifetime", async () => {
     const res = await request(app).get(`/api/files/${publicFile}`);
 
     assert.equal(res.status, 302);
     assert.equal(res.headers.location, `${SIGNED}/${publicFile}?X-Amz-Signature=deadbeef`);
-    assert.match(res.headers["cache-control"], /public/);
-    assert.match(res.headers["cache-control"], /immutable/);
+    assert.match(res.headers["cache-control"], /max-age=240/);
     assert.equal(res.headers["x-content-type-options"], "nosniff");
   });
 
@@ -162,7 +161,7 @@ describe("GET /api/files/:category/:filename", () => {
     const res = await request(app).get("/api/files/posts/9f83ab24e10c71a39bd5.jpg");
 
     assert.equal(res.status, 302);
-    assert.match(res.headers["cache-control"], /public/);
+    assert.match(res.headers["cache-control"], /max-age=240/);
   });
 
   test("requires authentication for theses", async () => {

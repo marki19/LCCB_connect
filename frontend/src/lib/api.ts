@@ -2,6 +2,7 @@ import { create, isAxiosError } from "axios";
 import { getSession, isExpired, clearSession } from "./session";
 import { refreshSession } from "./auth";
 import type { ContentVisibility } from "../types";
+import { fileUrl, resolveFileUrl, resolveFileUrls } from "./files";
 
 const API_URL = (
   process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api"
@@ -9,18 +10,18 @@ const API_URL = (
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
 // One shared instance so the interceptor is registered once.
-// Default timeout is 15s to fail fast on stalled backends; uploads extend to 60s.
-const client = create({ baseURL: API_URL, timeout: 15000 });
+// Default timeout is 60s to accommodate free-tier cold starts (Render spin-up takes 30-50s); uploads extend to 120s.
+const client = create({ baseURL: API_URL, timeout: 60000 });
 
 // Attach the Bearer token before every request and rewrite
 // guest GET paths to the public read-only endpoints.
 client.interceptors.request.use(async (config) => {
-  // Allow uploads / FormData to take up to 60s
+  // Allow uploads / FormData to take up to 120s
   const isUpload =
     (typeof FormData !== "undefined" && config.data instanceof FormData) ||
     (typeof config.url === "string" && config.url.includes("/upload"));
-  if (isUpload && (config.timeout === undefined || config.timeout === 15000)) {
-    config.timeout = 60000;
+  if (isUpload && (config.timeout === undefined || config.timeout === 60000)) {
+    config.timeout = 120000;
   }
 
   let session = await getSession();
@@ -340,7 +341,7 @@ export async function getPostImageUrls(id: string | number): Promise<string[]> {
  *
  * @param key A `<category>/<filename>` key, as returned by `uploadToStorage`.
  */
-export { fileUrl, resolveFileUrl, resolveFileUrls } from "./files";
+export { fileUrl, resolveFileUrl, resolveFileUrls };
 
 // ============================================================================
 // Repost endpoints
@@ -458,6 +459,7 @@ export function adaptPost(row: any): any {
   if (!row) return null;
   const authorName = row.author?.full_name || row.author?.name || "Unknown Author";
   const initials = (authorName.split(" ").map((n: string) => n[0]).join("").substring(0, 2) || "LC").toUpperCase();
+  const authorAvatarUrl = resolveFileUrl(row.author?.avatar_url || row.author?.avatarUrl);
   return {
     id: String(row.id),
     author: {
@@ -465,6 +467,7 @@ export function adaptPost(row: any): any {
       name: authorName,
       initials,
       avatarColor: row.author?.avatarColor || "#BFDBFE",
+      avatarUrl: authorAvatarUrl,
       course: row.author?.department_name || row.department_name || "—",
       yearLevel: row.author?.year_level || "—",
       username: row.author?.username,
@@ -475,7 +478,16 @@ export function adaptPost(row: any): any {
     type: row.type || "text",
     tags: row.technologies || row.tags || [],
     previewUrl: row.github_url || row.preview_url || row.previewUrl,
-    imageUrl: row.image_url || row.imageUrl,
+    imageUrl: resolveFileUrl(row.image_url || row.imageUrl),
+    image_urls: resolveFileUrls(
+      Array.isArray(row.image_urls)
+        ? row.image_urls
+        : Array.isArray(row.imageUrls)
+        ? row.imageUrls
+        : row.image_url
+        ? [row.image_url]
+        : []
+    ),
     preview_metadata: row.preview_metadata || null,
     likes: Number(row.like_count ?? row.likes ?? 0),
     comments: Number(row.comment_count ?? row.comments ?? 0),
@@ -489,6 +501,16 @@ export function adaptPost(row: any): any {
     edited_at: row.edited_at || null,
     deleted_at: row.deleted_at || null,
     kind: row.kind || "post",
+    repost: row.repost
+      ? {
+          caption: row.repost.caption,
+          created_at: row.repost.created_at,
+          reposter: {
+            ...row.repost.reposter,
+            avatarUrl: resolveFileUrl(row.repost.reposter?.avatar_url || row.repost.reposter?.avatarUrl),
+          },
+        }
+      : undefined,
   };
 }
 

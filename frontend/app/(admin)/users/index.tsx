@@ -26,7 +26,6 @@ import PageHeader from "../../../src/components/admin/PageHeader";
 import DataTable from "../../../src/components/admin/DataTable";
 import StatusBadge from "../../../src/components/admin/StatusBadge";
 import EmptyState from "../../../src/components/admin/EmptyState";
-import { resolveFileUrl } from "../../../src/lib/files";
 
 const ROLE_OPTIONS = [
   { value: "", label: "All roles" },

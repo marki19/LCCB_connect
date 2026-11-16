@@ -123,6 +123,84 @@ describe("googleAvatar service", () => {
       db.query = originalQuery;
     }
   });
+
+  it("mirrors upstream Google picture to storage on happy path", async () => {
+    const originalQuery = db.query;
+    const originalFetch = global.fetch;
+    const uploadService = require("../services/uploadService");
+    const originalStoreUpload = uploadService.storeUpload;
+
+    let updateParams = null;
+    db.query = async (sql, params) => {
+      if (sql.includes("SELECT avatar_url")) {
+        return {
+          rows: [
+            {
+              avatar_url: null,
+              avatar_source: null,
+              google_avatar_url: null,
+            },
+          ],
+        };
+      }
+      if (sql.includes("UPDATE public.profiles")) {
+        updateParams = params;
+        return { rows: [] };
+      }
+      return { rows: [] };
+    };
+
+    global.fetch = async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: (h) => (h.toLowerCase() === "content-type" ? "image/jpeg" : null) },
+      arrayBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]),
+    });
+
+    uploadService.storeUpload = async () => ({
+      key: "avatars/hashed-key-123.jpg",
+    });
+
+    try {
+      const res = await mirrorGoogleAvatar(
+        "u1",
+        "https://lh3.googleusercontent.com/new-user=s96-c"
+      );
+      assert.ok(res && res.key);
+      assert.ok(res.key.startsWith("avatars/"));
+      assert.ok(res.key.endsWith(".jpg"));
+      assert.ok(updateParams);
+      assert.equal(updateParams[0], res.key);
+      assert.equal(updateParams[1], "https://lh3.googleusercontent.com/new-user");
+      assert.equal(updateParams[2], "u1");
+    } finally {
+      db.query = originalQuery;
+      global.fetch = originalFetch;
+      uploadService.storeUpload = originalStoreUpload;
+    }
+  });
+
+  it("updateUser sets avatar_source='upload' when avatar_url is provided", async () => {
+    const originalQuery = db.query;
+    const userModel = require("../models/userModel");
+    let querySql = "";
+    let queryParams = [];
+
+    db.query = async (sql, params) => {
+      querySql = sql;
+      queryParams = params;
+      return { rows: [{ id: "u1", avatar_url: params[2], avatar_source: "upload" }] };
+    };
+
+    try {
+      const user = await userModel.updateUser("u1", { avatar_url: "avatars/custom-upload.jpg" });
+      assert.ok(querySql.includes("avatar_source = CASE WHEN $3 IS NOT NULL THEN 'upload'"));
+      assert.equal(queryParams[2], "avatars/custom-upload.jpg");
+      assert.equal(user.avatar_source, "upload");
+    } finally {
+      db.query = originalQuery;
+    }
+  });
 });
 
 describe("DELETE /api/users/me/avatar", () => {

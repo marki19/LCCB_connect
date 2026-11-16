@@ -138,7 +138,17 @@ async function mirrorGoogleAvatar(userId, rawGoogleUrl) {
       buffer,
     });
 
-    // 4. Clean up the previous mirrored object if one exists
+    // 4. Update user profile columns
+    await db.query(
+      `UPDATE public.profiles
+       SET avatar_url = $1,
+           avatar_source = 'google',
+           google_avatar_url = $2
+       WHERE id = $3`,
+      [stored.key, canonicalUrl, userId]
+    );
+
+    // 5. Clean up the previous mirrored object if one exists
     const oldAvatarKey = profile.avatar_url;
     if (
       oldAvatarKey &&
@@ -148,16 +158,6 @@ async function mirrorGoogleAvatar(userId, rawGoogleUrl) {
     ) {
       objectStorage.deleteObject(oldAvatarKey).catch(() => {});
     }
-
-    // 5. Update user profile columns
-    await db.query(
-      `UPDATE public.profiles
-       SET avatar_url = $1,
-           avatar_source = 'google',
-           google_avatar_url = $2
-       WHERE id = $3`,
-      [stored.key, canonicalUrl, userId]
-    );
 
     return { key: stored.key };
   } catch (err) {

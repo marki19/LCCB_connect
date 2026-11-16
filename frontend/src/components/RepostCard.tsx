@@ -247,7 +247,7 @@ export default function RepostCard({ post, repostInfo, onDeleted }: RepostCardPr
           <View style={styles.originalAuthorRow}>
             <Avatar
               name={post.author.name}
-              avatarUrl={resolveFileUrl((post.author as any).avatarUrl || (post.author as any).avatar_url)}
+              avatarUrl={post.author.avatarUrl}
               size={32}
               style={{ marginRight: 8 }}
             />

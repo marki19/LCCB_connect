@@ -85,7 +85,7 @@ function redirectToObject(res, key, { isPublic }) {
 
   res.setHeader(
     "Cache-Control",
-    isPublic ? "public, max-age=31536000, immutable" : "private, no-store"
+    isPublic ? "private, max-age=240" : "private, no-store"
   );
   res.setHeader("X-Content-Type-Options", "nosniff");
 

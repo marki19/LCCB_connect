@@ -3,7 +3,7 @@
  * serialization, parsing, URL resolution, and preview formatting.
  */
 
-import { fileUrl, resolveFileUrl } from "./files";
+import { resolveFileUrl } from "./files";
 import { uploadToStorage, MAX_UPLOAD_BYTES } from "./upload";
 
 export interface ParsedMessageContent {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { View, Text, Image, type StyleProp, type ViewStyle } from "react-native";
 import type { PresenceMode } from "../types";
 import { useTheme } from "../contexts/ThemeContext";
@@ -57,14 +57,10 @@ export default function Avatar({
   style,
 }: Props) {
   const { colors } = useTheme();
-  const [imageError, setImageError] = useState(false);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
 
   const resolvedUrl = resolveFileUrl(avatarUrl);
-
-  // Reset image error if the avatarUrl changes
-  useEffect(() => {
-    setImageError(false);
-  }, [resolvedUrl]);
+  const showImage = Boolean(resolvedUrl && failedUrl !== resolvedUrl);
 
   const dot = Math.round(size * 0.3);
   const ring = Math.max(2, Math.round(size * 0.06));
@@ -72,7 +68,7 @@ export default function Avatar({
 
   return (
     <View style={[{ width: size, height: size }, style]}>
-      {resolvedUrl && !imageError ? (
+      {showImage && resolvedUrl ? (
         <View
           style={{
             width: size,
@@ -86,7 +82,7 @@ export default function Avatar({
             source={{ uri: resolvedUrl }}
             style={{ width: size, height: size }}
             resizeMode="cover"
-            onError={() => setImageError(true)}
+            onError={() => setFailedUrl(resolvedUrl)}
           />
         </View>
       ) : (

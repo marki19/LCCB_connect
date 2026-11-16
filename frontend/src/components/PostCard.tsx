@@ -289,7 +289,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 }}>
         <Avatar
           name={post.author.name}
-          avatarUrl={resolveFileUrl((post.author as any).avatarUrl || (post.author as any).avatar_url)}
+          avatarUrl={post.author.avatarUrl}
           size={44}
           style={{ marginRight: 10 }}
         />

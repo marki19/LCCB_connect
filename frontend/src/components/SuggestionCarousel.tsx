@@ -88,7 +88,7 @@ export default function SuggestionCarousel() {
         >
           <Avatar
             name={item.full_name || item.username}
-            avatarUrl={(item as any).avatar_url}
+            avatarUrl={item.avatar_url}
             size={56}
           />
           <Text

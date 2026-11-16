@@ -313,11 +313,6 @@ const removeAvatar = async (req, res, next) => {
 
     const { avatar_url, avatar_source } = rows[0];
 
-    // If an uploaded file key was used, clean up object from storage
-    if (avatar_url && avatar_source === "upload" && !avatar_url.startsWith("http")) {
-      objectStorage.deleteObject(avatar_url).catch(() => {});
-    }
-
     // 2. Null all avatar-related columns
     await db.query(
       `UPDATE public.profiles
@@ -327,6 +322,11 @@ const removeAvatar = async (req, res, next) => {
        WHERE id = $1`,
       [userId]
     );
+
+    // If an uploaded file key was used, clean up object from storage after DB update
+    if (avatar_url && avatar_source === "upload" && !avatar_url.startsWith("http")) {
+      objectStorage.deleteObject(avatar_url).catch(() => {});
+    }
 
     res.json({ message: "Avatar removed successfully", avatar_url: null });
   } catch (error) {
