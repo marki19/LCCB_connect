@@ -78,6 +78,19 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
   const isSearchActive = activeSegment === "search";
   const isNotificationsActive = activeSegment === "notifications";
 
+  const itemRowStyle = (active: boolean = false) => ({ pressed, hovered }: any): any => [
+    styles.itemRow,
+    {
+      cursor: "pointer",
+      backgroundColor: active
+        ? colors.actionSurface
+        : pressed || hovered
+        ? colors.surfaceSunken
+        : "transparent",
+      transform: [{ scale: pressed ? 0.98 : 1 }],
+    },
+  ];
+
   return (
     <View
       style={[
@@ -98,11 +111,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
             accessibilityRole="button"
             accessibilityLabel="View your profile"
             onPress={() => router.push("/(tabs)/profile")}
-            style={({ pressed }) => [
-              styles.itemRow,
-              isProfileActive && { backgroundColor: colors.actionSurface },
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle(isProfileActive)}
           >
             <Avatar
               name={profile?.full_name ?? profile?.username}
@@ -129,10 +138,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
               accessibilityRole="button"
               accessibilityLabel="Friends"
               onPress={() => router.push("/friends")}
-              style={({ pressed }) => [
-                styles.itemRow,
-                pressed && { backgroundColor: colors.surfaceSunken },
-              ]}
+              style={itemRowStyle()}
             >
               <View style={[styles.iconCircle, { backgroundColor: "#1877F2" }]}>
                 <Users size={20} color="#FFFFFF" />
@@ -155,11 +161,8 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Messages"
-              onPress={() => router.push("/messages")}
-              style={({ pressed }) => [
-                styles.itemRow,
-                pressed && { backgroundColor: colors.surfaceSunken },
-              ]}
+              onPress={() => router.push("/(tabs)/messages")}
+              style={itemRowStyle()}
             >
               <View style={[styles.iconCircle, { backgroundColor: "#06B6D4" }]}>
                 <MessageCircle size={20} color="#FFFFFF" />
@@ -182,11 +185,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
             accessibilityRole="button"
             accessibilityLabel="Repository"
             onPress={() => router.push("/(tabs)/search")}
-            style={({ pressed }) => [
-              styles.itemRow,
-              isSearchActive && { backgroundColor: colors.actionSurface },
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle(isSearchActive)}
           >
             <View style={[styles.iconCircle, { backgroundColor: "#10B981" }]}>
               <BookOpen size={20} color="#FFFFFF" />
@@ -201,10 +200,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
             accessibilityRole="button"
             accessibilityLabel="Capstones"
             onPress={() => router.push({ pathname: "/(tabs)/search", params: { type: "capstone" } })}
-            style={({ pressed }) => [
-              styles.itemRow,
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle()}
           >
             <View style={[styles.iconCircle, { backgroundColor: "#F59E0B" }]}>
               <GraduationCap size={20} color="#FFFFFF" />
@@ -220,11 +216,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
               accessibilityRole="button"
               accessibilityLabel="Notifications"
               onPress={() => router.push("/(tabs)/notifications")}
-              style={({ pressed }) => [
-                styles.itemRow,
-                isNotificationsActive && { backgroundColor: colors.actionSurface },
-                pressed && { backgroundColor: colors.surfaceSunken },
-              ]}
+              style={itemRowStyle(isNotificationsActive)}
             >
               <View style={[styles.iconCircle, { backgroundColor: "#8B5CF6" }]}>
                 <Bell size={20} color="#FFFFFF" />
@@ -257,10 +249,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
                   router.push("/(moderation)" as any);
                 }
               }}
-              style={({ pressed }) => [
-                styles.itemRow,
-                pressed && { backgroundColor: colors.surfaceSunken },
-              ]}
+              style={itemRowStyle()}
             >
               <View style={[styles.iconCircle, { backgroundColor: "#F43F5E" }]}>
                 <Shield size={20} color="#FFFFFF" />
@@ -291,10 +280,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
             accessibilityRole="button"
             accessibilityLabel={profile?.department_name || "Campus Community"}
             onPress={() => router.push("/(tabs)/search")}
-            style={({ pressed }) => [
-              styles.itemRow,
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle()}
           >
             <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSunken }]}>
               <Building2 size={20} color={colors.action} />
@@ -309,10 +295,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
             accessibilityRole="button"
             accessibilityLabel="Saved posts"
             onPress={() => router.push("/saved")}
-            style={({ pressed }) => [
-              styles.itemRow,
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle()}
           >
             <View style={[styles.iconCircle, { backgroundColor: "rgba(139, 92, 246, 0.15)" }]}>
               <Bookmark size={20} color="#8B5CF6" />
@@ -326,10 +309,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
           <Pressable
             accessibilityRole="button"
             onPress={() => setShowMoreShortcuts((v) => !v)}
-            style={({ pressed }) => [
-              styles.itemRow,
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle()}
           >
             <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSunken }]}>
               {showMoreShortcuts ? (
@@ -349,10 +329,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
                 accessibilityRole="button"
                 accessibilityLabel="Settings"
                 onPress={openSettingsSidebar}
-                style={({ pressed }) => [
-                  styles.itemRow,
-                  pressed && { backgroundColor: colors.surfaceSunken },
-                ]}
+                style={itemRowStyle()}
               >
                 <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSunken }]}>
                   <Settings size={20} color={colors.textSecondary} />
@@ -366,10 +343,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
                 accessibilityRole="button"
                 accessibilityLabel="Switch theme"
                 onPress={() => void toggleTheme()}
-                style={({ pressed }) => [
-                  styles.itemRow,
-                  pressed && { backgroundColor: colors.surfaceSunken },
-                ]}
+                style={itemRowStyle()}
               >
                 <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSunken }]}>
                   {isDark ? (

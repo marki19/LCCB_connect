@@ -120,10 +120,12 @@ export default function DesktopContactsRail({ peers }: DesktopContactsRailProps)
                 }
                 accessibilityRole="button"
                 accessibilityLabel={`Chat with ${displayName}`}
-                style={({ pressed }) => [
+                style={({ pressed, hovered }: any) => [
                   styles.contactRow,
                   {
-                    backgroundColor: pressed ? colors.hoverOverlay : "transparent",
+                    cursor: "pointer",
+                    backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
                   },
                 ]}
               >

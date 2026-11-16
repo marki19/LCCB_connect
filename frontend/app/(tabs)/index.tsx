@@ -456,17 +456,19 @@ export default function HomeScreen() {
                         onPress={() => goCreate()}
                         accessibilityRole="button"
                         accessibilityLabel="What's on your mind?"
-                        style={({ pressed }) => ({
+                        style={({ pressed, hovered }: any) => ({
                           flex: 1,
                           minHeight: 40,
-                          backgroundColor: colors.surfaceSunken,
+                          backgroundColor: hovered || pressed ? colors.hoverOverlay : colors.surfaceSunken,
                           borderRadius: RADIUS.pill,
                           borderWidth: 1,
                           borderColor: colors.line,
                           justifyContent: "center",
                           paddingHorizontal: SPACE.x4,
                           marginLeft: SPACE.x3,
+                          cursor: "pointer",
                           opacity: pressed ? 0.85 : 1,
+                          transform: [{ scale: pressed ? 0.98 : 1 }],
                         })}
                       >
                         <Text style={{ color: colors.inkFaint, fontSize: 13 }} numberOfLines={1}>
@@ -498,7 +500,7 @@ export default function HomeScreen() {
                         onPress={() => router.push({ pathname: "/create", params: { editType: "project" } })}
                         accessibilityRole="button"
                         accessibilityLabel="Share Project"
-                        style={({ pressed }) => ({
+                        style={({ pressed, hovered }: any) => ({
                           flex: 1,
                           flexDirection: "row",
                           alignItems: "center",
@@ -506,7 +508,9 @@ export default function HomeScreen() {
                           gap: 6,
                           paddingVertical: 8,
                           borderRadius: RADIUS.md,
-                          backgroundColor: pressed ? colors.hoverOverlay : "transparent",
+                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                          cursor: "pointer",
+                          transform: [{ scale: pressed ? 0.95 : 1 }],
                         })}
                       >
                         <FolderGit2 size={18} color="#10B981" strokeWidth={2} />
@@ -519,7 +523,7 @@ export default function HomeScreen() {
                         onPress={() => router.push({ pathname: "/create", params: { editType: "capstone" } })}
                         accessibilityRole="button"
                         accessibilityLabel="Share Capstone"
-                        style={({ pressed }) => ({
+                        style={({ pressed, hovered }: any) => ({
                           flex: 1,
                           flexDirection: "row",
                           alignItems: "center",
@@ -527,7 +531,9 @@ export default function HomeScreen() {
                           gap: 6,
                           paddingVertical: 8,
                           borderRadius: RADIUS.md,
-                          backgroundColor: pressed ? colors.hoverOverlay : "transparent",
+                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                          cursor: "pointer",
+                          transform: [{ scale: pressed ? 0.95 : 1 }],
                         })}
                       >
                         <GraduationCap size={18} color="#F59E0B" strokeWidth={2} />
@@ -540,7 +546,7 @@ export default function HomeScreen() {
                         onPress={() => router.push({ pathname: "/create", params: { editType: "image" } })}
                         accessibilityRole="button"
                         accessibilityLabel="Share Photo"
-                        style={({ pressed }) => ({
+                        style={({ pressed, hovered }: any) => ({
                           flex: 1,
                           flexDirection: "row",
                           alignItems: "center",
@@ -548,7 +554,9 @@ export default function HomeScreen() {
                           gap: 6,
                           paddingVertical: 8,
                           borderRadius: RADIUS.md,
-                          backgroundColor: pressed ? colors.hoverOverlay : "transparent",
+                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                          cursor: "pointer",
+                          transform: [{ scale: pressed ? 0.95 : 1 }],
                         })}
                       >
                         <ImageIcon size={18} color="#8B5CF6" strokeWidth={2} />
@@ -561,7 +569,7 @@ export default function HomeScreen() {
                         onPress={() => router.push({ pathname: "/create", params: { editType: "text" } })}
                         accessibilityRole="button"
                         accessibilityLabel="Start Discussion"
-                        style={({ pressed }) => ({
+                        style={({ pressed, hovered }: any) => ({
                           flex: 1,
                           flexDirection: "row",
                           alignItems: "center",
@@ -569,7 +577,9 @@ export default function HomeScreen() {
                           gap: 6,
                           paddingVertical: 8,
                           borderRadius: RADIUS.md,
-                          backgroundColor: pressed ? colors.hoverOverlay : "transparent",
+                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                          cursor: "pointer",
+                          transform: [{ scale: pressed ? 0.95 : 1 }],
                         })}
                       >
                         <MessageSquare size={18} color="#3B82F6" strokeWidth={2} />

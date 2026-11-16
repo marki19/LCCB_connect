@@ -45,7 +45,7 @@ const SOCIAL_ITEMS: SocialItem[] = [
   { icon: Home,          label: "Campus Feed",        desc: "See recent posts from campus", href: "/(tabs)/" },
   { icon: BookOpen,      label: "Repository",         desc: "Browse thesis submissions",    href: "/(tabs)/search" },
   { icon: GraduationCap, label: "Capstones",          desc: "Explore capstone projects",    href: "/(tabs)/search?tab=theses&type=capstone" },
-  { icon: MessageCircle, label: "Messages",           desc: "Chat with classmates",         href: "/messages" },
+  { icon: MessageCircle, label: "Messages",           desc: "Chat with classmates",         href: "/(tabs)/messages" },
   { icon: Users,         label: "Friends & Network",  desc: "Connect with peers",           href: "/friends" },
   { icon: Bookmark,      label: "Saved Posts",        desc: "View bookmarked content",      href: "/saved" },
   { icon: Settings,      label: "Settings & Privacy", desc: "Manage your account",          action: "settings" },
@@ -112,9 +112,13 @@ export default function MenuPopover({ onClose }: MenuPopoverProps) {
                   onPress={() => handleItemClick(item)}
                   accessibilityRole="menuitem"
                   accessibilityLabel={item.label}
-                  style={({ pressed }) => [
+                  style={({ pressed, hovered }: any) => [
                     styles.menuItem,
-                    { backgroundColor: pressed ? colors.hoverOverlay : "transparent" },
+                    {
+                      cursor: "pointer",
+                      backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                      transform: [{ scale: pressed ? 0.98 : 1 }],
+                    },
                   ]}
                 >
                   <View
@@ -155,12 +159,16 @@ export default function MenuPopover({ onClose }: MenuPopoverProps) {
                 onPress={() => handleItemClick(item)}
                 accessibilityRole="menuitem"
                 accessibilityLabel={item.label}
-                style={({ pressed }) => [
+                style={({ pressed, hovered }: any) => [
                   styles.createItem,
                   {
+                    cursor: "pointer",
                     backgroundColor: pressed
                       ? colors.hoverOverlay
+                      : hovered
+                      ? colors.panelInset
                       : colors.surfaceSunken,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
                   },
                 ]}
               >
