@@ -46,8 +46,8 @@ import {
   createSavedCollection,
   addItemToCollection,
   type SavedCollection,
-  resolveFileUrl,
 } from "../src/lib/api";
+import { resolveFileUrl } from "../src/lib/files";
 import DesktopTopBar, { TOP_BAR_HEIGHT } from "../src/components/topbar/DesktopTopBar";
 import Avatar from "../src/components/Avatar";
 import { RADIUS, SPACE, elevation } from "../src/lib/tokens";

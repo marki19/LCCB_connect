@@ -157,26 +157,24 @@ describe("googleAvatar service", () => {
       arrayBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]),
     });
 
-    uploadService.storeUpload = async () => ({
+    uploadService.__setStoreUpload(async () => ({
       key: "avatars/hashed-key-123.jpg",
-    });
+    }));
 
     try {
       const res = await mirrorGoogleAvatar(
         "u1",
         "https://lh3.googleusercontent.com/new-user=s96-c"
       );
-      assert.ok(res && res.key);
-      assert.ok(res.key.startsWith("avatars/"));
-      assert.ok(res.key.endsWith(".jpg"));
+      assert.deepEqual(res, { key: "avatars/hashed-key-123.jpg" });
       assert.ok(updateParams);
-      assert.equal(updateParams[0], res.key);
+      assert.equal(updateParams[0], "avatars/hashed-key-123.jpg");
       assert.equal(updateParams[1], "https://lh3.googleusercontent.com/new-user");
       assert.equal(updateParams[2], "u1");
     } finally {
       db.query = originalQuery;
       global.fetch = originalFetch;
-      uploadService.storeUpload = originalStoreUpload;
+      uploadService.__resetStoreUpload();
     }
   });
 

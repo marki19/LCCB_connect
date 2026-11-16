@@ -44,8 +44,8 @@ process.env.PUSH_ENABLED = process.env.PUSH_ENABLED || "false";
 // bucket. Tests that exercise storage inject a signer or stub the transport;
 // leaving real keys in place would let a stray call upload or delete live
 // objects.
-delete process.env.R2_ACCOUNT_ID;
-delete process.env.R2_ACCESS_KEY_ID;
-delete process.env.R2_SECRET_ACCESS_KEY;
-delete process.env.R2_BUCKET;
-delete process.env.R2_ENDPOINT;
+process.env.R2_ACCOUNT_ID = "";
+process.env.R2_ACCESS_KEY_ID = "";
+process.env.R2_SECRET_ACCESS_KEY = "";
+process.env.R2_BUCKET = "";
+process.env.R2_ENDPOINT = "";

@@ -14,7 +14,7 @@ import SectionHeader from "../../src/components/ui/SectionHeader";
 import StatusBadge from "../../src/components/admin/StatusBadge";
 import EmptyState from "../../src/components/admin/EmptyState";
 import Avatar from "../../src/components/Avatar";
-import { resolveFileUrl, resolveFileUrls } from "../../src/lib/files";
+import { resolveFileUrl } from "../../src/lib/files";
 
 function getInitials(name: string | null) {
   if (!name) return "??";
@@ -37,14 +37,7 @@ function formatPostRows(rows: any[], user: any) {
     type: row.type || "text",
     tags: row.technologies || row.tags || [],
     previewUrl: row.github_url || row.preview_url,
-    imageUrl: resolveFileUrl(row.image_url),
-    image_urls: resolveFileUrls(
-      Array.isArray(row.image_urls)
-        ? row.image_urls
-        : row.image_url
-        ? [row.image_url]
-        : []
-    ),
+    imageUrl: resolveFileUrl(row.image_url) || undefined,
     likes: row.likes || 0,
     comments: row.comments || 0,
     createdAt: new Date(row.created_at).toLocaleDateString(),

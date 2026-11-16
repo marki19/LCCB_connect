@@ -7,7 +7,7 @@
 
 const db = require("../db");
 const objectStorage = require("./objectStorage");
-const { storeUpload } = require("./uploadService");
+const uploadService = require("./uploadService");
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB cap
 const FETCH_TIMEOUT_MS = 10000;
@@ -132,7 +132,7 @@ async function mirrorGoogleAvatar(userId, rawGoogleUrl) {
 
     // 3. Store into object storage under 'avatars' category
     const ext = extensionForMime(contentType);
-    const stored = await storeUpload({
+    const stored = await uploadService.storeUpload({
       category: "avatars",
       originalName: `google-avatar${ext}`,
       buffer,

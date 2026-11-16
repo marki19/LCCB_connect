@@ -478,7 +478,7 @@ export function adaptPost(row: any): any {
     type: row.type || "text",
     tags: row.technologies || row.tags || [],
     previewUrl: row.github_url || row.preview_url || row.previewUrl,
-    imageUrl: resolveFileUrl(row.image_url || row.imageUrl),
+    imageUrl: resolveFileUrl(row.image_url || row.imageUrl) || undefined,
     image_urls: resolveFileUrls(
       Array.isArray(row.image_urls)
         ? row.image_urls
