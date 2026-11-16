@@ -446,7 +446,7 @@ export default function InboxPane({
         />
       </View>
 
-      <View style={{ flex: 1, maxWidth: 760, width: "100%", alignSelf: "center" }}>
+      <View style={{ flex: 1, width: "100%", ...(activeId === undefined ? { maxWidth: 760, alignSelf: "center" } : {}) }}>
         {/* Search Bar */}
         <View style={styles.searchWrap}>
           <View style={[styles.searchBar, { backgroundColor: colors.panelInset, borderColor: colors.line }]}>
@@ -454,7 +454,7 @@ export default function InboxPane({
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Search conversations..."
+              placeholder="Search Messenger"
               placeholderTextColor={colors.inkFaint}
               style={[styles.searchInput, { color: colors.ink }]}
             />
@@ -533,7 +533,7 @@ export default function InboxPane({
             style={{ flex: 1 }}
             data={tab === "chats" ? filteredConversations : received}
             keyExtractor={(item) => item.id}
-            ListHeaderComponent={tab === "chats" ? renderActiveFriends : undefined}
+            ListHeaderComponent={tab === "chats" && activeId === undefined ? renderActiveFriends : undefined}
             contentContainerStyle={{ paddingBottom: SPACE.x8, flexGrow: 1 }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />

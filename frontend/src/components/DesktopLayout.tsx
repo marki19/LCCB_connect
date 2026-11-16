@@ -146,8 +146,10 @@ export default function DesktopLayout({
 
   // Get active tab index
   const seg = segments as string[];
-  const activeTabName = (seg.length > 1 ? (seg[1] as TabName) : undefined) || "index";
+  const rawSegment = (seg.length > 1 ? seg[1] : undefined) || seg[0] || "index";
+  const activeTabName = rawSegment as TabName;
   const activeTabIndex = visibleTabs.findIndex((t) => t.name === activeTabName);
+  const isMessages = rawSegment === "messages" || seg.includes("messages");
 
   // Mobile: render children directly (Tabs will render MobileTabBar)
   if (!isDesktopWeb) {
@@ -158,28 +160,45 @@ export default function DesktopLayout({
     );
   }
 
-  // Desktop: render three-column layout
+  // Desktop: render three-column layout (or full-width messenger layout)
   return (
     <SafeAreaView style={[styles.desktopContainer, { backgroundColor: colors.surfacePage }]}>
       {/* DESKTOP TOP BAR */}
       <DesktopTopBar unreadCount={unreadCount} />
 
       {/* LEFT SIDEBAR - Facebook Style Shortcuts Rail */}
-      {showLeftSidebar && (
+      {showLeftSidebar && !isMessages && (
         <View style={{ marginTop: TOP_BAR_HEIGHT }}>
           {leftSidebar ? leftSidebar : <DesktopLeftRail unreadCount={unreadCount} />}
         </View>
       )}
 
       {/* CENTER COLUMN */}
-      <View style={styles.centerColumn}>
-        <View style={[styles.centerColumnInner, { maxWidth: width >= 1600 ? 860 : 760 }]}>
+      <View
+        style={[
+          styles.centerColumn,
+          isMessages && {
+            paddingHorizontal: 0,
+            paddingTop: 0,
+            paddingBottom: 0,
+            alignItems: "stretch",
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.centerColumnInner,
+            isMessages
+              ? { maxWidth: "100%", width: "100%", flex: 1 }
+              : { maxWidth: width >= 1600 ? 860 : 760 },
+          ]}
+        >
           {children}
         </View>
       </View>
 
       {/* RIGHT SIDEBAR - Contacts Rail on Wide Desktop */}
-      {width >= 1200 && !isGuest && (
+      {width >= 1200 && !isGuest && !isMessages && (
         <View style={{ marginTop: TOP_BAR_HEIGHT }}>
           <DesktopContactsRail peers={activePeers} />
         </View>
