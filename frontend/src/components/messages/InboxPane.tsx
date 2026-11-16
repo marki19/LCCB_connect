@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import {
   Search,
   Plus,
   Inbox,
-  Users,
+  Clock,
 } from "lucide-react-native";
 import Avatar from "../Avatar";
 import PeerPicker from "../PeerPicker";
@@ -176,14 +176,63 @@ export default function InboxPane({
 
   const pendingCount = received.length;
 
+  const query = searchQuery.trim().toLowerCase();
+
   // Filter conversations by search query
-  const filteredConversations = conversations.filter((c) => {
-    if (!searchQuery.trim()) return true;
-    const name = c.peer?.full_name || c.peer?.username || "";
-    const lastMsg = c.last_message?.body || "";
-    const q = searchQuery.toLowerCase();
-    return name.toLowerCase().includes(q) || lastMsg.toLowerCase().includes(q);
-  });
+  const filteredConversations = useMemo(() => {
+    if (!query) return conversations;
+    return conversations.filter((c) => {
+      const name = c.peer?.full_name || c.peer?.username || "";
+      const lastMsg = c.last_message?.body || "";
+      return name.toLowerCase().includes(query) || lastMsg.toLowerCase().includes(query);
+    });
+  }, [conversations, query]);
+
+  const filteredReceived = useMemo(() => {
+    if (!query) return received;
+    return received.filter((c) => {
+      const name = c.peer?.full_name || c.peer?.username || "";
+      const lastMsg = c.last_message?.body || "";
+      return name.toLowerCase().includes(query) || lastMsg.toLowerCase().includes(query);
+    });
+  }, [received, query]);
+
+  const filteredSent = useMemo(() => {
+    if (!query) return sent;
+    return sent.filter((c) => {
+      const name = c.peer?.full_name || c.peer?.username || "";
+      const lastMsg = c.last_message?.body || "";
+      return name.toLowerCase().includes(query) || lastMsg.toLowerCase().includes(query);
+    });
+  }, [sent, query]);
+
+  type RequestRowItem = {
+    id: string;
+    kind: "received" | "sent";
+    isFirstOfKind: boolean;
+    conversation: Conversation;
+  };
+
+  const requestList = useMemo<RequestRowItem[]>(() => {
+    const list: RequestRowItem[] = [];
+    filteredReceived.forEach((conv: Conversation, index: number) => {
+      list.push({
+        id: `recv-${conv.id}`,
+        kind: "received",
+        isFirstOfKind: index === 0,
+        conversation: conv,
+      });
+    });
+    filteredSent.forEach((conv: Conversation, index: number) => {
+      list.push({
+        id: `sent-${conv.id}`,
+        kind: "sent",
+        isFirstOfKind: index === 0,
+        conversation: conv,
+      });
+    });
+    return list;
+  }, [filteredReceived, filteredSent]);
 
   const renderActiveFriends = () => (
     <View style={styles.storiesSection}>
@@ -372,50 +421,132 @@ export default function InboxPane({
   const renderRequest = (item: Conversation, kind: "received" | "sent") => {
     const peer = item.peer;
     const active = activeId === item.id;
+    const isOnline = peer ? modeOf(peer.id) === "online" : false;
+    const lastMsg = item.last_message?.body;
 
     return (
-      <View
+      <Pressable
         key={item.id}
-        style={[
-          styles.requestCard,
+        onPress={() => openThread(item.id)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: active }}
+        style={({ pressed, hovered }: any) => [
+          styles.chatRow,
           {
-            backgroundColor: active ? colors.brandWash : colors.surface,
-            borderColor: colors.border,
+            cursor: "pointer",
+            backgroundColor: active
+              ? colors.brandWash
+              : pressed || hovered
+              ? colors.hoverOverlay
+              : "transparent",
+            transform: [{ scale: pressed ? 0.98 : 1 }],
           },
         ]}
       >
-        <Avatar
-          name={peer?.full_name || peer?.username}
-          avatarUrl={peer?.avatar_url}
-          size={50}
-        />
-        <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-          <Text numberOfLines={1} style={{ ...TYPE.bodyStrong, color: colors.ink, fontWeight: "700" }}>
-            {peer?.full_name || peer?.username || "Peer"}
-          </Text>
-          <Text numberOfLines={1} style={{ ...TYPE.caption, color: colors.inkSoft }}>
-            {item.last_message?.body || "Wants to send you a message"}
-          </Text>
-          {kind === "received" ? (
-            <View style={{ flexDirection: "row", gap: SPACE.x2, marginTop: SPACE.x1 }}>
-              <Pressable
-                onPress={() => void handleAccept(item)}
-                style={[styles.actionBtn, { backgroundColor: colors.brandSolid }]}
-              >
-                <Text style={{ ...TYPE.micro, color: colors.textOnBrandSolid, fontWeight: "700" }}>Accept</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => openThread(item.id)}
-                style={[styles.actionBtn, { backgroundColor: colors.surfaceSunken, borderColor: colors.border, borderWidth: 1 }]}
-              >
-                <Text style={{ ...TYPE.micro, color: colors.inkSoft, fontWeight: "600" }}>View</Text>
-              </Pressable>
+        <View style={styles.avatarContainer}>
+          <Avatar
+            name={peer?.full_name || peer?.username}
+            avatarUrl={peer?.avatar_url}
+            size={54}
+          />
+          {isOnline ? (
+            <View
+              style={[
+                styles.onlineDot,
+                { backgroundColor: "#22C55E", borderColor: colors.surfacePage },
+              ]}
+            />
+          ) : null}
+        </View>
+
+        <View style={styles.chatDetails}>
+          <View style={styles.chatHeaderRow}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.chatName,
+                {
+                  color: colors.ink,
+                  fontWeight: "700",
+                },
+              ]}
+            >
+              {peer?.full_name || peer?.username || "Peer"}
+            </Text>
+            <Text style={[styles.chatTime, { color: colors.inkFaint }]}>
+              {formatWhen(item.last_message?.created_at || item.last_message_at || item.created_at)}
+            </Text>
+          </View>
+
+          <View style={styles.chatSnippetRow}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.chatSnippet,
+                {
+                  color: colors.inkSoft,
+                },
+              ]}
+            >
+              {kind === "sent"
+                ? lastMsg
+                  ? (item.last_message?.sender_id === peer?.id ? lastMsg : `You: ${lastMsg}`)
+                  : "You sent a request"
+                : lastMsg || "Wants to send you a message"}
+            </Text>
+          </View>
+
+          {kind === "sent" ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+              <Clock size={11} color={colors.inkFaint} />
+              <Text style={{ ...TYPE.micro, color: colors.inkFaint, fontWeight: "600" }}>
+                Pending request...
+              </Text>
             </View>
           ) : (
-            <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Pending request...</Text>
+            <View style={{ flexDirection: "row", gap: SPACE.x2, marginTop: 4 }}>
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  void handleAccept(item);
+                }}
+                style={({ pressed, hovered }: any) => [
+                  styles.actionBtn,
+                  {
+                    backgroundColor: colors.brandSolid,
+                    cursor: "pointer",
+                    opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
+                  },
+                ]}
+              >
+                <Text style={{ ...TYPE.micro, color: colors.textOnBrandSolid, fontWeight: "700" }}>
+                  Accept
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  openThread(item.id);
+                }}
+                style={({ pressed, hovered }: any) => [
+                  styles.actionBtn,
+                  {
+                    backgroundColor: colors.surfaceSunken,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    cursor: "pointer",
+                    opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
+                  },
+                ]}
+              >
+                <Text style={{ ...TYPE.micro, color: colors.inkSoft, fontWeight: "600" }}>
+                  View
+                </Text>
+              </Pressable>
+            </View>
           )}
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -531,38 +662,57 @@ export default function InboxPane({
         ) : (
           <FlatList
             style={{ flex: 1 }}
-            data={tab === "chats" ? filteredConversations : received}
-            keyExtractor={(item) => item.id}
+            data={tab === "chats" ? (filteredConversations as any) : (requestList as any)}
+            keyExtractor={(item: any) => item.id}
             ListHeaderComponent={tab === "chats" && activeId === undefined ? renderActiveFriends : undefined}
             contentContainerStyle={{ paddingBottom: SPACE.x8, flexGrow: 1 }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
             }
-            renderItem={({ item }) =>
-              tab === "chats" ? renderChat(item) : renderRequest(item, "received")
-            }
-            ListFooterComponent={
-              tab === "requests" && sent.length > 0 ? (
-                <View style={{ paddingHorizontal: SPACE.x4, marginTop: SPACE.x4, gap: SPACE.x2 }}>
-                  <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Sent Requests</Text>
-                  {sent.map((item) => renderRequest(item, "sent"))}
+            renderItem={({ item }: { item: any }) => {
+              if (tab === "chats") {
+                return renderChat(item as Conversation);
+              }
+              const req = item as RequestRowItem;
+              return (
+                <View key={req.id}>
+                  {req.isFirstOfKind && (
+                    <View style={styles.sectionHeader}>
+                      <Text style={[styles.sectionHeaderText, { color: colors.inkFaint }]}>
+                        {req.kind === "received" ? "RECEIVED REQUESTS" : "SENT REQUESTS"}
+                      </Text>
+                    </View>
+                  )}
+                  {renderRequest(req.conversation, req.kind)}
                 </View>
-              ) : undefined
-            }
+              );
+            }}
             ListEmptyComponent={
               <Card style={{ margin: SPACE.x4 }}>
                 <EmptyState
                   icon={tab === "chats" ? SquarePen : Inbox}
                   tone="brand"
                   compact
-                  title={tab === "chats" ? "No conversations yet" : "No message requests"}
+                  title={
+                    tab === "chats"
+                      ? query
+                        ? "No conversations found"
+                        : "No conversations yet"
+                      : query
+                      ? "No requests found"
+                      : "No message requests"
+                  }
                   body={
                     tab === "chats"
-                      ? "Start chatting with your classmates from the new message button."
+                      ? query
+                        ? "Try searching for a different name."
+                        : "Start chatting with your classmates from the new message button."
+                      : query
+                      ? "Try searching for a different name."
                       : "Requests from people outside your course or department appear here."
                   }
-                  actionLabel={tab === "chats" ? "New message" : undefined}
-                  onAction={tab === "chats" ? () => setPickerOpen(true) : undefined}
+                  actionLabel={tab === "chats" && !query ? "New message" : undefined}
+                  onAction={tab === "chats" && !query ? () => setPickerOpen(true) : undefined}
                 />
               </Card>
             }
@@ -697,12 +847,24 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
+  sectionHeader: {
+    paddingHorizontal: SPACE.x4,
+    paddingTop: SPACE.x3,
+    paddingBottom: SPACE.x1,
+  },
+  sectionHeaderText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
   chatRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: SPACE.x3,
-    paddingHorizontal: SPACE.x4,
+    paddingHorizontal: SPACE.x3,
     paddingVertical: SPACE.x3,
+    marginHorizontal: SPACE.x2,
+    borderRadius: RADIUS.md,
   },
   avatarContainer: {
     position: "relative",
@@ -746,15 +908,6 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 10,
     fontWeight: "800",
-  },
-  requestCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.x3,
-    padding: SPACE.x3,
-    marginHorizontal: SPACE.x4,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
   },
   actionBtn: {
     paddingHorizontal: SPACE.x3,

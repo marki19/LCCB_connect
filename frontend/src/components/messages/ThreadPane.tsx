@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   ArrowLeft,
   Send,
@@ -76,6 +76,7 @@ function Ticks({ message }: { message: Message }) {
 }
 
 export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) {
+  const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user?.id ?? null;
   const { modeOf } = usePresence();
@@ -293,6 +294,8 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
       setConversation({ ...conversation, status: "active" });
     } catch {
       // Leave the banner so the user can retry.
+    } finally {
+      setAccepting(false);
     }
   };
 
@@ -411,31 +414,52 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
         {onBack ? (
           <IconButton icon={ArrowLeft} label="Back to inbox" onPress={onBack} />
         ) : null}
-        <Avatar
-          name={peerName}
-          avatarUrl={peer?.avatar_url}
-          size={40}
-          showPresence
-          mode={peerMode}
-        />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
-            numberOfLines={1}
-            style={{ ...TYPE.title, color: colors.ink, fontWeight: "700" }}
-          >
-            {peerName}
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={{
-              ...TYPE.caption,
-              color: peerTyping ? colors.brand : colors.inkFaint,
-              fontWeight: peerTyping ? "600" : "400",
-            }}
-          >
-            {subtitle}
-          </Text>
-        </View>
+        <Pressable
+          onPress={() => {
+            if (peer?.id) {
+              router.push(`/profile/${peer.id}`);
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${peerName}'s profile`}
+          style={({ pressed, hovered }: any) => [
+            {
+              flexDirection: "row",
+              alignItems: "center",
+              gap: SPACE.x3,
+              flex: 1,
+              minWidth: 0,
+              cursor: (peer?.id ? "pointer" : "auto") as any,
+              opacity: pressed ? 0.8 : hovered ? 0.92 : 1,
+            },
+          ]}
+        >
+          <Avatar
+            name={peerName}
+            avatarUrl={peer?.avatar_url}
+            size={40}
+            showPresence
+            mode={peerMode}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              style={{ ...TYPE.title, color: colors.ink, fontWeight: "700" }}
+            >
+              {peerName}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{
+                ...TYPE.caption,
+                color: peerTyping ? colors.brand : colors.inkFaint,
+                fontWeight: peerTyping ? "600" : "400",
+              }}
+            >
+              {subtitle}
+            </Text>
+          </View>
+        </Pressable>
         <IconButton
           icon={MoreVertical}
           label="Conversation safety options"
