@@ -204,7 +204,11 @@ export default function InboxPane({
             </Text>
           </View>
           <View style={styles.storyAvatarWrap}>
-            <Avatar name={profile?.full_name || profile?.username} size={54} />
+            <Avatar
+              name={profile?.full_name || profile?.username}
+              avatarUrl={profile?.avatar_url}
+              size={54}
+            />
             <View style={[styles.storyPlusBadge, { backgroundColor: colors.brandSolid }]}>
               <Plus size={13} color={colors.textOnBrandSolid} strokeWidth={3} />
             </View>
@@ -233,7 +237,11 @@ export default function InboxPane({
                 </Text>
               </View>
               <View style={styles.storyAvatarWrap}>
-                <Avatar name={peer.full_name || peer.username} size={54} />
+                <Avatar
+                  name={peer.full_name || peer.username}
+                  avatarUrl={peer.avatar_url}
+                  size={54}
+                />
                 <View
                   style={[
                     styles.onlineDot,
@@ -274,7 +282,11 @@ export default function InboxPane({
         ]}
       >
         <View style={styles.avatarContainer}>
-          <Avatar name={peer?.full_name || peer?.username} size={54} />
+          <Avatar
+            name={peer?.full_name || peer?.username}
+            avatarUrl={peer?.avatar_url}
+            size={54}
+          />
           {isOnline ? (
             <View
               style={[
@@ -352,7 +364,11 @@ export default function InboxPane({
           },
         ]}
       >
-        <Avatar name={peer?.full_name || peer?.username} size={50} />
+        <Avatar
+          name={peer?.full_name || peer?.username}
+          avatarUrl={peer?.avatar_url}
+          size={50}
+        />
         <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
           <Text numberOfLines={1} style={{ ...TYPE.bodyStrong, color: colors.ink, fontWeight: "700" }}>
             {peer?.full_name || peer?.username || "Peer"}
@@ -483,7 +499,7 @@ export default function InboxPane({
             style={{ flex: 1 }}
             data={tab === "chats" ? filteredConversations : received}
             keyExtractor={(item) => item.id}
-            ListHeaderComponent={tab === "chats" ? renderActiveFriends : null}
+            ListHeaderComponent={tab === "chats" ? renderActiveFriends : undefined}
             contentContainerStyle={{ paddingBottom: SPACE.x8, flexGrow: 1 }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
@@ -497,7 +513,7 @@ export default function InboxPane({
                   <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Sent Requests</Text>
                   {sent.map((item) => renderRequest(item, "sent"))}
                 </View>
-              ) : null
+              ) : undefined
             }
             ListEmptyComponent={
               <Card style={{ margin: SPACE.x4 }}>

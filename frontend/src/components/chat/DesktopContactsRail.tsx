@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { Search, X } from "lucide-react-native";
 import Avatar from "../Avatar";
+import { resolveFileUrl } from "../../lib/files";
 import { useTheme } from "../../contexts/ThemeContext";
 import { usePresence } from "../../contexts/PresenceContext";
 import { useFloatingChat } from "../../contexts/FloatingChatContext";
@@ -114,7 +115,7 @@ export default function DesktopContactsRail({ peers }: DesktopContactsRailProps)
                   openChat({
                     peerId: peer.id,
                     peerName: displayName,
-                    avatarUrl: peer.avatar_url,
+                    avatarUrl: resolveFileUrl(peer.avatar_url) || undefined,
                   })
                 }
                 accessibilityRole="button"
@@ -127,7 +128,11 @@ export default function DesktopContactsRail({ peers }: DesktopContactsRailProps)
                 ]}
               >
                 <View style={styles.avatarWrap}>
-                  <Avatar name={displayName} size={34} />
+                  <Avatar
+                    name={displayName}
+                    avatarUrl={peer.avatar_url}
+                    size={34}
+                  />
                   {isOnline && (
                     <View
                       style={[

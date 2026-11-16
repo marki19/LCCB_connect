@@ -86,7 +86,11 @@ export default function SuggestionCarousel() {
           accessibilityRole="link"
           accessibilityLabel={`View ${item.full_name || item.username || "profile"}`}
         >
-          <Avatar name={item.full_name || item.username} size={56} />
+          <Avatar
+            name={item.full_name || item.username}
+            avatarUrl={(item as any).avatar_url}
+            size={56}
+          />
           <Text
             numberOfLines={2}
             style={[styles.name, { color: colors.textPrimary }]}

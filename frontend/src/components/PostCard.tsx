@@ -16,6 +16,8 @@ import InlineCommentsDrawer from "./InlineCommentsDrawer";
 import { PostImageGallery } from "./PostImageGallery";
 import Button from "./ui/Button";
 import Modal from "./ui/Modal";
+import Avatar from "./Avatar";
+import { resolveFileUrl, resolveFileUrls } from "../lib/files";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
   const configs: Record<string, { label: string; bg: string; text: string }> = {
@@ -85,11 +87,15 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [imageUrls, setImageUrls] = useState<string[]>(
-    post.image_urls && post.image_urls.length > 0
-      ? post.image_urls
-      : (post.imageUrl ? [post.imageUrl] : [])
+    resolveFileUrls(
+      post.image_urls && post.image_urls.length > 0
+        ? post.image_urls
+        : (post.imageUrl ? [post.imageUrl] : [])
+    )
   );
-  const [imageUrl, setImageUrl] = useState<string | undefined>(post.imageUrl);
+  const [imageUrl, setImageUrl] = useState<string | undefined>(
+    resolveFileUrl(post.imageUrl) || undefined
+  );
   const [showComments, setShowComments] = useState(false);
   const [commentsCount, setCommentsCount] = useState(post.comments || 0);
   const [isSaved, setIsSaved] = useState<boolean>(Boolean(post.is_saved));
@@ -281,9 +287,12 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
     >
       {/* Author row */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 }}>
-        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandWash, alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: colors.brand }}>{post.author.initials}</Text>
-        </View>
+        <Avatar
+          name={post.author.name}
+          avatarUrl={resolveFileUrl((post.author as any).avatarUrl || (post.author as any).avatar_url)}
+          size={44}
+          style={{ marginRight: 10 }}
+        />
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }}>{post.author.name}</Text>
           <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 1 }}>{post.author.course || "—"} · {post.author.yearLevel || "—"}</Text>

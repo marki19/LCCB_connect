@@ -44,6 +44,7 @@ import EmptyState from "../../src/components/admin/EmptyState";
 import { Skeleton } from "../../src/components/ui/Skeleton";
 import IdentityBanner from "../../src/components/IdentityBanner";
 import SuggestionCarousel from "../../src/components/SuggestionCarousel";
+import { resolveFileUrl, resolveFileUrls } from "../../src/lib/files";
 import { useFeedFilter, type FeedCategory } from "../../src/contexts/FeedFilterContext";
 
 type FilterValue = FeedCategory;
@@ -174,6 +175,7 @@ export default function HomeScreen() {
                 name: authorName,
                 initials: getInitials(authorName),
                 avatarColor: "#BFDBFE",
+                avatarUrl: resolveFileUrl(row.author?.avatar_url),
                 course: row.author?.department_name || "—",
                 yearLevel: row.author?.year_level || "—",
               },
@@ -183,8 +185,8 @@ export default function HomeScreen() {
               type: row.type || "text",
               tags: row.technologies || row.tags || [],
               previewUrl: row.github_url || row.preview_url,
-              imageUrl: row.image_url,
-              image_urls: row.image_urls || (row.image_url ? [row.image_url] : []),
+              imageUrl: resolveFileUrl(row.image_url) || undefined,
+              image_urls: resolveFileUrls(row.image_urls || (row.image_url ? [row.image_url] : [])),
               preview_metadata: row.preview_metadata || null,
               likes: row.likes || 0,
               comments: row.comments || 0,
@@ -217,6 +219,7 @@ export default function HomeScreen() {
                   name: reposterName,
                   initials: getInitials(reposterName),
                   avatarColor: "#BFDBFE",
+                  avatarUrl: resolveFileUrl(row.reposter?.avatar_url),
                   course: row.reposter?.department_name || "—",
                   yearLevel: row.reposter?.year_level || "—",
                 },

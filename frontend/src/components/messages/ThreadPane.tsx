@@ -411,7 +411,13 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
         {onBack ? (
           <IconButton icon={ArrowLeft} label="Back to inbox" onPress={onBack} />
         ) : null}
-        <Avatar name={peerName} size={40} showPresence mode={peerMode} />
+        <Avatar
+          name={peerName}
+          avatarUrl={peer?.avatar_url}
+          size={40}
+          showPresence
+          mode={peerMode}
+        />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text
             numberOfLines={1}

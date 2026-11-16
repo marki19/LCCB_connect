@@ -18,6 +18,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { apiFetch, deleteComment } from "../lib/api";
 import Avatar from "./Avatar";
+import { resolveFileUrl } from "../lib/files";
 
 interface CommentItem {
   id: string;
@@ -109,7 +110,7 @@ export default function InlineCommentsDrawer({
             id: profile.id,
             full_name: profile.full_name || undefined,
             username: profile.username || undefined,
-            avatar_url: profile.avatar_url || undefined,
+            avatar_url: resolveFileUrl(profile.avatar_url) || undefined,
             department_name: profile.department_name || undefined,
           },
         };
@@ -182,6 +183,7 @@ export default function InlineCommentsDrawer({
       <View style={styles.composerRow}>
         <Avatar
           name={profile?.full_name ?? profile?.username}
+          avatarUrl={profile?.avatar_url}
           size={34}
         />
         <View
@@ -250,7 +252,11 @@ export default function InlineCommentsDrawer({
 
             return (
               <View key={comment.id} style={styles.commentItem}>
-                <Avatar name={authorName} size={32} />
+                <Avatar
+                  name={authorName}
+                  avatarUrl={comment.user?.avatar_url}
+                  size={32}
+                />
                 <View style={styles.commentRight}>
                   {/* Bubble */}
                   <View

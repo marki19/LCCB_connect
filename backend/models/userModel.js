@@ -331,6 +331,7 @@ const updateUser = async (id, userData) => {
     SET username = COALESCE($1, username),
         full_name = COALESCE($2, full_name),
         avatar_url = COALESCE($3, avatar_url),
+        avatar_source = CASE WHEN $3 IS NOT NULL THEN 'upload' ELSE avatar_source END,
         bio = COALESCE($4, bio),
         course = COALESCE($5, course),
         year_level = COALESCE($6, year_level),

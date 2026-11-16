@@ -144,6 +144,7 @@ export default function NotificationsPopover({ onClose, onClearUnread }: Notific
           notifications.map((notif, idx) => {
             const isUnread = notif.is_read === false || notif.read === false;
             const actorName = notif.actor?.full_name ?? notif.actor?.username ?? notif.actor_name ?? notif.actor_username;
+            const actorAvatar = notif.actor?.avatar_url ?? notif.actor_avatar_url;
             return (
               <Pressable
                 key={notif.id ?? idx}
@@ -159,6 +160,7 @@ export default function NotificationsPopover({ onClose, onClearUnread }: Notific
                 <View style={styles.avatarWrap}>
                   <Avatar
                     name={actorName}
+                    avatarUrl={actorAvatar}
                     size={40}
                   />
                   {isUnread && (

@@ -84,6 +84,7 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
       >
         <Avatar
           name={profile?.full_name ?? profile?.username}
+          avatarUrl={profile?.avatar_url}
           size={48}
         />
         <View style={styles.profileText}>

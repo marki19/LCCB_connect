@@ -71,34 +71,34 @@ describe("multi-image posts", () => {
       signedUrlCalls = [];
     });
 
-    it("withStorageUrlsSync expands each key in image_urls", () => {
+    it("withStorageUrlsSync normalises each key in image_urls", () => {
       const post = {
         id: "p1",
         image_urls: ["posts/1/a.jpg", "posts/1/b.jpg"],
       };
       const synced = withStorageUrlsSync(post);
       assert.deepEqual(synced.image_urls, [
-        "https://signed/posts/1/a.jpg",
-        "https://signed/posts/1/b.jpg",
+        "posts/1/a.jpg",
+        "posts/1/b.jpg",
       ]);
     });
 
-    it("withStorageUrls signs each key in image_urls array", async () => {
+    it("withStorageUrls preserves keys for public post images without signing", async () => {
       const post = {
         id: "p1",
         image_url: "posts/1/a.jpg",
         image_urls: ["posts/1/a.jpg", "posts/1/b.jpg", "posts/1/c.jpg"],
       };
       const resolved = await withStorageUrls(post);
-      assert.equal(resolved.image_url, "https://signed/posts/1/a.jpg");
+      assert.equal(resolved.image_url, "posts/1/a.jpg");
       assert.deepEqual(resolved.image_urls, [
-        "https://signed/posts/1/a.jpg",
-        "https://signed/posts/1/b.jpg",
-        "https://signed/posts/1/c.jpg",
+        "posts/1/a.jpg",
+        "posts/1/b.jpg",
+        "posts/1/c.jpg",
       ]);
-      // image_url and the first entry of image_urls are the same key, so each
-      // field is signed independently: 4 signatures for 4 field values.
-      assert.equal(signedUrlCalls.length, 4);
+      // Public category keys are returned directly so clients resolve them to /api/files;
+      // no HMAC signatures are generated.
+      assert.equal(signedUrlCalls.length, 0);
     });
   });
 });

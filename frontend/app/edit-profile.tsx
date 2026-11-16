@@ -7,6 +7,7 @@ import {
   ScrollView,
   Image,
   Pressable,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
@@ -16,7 +17,8 @@ import { useTheme } from "../src/contexts/ThemeContext";
 import { useToast } from "../src/contexts/ToastContext";
 import { pickImage, uploadToStorage, MAX_UPLOAD_BYTES } from "../src/lib/upload";
 import { ArrowLeft, Camera, X, Check } from "lucide-react-native";
-import { apiFetch } from "../src/lib/api";
+import { apiFetch, deleteAvatar } from "../src/lib/api";
+import { resolveFileUrl } from "../src/lib/files";
 import { safeBack } from "../src/lib/navigation";
 import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
 import Button, { IconButton } from "../src/components/ui/Button";
@@ -67,7 +69,7 @@ function ReadOnlyField({
 }
 
 export default function EditProfileScreen() {
-  const { profile, session } = useAuth();
+  const { profile, session, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const { showToast } = useToast();
 
@@ -76,8 +78,11 @@ export default function EditProfileScreen() {
   const [skills, setSkills] = useState<string[]>(profile?.skills || []);
   const [newSkill, setNewSkill] = useState("");
 
-  const [avatarUri, setAvatarUri] = useState<string | null>(profile?.avatar_url || null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(
+    resolveFileUrl(profile?.avatar_url) || null
+  );
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [removingAvatar, setRemovingAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -86,6 +91,33 @@ export default function EditProfileScreen() {
     if (file) {
       setAvatarUri(file.uri);
     }
+  };
+
+  const handleRemoveAvatar = () => {
+    Alert.alert(
+      "Remove profile photo",
+      "Remove your custom profile photo? If you signed in with Google, your Google picture may return on next login.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            setRemovingAvatar(true);
+            try {
+              await deleteAvatar();
+              setAvatarUri(null);
+              await refreshProfile();
+              showToast("Profile photo removed", "success");
+            } catch (err: any) {
+              showToast(err.message || "Failed to remove photo", "error");
+            } finally {
+              setRemovingAvatar(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSave = async () => {
@@ -216,7 +248,7 @@ export default function EditProfileScreen() {
                 })}
               >
                 {avatarUri ? (
-                  <Image source={{ uri: avatarUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                  <Image source={{ uri: resolveFileUrl(avatarUri) || avatarUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
                 ) : (
                   <Camera color={colors.inkFaint} size={32} />
                 )}
@@ -243,9 +275,30 @@ export default function EditProfileScreen() {
                   </Text>
                 </View>
               </Pressable>
-              <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: SPACE.x2 }}>
-                Tap to change your profile photo
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3, marginTop: SPACE.x2 }}>
+                <Text style={{ ...TYPE.caption, color: colors.inkFaint }}>
+                  Tap to change your profile photo
+                </Text>
+                {avatarUri ? (
+                  <Pressable
+                    onPress={handleRemoveAvatar}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove profile photo"
+                    disabled={removingAvatar}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: SPACE.x2,
+                      paddingVertical: 2,
+                      borderRadius: RADIUS.sm,
+                      backgroundColor: colors.surfaceSunken,
+                      opacity: pressed || removingAvatar ? 0.6 : 1,
+                    })}
+                  >
+                    <Text style={{ ...TYPE.caption, color: colors.danger, fontWeight: "600" }}>
+                      {removingAvatar ? "Removing..." : "Remove"}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
 
             <Card>

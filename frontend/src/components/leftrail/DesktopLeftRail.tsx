@@ -106,6 +106,7 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
           >
             <Avatar
               name={profile?.full_name ?? profile?.username}
+              avatarUrl={profile?.avatar_url}
               size={36}
             />
             <Text

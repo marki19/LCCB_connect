@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { X, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
+import { resolveFileUrl, resolveFileUrls } from "../lib/files";
 
 interface PostImageGalleryProps {
   images?: string[];
@@ -30,10 +31,11 @@ export function PostImageGallery({
   // Consolidate images into a clean array of valid URLs
   const imageList = React.useMemo(() => {
     if (Array.isArray(images) && images.length > 0) {
-      return images.filter(Boolean);
+      return resolveFileUrls(images);
     }
     if (fallbackImageUrl) {
-      return [fallbackImageUrl];
+      const resolved = resolveFileUrl(fallbackImageUrl);
+      return resolved ? [resolved] : [];
     }
     return [];
   }, [images, fallbackImageUrl]);

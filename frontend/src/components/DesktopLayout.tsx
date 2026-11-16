@@ -38,7 +38,9 @@ import DesktopTopBar, { TOP_BAR_HEIGHT } from "./topbar/DesktopTopBar";
 import FloatingChatWindow from "./chat/FloatingChatWindow";
 import DesktopContactsRail from "./chat/DesktopContactsRail";
 import DesktopLeftRail from "./leftrail/DesktopLeftRail";
+import Avatar from "./Avatar";
 import { useFloatingChat } from "../contexts/FloatingChatContext";
+import { resolveFileUrl } from "../lib/files";
 
 type TabItem = (typeof TAB_ITEMS)[number];
 type TabName = TabItem["name"];
@@ -330,7 +332,7 @@ function MessagesSidebar({ unreadCount, activePeers, modeOf, colors, onOpenChat 
       const newConversations = activePeers.slice(0, 10).map((peer) => ({
         id: peer.id,
         name: peer.full_name || peer.username,
-        avatar: peer.avatar_url,
+        avatar: resolveFileUrl(peer.avatar_url) || undefined,
         lastMessage: "Tap to start a conversation",
         time: "",
         unread: false,
@@ -453,50 +455,6 @@ function MessagesSidebar({ unreadCount, activePeers, modeOf, colors, onOpenChat 
   );
 }
 
-// ============================================================================
-// AVATAR COMPONENT (inline for sidebar use)
-// ============================================================================
-function Avatar({ name, username, avatarUrl, size = 40 }: { name?: string; username?: string; avatarUrl?: string; size: number }) {
-  const { colors, isDark } = useTheme();
-  const displayName = name || username || "User";
-
-  if (avatarUrl) {
-    return (
-      <View style={styles.avatarContainer}>
-        <RNImage
-          source={{ uri: avatarUrl }}
-          style={[styles.avatarImage, { width: size, height: size, borderRadius: size / 2 }]}
-          resizeMode="cover"
-        />
-      </View>
-    );
-  }
-
-  const initials = displayName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .substring(0, 2)
-    .toUpperCase();
-
-  return (
-    <View
-      style={[
-        styles.avatarFallback,
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: isDark ? colors.surfaceSunken : colors.brandWash,
-        },
-      ]}
-    >
-      <Text style={{ fontSize: size * 0.35, fontWeight: "700", color: isDark ? colors.brand : colors.brandSolid }}>
-        {initials}
-      </Text>
-    </View>
-  );
-}
 
 // ============================================================================
 // STYLES

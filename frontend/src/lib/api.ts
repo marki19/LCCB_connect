@@ -283,6 +283,12 @@ export async function deleteThesis(id: string | number): Promise<void> {
   return apiJson(`/theses/${id}`, { method: "DELETE" });
 }
 
+export async function deleteAvatar(): Promise<{ message: string; avatar_url: null }> {
+  return apiJson<{ message: string; avatar_url: null }>("/users/me/avatar", {
+    method: "DELETE",
+  });
+}
+
 /**
  * Fetches a short-lived signed URL for a thesis' manuscript.
  *
@@ -334,10 +340,7 @@ export async function getPostImageUrls(id: string | number): Promise<string[]> {
  *
  * @param key A `<category>/<filename>` key, as returned by `uploadToStorage`.
  */
-export function fileUrl(key: string): string {
-  const origin = API_URL.replace(/\/api$/, "");
-  return `${origin}/api/files/${key.replace(/^\/+/, "")}`;
-}
+export { fileUrl, resolveFileUrl, resolveFileUrls } from "./files";
 
 // ============================================================================
 // Repost endpoints
