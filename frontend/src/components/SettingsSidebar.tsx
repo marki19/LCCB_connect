@@ -34,6 +34,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useSettingsSidebar } from "../contexts/SettingsSidebarContext";
 import { elevation, focusRing, RADIUS, SPACE, TYPE } from "../lib/tokens";
 import SecuritySettingsModal from "./settings/SecuritySettingsModal";
+import Avatar from "./Avatar";
 
 const DESKTOP_SIDEBAR_WIDTH = 360;
 const MOBILE_SIDEBAR_RATIO = 0.82;
@@ -134,16 +135,6 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
 
   const displayName = profile?.full_name || (isGuest ? "Guest Visitor" : "User");
 
-  const getInitials = (name: string | null) => {
-    if (!name) return "??";
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .substring(0, 2)
-      .toUpperCase();
-  };
-
   useEffect(() => {
     Animated.parallel([
       Animated.spring(translateX, {
@@ -240,22 +231,11 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
             <X size={20} color={colors.heroText} />
           </Pressable>
           <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3 }}>
-            <View
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 27,
-                backgroundColor: colors.heroLine,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 2,
-                borderColor: colors.heroText,
-              }}
-            >
-              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.heroText }}>
-                {getInitials(displayName)}
-              </Text>
-            </View>
+            <Avatar
+              name={displayName}
+              avatarUrl={profile?.avatar_url}
+              size={54}
+            />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 numberOfLines={1}

@@ -188,6 +188,7 @@ export default function PostDetailScreen() {
                   userId: c.user_id,
                   author: cName,
                   initials: getInitials(cName),
+                  avatar_url: c.user?.avatar_url,
                   text: c.content,
                   time: new Date(c.created_at).toLocaleDateString(),
                 };
@@ -245,6 +246,7 @@ export default function PostDetailScreen() {
       userId: profile.id,
       author: profile.full_name || profile.username || "You",
       initials: getInitials(profile.full_name || profile.username || "You"),
+      avatar_url: profile.avatar_url,
       text,
       time: "Just now",
     };
@@ -792,21 +794,12 @@ export default function PostDetailScreen() {
 
               return (
                 <View key={c.id} style={{ flexDirection: "row", alignItems: "flex-start", gap: SPACE.x2 }}>
-                  <View
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: colors.brandWash,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginTop: 2,
-                    }}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: "800", color: colors.brand }}>
-                      {c.initials}
-                    </Text>
-                  </View>
+                  <Avatar
+                    name={c.author}
+                    avatarUrl={c.avatar_url}
+                    size={32}
+                    style={{ marginTop: 2 }}
+                  />
 
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <View
@@ -1007,20 +1000,11 @@ export default function PostDetailScreen() {
           </View>
         ) : (
           <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x2 }}>
-            <View
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 17,
-                backgroundColor: colors.brandWash,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 12, fontWeight: "800", color: colors.brand }}>
-                {getInitials(profile?.full_name)}
-              </Text>
-            </View>
+            <Avatar
+              name={profile?.full_name || profile?.username}
+              avatarUrl={profile?.avatar_url}
+              size={34}
+            />
 
             <TextInput
               ref={inputRef}
@@ -1513,20 +1497,11 @@ export default function PostDetailScreen() {
               </View>
             ) : (
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: SPACE.x5, gap: SPACE.x2 }}>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: colors.brandWash,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: "800", color: colors.brand }}>
-                    {getInitials(profile?.full_name)}
-                  </Text>
-                </View>
+                <Avatar
+                  name={profile?.full_name || profile?.username}
+                  avatarUrl={profile?.avatar_url}
+                  size={36}
+                />
                 <TextInput
                   ref={inputRef}
                   value={commentText}
@@ -1592,20 +1567,11 @@ export default function PostDetailScreen() {
 
                   return (
                     <View key={c.id} style={{ flexDirection: "row", alignItems: "flex-start", gap: SPACE.x3 }}>
-                      <View
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 18,
-                          backgroundColor: colors.brandWash,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text style={{ fontSize: 12, fontWeight: "800", color: colors.brand }}>
-                          {c.initials}
-                        </Text>
-                      </View>
+                      <Avatar
+                        name={c.author}
+                        avatarUrl={c.avatar_url}
+                        size={36}
+                      />
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View
                           style={{
