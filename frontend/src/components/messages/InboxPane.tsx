@@ -194,7 +194,14 @@ export default function InboxPane({
       >
         {/* Current user: Add story / note */}
         <Pressable
-          style={styles.storyItem}
+          style={({ pressed, hovered }: any) => [
+            styles.storyItem,
+            {
+              cursor: "pointer",
+              opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
+              transform: [{ scale: pressed ? 0.95 : 1 }],
+            },
+          ]}
           onPress={() => Alert.alert("Stories & Notes", "24-hour stories and notes are coming soon!")}
         >
           {/* Note speech bubble */}
@@ -227,7 +234,14 @@ export default function InboxPane({
           return (
             <Pressable
               key={peer.id}
-              style={styles.storyItem}
+              style={({ pressed, hovered }: any) => [
+                styles.storyItem,
+                {
+                  cursor: "pointer",
+                  opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
+                  transform: [{ scale: pressed ? 0.95 : 1 }],
+                },
+              ]}
               onPress={() => handleStartFriendChat(peer.id)}
             >
               {/* Note placeholder bubble */}
@@ -274,10 +288,16 @@ export default function InboxPane({
         onPress={() => openThread(item.id)}
         accessibilityRole="button"
         accessibilityState={{ selected: active }}
-        style={({ pressed }) => [
+        style={({ pressed, hovered }: any) => [
           styles.chatRow,
           {
-            backgroundColor: active ? colors.brandWash : pressed ? colors.hoverOverlay : "transparent",
+            cursor: "pointer",
+            backgroundColor: active
+              ? colors.brandWash
+              : pressed || hovered
+              ? colors.hoverOverlay
+              : "transparent",
+            transform: [{ scale: pressed ? 0.98 : 1 }],
           },
         ]}
       >
@@ -445,11 +465,18 @@ export default function InboxPane({
         <View style={styles.tabsRow}>
           <Pressable
             onPress={() => setTabChoice("chats")}
-            style={[
+            style={({ pressed, hovered }: any) => [
               styles.tabPill,
               {
-                backgroundColor: tab === "chats" ? colors.brandSolid : colors.panel,
+                backgroundColor:
+                  tab === "chats"
+                    ? colors.brandSolid
+                    : hovered || pressed
+                    ? colors.surfaceSunken
+                    : colors.panel,
                 borderColor: tab === "chats" ? colors.brandSolid : colors.line,
+                cursor: "pointer",
+                transform: [{ scale: pressed ? 0.95 : 1 }],
               },
             ]}
           >
@@ -465,11 +492,18 @@ export default function InboxPane({
 
           <Pressable
             onPress={() => setTabChoice("requests")}
-            style={[
+            style={({ pressed, hovered }: any) => [
               styles.tabPill,
               {
-                backgroundColor: tab === "requests" ? colors.brandSolid : colors.panel,
+                backgroundColor:
+                  tab === "requests"
+                    ? colors.brandSolid
+                    : hovered || pressed
+                    ? colors.surfaceSunken
+                    : colors.panel,
                 borderColor: tab === "requests" ? colors.brandSolid : colors.line,
+                cursor: "pointer",
+                transform: [{ scale: pressed ? 0.95 : 1 }],
               },
             ]}
           >

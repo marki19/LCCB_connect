@@ -147,7 +147,14 @@ function MobileTabBar({
             onPress={() => navigate(name, focused)}
             accessibilityRole="tab"
             accessibilityLabel={label}
-            style={({ pressed }) => [styles.mobileTab, { opacity: pressed ? 0.75 : 1 }]}
+            style={({ pressed }: any) => [
+              styles.mobileTab,
+              {
+                cursor: "pointer",
+                opacity: pressed ? 0.75 : 1,
+                transform: [{ scale: pressed ? 0.92 : 1 }],
+              },
+            ]}
           >
             {focused && (
               <View style={[styles.mobileActiveIndicator, { backgroundColor: colors.brand }]} />

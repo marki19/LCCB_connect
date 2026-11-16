@@ -9,12 +9,12 @@ import {
   useWindowDimensions,
   StyleSheet,
   ActivityIndicator,
-  Image as RNImage,
   Modal,
   TextInput,
   Pressable,
   Alert,
 } from "react-native";
+import { AppImage } from "../src/components/AppImage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import {
@@ -48,6 +48,7 @@ import {
   type SavedCollection,
 } from "../src/lib/api";
 import { resolveFileUrl } from "../src/lib/files";
+import { usePrefetchImages } from "../src/hooks/usePrefetchImages";
 import DesktopTopBar, { TOP_BAR_HEIGHT } from "../src/components/topbar/DesktopTopBar";
 import Avatar from "../src/components/Avatar";
 import { RADIUS, SPACE, elevation } from "../src/lib/tokens";
@@ -109,10 +110,23 @@ export default function SavedPostsScreen() {
     }
   }, []);
 
+  const prefetchImages = usePrefetchImages();
+
   useEffect(() => {
     loadSaved();
     loadCollections();
   }, [loadSaved, loadCollections]);
+
+  useEffect(() => {
+    if (posts.length > 0) {
+      const urls: string[] = [];
+      for (const p of posts) {
+        if (p.imageUrl) urls.push(p.imageUrl);
+        if (p.image_urls?.[0]) urls.push(p.image_urls[0]);
+      }
+      if (urls.length > 0) prefetchImages(urls);
+    }
+  }, [posts, prefetchImages]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -214,10 +228,10 @@ export default function SavedPostsScreen() {
           accessibilityRole="link"
         >
           {hasImage && coverUri ? (
-            <RNImage
+            <AppImage
               source={{ uri: coverUri }}
               style={styles.thumbnailImage}
-              resizeMode="cover"
+              contentFit="cover"
             />
           ) : (
             <View style={styles.thumbnailFallback}>
@@ -409,10 +423,10 @@ export default function SavedPostsScreen() {
             >
               <View style={[styles.collectionThumbWrap, { backgroundColor: colors.surfaceSunken }]}>
                 {col.cover_image ? (
-                  <RNImage
+                  <AppImage
                     source={{ uri: col.cover_image }}
                     style={{ width: "100%", height: "100%", borderRadius: 6 }}
-                    resizeMode="cover"
+                    contentFit="cover"
                   />
                 ) : (
                   <Folder size={20} color={colors.action} />

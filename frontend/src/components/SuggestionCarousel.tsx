@@ -78,9 +78,14 @@ export default function SuggestionCarousel() {
       const subtitle = item.department_name || item.course_name || "LCCB student";
       return (
         <Pressable
-          style={[
+          style={({ pressed, hovered }: any): any => [
             styles.card,
-            { backgroundColor: colors.surface, borderColor: colors.border },
+            {
+              backgroundColor: hovered ? colors.surfaceSunken : colors.surface,
+              borderColor: hovered ? colors.borderStrong : colors.border,
+              cursor: "pointer",
+              transform: [{ scale: pressed ? 0.98 : 1 }],
+            },
           ]}
           onPress={() => router.push(`/profile/${item.id}`)}
           accessibilityRole="link"
@@ -101,10 +106,16 @@ export default function SuggestionCarousel() {
             {subtitle}
           </Text>
           <Pressable
-            style={[
+            style={({ pressed, hovered }: any): any => [
               styles.addPill,
               {
-                backgroundColor: sent ? colors.successSurface : colors.actionSurface,
+                backgroundColor: sent
+                  ? colors.successSurface
+                  : hovered || pressed
+                  ? colors.primarySurfaceAlt || colors.actionSurface
+                  : colors.actionSurface,
+                cursor: sent || pendingId === item.id ? "default" : "pointer",
+                transform: [{ scale: pressed && !sent ? 0.94 : 1 }],
               },
             ]}
             onPress={(e) => {
@@ -142,13 +153,15 @@ export default function SuggestionCarousel() {
   const renderFooter = useCallback(
     () => (
       <Pressable
-        style={[
+        style={({ pressed, hovered }: any): any => [
           styles.card,
           styles.seeAllCard,
           {
-            backgroundColor: colors.surfaceSunken,
-            borderColor: colors.border,
+            backgroundColor: hovered ? colors.surface : colors.surfaceSunken,
+            borderColor: hovered ? colors.borderStrong : colors.border,
             marginRight: SPACE.x4,
+            cursor: "pointer",
+            transform: [{ scale: pressed ? 0.97 : 1 }],
           },
         ]}
         onPress={() => router.push("/find-friends")}

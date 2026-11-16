@@ -39,14 +39,16 @@ function IconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={4}
-      style={({ pressed }) => ({
+      style={({ pressed, hovered }: any) => ({
         width: 44,
         height: 44,
         borderRadius: RADIUS.md,
-        backgroundColor,
+        backgroundColor: hovered ? colors.hoverOverlay : backgroundColor,
         alignItems: "center",
         justifyContent: "center",
+        cursor: "pointer",
         opacity: pressed ? 0.72 : 1,
+        transform: [{ scale: pressed ? 0.94 : 1 }],
       })}
     >
       <Icon size={19} color={iconColor} strokeWidth={2.1} />
@@ -106,12 +108,14 @@ export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
         onPress={onMenuPress}
         accessibilityRole="button"
         accessibilityLabel="Open sidebar menu"
-        style={({ pressed }) => ({
+        style={({ pressed }: any) => ({
           flexDirection: "row",
           alignItems: "center",
           gap: SPACE.x2,
           minWidth: 0,
+          cursor: "pointer",
           opacity: pressed ? 0.75 : 1,
+          transform: [{ scale: pressed ? 0.97 : 1 }],
         })}
       >
         <View
@@ -171,7 +175,7 @@ export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
           backgroundColor={colors.panelInset}
         />
         <IconButton
-          onPress={() => router.push("/messages")}
+          onPress={() => router.push("/(tabs)/messages")}
           label={unreadCount > 0 ? `Messages, ${unreadCount} unread` : "Open messages"}
           icon={MessageSquare}
           iconColor={colors.brand}

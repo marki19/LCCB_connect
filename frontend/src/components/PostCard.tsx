@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, Pressable, Linking, Image, Alert, Animated, Platform } from "react-native";
+import { useState, useRef } from "react";
+import { View, Text, TouchableOpacity, Pressable, Linking, Alert, Animated, Platform } from "react-native";
 import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical, Building2, Megaphone } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
@@ -7,7 +7,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
 import { ThemeTokens, elevation, RADIUS, SPACE, TYPE } from "../lib/tokens";
-import { apiJson, deletePost, deleteThesis, getThesisFileUrl, getPostImageUrl, getPostImageUrls, savePost, unsavePost } from "../lib/api";
+import { apiJson, deletePost, deleteThesis, getThesisFileUrl, savePost, unsavePost } from "../lib/api";
 import PostMenu from "./PostMenu";
 import RepostDialog from "./RepostDialog";
 import ReportDialog from "./ReportDialog";
@@ -18,6 +18,7 @@ import Button from "./ui/Button";
 import Modal from "./ui/Modal";
 import Avatar from "./Avatar";
 import { resolveFileUrl, resolveFileUrls } from "../lib/files";
+import { AppImage } from "./AppImage";
 
 function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
   const configs: Record<string, { label: string; bg: string; text: string }> = {
@@ -113,25 +114,6 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const { profile } = useAuth();
   const { colors } = useTheme();
   const isOwner = !!profile?.id && profile.id === post.author.id;
-
-  // Fetch signed URLs for private post images (assets bucket is private per migration 015)
-  useEffect(() => {
-    const hasImages = (post.image_urls && post.image_urls.length > 0) || Boolean(post.imageUrl);
-    if (hasImages) {
-      getPostImageUrls(post.id)
-        .then((urls) => {
-          if (urls.length > 0) {
-            setImageUrls(urls);
-            setImageUrl(urls[0]);
-          }
-        })
-        .catch(() => {
-          if (post.imageUrl) {
-            getPostImageUrl(post.id).then(setImageUrl).catch(() => setImageUrl(undefined));
-          }
-        });
-    }
-  }, [post.id, post.imageUrl, post.image_urls]);
 
   const handleEdit = () => {
     if (post.type === "thesis") {
@@ -258,7 +240,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
       <TouchableOpacity
         activeOpacity={0.97}
         accessibilityLabel={`${post.author.name}: ${primaryTitle || primaryText}`}
-      onPress={async () => {
+        onPress={async () => {
         // A thesis has no post-detail screen; open the deposited PDF instead
         // (mirrors the search screen's thesis card). Manuscripts are private
         // (migration 015), so the card carries the raw object key — ask the
@@ -274,16 +256,19 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         }
         router.push(`/post/${post.id}`);
       }}
-      style={{
-        backgroundColor: colors.panel,
-        borderRadius: RADIUS.xxl,
-        marginHorizontal: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: colors.line,
-        overflow: "hidden",
-        ...elevation("sm", colors),
-      }}
+      style={[
+        {
+          backgroundColor: colors.panel,
+          borderRadius: RADIUS.xxl,
+          marginHorizontal: 16,
+          marginBottom: 12,
+          borderWidth: 1,
+          borderColor: colors.line,
+          overflow: "hidden",
+          ...elevation("sm", colors),
+        },
+        Platform.OS === "web" ? ({ cursor: "pointer" } as any) : undefined,
+      ]}
     >
       {/* Author row */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 }}>
@@ -362,10 +347,10 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           }}
         >
           {post.preview_metadata.image ? (
-            <Image
+            <AppImage
               source={{ uri: post.preview_metadata.image }}
               style={{ width: "100%", height: 160, backgroundColor: colors.surfaceSunken }}
-              resizeMode="cover"
+              contentFit="cover"
             />
           ) : null}
           <View style={{ padding: 12 }}>
@@ -414,7 +399,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel={liked ? "Unlike this post" : "Like this post"}
-                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, minHeight: 44 }}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, minHeight: 44, cursor: "pointer" as any }}
               >
                 <Heart size={18} color={liked ? colors.destructive : colors.textTertiary} fill={liked ? colors.destructive : "transparent"} strokeWidth={2} />
                 <Text style={{ fontSize: 12, color: liked ? colors.destructive : colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>{likeCount}</Text>
@@ -429,7 +414,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Open comments"
-              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, minHeight: 44 }}
+              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, minHeight: 44, cursor: "pointer" as any }}
             >
               <MessageCircle
                 size={18}
@@ -461,7 +446,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel="Share this post"
-          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, minHeight: 44 }}
+          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, minHeight: 44, cursor: "pointer" as any }}
         >
           <Share2 size={18} color={colors.textTertiary} strokeWidth={2} />
           <Text style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 5, fontWeight: "600" }}>Share</Text>

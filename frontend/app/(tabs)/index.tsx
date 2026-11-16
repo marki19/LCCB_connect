@@ -27,6 +27,7 @@ import PostCard from "../../src/components/PostCard";
 import RepostCard from "../../src/components/RepostCard";
 import SettingsSidebar from "../../src/components/SettingsSidebar";
 import Avatar from "../../src/components/Avatar";
+import { usePrefetchImages } from "../../src/hooks/usePrefetchImages";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -87,6 +88,10 @@ function getInitials(name?: string | null) {
     .toUpperCase();
 }
 
+
+const FEED_VIEWABILITY_CONFIG = {
+  itemVisiblePercentThreshold: 20,
+};
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -317,6 +322,38 @@ export default function HomeScreen() {
 
   const goCreate = () => router.push("/create");
 
+  // Prefetch images ahead of viewport scroll
+  const prefetchImages = usePrefetchImages();
+  const postsRef = useRef(posts);
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
+
+  const handleViewableItemsChanged = useCallback(
+    ({ viewableItems }: any) => {
+      if (!viewableItems || viewableItems.length === 0) return;
+      const lastVisibleIndex = viewableItems[viewableItems.length - 1]?.index ?? 0;
+      const currentPosts = postsRef.current;
+      const lookaheadItems = currentPosts.slice(lastVisibleIndex + 1, lastVisibleIndex + 7);
+      const urlsToPrefetch: string[] = [];
+      for (const p of lookaheadItems) {
+        if (p.image_urls && p.image_urls.length > 0) {
+          urlsToPrefetch.push(...p.image_urls);
+        } else if (p.imageUrl) {
+          urlsToPrefetch.push(p.imageUrl);
+        }
+        const authorAvatar = p.author?.avatarUrl || p.author?.avatar_url;
+        if (authorAvatar) {
+          urlsToPrefetch.push(authorAvatar);
+        }
+      }
+      if (urlsToPrefetch.length > 0) {
+        prefetchImages(urlsToPrefetch);
+      }
+    },
+    [prefetchImages]
+  );
+
   // Swipe from left edge (<45px) to right to open sidebar drawer
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const handleTouchStart = (e: any) => {
@@ -362,6 +399,8 @@ export default function HomeScreen() {
           <FlatList
             data={posts}
             keyExtractor={(item) => String(item.id)}
+            onViewableItemsChanged={handleViewableItemsChanged}
+            viewabilityConfig={FEED_VIEWABILITY_CONFIG}
             renderItem={({ item, index }) => {
               const showSuggestions =
                 !isGuest &&
@@ -449,23 +488,26 @@ export default function HomeScreen() {
                     <View style={{ flexDirection: "row", alignItems: "center" }}>
                       <Avatar
                         name={activeName}
+                        avatarUrl={profile?.avatar_url}
                         size={40}
                       />
                       <Pressable
                         onPress={() => goCreate()}
                         accessibilityRole="button"
                         accessibilityLabel="What's on your mind?"
-                        style={({ pressed }) => ({
+                        style={({ pressed, hovered }: any) => ({
                           flex: 1,
                           minHeight: 40,
-                          backgroundColor: colors.surfaceSunken,
+                          backgroundColor: hovered || pressed ? colors.hoverOverlay : colors.surfaceSunken,
                           borderRadius: RADIUS.pill,
                           borderWidth: 1,
                           borderColor: colors.line,
                           justifyContent: "center",
                           paddingHorizontal: SPACE.x4,
                           marginLeft: SPACE.x3,
+                          cursor: "pointer",
                           opacity: pressed ? 0.85 : 1,
+                          transform: [{ scale: pressed ? 0.98 : 1 }],
                         })}
                       >
                         <Text style={{ color: colors.inkFaint, fontSize: 13 }} numberOfLines={1}>
@@ -497,7 +539,7 @@ export default function HomeScreen() {
                         onPress={() => router.push({ pathname: "/create", params: { editType: "project" } })}
                         accessibilityRole="button"
                         accessibilityLabel="Share Project"
-                        style={({ pressed }) => ({
+                        style={({ pressed, hovered }: any) => ({
                           flex: 1,
                           flexDirection: "row",
                           alignItems: "center",
@@ -505,7 +547,9 @@ export default function HomeScreen() {
                           gap: 6,
                           paddingVertical: 8,
                           borderRadius: RADIUS.md,
-                          backgroundColor: pressed ? colors.hoverOverlay : "transparent",
+                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                          cursor: "pointer",
+                          transform: [{ scale: pressed ? 0.95 : 1 }],
                         })}
                       >
                         <FolderGit2 size={18} color="#10B981" strokeWidth={2} />
@@ -518,7 +562,7 @@ export default function HomeScreen() {
                         onPress={() => router.push({ pathname: "/create", params: { editType: "capstone" } })}
                         accessibilityRole="button"
                         accessibilityLabel="Share Capstone"
-                        style={({ pressed }) => ({
+                        style={({ pressed, hovered }: any) => ({
                           flex: 1,
                           flexDirection: "row",
                           alignItems: "center",
@@ -526,7 +570,9 @@ export default function HomeScreen() {
                           gap: 6,
                           paddingVertical: 8,
                           borderRadius: RADIUS.md,
-                          backgroundColor: pressed ? colors.hoverOverlay : "transparent",
+                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                          cursor: "pointer",
+                          transform: [{ scale: pressed ? 0.95 : 1 }],
                         })}
                       >
                         <GraduationCap size={18} color="#F59E0B" strokeWidth={2} />
@@ -539,7 +585,7 @@ export default function HomeScreen() {
                         onPress={() => router.push({ pathname: "/create", params: { editType: "image" } })}
                         accessibilityRole="button"
                         accessibilityLabel="Share Photo"
-                        style={({ pressed }) => ({
+                        style={({ pressed, hovered }: any) => ({
                           flex: 1,
                           flexDirection: "row",
                           alignItems: "center",
@@ -547,7 +593,9 @@ export default function HomeScreen() {
                           gap: 6,
                           paddingVertical: 8,
                           borderRadius: RADIUS.md,
-                          backgroundColor: pressed ? colors.hoverOverlay : "transparent",
+                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                          cursor: "pointer",
+                          transform: [{ scale: pressed ? 0.95 : 1 }],
                         })}
                       >
                         <ImageIcon size={18} color="#8B5CF6" strokeWidth={2} />
@@ -560,7 +608,7 @@ export default function HomeScreen() {
                         onPress={() => router.push({ pathname: "/create", params: { editType: "text" } })}
                         accessibilityRole="button"
                         accessibilityLabel="Start Discussion"
-                        style={({ pressed }) => ({
+                        style={({ pressed, hovered }: any) => ({
                           flex: 1,
                           flexDirection: "row",
                           alignItems: "center",
@@ -568,7 +616,9 @@ export default function HomeScreen() {
                           gap: 6,
                           paddingVertical: 8,
                           borderRadius: RADIUS.md,
-                          backgroundColor: pressed ? colors.hoverOverlay : "transparent",
+                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                          cursor: "pointer",
+                          transform: [{ scale: pressed ? 0.95 : 1 }],
                         })}
                       >
                         <MessageSquare size={18} color="#3B82F6" strokeWidth={2} />

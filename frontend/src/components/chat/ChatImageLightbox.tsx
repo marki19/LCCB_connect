@@ -8,13 +8,13 @@ import {
   Modal,
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
   Platform,
 } from "react-native";
 import { X } from "lucide-react-native";
+import { AppImage } from "../AppImage";
 
 interface ChatImageLightboxProps {
   visible: boolean;
@@ -52,10 +52,10 @@ export default function ChatImageLightbox({
 
         {/* Centered Image */}
         <View style={styles.imageContainer}>
-          <Image
+          <AppImage
             source={{ uri: imageUrl }}
             style={styles.fullImage}
-            resizeMode="contain"
+            contentFit="contain"
           />
         </View>
 

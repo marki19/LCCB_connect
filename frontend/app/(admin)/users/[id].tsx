@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { AppImage } from "../../../src/components/AppImage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeft,
@@ -391,9 +391,10 @@ export default function AdminUserDossierScreen() {
                 }}
               >
                 {target.avatar_url ? (
-                  <Image
+                  <AppImage
                     source={{ uri: resolveFileUrl(target.avatar_url) || target.avatar_url }}
                     style={{ width: 96, height: 96 }}
+                    contentFit="cover"
                   />
                 ) : (
                   <Text style={{ fontSize: 32, fontWeight: "900", color: colors.primary }}>

@@ -38,3 +38,22 @@ export function resolveFileUrls(
     .map((item) => resolveFileUrl(item))
     .filter((url): url is string => Boolean(url));
 }
+
+/**
+ * Extracts a content-addressed storage key from a `/api/files/:category/:filename` URL.
+ * e.g. 'https://.../api/files/posts/abc.jpg' -> 'posts/abc.jpg'
+ * e.g. '/api/files/avatars/xyz.jpg' -> 'avatars/xyz.jpg'
+ * Returns undefined for non-storage URLs (Google avatars, link previews, data URIs).
+ */
+export function fileKeyFromUrl(uri: string | null | undefined): string | undefined {
+  if (!uri || typeof uri !== "string") return undefined;
+  const match = uri.match(/\/api\/files\/([a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+)(?:\?.*)?$/);
+  if (match) {
+    return match[1];
+  }
+  // If the uri is already a raw storage key like "posts/abc.jpg" or "avatars/xyz.jpg":
+  if (/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(uri)) {
+    return uri;
+  }
+  return undefined;
+}

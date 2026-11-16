@@ -41,6 +41,7 @@ function palette(variant: ButtonVariant, colors: ThemeTokens) {
       return {
         bg: colors.surface,
         bgHover: colors.surfaceSunken,
+        bgPressed: colors.panelInset || colors.surfaceSunken,
         border: colors.borderStrong,
         text: colors.textPrimary,
         icon: colors.textSecondary,
@@ -49,6 +50,7 @@ function palette(variant: ButtonVariant, colors: ThemeTokens) {
       return {
         bg: "transparent",
         bgHover: colors.surfaceSunken,
+        bgPressed: colors.hoverOverlay,
         border: "transparent",
         text: colors.textSecondary,
         icon: colors.textSecondary,
@@ -57,6 +59,7 @@ function palette(variant: ButtonVariant, colors: ThemeTokens) {
       return {
         bg: colors.destructive,
         bgHover: colors.destructiveHover,
+        bgPressed: colors.destructiveHover,
         border: colors.destructive,
         text: colors.textOnDanger,
         icon: colors.textOnDanger,
@@ -65,6 +68,7 @@ function palette(variant: ButtonVariant, colors: ThemeTokens) {
       return {
         bg: colors.primarySurface,
         bgHover: colors.primarySurfaceAlt,
+        bgPressed: colors.primarySurfaceAlt,
         border: "transparent",
         text: colors.primary,
         icon: colors.primary,
@@ -74,6 +78,7 @@ function palette(variant: ButtonVariant, colors: ThemeTokens) {
       return {
         bg: colors.primary,
         bgHover: colors.primaryHover,
+        bgPressed: colors.primaryHover,
         border: colors.primary,
         text: colors.textOnPrimary,
         icon: colors.textOnPrimary,
@@ -127,14 +132,16 @@ export default function Button({
           backgroundColor: inactive
             ? colors.surfaceSunken
             : pressed
-            ? p.bgHover
+            ? p.bgPressed
             : hovered
             ? p.bgHover
             : p.bg,
           paddingHorizontal: size === "sm" ? SPACE.x3 : SPACE.x4,
           opacity: inactive ? 0.7 : 1,
+          cursor: inactive ? "default" : "pointer",
+          transform: [{ scale: pressed && !inactive ? 0.97 : 1 }],
           ...(variant === "primary" || variant === "danger" ? elevation("sm", colors) : {}),
-        },
+        } as ViewStyle,
         focusRing(colors, focused),
         style,
       ]}
@@ -167,6 +174,7 @@ export function IconButton({
   variant = "ghost",
   size = 40,
   badgeCount = 0,
+  disabled = false,
   style,
 }: {
   icon: any;
@@ -175,6 +183,7 @@ export function IconButton({
   variant?: "ghost" | "secondary" | "subtle";
   size?: number;
   badgeCount?: number;
+  disabled?: boolean;
   style?: any;
 }) {
   const { colors } = useTheme();
@@ -186,27 +195,38 @@ export function IconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={badgeCount > 0 ? `${label}, ${badgeCount} unread` : label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       onHoverIn={() => setHovered(true)}
       onHoverOut={() => setHovered(false)}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      style={[
+      style={({ pressed }: any) => [
         {
           width: size,
           height: size,
           borderRadius: RADIUS.md,
           borderWidth: variant === "secondary" ? 1 : 0,
           borderColor: colors.border,
-          backgroundColor: hovered ? p.bgHover : p.bg,
+          backgroundColor: disabled
+            ? "transparent"
+            : pressed
+            ? p.bgPressed
+            : hovered
+            ? p.bgHover
+            : p.bg,
           alignItems: "center",
           justifyContent: "center",
+          cursor: disabled ? "default" : "pointer",
+          transform: [{ scale: pressed && !disabled ? 0.93 : 1 }],
+          opacity: disabled ? 0.5 : 1,
         },
         focusRing(colors, focused),
-        style,
+        typeof style === "function" ? style({ pressed }) : style,
       ]}
     >
-      <Icon size={18} color={p.icon} strokeWidth={2.1} />
+      <Icon size={18} color={disabled ? colors.textDisabled : p.icon} strokeWidth={2.1} />
       {badgeCount > 0 ? (
         <View
           style={{

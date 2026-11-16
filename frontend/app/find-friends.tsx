@@ -216,7 +216,11 @@ export default function FindFriendsScreen() {
                     accessibilityLabel={`View ${name}`}
                     style={styles.rowMain}
                   >
-                    <Avatar name={name} size={44} />
+                    <Avatar
+                      name={name}
+                      avatarUrl={item.avatar_url}
+                      size={44}
+                    />
                     <View style={styles.rowText}>
                       <Text
                         numberOfLines={1}

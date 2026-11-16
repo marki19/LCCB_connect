@@ -9,6 +9,8 @@ import {
   TouchableWithoutFeedback,
   Switch,
   useWindowDimensions,
+  Linking,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -34,6 +36,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useSettingsSidebar } from "../contexts/SettingsSidebarContext";
 import { elevation, focusRing, RADIUS, SPACE, TYPE } from "../lib/tokens";
 import SecuritySettingsModal from "./settings/SecuritySettingsModal";
+import Avatar from "./Avatar";
 
 const DESKTOP_SIDEBAR_WIDTH = 360;
 const MOBILE_SIDEBAR_RATIO = 0.82;
@@ -65,7 +68,7 @@ function MenuItem({ icon, label, danger, onPress }: MenuItemProps) {
       onBlur={() => setFocused(false)}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={[
+      style={({ pressed }: any) => [
         {
           flexDirection: "row",
           alignItems: "center",
@@ -73,7 +76,13 @@ function MenuItem({ icon, label, danger, onPress }: MenuItemProps) {
           paddingVertical: SPACE.x2,
           paddingHorizontal: SPACE.x4,
           gap: SPACE.x3,
-          backgroundColor: hovered || focused ? colors.panelInset : "transparent",
+          cursor: "pointer",
+          backgroundColor: pressed
+            ? colors.hoverOverlay
+            : hovered || focused
+            ? colors.panelInset
+            : "transparent",
+          transform: [{ scale: pressed ? 0.98 : 1 }],
         },
         focusRing(colors, focused),
       ]}
@@ -133,16 +142,6 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
   const [securityModalOpen, setSecurityModalOpen] = useState(false);
 
   const displayName = profile?.full_name || (isGuest ? "Guest Visitor" : "User");
-
-  const getInitials = (name: string | null) => {
-    if (!name) return "??";
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .substring(0, 2)
-      .toUpperCase();
-  };
 
   useEffect(() => {
     Animated.parallel([
@@ -240,22 +239,11 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
             <X size={20} color={colors.heroText} />
           </Pressable>
           <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3 }}>
-            <View
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 27,
-                backgroundColor: colors.heroLine,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 2,
-                borderColor: colors.heroText,
-              }}
-            >
-              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.heroText }}>
-                {getInitials(displayName)}
-              </Text>
-            </View>
+            <Avatar
+              name={displayName}
+              avatarUrl={profile?.avatar_url}
+              size={54}
+            />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 numberOfLines={1}
@@ -306,7 +294,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
           <MenuItem
             icon={<MessageSquare size={20} color={colors.brand} />}
             label="Messages"
-            onPress={() => go("/messages")}
+            onPress={() => go("/(tabs)/messages")}
           />
           <MenuItem
             icon={<Users size={20} color={colors.brand} />}
@@ -354,11 +342,43 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
             label="Appearance"
             onPress={() => go("/settings")}
           />
-          <MenuItem icon={<BellRing size={20} color={colors.brand} />} label="Notifications" />
+          <MenuItem
+            icon={<BellRing size={20} color={colors.brand} />}
+            label="Notifications"
+            onPress={() => go("/(tabs)/notifications")}
+          />
 
           <SectionLabel label="Institution" />
-          <MenuItem icon={<School size={20} color={colors.brand} />} label="About LCCB" />
-          <MenuItem icon={<Flag size={20} color={colors.brand} />} label="Report an issue" />
+          <MenuItem
+            icon={<School size={20} color={colors.brand} />}
+            label="About LCCB"
+            onPress={() => {
+              onClose();
+              void Linking.openURL("https://lccbonline.edu.ph");
+            }}
+          />
+          <MenuItem
+            icon={<Flag size={20} color={colors.brand} />}
+            label="Report an issue"
+            onPress={() => {
+              onClose();
+              Alert.alert(
+                "Report an Issue",
+                "Found a bug or need assistance? Email campus support at itsupport@lccbonline.edu.ph.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Send Email",
+                    onPress: () => {
+                      void Linking.openURL(
+                        "mailto:itsupport@lccbonline.edu.ph?subject=LCCB%20Connect%20Issue%20Report"
+                      );
+                    },
+                  },
+                ]
+              );
+            }}
+          />
 
           <View
             style={{
