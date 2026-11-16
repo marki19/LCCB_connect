@@ -44,6 +44,7 @@ import EmptyState from "../../src/components/admin/EmptyState";
 import { Skeleton } from "../../src/components/ui/Skeleton";
 import IdentityBanner from "../../src/components/IdentityBanner";
 import SuggestionCarousel from "../../src/components/SuggestionCarousel";
+import { resolveFileUrl, resolveFileUrls } from "../../src/lib/files";
 import { useFeedFilter, type FeedCategory } from "../../src/contexts/FeedFilterContext";
 
 type FilterValue = FeedCategory;
@@ -174,6 +175,7 @@ export default function HomeScreen() {
                 name: authorName,
                 initials: getInitials(authorName),
                 avatarColor: "#BFDBFE",
+                avatarUrl: resolveFileUrl(row.author?.avatar_url),
                 course: row.author?.department_name || "—",
                 yearLevel: row.author?.year_level || "—",
               },
@@ -183,8 +185,8 @@ export default function HomeScreen() {
               type: row.type || "text",
               tags: row.technologies || row.tags || [],
               previewUrl: row.github_url || row.preview_url,
-              imageUrl: row.image_url,
-              image_urls: row.image_urls || (row.image_url ? [row.image_url] : []),
+              imageUrl: resolveFileUrl(row.image_url) || undefined,
+              image_urls: resolveFileUrls(row.image_urls || (row.image_url ? [row.image_url] : [])),
               preview_metadata: row.preview_metadata || null,
               likes: row.likes || 0,
               comments: row.comments || 0,
@@ -217,6 +219,7 @@ export default function HomeScreen() {
                   name: reposterName,
                   initials: getInitials(reposterName),
                   avatarColor: "#BFDBFE",
+                  avatarUrl: resolveFileUrl(row.reposter?.avatar_url),
                   course: row.reposter?.department_name || "—",
                   yearLevel: row.reposter?.year_level || "—",
                 },
@@ -314,8 +317,35 @@ export default function HomeScreen() {
 
   const goCreate = () => router.push("/create");
 
+  // Swipe from left edge (<45px) to right to open sidebar drawer
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const handleTouchStart = (e: any) => {
+    const touch = e.nativeEvent?.touches?.[0] || e.nativeEvent;
+    if (touch && touch.pageX < 45) {
+      touchStartRef.current = { x: touch.pageX, y: touch.pageY };
+    } else {
+      touchStartRef.current = null;
+    }
+  };
+  const handleTouchEnd = (e: any) => {
+    if (!touchStartRef.current) return;
+    const touch = e.nativeEvent?.changedTouches?.[0] || e.nativeEvent;
+    if (touch) {
+      const deltaX = touch.pageX - touchStartRef.current.x;
+      const deltaY = Math.abs(touch.pageY - touchStartRef.current.y);
+      if (deltaX > 40 && deltaY < 60) {
+        setSidebarOpen(true);
+      }
+    }
+    touchStartRef.current = null;
+  };
+
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+    <View
+      style={{ flex: 1, backgroundColor: colors.surfacePage }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <HomeHeader
         onMenuPress={() => setSidebarOpen(true)}
         unreadCount={unreadCount}
@@ -332,13 +362,22 @@ export default function HomeScreen() {
           <FlatList
             data={posts}
             keyExtractor={(item) => String(item.id)}
-            renderItem={({ item }) =>
-              item.kind === "repost" ? (
-                <RepostCard post={item} repostInfo={item.repost!} onDeleted={handlePostDeleted} />
-              ) : (
-                <PostCard post={item} onDeleted={handlePostDeleted} />
-              )
-            }
+            renderItem={({ item, index }) => {
+              const showSuggestions =
+                !isGuest &&
+                ((posts.length > 2 && index === 2) || (posts.length <= 2 && index === posts.length - 1));
+
+              return (
+                <View>
+                  {item.kind === "repost" ? (
+                    <RepostCard post={item} repostInfo={item.repost!} onDeleted={handlePostDeleted} />
+                  ) : (
+                    <PostCard post={item} onDeleted={handlePostDeleted} />
+                  )}
+                  {showSuggestions && <SuggestionCarousel />}
+                </View>
+              );
+            }}
             contentContainerStyle={{
               flexGrow: 1,
               paddingTop: SPACE.x2,
@@ -540,8 +579,6 @@ export default function HomeScreen() {
                     </View>
                   </View>
                 )}
-
-                {!isGuest && <SuggestionCarousel />}
               </View>
             }
             ListEmptyComponent={

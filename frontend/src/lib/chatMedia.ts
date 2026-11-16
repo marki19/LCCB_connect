@@ -3,7 +3,7 @@
  * serialization, parsing, URL resolution, and preview formatting.
  */
 
-import { fileUrl } from "./api";
+import { resolveFileUrl } from "./files";
 import { uploadToStorage, MAX_UPLOAD_BYTES } from "./upload";
 
 export interface ParsedMessageContent {
@@ -95,13 +95,7 @@ export function formatMessagePreview(body: string | null | undefined): string {
  *          `null` when there is nothing to render.
  */
 export function resolveMediaUrl(keyOrUrl: string | null | undefined): string | null {
-  if (!keyOrUrl) return null;
-
-  if (/^(file|blob|data):/i.test(keyOrUrl) || /^https?:\/\//i.test(keyOrUrl)) {
-    return keyOrUrl;
-  }
-
-  return fileUrl(keyOrUrl);
+  return resolveFileUrl(keyOrUrl);
 }
 
 /**

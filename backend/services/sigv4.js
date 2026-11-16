@@ -215,12 +215,16 @@ function signRequest({
  * @param {Date}   [opts.now]
  * @returns {{ url: string, headers: Record<string,string> }}
  */
-function signPut({ body, contentType, ...rest }) {
+function signPut({ body, contentType, cacheControl, ...rest }) {
+  const extraHeaders = { "Content-Type": contentType };
+  if (cacheControl) {
+    extraHeaders["Cache-Control"] = cacheControl;
+  }
   return signRequest({
     ...rest,
     method: "PUT",
     payloadHash: sha256Hex(body),
-    extraHeaders: { "Content-Type": contentType },
+    extraHeaders,
   });
 }
 

@@ -462,6 +462,7 @@ export default function DesktopTopBar({
           >
             <Avatar
               name={profile?.full_name ?? profile?.username}
+              avatarUrl={profile?.avatar_url}
               size={30}
             />
             <ChevronDown size={12} color={colors.inkFaint} strokeWidth={2.5} />

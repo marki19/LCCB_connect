@@ -23,6 +23,7 @@ import { listConversations, listRequests } from "../../lib/messages";
 import type { Conversation } from "../../types";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
+import { resolveFileUrl } from "../../lib/files";
 import { TOP_BAR_HEIGHT } from "./constants";
 
 interface ChatsPopoverProps {
@@ -105,7 +106,7 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
         conversationId: c.id,
         peerId: c.peer?.id || "",
         peerName: c.peer?.full_name ?? c.peer?.username ?? "Conversation",
-        avatarUrl: c.peer?.avatar_url ?? undefined,
+        avatarUrl: resolveFileUrl(c.peer?.avatar_url) ?? undefined,
       });
     } else {
       router.push(`/messages/${c.id}`);
@@ -213,6 +214,7 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
                 <View style={styles.avatarWrap}>
                   <Avatar
                     name={peerName}
+                    avatarUrl={c.peer?.avatar_url}
                     size={40}
                   />
                   {online && (

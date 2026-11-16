@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import type { Post } from "../types";
 import { useTheme } from "../contexts/ThemeContext";
 import { RADIUS } from "../lib/tokens";
+import Avatar from "./Avatar";
+import { resolveFileUrl } from "../lib/files";
 
 interface RepostCardProps {
   post: Post;
@@ -243,14 +245,12 @@ export default function RepostCard({ post, repostInfo, onDeleted }: RepostCardPr
         <View style={styles.originalPostBorder}>
           {/* Original author */}
           <View style={styles.originalAuthorRow}>
-            <View
-              style={[
-                styles.authorAvatar,
-                { backgroundColor: post.author.avatarColor },
-              ]}
-            >
-              <Text style={styles.authorInitials}>{post.author.initials}</Text>
-            </View>
+            <Avatar
+              name={post.author.name}
+              avatarUrl={post.author.avatarUrl}
+              size={32}
+              style={{ marginRight: 8 }}
+            />
             <View>
               <Text style={styles.authorName}>{post.author.name}</Text>
               <Text style={styles.authorMeta}>
@@ -273,7 +273,7 @@ export default function RepostCard({ post, repostInfo, onDeleted }: RepostCardPr
           {/* Original image */}
           {post.imageUrl && (
             <Image
-              source={{ uri: post.imageUrl }}
+              source={{ uri: resolveFileUrl(post.imageUrl) || post.imageUrl }}
               style={styles.originalImage}
               resizeMode="cover"
             />

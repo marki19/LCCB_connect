@@ -1,3 +1,5 @@
+const db = require("../db");
+const objectStorage = require("../services/objectStorage");
 const userModel = require("../models/userModel");
 const departmentModel = require("../models/departmentModel");
 const accountService = require("../services/accountService");
@@ -295,6 +297,43 @@ const disableUser = async (req, res, next) => {
   }
 };
 
+const removeAvatar = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Fetch current avatar info
+    const { rows } = await db.query(
+      "SELECT avatar_url, avatar_source FROM public.profiles WHERE id = $1",
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const { avatar_url, avatar_source } = rows[0];
+
+    // 2. Null all avatar-related columns
+    await db.query(
+      `UPDATE public.profiles
+       SET avatar_url = NULL,
+           avatar_source = NULL,
+           google_avatar_url = NULL
+       WHERE id = $1`,
+      [userId]
+    );
+
+    // If an uploaded file key was used, clean up object from storage after DB update
+    if (avatar_url && avatar_source === "upload" && !avatar_url.startsWith("http")) {
+      objectStorage.deleteObject(avatar_url).catch(() => {});
+    }
+
+    res.json({ message: "Avatar removed successfully", avatar_url: null });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getUsers,
   getUser,
@@ -304,4 +343,5 @@ module.exports = {
   updateUser,
   disableUser,
   validateCatalogReferences,
+  removeAvatar,
 };

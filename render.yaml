@@ -64,6 +64,21 @@ services:
       - key: R2_BUCKET
         sync: false
 
+      # --- required in production: email -------------------------------------
+      # In production the mailer refuses to drop mail silently, so signup
+      # verification and password resets fail their requests until SMTP is
+      # configured. Without it, no new account can complete onboarding.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+
       # --- required values that are not secret ------------------------------
       # Must be the HTTPS origin of the Vercel deployment, or the browser
       # blocks every API call. Native builds send no Origin and are unaffected.

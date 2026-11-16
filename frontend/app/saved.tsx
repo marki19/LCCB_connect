@@ -47,6 +47,7 @@ import {
   addItemToCollection,
   type SavedCollection,
 } from "../src/lib/api";
+import { resolveFileUrl } from "../src/lib/files";
 import DesktopTopBar, { TOP_BAR_HEIGHT } from "../src/components/topbar/DesktopTopBar";
 import Avatar from "../src/components/Avatar";
 import { RADIUS, SPACE, elevation } from "../src/lib/tokens";
@@ -196,7 +197,7 @@ export default function SavedPostsScreen() {
   // Render horizontal Facebook-style saved item card
   const renderItemCard = ({ item }: { item: Post }) => {
     const hasImage = Boolean(item.imageUrl || (item.image_urls && item.image_urls.length > 0));
-    const coverUri = item.imageUrl || item.image_urls?.[0];
+    const coverUri = resolveFileUrl(item.imageUrl || item.image_urls?.[0]);
     const isMenuOpen = activeMenuPostId === item.id;
 
     return (
@@ -253,7 +254,11 @@ export default function SavedPostsScreen() {
             style={styles.authorAttribution}
             accessibilityRole="link"
           >
-            <Avatar name={item.author?.name || "Peer"} size={22} />
+            <Avatar
+              name={item.author?.name || "Peer"}
+              avatarUrl={item.author?.avatarUrl}
+              size={22}
+            />
             <Text style={[styles.authorAttributionText, { color: colors.textSecondary }]}>
               Saved from{" "}
               <Text style={{ fontWeight: "700", color: colors.textPrimary }}>

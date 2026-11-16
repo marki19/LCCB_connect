@@ -43,6 +43,7 @@ import {
   getThesisFileUrl,
   adaptPost,
 } from "../../src/lib/api";
+import { resolveFileUrl } from "../../src/lib/files";
 import {
   openConversation,
   sendFriendRequest,
@@ -159,7 +160,7 @@ export default function UserProfileScreen() {
       openChat({
         peerId: userData.id,
         peerName: userData.full_name || userData.username,
-        avatarUrl: userData.avatar_url || undefined,
+        avatarUrl: resolveFileUrl(userData.avatar_url) || undefined,
       });
     } else {
       try {
@@ -281,6 +282,7 @@ export default function UserProfileScreen() {
         <View style={styles.avatarWrapper}>
           <Avatar
             name={userData.full_name}
+            avatarUrl={userData.avatar_url}
             size={90}
             showPresence
             mode={modeOf(userData.id)}

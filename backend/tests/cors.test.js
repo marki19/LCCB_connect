@@ -72,6 +72,15 @@ describe("CORS HTTPS Enforcement", () => {
       });
     });
 
+    it("allows wildcard https subdomains in production", (t, done) => {
+      const cors = createCorsOptions({ env: "production", corsOrigins: "https://*.vercel.app" });
+      cors.origin("https://lccb-connect-marki19s-projects.vercel.app", (err, allow) => {
+        assert.equal(err, null);
+        assert.equal(allow, true);
+        done();
+      });
+    });
+
     it("blocks insecure http origins in production", (t, done) => {
       const cors = createCorsOptions({ env: "production", corsOrigins: "http://insecure.lccbonline.edu.ph" });
       cors.origin("http://insecure.lccbonline.edu.ph", (err, allow) => {

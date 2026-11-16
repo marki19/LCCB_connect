@@ -7,7 +7,23 @@
  */
 
 const objectStorage = require("./objectStorage");
-const { resolveUpload } = require("./filePolicy");
+const { resolveUpload, isPublicCategory } = require("./filePolicy");
+
+async function defaultStoreUpload({ category, originalName, buffer }) {
+  const resolved = resolveUpload({ category, originalName, buffer });
+  const isPublic = isPublicCategory(resolved.category);
+
+  await objectStorage.putObject({
+    key: resolved.key,
+    body: buffer,
+    contentType: resolved.contentType,
+    cacheControl: isPublic ? "public, max-age=31536000, immutable" : undefined,
+  });
+
+  return resolved;
+}
+
+let storeUploadImpl = defaultStoreUpload;
 
 /**
  * Validates a buffer, stores it, and returns the key to persist.
@@ -20,18 +36,20 @@ const { resolveUpload } = require("./filePolicy");
  * @throws {import("./filePolicy").UploadRejectedError} when the file is unacceptable.
  * @throws {import("./objectStorage").StorageNotConfiguredError | import("./objectStorage").StorageRequestError}
  */
-async function storeUpload({ category, originalName, buffer }) {
-  const resolved = resolveUpload({ category, originalName, buffer });
+async function storeUpload(opts) {
+  return storeUploadImpl(opts);
+}
 
-  await objectStorage.putObject({
-    key: resolved.key,
-    body: buffer,
-    contentType: resolved.contentType,
-  });
+function __setStoreUpload(fn) {
+  storeUploadImpl = fn;
+}
 
-  return resolved;
+function __resetStoreUpload() {
+  storeUploadImpl = defaultStoreUpload;
 }
 
 module.exports = {
   storeUpload,
+  __setStoreUpload,
+  __resetStoreUpload,
 };

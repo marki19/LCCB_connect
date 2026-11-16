@@ -8,6 +8,7 @@ export type User = {
   name: string;
   initials: string;
   avatarColor?: string;
+  avatarUrl?: string | null;
   course?: string;
   yearLevel?: string;
   username?: string;

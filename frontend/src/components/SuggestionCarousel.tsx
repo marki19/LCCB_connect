@@ -86,7 +86,11 @@ export default function SuggestionCarousel() {
           accessibilityRole="link"
           accessibilityLabel={`View ${item.full_name || item.username || "profile"}`}
         >
-          <Avatar name={item.full_name || item.username} size={56} />
+          <Avatar
+            name={item.full_name || item.username}
+            avatarUrl={item.avatar_url}
+            size={56}
+          />
           <Text
             numberOfLines={2}
             style={[styles.name, { color: colors.textPrimary }]}
@@ -141,14 +145,31 @@ export default function SuggestionCarousel() {
         style={[
           styles.card,
           styles.seeAllCard,
-          { backgroundColor: colors.surfaceSunken, borderColor: colors.border },
+          {
+            backgroundColor: colors.surfaceSunken,
+            borderColor: colors.border,
+            marginRight: SPACE.x4,
+          },
         ]}
         onPress={() => router.push("/find-friends")}
         accessibilityRole="button"
         accessibilityLabel="See all suggested people"
       >
-        <UserPlus size={22} color={colors.action} />
+        <View
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: colors.actionSurface,
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: SPACE.x1,
+          }}
+        >
+          <UserPlus size={24} color={colors.action} />
+        </View>
         <Text style={[styles.seeAllText, { color: colors.action }]}>See all</Text>
+        <Text style={{ ...TYPE.micro, fontSize: 10, color: colors.textSecondary }}>Find classmates</Text>
       </Pressable>
     ),
     [colors, router]
@@ -157,7 +178,15 @@ export default function SuggestionCarousel() {
   if (!user || isGuest || loading || suggestions.length === 0) return null;
 
   return (
-    <View style={[styles.wrap, { borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.wrap,
+        {
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+        },
+      ]}
+    >
       <Text style={[styles.heading, { color: colors.textSecondary }]}>
         People you may know
       </Text>
@@ -187,24 +216,30 @@ export default function SuggestionCarousel() {
 
 const styles = StyleSheet.create({
   wrap: {
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
     paddingVertical: SPACE.x3,
-    marginVertical: SPACE.x2,
+    marginVertical: SPACE.x3,
+    marginHorizontal: SPACE.x4,
   },
   heading: {
     ...TYPE.micro,
     fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
     paddingHorizontal: SPACE.x4,
     marginBottom: SPACE.x2,
   },
   listContent: {
-    paddingHorizontal: SPACE.x4,
+    paddingLeft: SPACE.x4,
+    paddingRight: SPACE.x2,
     gap: CARD_GAP,
   },
   card: {
     width: CARD_WIDTH,
-    borderRadius: RADIUS.md,
+    minHeight: 184,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
     alignItems: "center",
     paddingTop: SPACE.x4,
@@ -231,7 +266,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.pill,
     paddingHorizontal: SPACE.x3,
     paddingVertical: 5,
-    marginTop: SPACE.x1,
+    marginTop: "auto",
     minWidth: 64,
     justifyContent: "center",
   },
@@ -241,7 +276,7 @@ const styles = StyleSheet.create({
   },
   seeAllCard: {
     justifyContent: "center",
-    gap: SPACE.x2,
+    gap: 2,
   },
   seeAllText: {
     fontSize: 13,

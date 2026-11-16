@@ -9,46 +9,53 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
-  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Plus, Sun, Moon, Shield } from "lucide-react-native";
-import { elevation, focusRing } from "../../src/lib/tokens";
-import { useState } from "react";
+import {
+  FolderGit2,
+  BookOpen,
+  Home,
+  MessageCircle,
+  Bell,
+} from "lucide-react-native";
+import { elevation, RADIUS, SPACE } from "../../src/lib/tokens";
+import { useState, useEffect } from "react";
+import { apiJson } from "../../src/lib/api";
+import { onMessage, onConversation } from "../../src/lib/realtime";
 
 type TabItem = {
   name: string;
   label: string;
-  isAction: boolean;
+  Icon: any;
 };
 
 const TAB_ITEMS: readonly TabItem[] = [
-  { name: "index", label: "Home", isAction: false },
-  { name: "search", label: "Repository", isAction: false },
-  { name: "create", label: "Create", isAction: true },
-  { name: "notifications", label: "Notifications", isAction: false },
-  { name: "profile", label: "Profile", isAction: false },
+  { name: "capstones", label: "Projects", Icon: FolderGit2 },
+  { name: "search", label: "Repositories", Icon: BookOpen },
+  { name: "index", label: "Home", Icon: Home },
+  { name: "messages", label: "Chats", Icon: MessageCircle },
+  { name: "notifications", label: "Notifications", Icon: Bell },
 ] as const;
 
 export default function TabsLayout() {
   const { profile } = useAuth();
   const isGuest = profile?.role === "guest";
-  const visibleTabs = TAB_ITEMS.filter((item) => !isGuest || !item.isAction);
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
 
   return (
     <DesktopLayout showRightSidebar={false}>
       <Tabs
-        tabBar={isDesktopWeb ? () => null : (props) => <MobileTabBar {...props} visibleTabs={visibleTabs} isDesktopWeb={isDesktopWeb} />}
+        tabBar={isDesktopWeb ? () => null : (props) => <MobileTabBar {...props} visibleTabs={TAB_ITEMS} isDesktopWeb={isDesktopWeb} />}
         screenOptions={{ headerShown: false, tabBarPosition: "bottom" }}
       >
-        <Tabs.Screen name="index" />
+        <Tabs.Screen name="capstones" />
         <Tabs.Screen name="search" />
-        <Tabs.Screen name="capstones" options={{ href: null }} />
-        <Tabs.Screen name="discussions" options={{ href: null }} />
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="messages" />
         <Tabs.Screen name="notifications" />
-        <Tabs.Screen name="profile" />
+        <Tabs.Screen name="profile" options={{ href: null }} />
+        <Tabs.Screen name="discussions" options={{ href: null }} />
       </Tabs>
     </DesktopLayout>
   );
@@ -57,20 +64,52 @@ export default function TabsLayout() {
 function MobileTabBar({
   visibleTabs,
   state,
-  descriptors,
   emitter,
   navigateToTab,
-  isDesktopWeb,
 }: any) {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors } = useTheme();
   const { profile } = useAuth();
-  const [hovered, setHovered] = useState(false);
-  const [focusVisible, setFocusVisible] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
-  const adminUser = profile?.role === "admin" || profile?.role === "superadmin";
-  const departmentAdmin = profile?.role === "moderator" || profile?.role === "department_admin";
+  const isGuest = profile?.role === "guest";
+
+  // Real-time unread count sync
+  useEffect(() => {
+    if (isGuest || !profile?.id) return;
+    let cancelled = false;
+
+    const loadCounts = async () => {
+      try {
+        const [msgData, notifData] = await Promise.all([
+          apiJson<{ unread: number }>("/conversations/unread-count").catch(() => ({ unread: 0 })),
+          apiJson<{ unread: number }>("/notifications/unread-count").catch(() => ({ unread: 0 })),
+        ]);
+        if (!cancelled) {
+          if (typeof msgData?.unread === "number") setUnreadMessages(msgData.unread);
+          if (typeof notifData?.unread === "number") setUnreadNotifications(notifData.unread);
+        }
+      } catch {
+        // Best effort
+      }
+    };
+
+    loadCounts();
+
+    const unsubMsg = onMessage(() => {
+      loadCounts();
+    });
+    const unsubConv = onConversation(() => {
+      loadCounts();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubMsg();
+      unsubConv();
+    };
+  }, [isGuest, profile?.id]);
 
   const navigate = (name: string, focused: boolean) => {
     const route = state.routes.find((r: any) => r.name === name);
@@ -85,54 +124,33 @@ function MobileTabBar({
     }
   };
 
-  // Mobile: thumb-friendly bottom bar
   return (
     <View
       style={[
         styles.mobileBar,
         {
-          paddingBottom: Math.max(insets.bottom, 10),
-          backgroundColor: colors.tabBarBg,
+          paddingBottom: Math.max(insets.bottom, 8),
+          backgroundColor: colors.tabBarBg || colors.surface,
           borderTopColor: colors.line,
         },
       ]}
     >
-      {visibleTabs.map(({ name, label, isAction }: TabItem) => {
+      {visibleTabs.map(({ name, label, Icon }: TabItem) => {
         const routeIndex = state.routes.findIndex((route: any) => route.name === name);
-        const focused = !isAction && state.index === routeIndex;
-
-        if (isAction) {
-          return (
-            <Pressable
-              key={name}
-              onPress={() => router.push("/create")}
-              accessibilityRole="button"
-              accessibilityLabel="Create a post"
-              style={({ pressed }) => [styles.mobileTab, { opacity: pressed ? 0.78 : 1 }]}
-            >
-              <View
-                style={[
-                  styles.actionBubble,
-                  { backgroundColor: colors.brandSolid, ...elevation("sm", colors) },
-                ]}
-              >
-                <Plus size={22} color={colors.textOnBrandSolid} strokeWidth={2.6} />
-              </View>
-              <Text style={[{ ...styles.mobileLabel, color: colors.brand, fontWeight: "700" }]}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        }
+        const focused = state.index === routeIndex;
+        const badgeCount =
+          name === "messages" ? unreadMessages : name === "notifications" ? unreadNotifications : 0;
 
         return (
           <Pressable
             key={name}
             onPress={() => navigate(name, focused)}
-            style={styles.mobileTab}
+            accessibilityRole="tab"
+            accessibilityLabel={label}
+            style={({ pressed }) => [styles.mobileTab, { opacity: pressed ? 0.75 : 1 }]}
           >
             {focused && (
-              <View style={[{ ...styles.mobileActiveIndicator, backgroundColor: colors.brand }]} />
+              <View style={[styles.mobileActiveIndicator, { backgroundColor: colors.brand }]} />
             )}
             <View
               style={[
@@ -140,15 +158,26 @@ function MobileTabBar({
                 { backgroundColor: focused ? colors.brandWash : "transparent" },
               ]}
             >
-              <Text style={{ fontSize: 21, color: focused ? colors.brand : colors.inkFaint }}>
-                {label[0]}
-              </Text>
+              <Icon
+                size={22}
+                color={focused ? colors.brand : colors.inkFaint}
+                strokeWidth={focused ? 2.4 : 1.9}
+              />
+              {badgeCount > 0 ? (
+                <View style={[styles.badge, { backgroundColor: colors.coral }]}>
+                  <Text style={[styles.badgeText, { color: colors.textOnDanger }]}>
+                    {badgeCount > 99 ? "99+" : badgeCount}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <Text
               style={[
                 styles.mobileLabel,
-                { color: focused ? colors.brand : colors.inkFaint },
-                focused && { fontWeight: "700" },
+                {
+                  color: focused ? colors.brand : colors.inkFaint,
+                  fontWeight: focused ? "700" : "500",
+                },
               ]}
               numberOfLines={1}
             >
@@ -168,41 +197,50 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
+    justifyContent: "space-around",
     borderTopWidth: 1,
     zIndex: 100,
+    paddingTop: 6,
   },
   mobileTab: {
     flex: 1,
     minHeight: 52,
     alignItems: "center",
-    justifyContent: "flex-start",
-    gap: 2,
+    justifyContent: "center",
+    gap: 3,
   },
   mobileActiveIndicator: {
     position: "absolute",
-    top: 0,
-    width: 18,
-    height: 2,
-    borderRadius: 1,
+    top: -6,
+    width: 24,
+    height: 3,
+    borderRadius: 1.5,
   },
   iconBubble: {
-    width: 42,
+    width: 40,
     height: 30,
-    borderRadius: 15,
+    borderRadius: RADIUS.md,
     alignItems: "center",
     justifyContent: "center",
   },
-  actionBubble: {
-    width: 48,
-    height: 34,
-    borderRadius: 17,
+  badge: {
+    position: "absolute",
+    top: -3,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
     alignItems: "center",
     justifyContent: "center",
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: "800",
   },
   mobileLabel: {
-    fontSize: 10.5,
-    fontWeight: "600",
-    letterSpacing: -0.1,
+    fontSize: 10,
+    letterSpacing: -0.2,
   },
 });

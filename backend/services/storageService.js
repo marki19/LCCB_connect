@@ -11,7 +11,7 @@
  */
 
 const objectStorage = require("./objectStorage");
-const { isCategory } = require("./filePolicy");
+const { isCategory, isPublicCategory } = require("./filePolicy");
 
 /** Default presigned-URL lifetime, in seconds. */
 const DEFAULT_SIGNED_URL_EXPIRES = 300;
@@ -24,6 +24,7 @@ const FILE_FIELD_BUCKETS = {
   image_url: "assets",
   pdf_url: "theses",
   avatar_url: "avatars",
+  video_url: "videos",
 };
 
 /** Bucket name → key prefix. `assets` is the legacy name for post images. */
@@ -130,6 +131,17 @@ function publicStorageUrl(bucket, key) {
   return signKey(bucket, key);
 }
 
+function resolveFieldForSerialization(bucket, rawValue) {
+  if (!rawValue || typeof rawValue !== "string" || isAbsoluteUrl(rawValue)) {
+    return rawValue;
+  }
+  const category = BUCKET_CATEGORY[bucket] || bucket;
+  if (isPublicCategory(category)) {
+    return objectKey(bucket, rawValue);
+  }
+  return signKey(bucket, rawValue);
+}
+
 /**
  * Expands every recognised file field in a value, recursively.
  *
@@ -147,13 +159,15 @@ function expand(value) {
 
     for (const [field, bucket] of Object.entries(FILE_FIELD_BUCKETS)) {
       if (typeof output[field] === "string" && !isAbsoluteUrl(output[field])) {
-        output[field] = signKey(bucket, output[field]);
+        output[field] = resolveFieldForSerialization(bucket, output[field]);
       }
     }
 
     if (Array.isArray(output.image_urls)) {
       output.image_urls = output.image_urls.map((key) =>
-        typeof key === "string" && !isAbsoluteUrl(key) ? signKey("assets", key) : key
+        typeof key === "string" && !isAbsoluteUrl(key)
+          ? resolveFieldForSerialization("assets", key)
+          : key
       );
     }
 

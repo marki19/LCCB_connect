@@ -16,6 +16,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
 import { usePresence } from "../contexts/PresenceContext";
 import Avatar from "./Avatar";
+import { resolveFileUrl } from "../lib/files";
 import Modal from "./ui/Modal";
 import Button, { IconButton } from "./ui/Button";
 import EmptyState from "./admin/EmptyState";
@@ -269,7 +270,13 @@ export default function PeerPicker({ visible, onClose, onOpened, mode = "message
           borderBottomColor: colors.line,
         }}
       >
-        <Avatar name={item.full_name || item.username} size={42} showPresence mode={modeOf(item.id)} />
+        <Avatar
+          name={item.full_name || item.username}
+          size={42}
+          showPresence
+          mode={modeOf(item.id)}
+          avatarUrl={resolveFileUrl(item.avatar_url)}
+        />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text
             numberOfLines={1}

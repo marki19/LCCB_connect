@@ -76,7 +76,7 @@ function config() {
  *                                   so browsers render rather than download.
  * @returns {Promise<void>}
  */
-async function putObject({ key, body, contentType }) {
+async function putObject({ key, body, contentType, cacheControl }) {
   const cfg = config();
 
   const { url, headers } = sigv4.signPut({
@@ -87,6 +87,7 @@ async function putObject({ key, body, contentType }) {
     secretAccessKey: cfg.secretAccessKey,
     body,
     contentType,
+    cacheControl,
   });
 
   let response;

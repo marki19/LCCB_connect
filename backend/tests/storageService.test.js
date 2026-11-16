@@ -120,7 +120,7 @@ describe("publicStorageUrl", () => {
 });
 
 describe("withStorageUrls", () => {
-  it("expands the recognised file columns", async () => {
+  it("keeps public fields as keys and signs private fields", async () => {
     const resolved = await withStorageUrls({
       id: "p1",
       image_url: "abc.jpg",
@@ -128,30 +128,30 @@ describe("withStorageUrls", () => {
       pdf_url: "paper.pdf",
     });
 
-    assert.equal(resolved.image_url, "https://r2.example/posts/abc.jpg?sig=abc");
-    assert.equal(resolved.avatar_url, "https://r2.example/avatars/me.png?sig=abc");
+    assert.equal(resolved.image_url, "posts/abc.jpg");
+    assert.equal(resolved.avatar_url, "avatars/me.png");
     assert.equal(resolved.pdf_url, "https://r2.example/theses/paper.pdf?sig=abc");
   });
 
-  it("expands every entry of image_urls", async () => {
+  it("normalises every entry of image_urls to a key", async () => {
     const resolved = await withStorageUrls({
       id: "p1",
       image_urls: ["a.jpg", "b.jpg"],
     });
 
     assert.deepEqual(resolved.image_urls, [
-      "https://r2.example/posts/a.jpg?sig=abc",
-      "https://r2.example/posts/b.jpg?sig=abc",
+      "posts/a.jpg",
+      "posts/b.jpg",
     ]);
   });
 
-  it("expands nested authors and arrays of rows", async () => {
+  it("normalises nested authors and arrays of rows", async () => {
     const resolved = await withStorageUrls([
       { id: "p1", image_url: "a.jpg", author: { id: "u1", avatar_url: "me.png" } },
     ]);
 
-    assert.equal(resolved[0].image_url, "https://r2.example/posts/a.jpg?sig=abc");
-    assert.equal(resolved[0].author.avatar_url, "https://r2.example/avatars/me.png?sig=abc");
+    assert.equal(resolved[0].image_url, "posts/a.jpg");
+    assert.equal(resolved[0].author.avatar_url, "avatars/me.png");
   });
 
   it("leaves absolute URLs, nulls, and non-strings alone", async () => {
@@ -186,8 +186,8 @@ describe("withStorageUrls", () => {
       throw new Error("boom");
     });
 
-    const resolved = await withStorageUrls({ image_url: "a.jpg" });
-    assert.equal(resolved.image_url, "a.jpg");
+    const resolved = await withStorageUrls({ pdf_url: "a.pdf" });
+    assert.equal(resolved.pdf_url, "a.pdf");
   });
 });
 
@@ -195,8 +195,8 @@ describe("withStorageUrlsSync", () => {
   it("expands the same fields synchronously", () => {
     const resolved = withStorageUrlsSync({ image_url: "a.jpg", avatar_url: "me.png" });
 
-    assert.equal(resolved.image_url, "https://r2.example/posts/a.jpg?sig=abc");
-    assert.equal(resolved.avatar_url, "https://r2.example/avatars/me.png?sig=abc");
+    assert.equal(resolved.image_url, "posts/a.jpg");
+    assert.equal(resolved.avatar_url, "avatars/me.png");
   });
 
   it("matches the asynchronous result", async () => {

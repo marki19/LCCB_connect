@@ -14,6 +14,7 @@ const { lockoutIntervalFor } = require("../utils/lockout");
 const { normalizeRole } = require("../utils/roles");
 const passwordResetModel = require("../models/passwordResetModel");
 const { sanitizeProfile } = require("../utils/profile");
+const { mirrorGoogleAvatar } = require("../services/googleAvatar");
 
 const GENERIC_LOGIN_ERROR = "Invalid email, student ID, or password";
 const GENERIC_CODE_ERROR = "That code is incorrect or has expired. Request a new one.";
@@ -1108,10 +1109,19 @@ async function googleAuth(req, res, next) {
         verification_status: "unverified",
       });
       profile = await userModel.getUserById(user.id);
-    } else if (!profile.avatar_url && googleAvatar) {
-      // Default to Google avatar if user has not yet set a custom profile photo
-      await userModel.updateUser(user.id, { avatar_url: googleAvatar });
-      profile.avatar_url = googleAvatar;
+    }
+
+    // Mirror Google avatar into object storage if user has not set a custom upload
+    if (googleAvatar) {
+      try {
+        const mirrored = await mirrorGoogleAvatar(user.id, googleAvatar);
+        if (mirrored?.key && profile) {
+          profile.avatar_url = mirrored.key;
+        }
+      } catch (err) {
+        // Never fail login on avatar mirror failure
+        console.error("[auth] Google avatar mirror failed:", err);
+      }
     }
 
     // Check for suspension
