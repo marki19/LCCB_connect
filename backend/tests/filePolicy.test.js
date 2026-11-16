@@ -41,6 +41,7 @@ describe("category model", () => {
     assert.equal(isPublicCategory("avatars"), true);
     assert.equal(isPublicCategory("posts"), true);
     assert.equal(isPublicCategory("videos"), true);
+    assert.equal(isPublicCategory("snaps"), true);
     assert.equal(isPublicCategory("theses"), false);
     assert.equal(isPublicCategory("documents"), false);
   });
@@ -181,5 +182,45 @@ describe("parseKey", () => {
     assert.equal(parseKey("posts/"), null);
     assert.equal(parseKey(""), null);
     assert.equal(parseKey(null), null);
+  });
+});
+
+describe("snaps category policy", () => {
+  test("accepts jpg, png, webp, mp4, and webm", () => {
+    for (const [ext, buf] of [
+      [".jpg", sampleJpg],
+      [".png", samplePng],
+      [".mp4", sampleMp4],
+    ]) {
+      const res = resolveUpload({
+        category: "snaps",
+        originalName: `snap${ext}`,
+        buffer: buf,
+      });
+      assert.match(res.key, new RegExp(`^snaps/[0-9a-f]{32}\\${ext}$`));
+    }
+  });
+
+  test("rejects a 26 MB buffer in snaps", () => {
+    const oversized = Buffer.alloc(26 * 1024 * 1024);
+    assert.throws(
+      () => resolveUpload({ category: "snaps", originalName: "video.mp4", buffer: oversized }),
+      /exceeds category maximum/
+    );
+  });
+
+  test("rejects an extension not allowed in snaps (such as .gif or .pdf)", () => {
+    assert.throws(
+      () => resolveUpload({ category: "snaps", originalName: "doc.pdf", buffer: samplePdf }),
+      /not allowed in category/
+    );
+  });
+
+  test("rejects a .mp4 whose bytes are not ftyp", () => {
+    const fakeMp4 = Buffer.from("NOT_REALLY_AN_MP4_FILE_HERE");
+    assert.throws(
+      () => resolveUpload({ category: "snaps", originalName: "video.mp4", buffer: fakeMp4 }),
+      /do not match the expected format/
+    );
   });
 });
