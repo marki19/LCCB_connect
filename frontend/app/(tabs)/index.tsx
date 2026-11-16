@@ -314,8 +314,35 @@ export default function HomeScreen() {
 
   const goCreate = () => router.push("/create");
 
+  // Swipe from left edge (<45px) to right to open sidebar drawer
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const handleTouchStart = (e: any) => {
+    const touch = e.nativeEvent?.touches?.[0] || e.nativeEvent;
+    if (touch && touch.pageX < 45) {
+      touchStartRef.current = { x: touch.pageX, y: touch.pageY };
+    } else {
+      touchStartRef.current = null;
+    }
+  };
+  const handleTouchEnd = (e: any) => {
+    if (!touchStartRef.current) return;
+    const touch = e.nativeEvent?.changedTouches?.[0] || e.nativeEvent;
+    if (touch) {
+      const deltaX = touch.pageX - touchStartRef.current.x;
+      const deltaY = Math.abs(touch.pageY - touchStartRef.current.y);
+      if (deltaX > 40 && deltaY < 60) {
+        setSidebarOpen(true);
+      }
+    }
+    touchStartRef.current = null;
+  };
+
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+    <View
+      style={{ flex: 1, backgroundColor: colors.surfacePage }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <HomeHeader
         onMenuPress={() => setSidebarOpen(true)}
         unreadCount={unreadCount}
@@ -332,13 +359,22 @@ export default function HomeScreen() {
           <FlatList
             data={posts}
             keyExtractor={(item) => String(item.id)}
-            renderItem={({ item }) =>
-              item.kind === "repost" ? (
-                <RepostCard post={item} repostInfo={item.repost!} onDeleted={handlePostDeleted} />
-              ) : (
-                <PostCard post={item} onDeleted={handlePostDeleted} />
-              )
-            }
+            renderItem={({ item, index }) => {
+              const showSuggestions =
+                !isGuest &&
+                ((posts.length > 2 && index === 2) || (posts.length <= 2 && index === posts.length - 1));
+
+              return (
+                <View>
+                  {item.kind === "repost" ? (
+                    <RepostCard post={item} repostInfo={item.repost!} onDeleted={handlePostDeleted} />
+                  ) : (
+                    <PostCard post={item} onDeleted={handlePostDeleted} />
+                  )}
+                  {showSuggestions && <SuggestionCarousel />}
+                </View>
+              );
+            }}
             contentContainerStyle={{
               flexGrow: 1,
               paddingTop: SPACE.x2,
@@ -540,8 +576,6 @@ export default function HomeScreen() {
                     </View>
                   </View>
                 )}
-
-                {!isGuest && <SuggestionCarousel />}
               </View>
             }
             ListEmptyComponent={

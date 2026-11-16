@@ -9,18 +9,18 @@ const API_URL = (
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
 // One shared instance so the interceptor is registered once.
-// Default timeout is 60s to accommodate free-tier cold starts (Render spin-up takes 30-50s); uploads extend to 120s.
-const client = create({ baseURL: API_URL, timeout: 60000 });
+// Default timeout is 15s to fail fast on stalled backends; uploads extend to 60s.
+const client = create({ baseURL: API_URL, timeout: 15000 });
 
 // Attach the Bearer token before every request and rewrite
 // guest GET paths to the public read-only endpoints.
 client.interceptors.request.use(async (config) => {
-  // Allow uploads / FormData to take up to 120s
+  // Allow uploads / FormData to take up to 60s
   const isUpload =
     (typeof FormData !== "undefined" && config.data instanceof FormData) ||
     (typeof config.url === "string" && config.url.includes("/upload"));
-  if (isUpload && (config.timeout === undefined || config.timeout === 60000)) {
-    config.timeout = 120000;
+  if (isUpload && (config.timeout === undefined || config.timeout === 15000)) {
+    config.timeout = 60000;
   }
 
   let session = await getSession();
