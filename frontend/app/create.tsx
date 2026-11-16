@@ -305,7 +305,11 @@ export default function CreatePostModal() {
     <View style={{ flex: 1 }}>
       {/* User Row (Facebook style) */}
       <View style={styles.modalUserRow}>
-        <Avatar name={profile?.full_name ?? profile?.username} size={44} />
+        <Avatar
+          name={profile?.full_name ?? profile?.username}
+          avatarUrl={profile?.avatar_url}
+          size={44}
+        />
         <View style={{ marginLeft: 12, flex: 1 }}>
           <Text
             style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}

@@ -424,7 +424,11 @@ export default function PostDetailScreen() {
           borderBottomColor: colors.line,
         }}
       >
-        <Avatar name={post.author.name} size={42} />
+        <Avatar
+          name={post.author.name}
+          avatarUrl={post.author.avatarUrl}
+          size={42}
+        />
 
         <View style={{ flex: 1, marginLeft: SPACE.x3, minWidth: 0 }}>
           <Text
@@ -1344,7 +1348,11 @@ export default function PostDetailScreen() {
         <View style={{ width: "100%", maxWidth: 760, alignSelf: "center", padding: SPACE.x4, paddingBottom: SPACE.x10 }}>
           <Card padding={0} style={{ overflow: "hidden" }}>
             <View style={{ flexDirection: "row", alignItems: "center", padding: SPACE.x4 }}>
-              <Avatar name={post.author.name} size={42} />
+              <Avatar
+          name={post.author.name}
+          avatarUrl={post.author.avatarUrl}
+          size={42}
+        />
               <View style={{ flex: 1, marginLeft: SPACE.x3, minWidth: 0 }}>
                 <Text style={{ ...TYPE.bodyStrong, fontSize: 15, fontWeight: "700", color: colors.ink }} numberOfLines={1}>
                   {post.author.name}

@@ -449,6 +449,7 @@ export default function HomeScreen() {
                     <View style={{ flexDirection: "row", alignItems: "center" }}>
                       <Avatar
                         name={activeName}
+                        avatarUrl={profile?.avatar_url}
                         size={40}
                       />
                       <Pressable
