@@ -366,6 +366,20 @@ describe("profile writes: self-or-admin only", () => {
     const res = await request(app).delete("/api/users/u1").set(AUTH);
     assert.equal(res.status, 404);
   });
+
+  it("silently ignores full_name and username in profile updates (permanent identity)", async () => {
+    m.updateUser.setImpl(async (id, data) => ({ id, full_name: "Original Name", username: "original.name", ...data }));
+
+    const res = await request(app)
+      .put("/api/users/u1")
+      .set(AUTH)
+      .send({ full_name: "Someone Else", username: "hacked.name", bio: "New bio" });
+
+    assert.equal(res.status, 200);
+    assert.equal(m.updateUser.calls.length, 1);
+    const passedData = m.updateUser.calls[0][1];
+    assert.equal(passedData.bio, "New bio");
+  });
 });
 
 // --- RBAC regression tests (privilege hierarchy) ---------------------------

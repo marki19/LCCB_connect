@@ -15,6 +15,7 @@ const { normalizeRole } = require("../utils/roles");
 const passwordResetModel = require("../models/passwordResetModel");
 const { sanitizeProfile } = require("../utils/profile");
 const { mirrorGoogleAvatar } = require("../services/googleAvatar");
+const identityService = require("../services/identity");
 
 const GENERIC_LOGIN_ERROR = "Invalid email, student ID, or password";
 const GENERIC_CODE_ERROR = "That code is incorrect or has expired. Request a new one.";
@@ -583,11 +584,15 @@ async function verifySignup(req, res, next) {
       console.warn(`[auth] Supabase sign-in error for ${normalizedEmail}: ${syncErr?.message || syncErr}`);
     }
 
+    // Derive unique username from full name
+    const username = await identityService.deriveUsername(pending.full_name, userId);
+
     // Create profile with password_hash directly in PostgreSQL
     const createdProfile = await userModel.createUser({
       id: userId,
       email: normalizedEmail,
       full_name: pending.full_name,
+      username,
       role: "user",
       password_hash: pending.password_hash,
       verification_status: "unverified",
@@ -1148,11 +1153,14 @@ async function googleAuth(req, res, next) {
 
     if (!profile) {
       // Create profile for new Google user with Google avatar as default
-      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || null;
+      const emailLocalPart = email.split("@")[0] || null;
+      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || emailLocalPart;
+      const username = await identityService.deriveUsername(fullName, user.id);
       await userModel.createUser({
         id: user.id,
         email: user.email,
         full_name: fullName,
+        username,
         avatar_url: googleAvatar,
         role: "user",
         verification_status: "unverified",

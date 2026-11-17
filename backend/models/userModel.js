@@ -2,6 +2,7 @@ const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
 const { escapeLike } = require("../utils/queryFilters");
 const { normalizeRole } = require("../utils/roles");
+const identityService = require("../services/identity");
 
 // RAW SQL QUERIES ONLY (NO ORM METHODS)
 
@@ -321,12 +322,22 @@ const createUser = async (userData) => {
     id, username, full_name, avatar_url, bio, course, year_level, role,
     department_id, course_id, email, student_id, verification_status, password_hash,
   } = userData;
+
+  let effectiveUsername = username;
+  if (!effectiveUsername) {
+    try {
+      effectiveUsername = await identityService.deriveUsername(full_name, id);
+    } catch {
+      effectiveUsername = identityService.deriveBaseUsername(full_name, id);
+    }
+  }
+
   const sql = `
     INSERT INTO profiles (id, username, full_name, avatar_url, bio, course, year_level, role, department_id, course_id, email, student_id, verification_status, password_hash)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     ON CONFLICT (id) DO UPDATE SET
-      full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
-      username = COALESCE(EXCLUDED.username, profiles.username),
+      full_name = COALESCE(profiles.full_name, EXCLUDED.full_name),
+      username = COALESCE(profiles.username, EXCLUDED.username),
       password_hash = COALESCE(EXCLUDED.password_hash, profiles.password_hash),
       -- Department/course are CLAIM-ONCE: fill them only while still unset, so a
       -- repeat POST can never move a user into a different department.
@@ -340,7 +351,7 @@ const createUser = async (userData) => {
     RETURNING ${PROFILE_RETURNING};
   `;
   const values = [
-    id, username, full_name, avatar_url, bio, course, year_level, role || 'student',
+    id, effectiveUsername, full_name, avatar_url, bio, course, year_level, role || 'student',
     department_id || null, course_id || null, email || null, student_id || null, verification_status || 'unverified',
     password_hash || null,
   ];
@@ -351,39 +362,36 @@ const createUser = async (userData) => {
 const updateUser = async (id, userData) => {
   const hasProp = (prop) => Object.prototype.hasOwnProperty.call(userData, prop);
   const {
-    username, full_name, avatar_url, bio, course, year_level, role, skills,
+    avatar_url, bio, course, year_level, role, skills,
     department_id, course_id, message_policy, student_id, verification_status,
     contact_email, facebook_url, instagram_url, twitter_url,
     relationship_status, gender,
   } = userData;
+  // Permanent identity: full_name and username are not updatable via updateUser.
   const sql = `
     UPDATE profiles
-    SET username = COALESCE($1, username),
-        full_name = COALESCE($2, full_name),
-        avatar_url = COALESCE($3, avatar_url),
-        avatar_source = CASE WHEN $3 IS NOT NULL THEN 'upload' ELSE avatar_source END,
-        bio = COALESCE($4, bio),
-        course = COALESCE($5, course),
-        year_level = COALESCE($6, year_level),
-        role = COALESCE($7, role),
-        skills = COALESCE($8, skills),
-        department_id = COALESCE($9, department_id),
-        course_id = COALESCE($10, course_id),
-        message_policy = COALESCE($11, message_policy),
-        student_id = COALESCE($12, student_id),
-        verification_status = COALESCE($13, verification_status),
-        contact_email = CASE WHEN $15::boolean THEN $16 ELSE contact_email END,
-        facebook_url = CASE WHEN $17::boolean THEN $18 ELSE facebook_url END,
-        instagram_url = CASE WHEN $19::boolean THEN $20 ELSE instagram_url END,
-        twitter_url = CASE WHEN $21::boolean THEN $22 ELSE twitter_url END,
-        relationship_status = CASE WHEN $23::boolean THEN $24 ELSE relationship_status END,
-        gender = CASE WHEN $25::boolean THEN $26 ELSE gender END
-    WHERE id = $14
+    SET avatar_url = COALESCE($1, avatar_url),
+        avatar_source = CASE WHEN $1 IS NOT NULL THEN 'upload' ELSE avatar_source END,
+        bio = COALESCE($2, bio),
+        course = COALESCE($3, course),
+        year_level = COALESCE($4, year_level),
+        role = COALESCE($5, role),
+        skills = COALESCE($6, skills),
+        department_id = COALESCE($7, department_id),
+        course_id = COALESCE($8, course_id),
+        message_policy = COALESCE($9, message_policy),
+        student_id = COALESCE($10, student_id),
+        verification_status = COALESCE($11, verification_status),
+        contact_email = CASE WHEN $13::boolean THEN $14 ELSE contact_email END,
+        facebook_url = CASE WHEN $15::boolean THEN $16 ELSE facebook_url END,
+        instagram_url = CASE WHEN $17::boolean THEN $18 ELSE instagram_url END,
+        twitter_url = CASE WHEN $19::boolean THEN $20 ELSE twitter_url END,
+        relationship_status = CASE WHEN $21::boolean THEN $22 ELSE relationship_status END,
+        gender = CASE WHEN $23::boolean THEN $24 ELSE gender END
+    WHERE id = $12
     RETURNING ${PROFILE_RETURNING};
   `;
   const values = [
-    username || null,
-    full_name || null,
     avatar_url || null,
     bio || null,
     course || null,

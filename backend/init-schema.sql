@@ -108,9 +108,13 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   bounced_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT profiles_suspension_dates_check CHECK (suspended_until IS NULL OR suspended_at IS NOT NULL)
+  CONSTRAINT profiles_suspension_dates_check CHECK (suspended_until IS NULL OR suspended_at IS NOT NULL),
+  CONSTRAINT chk_profiles_username_format CHECK (username IS NULL OR username ~ '^[a-z0-9._]{3,30}$')
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_username_lower
+  ON public.profiles (lower(username))
+  WHERE username IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_student_id
   ON public.profiles (upper(student_id))
   WHERE student_id IS NOT NULL;

@@ -210,15 +210,17 @@ const updateUser = async (req, res, next) => {
       });
     }
 
-    // Identity lock: verified students cannot change name, student_id,
+    // Identity lock: verified students cannot change student_id,
     // department_id, or course_id. Admins can always change these.
+    // Permanent identity: full_name and username are not in the SQL SET clause
+    // in userModel.updateUser, so renames are a silent no-op without failing clients.
     const target =
       authz.target ||
       (authz.isSelf ? req.profile : null) ||
       (await userModel.getUserById(id));
 
     if (!isAdmin(req) && target?.verification_status === "verified") {
-      const lockedFields = ["full_name", "student_id", "department_id", "course_id"];
+      const lockedFields = ["student_id", "department_id", "course_id"];
       for (const field of lockedFields) {
         if (payload[field] !== undefined) {
           return res.status(403).json({
