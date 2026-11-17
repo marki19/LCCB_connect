@@ -41,7 +41,12 @@ import { useToast } from "../src/contexts/ToastContext";
 import { uploadToStorage, pickImage, pickMultipleImages } from "../src/lib/upload";
 import { apiFetch, updatePost } from "../src/lib/api";
 import { resolveFileUrl } from "../src/lib/files";
-import { fetchLinkPreview, LinkPreviewData } from "../src/lib/linkPreview";
+import {
+  fetchLinkPreview,
+  LinkPreviewData,
+  extractFirstUrl,
+  normalizeWebsiteUrl,
+} from "../src/lib/linkPreview";
 import { safeBack } from "../src/lib/navigation";
 import VisibilityPicker from "../src/components/VisibilityPicker";
 import Avatar from "../src/components/Avatar";
@@ -55,15 +60,6 @@ import Modal from "../src/components/ui/Modal";
 import TextField from "../src/components/ui/TextField";
 
 type PostType = "text" | "image" | "project" | "capstone" | "website";
-
-function normalizeWebsiteUrl(raw: string): string {
-  const trimmed = (raw || "").trim();
-  if (!trimmed) return "";
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
-  return `https://${trimmed}`;
-}
 
 export default function CreatePostModal() {
   const { profile } = useAuth();
@@ -127,6 +123,8 @@ export default function CreatePostModal() {
   const [urlFocused, setUrlFocused] = useState(false);
 
   const [previewData, setPreviewData] = useState<LinkPreviewData | null>(null);
+  const [previewDismissed, setPreviewDismissed] = useState(false);
+  const [lastDetectedUrl, setLastDetectedUrl] = useState<string | null>(null);
   const [fetchingPreview, setFetchingPreview] = useState(false);
   const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
 
@@ -150,9 +148,11 @@ export default function CreatePostModal() {
     try {
       setFetchingPreview(true);
       const data = await fetchLinkPreview(normalized);
-      setPreviewData(data);
-      if (data?.title && !title) {
-        setTitle(data.title);
+      if (data) {
+        setPreviewData(data);
+        if (data.title && !title) {
+          setTitle(data.title);
+        }
       }
     } catch {
       // Non-blocking
@@ -160,6 +160,45 @@ export default function CreatePostModal() {
       setFetchingPreview(false);
     }
   };
+
+  const handleContentChange = (text: string) => {
+    setContent(text);
+    if (!githubUrl.trim()) {
+      const detected = extractFirstUrl(text);
+      if (detected) {
+        if (detected !== lastDetectedUrl) {
+          setLastDetectedUrl(detected);
+          setPreviewDismissed(false);
+          loadPreview(detected);
+        }
+      } else if (lastDetectedUrl) {
+        setLastDetectedUrl(null);
+        setPreviewData(null);
+      }
+    }
+  };
+
+  const handleGithubUrlChange = (val: string) => {
+    setGithubUrl(val);
+    const clean = val.trim();
+    if (clean.includes(".") && clean.length >= 4) {
+      setPreviewDismissed(false);
+      loadPreview(clean);
+    } else if (!clean && !extractFirstUrl(content)) {
+      setPreviewData(null);
+    }
+  };
+
+  // Auto-detect link on mount if editing or initial content exists
+  useEffect(() => {
+    if (content && !previewData && !githubUrl) {
+      const detected = extractFirstUrl(content);
+      if (detected) {
+        setLastDetectedUrl(detected);
+        loadPreview(detected);
+      }
+    }
+  }, []);
 
   const handlePickImage = async () => {
     if (imageUris.length >= 4) {
@@ -180,15 +219,17 @@ export default function CreatePostModal() {
 
   const trimmedContent = content.trim();
   const trimmedTitle = title.trim();
+  const detectedUrlInContent = extractFirstUrl(trimmedContent);
 
   const isPostValid = Boolean(
-    (postType === "text" && trimmedContent.length > 0) ||
+    (postType === "text" && (trimmedContent.length > 0 || detectedUrlInContent || previewData)) ||
       (postType === "image" && imageUris.length > 0) ||
       (postType === "project" && (trimmedTitle.length > 0 || trimmedContent.length > 0)) ||
       (postType === "capstone" && (trimmedTitle.length > 0 || trimmedContent.length > 0)) ||
       (postType === "website" && (githubUrl.trim().length > 0 || previewData || trimmedContent.length > 0)) ||
       trimmedContent.length > 0 ||
-      imageUris.length > 0
+      imageUris.length > 0 ||
+      previewData
   );
 
   const handlePublish = async () => {
@@ -240,15 +281,21 @@ export default function CreatePostModal() {
       }
       const finalImageKey = finalImageKeys.length > 0 ? finalImageKeys[0] : null;
 
-      const normalizedUrl = githubUrl.trim() ? normalizeWebsiteUrl(githubUrl) : null;
-      let finalPreviewMetadata = previewData;
-      if (postType === "website" && normalizedUrl && !finalPreviewMetadata) {
+      const detectedInContent = extractFirstUrl(trimmedContent);
+      const rawUrl = githubUrl.trim() || (!previewDismissed ? detectedInContent : null);
+      const normalizedUrl = rawUrl ? normalizeWebsiteUrl(rawUrl) : null;
+      let finalPreviewMetadata = previewDismissed ? null : previewData;
+      if (normalizedUrl && !finalPreviewMetadata && !previewDismissed) {
         try {
           finalPreviewMetadata = await fetchLinkPreview(normalizedUrl);
         } catch {
           // Non-blocking
         }
       }
+      const effectivePostType =
+        postType === "text" && (finalPreviewMetadata || normalizedUrl)
+          ? "website"
+          : postType;
 
       const techArray = technologies ? technologies.split(",").map((t) => t.trim()).filter(Boolean) : null;
       const visibilityPayload = visibilityTouched
@@ -259,7 +306,7 @@ export default function CreatePostModal() {
         // Edit mode — PUT /posts/:id
         await updatePost(postId, {
           content: trimmedContent || undefined,
-          type: postType,
+          type: effectivePostType,
           title: trimmedTitle || finalPreviewMetadata?.title || null,
           technologies: techArray,
           github_url: normalizedUrl,
@@ -275,7 +322,7 @@ export default function CreatePostModal() {
           method: "POST",
           body: JSON.stringify({
             content: trimmedContent || null,
-            type: postType,
+            type: effectivePostType,
             title: trimmedTitle || finalPreviewMetadata?.title || null,
             technologies: techArray,
             github_url: normalizedUrl,
@@ -644,13 +691,7 @@ export default function CreatePostModal() {
                 placeholder="your-project.vercel.app or https://..."
                 placeholderTextColor={colors.textTertiary}
                 value={githubUrl}
-                onChangeText={(val) => {
-                  setGithubUrl(val);
-                  const clean = val.trim();
-                  if (clean.includes(".") && clean.length >= 4) {
-                    loadPreview(clean);
-                  }
-                }}
+                onChangeText={handleGithubUrlChange}
                 autoCapitalize="none"
                 keyboardType="url"
                 style={{
@@ -682,52 +723,6 @@ export default function CreatePostModal() {
                 )}
               </TouchableOpacity>
             </View>
-
-            {previewData && (
-              <View
-                style={{
-                  marginTop: 10,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  overflow: "hidden",
-                  backgroundColor: colors.surface,
-                }}
-              >
-                {previewData.image ? (
-                  <AppImage source={{ uri: previewData.image }} style={{ width: "100%", height: 130 }} contentFit="cover" />
-                ) : (
-                  <View
-                    style={{
-                      height: 70,
-                      backgroundColor: colors.surfaceSunken,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexDirection: "row",
-                      gap: 8,
-                      borderBottomWidth: 1,
-                      borderBottomColor: colors.border,
-                      paddingHorizontal: 12,
-                    }}
-                  >
-                    <Globe size={22} color="#0284C7" />
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }} numberOfLines={1}>
-                      {previewData.siteName || previewData.url}
-                    </Text>
-                  </View>
-                )}
-                <View style={{ padding: 10 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>
-                    {previewData.title || title || "Preview"}
-                  </Text>
-                  {previewData.description && (
-                    <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }} numberOfLines={2}>
-                      {previewData.description}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            )}
           </Animated.View>
         )}
 
@@ -779,7 +774,7 @@ export default function CreatePostModal() {
           multiline
           autoFocus={!isEditing}
           value={content}
-          onChangeText={setContent}
+          onChangeText={handleContentChange}
           style={{
             minHeight: 120,
             fontSize: content.length > 80 ? 16 : 18,
@@ -790,6 +785,90 @@ export default function CreatePostModal() {
             ...(Platform.OS === "web" ? ({ outlineStyle: "none", borderWidth: 0 } as any) : {}),
           }}
         />
+
+        {/* Rich Link Preview Card (Facebook-style inline preview) */}
+        {previewData && !previewDismissed && (
+          <View
+            style={{
+              marginVertical: 10,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              overflow: "hidden",
+              backgroundColor: colors.surfaceSunken,
+              position: "relative",
+            }}
+          >
+            {/* Dismiss preview button */}
+            <TouchableOpacity
+              onPress={() => {
+                setPreviewDismissed(true);
+                setPreviewData(null);
+              }}
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                zIndex: 10,
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: "rgba(0, 0, 0, 0.65)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Remove link preview"
+            >
+              <X size={16} color="#FFFFFF" strokeWidth={2.5} />
+            </TouchableOpacity>
+
+            {previewData.image ? (
+              <AppImage
+                source={{ uri: previewData.image }}
+                style={{ width: "100%", height: 160 }}
+                contentFit="cover"
+              />
+            ) : (
+              <View
+                style={{
+                  height: 70,
+                  backgroundColor: colors.surface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  gap: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                  paddingHorizontal: 12,
+                }}
+              >
+                <Globe size={22} color="#0284C7" />
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }} numberOfLines={1}>
+                  {previewData.siteName || previewData.url}
+                </Text>
+              </View>
+            )}
+            <View style={{ padding: 12 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                <Globe size={13} color={colors.action} />
+                <Text numberOfLines={1} style={{ fontSize: 11.5, color: colors.action, fontWeight: "700", marginLeft: 6, flex: 1 }}>
+                  {previewData.siteName || previewData.url}
+                </Text>
+              </View>
+              {previewData.title ? (
+                <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary, marginBottom: 2 }}>
+                  {previewData.title}
+                </Text>
+              ) : null}
+              {previewData.description ? (
+                <Text numberOfLines={2} style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }}>
+                  {previewData.description}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        )}
 
         {/* Attached Images Preview Grid */}
         {imageUris.length > 0 && (

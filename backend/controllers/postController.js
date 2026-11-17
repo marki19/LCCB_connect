@@ -94,7 +94,27 @@ const createPost = async (req, res, next) => {
       return res.status(400).json({ error: resolved.error, invalid: resolved.invalid });
     }
 
-    const postPayload = resolved.body || req.body;
+    const postPayload = { ...(resolved.body || req.body) };
+
+    // Auto-enrich link preview if content contains a URL and preview was not supplied
+    if (!postPayload.github_url && !postPayload.preview_metadata && postPayload.content) {
+      const detectedUrl = previewService.extractFirstUrl(postPayload.content);
+      if (detectedUrl) {
+        try {
+          const preview = await previewService.fetchLinkPreview(detectedUrl);
+          if (preview) {
+            postPayload.github_url = preview.url || detectedUrl;
+            postPayload.preview_metadata = preview;
+            if (postPayload.type === "text" || !postPayload.type) {
+              postPayload.type = "website";
+            }
+          }
+        } catch {
+          // Non-blocking fallback
+        }
+      }
+    }
+
     const newPost = await postModel.createPost({
       ...postPayload,
       type: postPayload.type || "post",
@@ -136,9 +156,25 @@ const updatePost = async (req, res, next) => {
     if (resolved.error) {
       return res.status(400).json({ error: resolved.error, invalid: resolved.invalid });
     }
+    const updatePayload = { ...(resolved.body || req.body) };
+    if (updatePayload.content && !updatePayload.github_url && !updatePayload.preview_metadata) {
+      const detectedUrl = previewService.extractFirstUrl(updatePayload.content);
+      if (detectedUrl) {
+        try {
+          const preview = await previewService.fetchLinkPreview(detectedUrl);
+          if (preview) {
+            updatePayload.github_url = preview.url || detectedUrl;
+            updatePayload.preview_metadata = preview;
+          }
+        } catch {
+          // Non-blocking fallback
+        }
+      }
+    }
+
     // Ownership is enforced in SQL (author_id = caller). An unauthorized caller
     // receives the same 404 as a missing post.
-    const updated = await postModel.updatePost(id, req.user.id, resolved.body);
+    const updated = await postModel.updatePost(id, req.user.id, updatePayload);
     if (!updated) {
       return res.status(404).json({ message: "Post not found" });
     }

@@ -275,7 +275,36 @@ async function fetchLinkPreview(rawUrl, redirectCount = 0) {
   });
 }
 
+/**
+ * Extracts the first valid URL from raw text (e.g. pasted into a post body).
+ */
+function extractFirstUrl(text) {
+  if (!text || typeof text !== "string") return null;
+
+  const tokens = text.split(/\s+/);
+  for (const rawToken of tokens) {
+    const token = rawToken.replace(/^[<(\[{'"]+/, "").replace(/[>,:;"')\]}.]+$/, "");
+    if (!token || token.includes("@")) continue;
+
+    if (/^https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/.*)?$/i.test(token)) {
+      return token;
+    }
+    if (
+      /^[a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/.*)?$/i.test(token) ||
+      /^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\/.*)?$/i.test(token)
+    ) {
+      if (!token.includes("/") && /\.(jpg|jpeg|png|gif|webp|svg|pdf|docx?|txt)$/i.test(token)) {
+        continue;
+      }
+      return token;
+    }
+  }
+
+  return null;
+}
+
 module.exports = {
   fetchLinkPreview,
   validateUrlSafety,
+  extractFirstUrl,
 };
