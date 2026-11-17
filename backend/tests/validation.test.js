@@ -10,6 +10,8 @@ const {
   createPostSchema,
   createThesisSchema,
   createProfileSchema,
+  updateProfileSchema,
+  markReadSchema,
 } = require("../validation");
 
 describe("post image keys", () => {
@@ -47,6 +49,27 @@ describe("post image keys", () => {
       image_url: "file:///etc/passwd",
     });
     assert.equal(parsed.success, false);
+  });
+
+  it("accepts link preview metadata with siteName and site_name", () => {
+    const parsed = createPostSchema.safeParse({
+      content: "Check this website",
+      type: "website",
+      preview_metadata: {
+        title: "LCCB Connect",
+        description: "Official student hub",
+        image: "https://example.com/thumb.jpg",
+        siteName: "LCCB Connect App",
+        url: "https://example.com",
+      },
+    });
+    assert.equal(parsed.success, true);
+  });
+
+  it("accepts markReadSchema without upto_seq defaulting to 0", () => {
+    const parsed = markReadSchema.safeParse({});
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.data.upto_seq, 0);
   });
 });
 
@@ -95,6 +118,45 @@ describe("avatar keys", () => {
     const parsed = createProfileSchema.safeParse({
       username: "x",
       avatar_url: "https://evil.example/x.jpg",
+    });
+    assert.equal(parsed.success, false);
+  });
+});
+
+describe("profile contact and personal details schema", () => {
+  it("accepts contact_email, facebook_url, instagram_url, twitter_url, relationship_status, and gender", () => {
+    const parsed = updateProfileSchema.safeParse({
+      contact_email: "test@example.com",
+      facebook_url: "https://facebook.com/test",
+      instagram_url: "@test_ig",
+      twitter_url: "https://x.com/test_x",
+      relationship_status: "Single",
+      gender: "Male",
+    });
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.data.contact_email, "test@example.com");
+    assert.equal(parsed.data.facebook_url, "https://facebook.com/test");
+    assert.equal(parsed.data.instagram_url, "@test_ig");
+    assert.equal(parsed.data.twitter_url, "https://x.com/test_x");
+    assert.equal(parsed.data.relationship_status, "Single");
+    assert.equal(parsed.data.gender, "Male");
+  });
+
+  it("accepts null or empty strings to clear fields", () => {
+    const parsed = updateProfileSchema.safeParse({
+      contact_email: null,
+      facebook_url: null,
+      instagram_url: null,
+      twitter_url: null,
+      relationship_status: null,
+      gender: null,
+    });
+    assert.equal(parsed.success, true);
+  });
+
+  it("rejects unknown properties due to strict schema", () => {
+    const parsed = updateProfileSchema.safeParse({
+      unknown_field: "foo",
     });
     assert.equal(parsed.success, false);
   });

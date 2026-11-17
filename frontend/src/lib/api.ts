@@ -1,6 +1,7 @@
 import { create, isAxiosError } from "axios";
 import { getSession, isExpired, clearSession } from "./session";
-import { refreshSession } from "./auth";
+import { refreshSession } from "./sessionRefresh";
+import { ApiError } from "./errors";
 import type { ContentVisibility } from "../types";
 import { fileUrl, resolveFileUrl, resolveFileUrls } from "./files";
 
@@ -204,21 +205,7 @@ export async function apiJson<T = any>(
  * rejection (4xx — e.g. a blocked send) from a transient one (network / 5xx)
  * and avoid retrying something that will never succeed.
  */
-export class ApiError extends Error {
-  status: number;
-  code?: string;
-  /** Raw response body, when the server sent JSON. Carries validation
-   *  `fields[]` that `validate()` in the backend produces — without this the
-   *  client would have to guess field names from the message string. */
-  body?: any;
-  constructor(message: string, status: number, code?: string, body?: any) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.code = code;
-    this.body = body;
-  }
-}
+export { ApiError } from "./errors";
 
 export async function updatePost(
   id: string | number,
@@ -521,9 +508,12 @@ export function adaptPost(row: any): any {
 export interface UserProfileData {
   id: string;
   username: string;
+  email?: string | null;
   full_name: string;
   avatar_url?: string | null;
   cover_url?: string | null;
+  note?: string | null;
+  note_updated_at?: string | null;
   bio?: string | null;
   year_level?: string | null;
   role: string;
@@ -532,6 +522,12 @@ export interface UserProfileData {
   course_id?: string | null;
   department_name?: string | null;
   course_name?: string | null;
+  contact_email?: string | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
+  twitter_url?: string | null;
+  relationship_status?: string | null;
+  gender?: string | null;
   created_at: string;
   verified_status?: string | null;
   friendship: "friend" | "pending_out" | "pending_in" | "none";
@@ -563,6 +559,19 @@ export async function updateCover(coverUrl: string): Promise<{ message: string; 
 
 export async function removeCover(): Promise<{ message: string; cover_url: null }> {
   return apiJson<{ message: string; cover_url: null }>('/users/me/cover', {
+    method: 'DELETE',
+  });
+}
+
+export async function updateNote(note: string | null): Promise<UserProfileData> {
+  return apiJson<UserProfileData>('/users/me/note', {
+    method: 'PUT',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function deleteNote(): Promise<{ message: string; note: null }> {
+  return apiJson<{ message: string; note: null }>('/users/me/note', {
     method: 'DELETE',
   });
 }

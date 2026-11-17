@@ -61,6 +61,8 @@ const previewMetadataSchema = z
     title: z.string().max(300).nullable().optional(),
     description: z.string().max(2000).nullable().optional(),
     image: HttpUrl.nullable().optional(),
+    siteName: z.string().max(200).nullable().optional(),
+    site_name: z.string().max(200).nullable().optional(),
     url: HttpUrl,
   })
   .strict()
@@ -372,6 +374,12 @@ const profileFields = {
   // the controller enforces.
   department_id: optionalUuid(),
   course_id: optionalUuid(),
+  contact_email: optionalText(255),
+  facebook_url: optionalText(255),
+  instagram_url: optionalText(255),
+  twitter_url: optionalText(255),
+  relationship_status: optionalText(50),
+  gender: optionalText(50),
 };
 
 // Self-provisioning: no `role`/`id` accepted (server assigns them).
@@ -412,7 +420,9 @@ const sendMessageSchema = z
   })
   .strict();
 
-const markReadSchema = z.object({ upto_seq: z.number().int().min(0) }).strict();
+const markReadSchema = z
+  .object({ upto_seq: z.number().int().min(0).optional().default(0) })
+  .strict();
 
 // `mute_minutes: null` clears the mute (see messageModel.muteConversation).
 const muteConversationSchema = z
@@ -433,6 +443,12 @@ const messagePolicySchema = z
 const presenceModes = ["online", "away", "busy", "dnd", "invisible"];
 
 const presenceSchema = z.object({ mode: z.enum(presenceModes) }).strict();
+
+const noteSchema = z
+  .object({
+    note: z.string().trim().max(60).nullable().optional(),
+  })
+  .strict();
 
 const heartbeatSchema = z
   .object({
@@ -620,6 +636,7 @@ const validate = (schema) => (req, res, next) => {
   muteConversationSchema,
   reportMessageSchema,
   messagePolicySchema,
+  noteSchema,
   presenceSchema,
   heartbeatSchema,
   deviceTokenSchema,

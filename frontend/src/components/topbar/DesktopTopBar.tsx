@@ -28,7 +28,7 @@ import {
   Users,
   BookOpen,
   MessageSquare,
-  Sparkles,
+  Home,
   Globe,
   FolderGit2,
 } from "lucide-react-native";
@@ -48,7 +48,7 @@ import { TOP_BAR_HEIGHT } from "./constants";
 export type PopoverType = "menu" | "chats" | "notifications" | "account" | null;
 
 const CATEGORY_TABS = [
-  { id: "all", label: "All Posts", Icon: Sparkles },
+  { id: "all", label: "All Posts", Icon: Home },
   { id: "websites", label: "Websites", Icon: Globe },
   { id: "theses", label: "Theses", Icon: BookOpen },
   { id: "projects", label: "Projects", Icon: FolderGit2 },

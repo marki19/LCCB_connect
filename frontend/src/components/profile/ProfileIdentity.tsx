@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { GraduationCap, CheckCircle } from "lucide-react-native";
 import Avatar from "../Avatar";
+import NoteBubble from "./NoteBubble";
 import { UserProfileData } from "../../lib/api";
 import { useTheme } from "../../contexts/ThemeContext";
 import { SPACE } from "../../lib/tokens";
@@ -10,12 +11,14 @@ interface ProfileIdentityProps {
   userData: UserProfileData;
   isDesktop?: boolean;
   actions?: React.ReactNode;
+  onNoteUpdated?: (newNote: string | null) => void;
 }
 
 export default function ProfileIdentity({
   userData,
   isDesktop = true,
   actions,
+  onNoteUpdated,
 }: ProfileIdentityProps) {
   const { colors } = useTheme();
 
@@ -32,22 +35,32 @@ export default function ProfileIdentity({
     <View style={[styles.container, isDesktop ? styles.desktopContainer : styles.mobileContainer]}>
       {/* Left side: Avatar + Identity Details */}
       <View style={[styles.mainIdentity, isDesktop && styles.mainIdentityDesktop]}>
-        {/* Overlapping Avatar */}
-        <View
-          style={[
-            styles.avatarWrap,
-            {
-              marginTop: avatarOverlap,
-              borderColor: colors.surfacePage,
-              backgroundColor: colors.surfacePage,
-            },
-          ]}
-        >
-          <Avatar
-            name={userData.full_name || userData.username}
-            avatarUrl={userData.avatar_url}
-            size={avatarSize}
-          />
+        {/* Overlapping Avatar with Note bubble */}
+        <View style={styles.avatarSection}>
+          <View style={[styles.noteBubbleAnchor, { top: avatarOverlap - 38 }]}>
+            <NoteBubble
+              note={userData.note}
+              isSelf={userData.is_self}
+              onNoteUpdated={onNoteUpdated}
+              variant="large"
+            />
+          </View>
+          <View
+            style={[
+              styles.avatarWrap,
+              {
+                marginTop: avatarOverlap,
+                borderColor: colors.surfacePage,
+                backgroundColor: colors.surfacePage,
+              },
+            ]}
+          >
+            <Avatar
+              name={userData.full_name || userData.username}
+              avatarUrl={userData.avatar_url}
+              size={avatarSize}
+            />
+          </View>
         </View>
 
         {/* Identity Details */}
@@ -126,6 +139,15 @@ const styles = StyleSheet.create({
     gap: SPACE.x5,
     flex: 1,
     marginRight: SPACE.x4,
+  },
+  avatarSection: {
+    position: "relative",
+    alignItems: "center",
+  },
+  noteBubbleAnchor: {
+    position: "absolute",
+    zIndex: 30,
+    alignSelf: "center",
   },
   avatarWrap: {
     borderWidth: 4,

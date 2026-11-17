@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { View, Text, TouchableOpacity, Pressable, Linking, Alert, Animated, Platform } from "react-native";
+import { View, Text, TouchableOpacity, Pressable, Linking, Alert, Animated, Platform, type StyleProp, type ViewStyle } from "react-native";
 import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical, Building2, Megaphone } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
@@ -82,7 +82,15 @@ function VisibilityBadge({ visibility }: { visibility: string }) {
   );
 }
 
-export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: (id: string | number) => void }) {
+export default function PostCard({
+  post,
+  onDeleted,
+  style,
+}: {
+  post: Post;
+  onDeleted?: (id: string | number) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
   const router = useRouter();
   const { showToast } = useToast();
   const [liked, setLiked] = useState(post.isLiked);
@@ -268,6 +276,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           ...elevation("sm", colors),
         },
         Platform.OS === "web" ? ({ cursor: "pointer" } as any) : undefined,
+        style,
       ]}
     >
       {/* Author row */}

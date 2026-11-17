@@ -110,6 +110,7 @@ export type ConversationPeer = {
   username: string | null;
   full_name: string | null;
   avatar_url: string | null;
+  note?: string | null;
   department_id: string | null;
   department_name: string | null;
 };

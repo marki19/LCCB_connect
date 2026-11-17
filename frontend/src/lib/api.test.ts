@@ -13,7 +13,7 @@ vi.mock("./session", () => ({
   getAccessToken: vi.fn().mockResolvedValue("mock-access"),
 }));
 
-vi.mock("./auth", () => ({
+vi.mock("./sessionRefresh", () => ({
   refreshSession: vi.fn().mockResolvedValue("new-mock-access-token"),
 }));
 

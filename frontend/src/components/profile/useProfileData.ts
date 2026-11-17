@@ -10,6 +10,34 @@ import {
 } from "../../lib/api";
 import type { Post } from "../../types";
 
+function extractPhotosFromPosts(posts: any[]): UserPhoto[] {
+  const result: UserPhoto[] = [];
+  const seenUrls = new Set<string>();
+
+  for (const post of posts) {
+    const urls: string[] = [];
+    if (Array.isArray(post.image_urls) && post.image_urls.length > 0) {
+      urls.push(...post.image_urls);
+    } else if (post.image_url || post.imageUrl) {
+      urls.push(post.image_url || post.imageUrl);
+    }
+
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i];
+      if (url && typeof url === "string" && !seenUrls.has(url)) {
+        seenUrls.add(url);
+        result.push({
+          id: `${post.id}-img-${i}`,
+          image_url: url,
+          image_urls: [url],
+          created_at: post.created_at || post.createdAt || new Date().toISOString(),
+        });
+      }
+    }
+  }
+  return result;
+}
+
 export function useProfileData(id?: string | null) {
   const [userData, setUserData] = useState<UserProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,11 +73,17 @@ export function useProfileData(id?: string | null) {
           getUserPhotos(id!, 9).catch(() => []),
         ]);
 
+        const postList = postsData.map(adaptPost);
+        const resolvedPhotos =
+          Array.isArray(photosData) && photosData.length > 0
+            ? photosData
+            : extractPhotosFromPosts(postsData);
+
         if (!ignore) {
           setUserData(profileData);
-          setPosts(postsData.map(adaptPost));
+          setPosts(postList);
           setFriends(friendsData);
-          setPhotos(photosData);
+          setPhotos(resolvedPhotos);
           setError(null);
         }
       } catch (err: any) {
@@ -98,6 +132,7 @@ export function useProfileData(id?: string | null) {
           ? data.posts
           : [];
         setPosts(list.map(adaptPost));
+        setPhotos((prev) => (prev.length > 0 ? prev : extractPhotosFromPosts(list)));
       }
     } catch (err) {
       console.error("Failed to load user posts:", err);
@@ -143,13 +178,17 @@ export function useProfileData(id?: string | null) {
     setLoadingPhotos(true);
     try {
       const list = await getUserPhotos(id, 9);
-      setPhotos(Array.isArray(list) ? list : []);
+      if (Array.isArray(list) && list.length > 0) {
+        setPhotos(list);
+      } else {
+        setPhotos((prev) => (prev.length > 0 ? prev : extractPhotosFromPosts(posts)));
+      }
     } catch {
-      // Non-blocking
+      setPhotos((prev) => (prev.length > 0 ? prev : extractPhotosFromPosts(posts)));
     } finally {
       setLoadingPhotos(false);
     }
-  }, [id]);
+  }, [id, posts]);
 
   return {
     userData,

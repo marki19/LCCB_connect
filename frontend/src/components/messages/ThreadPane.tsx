@@ -29,6 +29,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { usePresence } from "../../contexts/PresenceContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import Modal from "../ui/Modal";
+import NoteBubble from "../profile/NoteBubble";
 import { useConversationRealtime, type PendingMessage } from "../../hooks/useConversationRealtime";
 import {
   acceptConversation,
@@ -435,13 +436,20 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
             },
           ]}
         >
-          <Avatar
-            name={peerName}
-            avatarUrl={peer?.avatar_url}
-            size={40}
-            showPresence
-            mode={peerMode}
-          />
+          <View style={{ position: "relative", alignItems: "center" }}>
+            {peer?.note ? (
+              <View style={{ position: "absolute", top: -20, zIndex: 10 }}>
+                <NoteBubble note={peer.note} variant="compact" />
+              </View>
+            ) : null}
+            <Avatar
+              name={peerName}
+              avatarUrl={peer?.avatar_url}
+              size={40}
+              showPresence
+              mode={peerMode}
+            />
+          </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text
               numberOfLines={1}
@@ -449,16 +457,29 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
             >
               {peerName}
             </Text>
-            <Text
-              numberOfLines={1}
-              style={{
-                ...TYPE.caption,
-                color: peerTyping ? colors.brand : colors.inkFaint,
-                fontWeight: peerTyping ? "600" : "400",
-              }}
-            >
-              {subtitle}
-            </Text>
+            {peer?.note && !peerTyping ? (
+              <Text
+                numberOfLines={1}
+                style={{
+                  ...TYPE.caption,
+                  color: colors.brand,
+                  fontWeight: "600",
+                }}
+              >
+                💭 "{peer.note}"
+              </Text>
+            ) : (
+              <Text
+                numberOfLines={1}
+                style={{
+                  ...TYPE.caption,
+                  color: peerTyping ? colors.brand : colors.inkFaint,
+                  fontWeight: peerTyping ? "600" : "400",
+                }}
+              >
+                {subtitle}
+              </Text>
+            )}
           </View>
         </Pressable>
         <View style={{ position: "relative", zIndex: 100 }}>

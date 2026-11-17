@@ -22,10 +22,6 @@ export default function ProfileFriendsCard({
 
   const count = friendsCount || friends.length;
 
-  if (count === 0) {
-    return null;
-  }
-
   const handleSeeAll = () => {
     if (onSeeAll) {
       onSeeAll();
@@ -46,42 +42,48 @@ export default function ProfileFriendsCard({
         {`${count} ${count === 1 ? "friend" : "friends"}`}
       </Text>
 
-      <View style={styles.grid}>
-        {previewFriends.map((f) => {
-          const peer = f.peer || f.user || f;
-          const name = peer.full_name || peer.username || "Friend";
-          return (
-            <Pressable
-              key={peer.id}
-              onPress={() => router.push(`/profile/${peer.id}`)}
-              accessibilityRole="link"
-              accessibilityLabel={`View ${name}'s profile`}
-              style={({ pressed, hovered }: any) => [
-                styles.gridItem,
-                {
-                  cursor: "pointer",
-                  opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
-                  transform: [{ scale: pressed ? 0.96 : 1 }],
-                },
-              ]}
-            >
-              <View style={[styles.avatarWrap, { borderColor: colors.border, backgroundColor: colors.surfaceSunken }]}>
-                <Avatar
-                  name={name}
-                  avatarUrl={peer.avatar_url}
-                  size={92}
-                />
-              </View>
-              <Text
-                style={[styles.friendName, { color: colors.ink }]}
-                numberOfLines={1}
+      {previewFriends.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={[styles.emptyText, { color: colors.inkFaint }]}>No friends to show yet.</Text>
+        </View>
+      ) : (
+        <View style={styles.grid}>
+          {previewFriends.map((f) => {
+            const peer = f.peer || f.user || f;
+            const name = peer.full_name || peer.username || "Friend";
+            return (
+              <Pressable
+                key={peer.id}
+                onPress={() => router.push(`/profile/${peer.id}`)}
+                accessibilityRole="link"
+                accessibilityLabel={`View ${name}'s profile`}
+                style={({ pressed, hovered }: any) => [
+                  styles.gridItem,
+                  {
+                    cursor: "pointer",
+                    opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                  },
+                ]}
               >
-                {name}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+                <View style={[styles.avatarWrap, { borderColor: colors.border, backgroundColor: colors.surfaceSunken }]}>
+                  <Avatar
+                    name={name}
+                    avatarUrl={peer.avatar_url}
+                    size={92}
+                  />
+                </View>
+                <Text
+                  style={[styles.friendName, { color: colors.ink }]}
+                  numberOfLines={1}
+                >
+                  {name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
     </ProfileCard>
   );
 }
@@ -118,5 +120,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: "center",
     width: "100%",
+  },
+  emptyState: {
+    paddingVertical: SPACE.x4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyText: {
+    fontSize: 13,
   },
 });

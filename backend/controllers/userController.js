@@ -419,12 +419,36 @@ const getUserPhotos = async (req, res, next) => {
       FROM visible_posts($1::text) vp
       WHERE vp.author_id = $2
         AND vp.deleted_at IS NULL
-        AND (vp.image_url IS NOT NULL OR (vp.image_urls IS NOT NULL AND jsonb_array_length(vp.image_urls) > 0))
+        AND (vp.image_url IS NOT NULL OR (vp.image_urls IS NOT NULL AND cardinality(vp.image_urls) > 0))
       ORDER BY vp.created_at DESC
       LIMIT $3;
     `;
     const result = await db.query(sql, [viewerId, targetId, limit]);
     res.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateNote = async (req, res, next) => {
+  try {
+    const updated = await userModel.setNote(req.user.id, req.body.note);
+    if (!updated) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json(sanitizeProfile(updated));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const clearNote = async (req, res, next) => {
+  try {
+    const updated = await userModel.setNote(req.user.id, null);
+    if (!updated) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json({ message: "Note cleared successfully", note: null });
   } catch (error) {
     next(error);
   }
@@ -444,4 +468,6 @@ module.exports = {
   removeCover,
   getUserFriends,
   getUserPhotos,
+  updateNote,
+  clearNote,
 };

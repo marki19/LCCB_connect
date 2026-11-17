@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import ProfileCard from "./ProfileCard";
 import { AppImage } from "../AppImage";
 import { resolveFileUrl } from "../../lib/files";
@@ -20,51 +20,53 @@ export default function ProfilePhotosCard({
 }: ProfilePhotosCardProps) {
   const { colors } = useTheme();
 
-  if (!photos || photos.length === 0) {
-    return null;
-  }
-
   // Display up to 9 photos in a 3x3 grid
-  const previewPhotos = photos.slice(0, 9);
+  const previewPhotos = (photos || []).slice(0, 9);
 
   return (
     <ProfileCard
       title="Photos"
-      actionLabel="See all photos"
+      actionLabel={previewPhotos.length > 0 ? "See all photos" : undefined}
       onAction={onSeeAll}
     >
-      <View style={styles.grid}>
-        {previewPhotos.map((photo) => {
-          const rawUrl = photo.image_url || photo.image_urls?.[0];
-          const resolved = rawUrl ? resolveFileUrl(rawUrl) : null;
-          if (!resolved) return null;
+      {previewPhotos.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={[styles.emptyText, { color: colors.inkFaint }]}>No photos to show yet.</Text>
+        </View>
+      ) : (
+        <View style={styles.grid}>
+          {previewPhotos.map((photo) => {
+            const rawUrl = photo.image_url || photo.image_urls?.[0];
+            const resolved = rawUrl ? resolveFileUrl(rawUrl) : null;
+            if (!resolved) return null;
 
-          return (
-            <Pressable
-              key={photo.id}
-              onPress={() => onPhotoPress?.(photo)}
-              accessibilityRole="button"
-              accessibilityLabel="View photo"
-              style={({ pressed, hovered }: any) => [
-                styles.gridItem,
-                {
-                  backgroundColor: colors.surfaceSunken,
-                  borderColor: colors.border,
-                  cursor: "pointer",
-                  opacity: pressed ? 0.85 : hovered ? 0.92 : 1,
-                  transform: [{ scale: pressed ? 0.97 : 1 }],
-                },
-              ]}
-            >
-              <AppImage
-                source={resolved}
-                style={StyleSheet.absoluteFill}
-                contentFit="cover"
-              />
-            </Pressable>
-          );
-        })}
-      </View>
+            return (
+              <Pressable
+                key={photo.id}
+                onPress={() => onPhotoPress?.(photo)}
+                accessibilityRole="button"
+                accessibilityLabel="View photo"
+                style={({ pressed, hovered }: any) => [
+                  styles.gridItem,
+                  {
+                    backgroundColor: colors.surfaceSunken,
+                    borderColor: colors.border,
+                    cursor: "pointer",
+                    opacity: pressed ? 0.85 : hovered ? 0.92 : 1,
+                    transform: [{ scale: pressed ? 0.97 : 1 }],
+                  },
+                ]}
+              >
+                <AppImage
+                  source={resolved}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                />
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
     </ProfileCard>
   );
 }
@@ -82,5 +84,13 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     overflow: "hidden",
     borderWidth: 1,
+  },
+  emptyState: {
+    paddingVertical: SPACE.x4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyText: {
+    fontSize: 13,
   },
 });

@@ -78,6 +78,7 @@ const CONVERSATION_SELECT = `
     'username', pr.username,
     'full_name', pr.full_name,
     'avatar_url', pr.avatar_url,
+    'note', pr.note,
     'department_id', pr.department_id,
     'department_name', d.name
   ) AS peer,

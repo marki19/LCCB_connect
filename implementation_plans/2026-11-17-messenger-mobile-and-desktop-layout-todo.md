@@ -1,0 +1,23 @@
+# Messenger Mobile & Desktop Layout Task List
+
+- [x] Phase 1: Desktop layout sidebars preservation
+  - [x] Maintain `DesktopLeftRail` and `DesktopContactsRail` on Messages in `DesktopLayout.tsx`
+  - [x] Adjust `styles.centerColumn` and inner container for Messages between rails
+  - [x] Support `?id=` param in `(tabs)/messages.tsx` and forward `initialId` to `MessagesSplit`
+  - [x] Redirect desktop deep link in `app/messages/[id].tsx` to `(tabs)/messages?id=...`
+- [x] Phase 2: Mobile Messenger UI & Header
+  - [x] Update title to bold "messenger" style with new chat icon in `InboxPane.tsx`
+  - [x] Update search bar to Meta AI / Search pill with grid icon
+- [x] Phase 3: Stories & Notes horizontal carousel
+  - [x] Fix condition to render stories rail on mobile (`tab === "chats"`)
+  - [x] Add User "Create story" with note bubble and `+` badge
+  - [x] Add friend avatars with online / recent badges, note bubbles (`peer.note`), and first name
+  - [x] Wire tap on friend to open conversation
+- [x] Phase 4: Conversation rows & Message requests polish
+  - [x] Refine chat row layout with avatars, active indicators, "You: ..." snippets, time, unread indicator
+  - [x] Ensure request rows open threads cleanly in both desktop split and mobile
+- [x] Phase 5: Verification & Gate checks
+  - [x] Run tsc --noEmit (0 errors)
+  - [x] Run vitest (41/41 passing)
+  - [x] Run backend tests (691/691 passing, 180 suites)
+  - [x] Run web build (clean export dist/index.html)

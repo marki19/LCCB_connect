@@ -11,6 +11,8 @@ const PROFILE_COLUMNS = [
   "full_name",
   "avatar_url",
   "cover_url",
+  "note",
+  "note_updated_at",
   "bio",
   "course",
   "year_level",
@@ -24,6 +26,12 @@ const PROFILE_COLUMNS = [
   "department_id",
   "course_id",
   "message_policy",
+  "contact_email",
+  "facebook_url",
+  "instagram_url",
+  "twitter_url",
+  "relationship_status",
+  "gender",
   "profile_completed",
   "profile_banner_dismissed",
   "last_seen_at",
@@ -210,6 +218,14 @@ const getPublicProfile = async (targetId, viewerId = null) => {
       p.full_name,
       p.avatar_url,
       p.cover_url,
+      p.note,
+      p.note_updated_at,
+      p.contact_email,
+      p.facebook_url,
+      p.instagram_url,
+      p.twitter_url,
+      p.relationship_status,
+      p.gender,
       p.bio,
       p.year_level,
       p.role,
@@ -270,6 +286,15 @@ const getPublicProfile = async (targetId, viewerId = null) => {
     username: row.username,
     full_name: row.full_name,
     avatar_url: row.avatar_url,
+    cover_url: row.cover_url,
+    note: row.note,
+    note_updated_at: row.note_updated_at,
+    contact_email: row.contact_email,
+    facebook_url: row.facebook_url,
+    instagram_url: row.instagram_url,
+    twitter_url: row.twitter_url,
+    relationship_status: row.relationship_status,
+    gender: row.gender,
     bio: row.bio,
     year_level: row.year_level,
     role: row.role,
@@ -324,9 +349,12 @@ const createUser = async (userData) => {
 };
 
 const updateUser = async (id, userData) => {
+  const hasProp = (prop) => Object.prototype.hasOwnProperty.call(userData, prop);
   const {
     username, full_name, avatar_url, bio, course, year_level, role, skills,
     department_id, course_id, message_policy, student_id, verification_status,
+    contact_email, facebook_url, instagram_url, twitter_url,
+    relationship_status, gender,
   } = userData;
   const sql = `
     UPDATE profiles
@@ -343,7 +371,13 @@ const updateUser = async (id, userData) => {
         course_id = COALESCE($10, course_id),
         message_policy = COALESCE($11, message_policy),
         student_id = COALESCE($12, student_id),
-        verification_status = COALESCE($13, verification_status)
+        verification_status = COALESCE($13, verification_status),
+        contact_email = CASE WHEN $15::boolean THEN $16 ELSE contact_email END,
+        facebook_url = CASE WHEN $17::boolean THEN $18 ELSE facebook_url END,
+        instagram_url = CASE WHEN $19::boolean THEN $20 ELSE instagram_url END,
+        twitter_url = CASE WHEN $21::boolean THEN $22 ELSE twitter_url END,
+        relationship_status = CASE WHEN $23::boolean THEN $24 ELSE relationship_status END,
+        gender = CASE WHEN $25::boolean THEN $26 ELSE gender END
     WHERE id = $14
     RETURNING ${PROFILE_RETURNING};
   `;
@@ -362,6 +396,18 @@ const updateUser = async (id, userData) => {
     student_id || null,
     verification_status || null,
     id,
+    hasProp("contact_email"),
+    contact_email ? String(contact_email).trim() : null,
+    hasProp("facebook_url"),
+    facebook_url ? String(facebook_url).trim() : null,
+    hasProp("instagram_url"),
+    instagram_url ? String(instagram_url).trim() : null,
+    hasProp("twitter_url"),
+    twitter_url ? String(twitter_url).trim() : null,
+    hasProp("relationship_status"),
+    relationship_status ? String(relationship_status).trim() : null,
+    hasProp("gender"),
+    gender ? String(gender).trim() : null,
   ];
   const result = await db.query(sql, values);
   return result.rows[0];
@@ -670,6 +716,20 @@ const removeCover = async (id) => {
   return result.rows[0];
 };
 
+const setNote = async (id, note) => {
+  const text = note ? note.trim() : null;
+  const sql = `
+    UPDATE public.profiles
+    SET note = $1,
+        note_updated_at = CASE WHEN $1 IS NULL THEN NULL ELSE NOW() END,
+        updated_at = NOW()
+    WHERE id = $2
+    RETURNING ${PROFILE_RETURNING};
+  `;
+  const result = await db.query(sql, [text, id]);
+  return result.rows[0];
+};
+
 module.exports = {
   PROFILE_COLUMNS,
   getAllUsers,
@@ -680,6 +740,7 @@ module.exports = {
   updateUser,
   updateCover,
   removeCover,
+  setNote,
   deleteUser,
   getLoginEmailByStudentId,
   getLoginEmailByUsername,

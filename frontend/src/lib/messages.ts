@@ -91,10 +91,10 @@ export type MarkReadResult = {
   last_read_seq: number;
 };
 
-export function markRead(conversationId: string, uptoSeq: number): Promise<MarkReadResult> {
+export function markRead(conversationId: string, uptoSeq?: number): Promise<MarkReadResult> {
   return apiJson<MarkReadResult>(`/conversations/${conversationId}/read`, {
     method: "POST",
-    body: JSON.stringify({ upto_seq: uptoSeq }),
+    body: JSON.stringify({ upto_seq: Math.max(0, uptoSeq || 0) }),
   });
 }
 

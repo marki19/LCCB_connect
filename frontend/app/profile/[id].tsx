@@ -41,13 +41,16 @@ import ProfileIdentity from "../../src/components/profile/ProfileIdentity";
 import ProfileActions from "../../src/components/profile/ProfileActions";
 import ProfileTabs, { ProfileTabKey } from "../../src/components/profile/ProfileTabs";
 import ProfileIntroCard from "../../src/components/profile/ProfileIntroCard";
+import ProfilePersonalDetailsCard from "../../src/components/profile/ProfilePersonalDetailsCard";
 import ProfileEducationCard from "../../src/components/profile/ProfileEducationCard";
+import ProfileContactInfoCard from "../../src/components/profile/ProfileContactInfoCard";
 import ProfileFriendsCard from "../../src/components/profile/ProfileFriendsCard";
 import ProfilePhotosCard from "../../src/components/profile/ProfilePhotosCard";
 import ProfileAboutTab from "../../src/components/profile/ProfileAboutTab";
 import ProfileFriendsTab from "../../src/components/profile/ProfileFriendsTab";
 import ProfilePhotosTab from "../../src/components/profile/ProfilePhotosTab";
 import ProfileThesesList from "../../src/components/profile/ProfileThesesList";
+import StoryActionModal from "../../src/components/profile/StoryActionModal";
 import { RADIUS, SPACE } from "../../src/lib/tokens";
 
 export default function UserProfileScreen() {
@@ -65,6 +68,7 @@ export default function UserProfileScreen() {
     (tab as ProfileTabKey) || "all"
   );
   const [actionBusy, setActionBusy] = useState(false);
+  const [storyModalOpen, setStoryModalOpen] = useState(false);
 
   const {
     userData,
@@ -235,7 +239,7 @@ export default function UserProfileScreen() {
       onFriendAction={handleFriendAction}
       actionBusy={actionBusy}
       onEditProfile={() => router.push("/edit-profile")}
-      onAddStory={() => router.push("/create")}
+      onAddStory={() => setStoryModalOpen(true)}
       onMore={() => {}}
     />
   );
@@ -256,6 +260,9 @@ export default function UserProfileScreen() {
         userData={userData}
         isDesktop={isDesktop}
         actions={actionButtons}
+        onNoteUpdated={(newNote) =>
+          setUserData((prev) => (prev ? { ...prev, note: newNote } : null))
+        }
       />
 
       {/* Facebook-style navigation tab strip */}
@@ -290,10 +297,12 @@ export default function UserProfileScreen() {
     if (isDesktop) {
       return (
         <View style={styles.desktopTwoColBody}>
-          {/* Left Column (360px): Intro, Education, Friends, Photos */}
+          {/* Left Column (360px): Intro, Personal details, Education, Contact info, Friends, Photos */}
           <View style={styles.desktopLeftCol}>
             <ProfileIntroCard userData={userData} isSelf={isSelf} />
-            <ProfileEducationCard userData={userData} />
+            <ProfilePersonalDetailsCard userData={userData} isSelf={isSelf} />
+            <ProfileEducationCard userData={userData} isSelf={isSelf} />
+            <ProfileContactInfoCard userData={userData} isSelf={isSelf} />
             <ProfileFriendsCard
               friends={friends}
               friendsCount={userData.stats?.friends_count}
@@ -369,7 +378,7 @@ export default function UserProfileScreen() {
               <View style={styles.feedListWrapper}>
                 {posts.map((post) => (
                   <View key={post.id} style={{ marginBottom: SPACE.x4 }}>
-                    <PostCard post={post} onDeleted={handlePostDeleted} />
+                    <PostCard post={post} onDeleted={handlePostDeleted} style={{ marginHorizontal: 0 }} />
                   </View>
                 ))}
               </View>
@@ -383,7 +392,9 @@ export default function UserProfileScreen() {
     return (
       <View style={styles.mobileColumnBody}>
         <ProfileIntroCard userData={userData} isSelf={isSelf} />
-        <ProfileEducationCard userData={userData} />
+        <ProfilePersonalDetailsCard userData={userData} isSelf={isSelf} />
+        <ProfileEducationCard userData={userData} isSelf={isSelf} />
+        <ProfileContactInfoCard userData={userData} isSelf={isSelf} />
         <ProfileFriendsCard
           friends={friends}
           friendsCount={userData.stats?.friends_count}
@@ -417,7 +428,7 @@ export default function UserProfileScreen() {
           <View style={styles.feedListWrapper}>
             {posts.map((post) => (
               <View key={post.id} style={{ marginBottom: SPACE.x3 }}>
-                <PostCard post={post} onDeleted={handlePostDeleted} />
+                <PostCard post={post} onDeleted={handlePostDeleted} style={{ marginHorizontal: 0 }} />
               </View>
             ))}
           </View>
@@ -435,6 +446,7 @@ export default function UserProfileScreen() {
         {profileHeaderCard}
         <View style={{ marginTop: SPACE.x4 }}>{renderTabContent()}</View>
       </View>
+      <StoryActionModal visible={storyModalOpen} onClose={() => setStoryModalOpen(false)} />
     </ScrollView>
   );
 

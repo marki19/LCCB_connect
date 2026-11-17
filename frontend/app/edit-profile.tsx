@@ -78,6 +78,13 @@ export default function EditProfileScreen() {
   const [skills, setSkills] = useState<string[]>(profile?.skills || []);
   const [newSkill, setNewSkill] = useState("");
 
+  const [contactEmail, setContactEmail] = useState(profile?.contact_email || "");
+  const [facebookUrl, setFacebookUrl] = useState(profile?.facebook_url || "");
+  const [instagramUrl, setInstagramUrl] = useState(profile?.instagram_url || "");
+  const [twitterUrl, setTwitterUrl] = useState(profile?.twitter_url || "");
+  const [relationshipStatus, setRelationshipStatus] = useState(profile?.relationship_status || "");
+  const [gender, setGender] = useState(profile?.gender || "");
+
   const [avatarUri, setAvatarUri] = useState<string | null>(
     resolveFileUrl(profile?.avatar_url) || null
   );
@@ -147,6 +154,12 @@ export default function EditProfileScreen() {
           bio: bio.trim(),
           year_level: yearLevel.trim(),
           skills: skills,
+          contact_email: contactEmail.trim() || null,
+          facebook_url: facebookUrl.trim() || null,
+          instagram_url: instagramUrl.trim() || null,
+          twitter_url: twitterUrl.trim() || null,
+          relationship_status: relationshipStatus.trim() || null,
+          gender: gender.trim() || null,
           // Only sent when a new avatar was uploaded: the server stores object
           // keys, and the existing (URL-rendered) value must not be echoed back.
           ...(finalAvatarKey ? { avatar_url: finalAvatarKey } : {}),
@@ -157,6 +170,8 @@ export default function EditProfileScreen() {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || "Failed to update profile via backend");
       }
+
+      await refreshProfile();
 
       // Show success confirmation toast and dismiss modal
       showToast({ message: "Profile updated successfully.", tone: "success" });
@@ -419,6 +434,67 @@ export default function EditProfileScreen() {
                   Press enter after each skill to add it.
                 </Text>
               </View>
+            </Card>
+
+            {/* Personal details */}
+            <Card style={{ marginTop: SPACE.x4 }}>
+              <Text style={{ ...TYPE.h3, color: colors.ink, marginBottom: SPACE.x3 }}>
+                Personal details
+              </Text>
+              <TextField
+                label="Relationship status"
+                value={relationshipStatus}
+                onChangeText={setRelationshipStatus}
+                placeholder="e.g. Single, In a relationship, Married…"
+                autoCapitalize="sentences"
+              />
+              <TextField
+                label="Gender"
+                value={gender}
+                onChangeText={setGender}
+                placeholder="e.g. Male, Female, Non-binary, Prefer not to say…"
+                autoCapitalize="sentences"
+              />
+            </Card>
+
+            {/* Contact info & social links */}
+            <Card style={{ marginTop: SPACE.x4 }}>
+              <Text style={{ ...TYPE.h3, color: colors.ink, marginBottom: SPACE.x3 }}>
+                Contact info & social links
+              </Text>
+              <TextField
+                label="Contact email"
+                value={contactEmail}
+                onChangeText={setContactEmail}
+                placeholder="e.g. personal@email.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                hint="Alternative personal email for peers"
+              />
+              <TextField
+                label="Facebook"
+                value={facebookUrl}
+                onChangeText={setFacebookUrl}
+                placeholder="e.g. facebook.com/username or username"
+                autoCapitalize="none"
+                hint="Facebook profile link or handle"
+              />
+              <TextField
+                label="Instagram"
+                value={instagramUrl}
+                onChangeText={setInstagramUrl}
+                placeholder="e.g. @username or instagram.com/username"
+                autoCapitalize="none"
+                hint="Instagram handle or link"
+              />
+              <TextField
+                label="Twitter / X"
+                value={twitterUrl}
+                onChangeText={setTwitterUrl}
+                placeholder="e.g. @username or x.com/username"
+                autoCapitalize="none"
+                hint="Twitter or X handle or link"
+              />
             </Card>
           </View>
         </ScrollView>

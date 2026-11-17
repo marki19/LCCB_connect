@@ -8,17 +8,18 @@ import { RADIUS, SPACE } from "../../lib/tokens";
 
 interface ProfileEducationCardProps {
   userData: UserProfileData;
+  isSelf?: boolean;
 }
 
-export default function ProfileEducationCard({ userData }: ProfileEducationCardProps) {
+export default function ProfileEducationCard({ userData, isSelf }: ProfileEducationCardProps) {
   const { colors } = useTheme();
 
-  if (!userData.course_name && !userData.department_name) {
-    return null;
-  }
-
   return (
-    <ProfileCard title="Education">
+    <ProfileCard
+      title="Education"
+      actionLabel={isSelf ? "Edit" : undefined}
+      onAction={isSelf ? () => {} : undefined}
+    >
       <View style={styles.eduRow}>
         <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSunken, borderColor: colors.border }]}>
           <GraduationCap size={20} color={colors.brand} />
@@ -30,8 +31,13 @@ export default function ProfileEducationCard({ userData }: ProfileEducationCardP
           {userData.course_name ? (
             <Text style={[styles.courseName, { color: colors.inkSoft }]} numberOfLines={1}>
               {userData.course_name}
+              {userData.year_level ? ` (${userData.year_level})` : ""}
             </Text>
-          ) : null}
+          ) : (
+            <Text style={[styles.courseName, { color: colors.inkSoft }]} numberOfLines={1}>
+              {userData.role === "faculty" ? "Faculty Member" : "College Student"}
+            </Text>
+          )}
           {userData.department_name ? (
             <Text style={[styles.deptName, { color: colors.inkFaint }]} numberOfLines={1}>
               {userData.department_name}
