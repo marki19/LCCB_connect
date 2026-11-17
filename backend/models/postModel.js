@@ -2,6 +2,42 @@ const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
 const { escapeLike } = require("../utils/queryFilters");
 
+const POST_ATTACHMENTS_SQL = `
+  COALESCE((
+    SELECT json_agg(json_build_object(
+      'id', a.id,
+      'storage_key', a.storage_key,
+      'file_name', a.file_name,
+      'mime_type', a.mime_type,
+      'size_bytes', a.size_bytes,
+      'sort_order', a.sort_order
+    ) ORDER BY a.sort_order)
+    FROM public.post_attachments a WHERE a.post_id = p.id
+  ), '[]'::json) AS attachments
+`;
+
+function withDerivedImages(row) {
+  if (!row) return row;
+  const attachments = Array.isArray(row.attachments) ? row.attachments : [];
+  const imageAttachments = attachments.filter(
+    (a) => a.mime_type && a.mime_type.startsWith("image/")
+  );
+  const derivedImageUrls = imageAttachments.map((a) => a.storage_key);
+
+  const storedUrls = Array.isArray(row.image_urls)
+    ? row.image_urls
+    : (row.image_url ? [row.image_url] : []);
+  const imageUrls = derivedImageUrls.length > 0 ? derivedImageUrls : storedUrls;
+  const imageUrl = imageUrls[0] || null;
+
+  return {
+    ...row,
+    attachments,
+    image_urls: imageUrls,
+    image_url: imageUrl,
+  };
+}
+
 // RAW SQL QUERIES FOR POSTS (WITH JOIN FOR AUTHOR INFO)
 
 // Keyset pagination. Pass `cursor` = "<created_at>|<id>" of the last row you saw.
@@ -104,12 +140,17 @@ const getAllPosts = async ({
       p.author_id,
       p.content,
       p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
       p.pinned,
       p.image_url,
       p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
       p.preview_metadata,
       p.visibility,
       p.moderation_status,
@@ -138,12 +179,14 @@ const getAllPosts = async ({
   
   const queryParams = userId ? [...params, userId] : params;
   const result = await db.query(sql, queryParams);
-  return result.rows;
+  return result.rows.map(withDerivedImages);
 };
 
 // `viewerId` gates which posts exist at all; `includeHidden` is the moderation
 // escape hatch that reads the base table instead.
-const getPostById = async (id, { includeHidden = false, userId = null } = {}) => {
+const getPostById = async (id, options = {}) => {
+  const opts = typeof options === "string" ? { userId: options } : (options || {});
+  const { includeHidden = false, userId = null } = opts;
   const params = [id];
 
   let fromClause = "FROM posts p";
@@ -164,12 +207,17 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
       p.author_id,
       p.content,
       p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
       p.pinned,
       p.image_url,
       p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
       p.preview_metadata,
       p.visibility,
       p.moderation_status,
@@ -194,7 +242,7 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
     WHERE p.id = $1;
   `;
   const result = await db.query(sql, userId ? [...params, userId] : params);
-  return result.rows[0];
+  return withDerivedImages(result.rows[0]);
 };
 
 
@@ -222,12 +270,17 @@ const buildPostSelect = (paramsLength, viewerId) => {
       p.author_id,
       p.content,
       p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
       p.pinned,
       p.image_url,
       p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
@@ -272,12 +325,17 @@ const buildRepostSelect = (paramsLength, viewerId) => {
       p.author_id,
       p.content,
       p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
       p.pinned,
       p.image_url,
       p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
@@ -552,11 +610,16 @@ const createPost = async (postData) => {
     author_id,
     content,
     type,
+    kind = 'discussion',
+    repository_type = null,
+    repository_category = null,
+    live_url = null,
     title,
     technologies,
     github_url,
     image_url,
     image_urls,
+    attachments,
     preview_metadata = null,
     moderation_status = 'approved',
     moderation_reason = null,
@@ -565,10 +628,14 @@ const createPost = async (postData) => {
     allow_reposts = true,
   } = postData;
 
-  const effectiveImageUrls = Array.isArray(image_urls)
-    ? image_urls
-    : (image_url ? [image_url] : []);
-  const effectiveImageUrl = image_url || (effectiveImageUrls.length > 0 ? effectiveImageUrls[0] : null);
+  const imageAttachments = Array.isArray(attachments)
+    ? attachments.filter((a) => a.mime_type && a.mime_type.startsWith("image/"))
+    : [];
+  const derivedImageUrls = imageAttachments.map((a) => a.storage_key);
+  const effectiveImageUrls = derivedImageUrls.length > 0
+    ? derivedImageUrls
+    : (Array.isArray(image_urls) ? image_urls : (image_url ? [image_url] : []));
+  const effectiveImageUrl = effectiveImageUrls[0] || null;
 
   return db.withTransaction(async (client) => {
     // Snapshot author's department and course at post creation time
@@ -580,14 +647,18 @@ const createPost = async (postData) => {
     const author_course_id = profileResult.rows[0]?.course_id || null;
 
     const sql = `
-      INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, image_urls, preview_metadata, moderation_status, moderation_reason, visibility, allow_reposts, author_department_id, author_course_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      INSERT INTO posts (author_id, content, type, kind, repository_type, repository_category, live_url, title, technologies, github_url, image_url, image_urls, preview_metadata, moderation_status, moderation_reason, visibility, allow_reposts, author_department_id, author_course_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *;
     `;
     const values = [
       author_id,
       content,
-      type || 'text',
+      type || (kind === 'repository' ? repository_type || 'project' : 'text'),
+      kind,
+      repository_type,
+      repository_category,
+      live_url,
       title || null,
       technologies || null,
       github_url || null,
@@ -603,22 +674,58 @@ const createPost = async (postData) => {
     ];
     const result = await client.query(sql, values);
     const post = result.rows[0];
+
+    // Insert attachments transactionally
+    let persistedAttachments = [];
+    if (Array.isArray(attachments) && attachments.length > 0) {
+      for (let i = 0; i < attachments.length; i++) {
+        const att = attachments[i];
+        const attRes = await client.query(
+          `INSERT INTO public.post_attachments (post_id, storage_key, file_name, mime_type, size_bytes, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (post_id, storage_key) DO UPDATE
+           SET file_name = EXCLUDED.file_name,
+               mime_type = EXCLUDED.mime_type,
+               size_bytes = EXCLUDED.size_bytes,
+               sort_order = EXCLUDED.sort_order
+           RETURNING *;`,
+          [post.id, att.storage_key, att.file_name, att.mime_type, att.size_bytes ?? null, i]
+        );
+        persistedAttachments.push(attRes.rows[0]);
+      }
+    } else if (effectiveImageUrls.length > 0) {
+      for (let i = 0; i < effectiveImageUrls.length; i++) {
+        const key = effectiveImageUrls[i];
+        const mime = key.endsWith(".png") ? "image/png" : (key.endsWith(".webp") ? "image/webp" : "image/jpeg");
+        const attRes = await client.query(
+          `INSERT INTO public.post_attachments (post_id, storage_key, file_name, mime_type, size_bytes, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (post_id, storage_key) DO NOTHING
+           RETURNING *;`,
+          [post.id, key, key.split("/").pop() || "image.jpg", mime, null, i]
+        );
+        if (attRes.rows[0]) persistedAttachments.push(attRes.rows[0]);
+      }
+    }
+
     // A non-custom post stores no audience; a custom one must.
     if (post.visibility === 'custom') {
       await setPostAudience(client, post.id, audience);
     }
-    return post;
+    return withDerivedImages({ ...post, attachments: persistedAttachments });
   });
 };
 
 const POST_UPDATABLE_COLUMNS = [
   "content",
   "type",
+  "kind",
+  "repository_type",
+  "repository_category",
+  "live_url",
   "title",
   "technologies",
   "github_url",
-  "image_url",
-  "image_urls",
   "preview_metadata",
   "visibility",
   "allow_reposts",
@@ -629,26 +736,35 @@ const POST_UPDATABLE_COLUMNS = [
 // unrelated edit (a title change) would silently wipe the custom list.
 const updatePost = async (id, authorId, postData) => {
   const updatePayload = { ...postData };
-  if (updatePayload.image_urls !== undefined && updatePayload.image_url === undefined) {
-    updatePayload.image_url = Array.isArray(updatePayload.image_urls) && updatePayload.image_urls.length > 0
-      ? updatePayload.image_urls[0]
-      : null;
-  } else if (updatePayload.image_url !== undefined && updatePayload.image_urls === undefined) {
-    updatePayload.image_urls = updatePayload.image_url ? [updatePayload.image_url] : [];
+  const touchesAudience =
+    updatePayload.audience !== undefined || updatePayload.visibility !== undefined;
+
+  let candidateAttachments = updatePayload.attachments;
+  if (candidateAttachments === undefined && (updatePayload.image_urls !== undefined || updatePayload.image_url !== undefined)) {
+    const urls = Array.isArray(updatePayload.image_urls)
+      ? updatePayload.image_urls
+      : (updatePayload.image_url ? [updatePayload.image_url] : []);
+    candidateAttachments = urls.map((url, i) => ({
+      storage_key: url,
+      file_name: url.split("/").pop() || "image.jpg",
+      mime_type: url.endsWith(".png") ? "image/png" : (url.endsWith(".webp") ? "image/webp" : "image/jpeg"),
+      size_bytes: null,
+      sort_order: i,
+    }));
   }
+
+  const touchesAttachments = candidateAttachments !== undefined;
 
   const fields = POST_UPDATABLE_COLUMNS.filter(
     (column) => updatePayload[column] !== undefined
   );
-  const touchesAudience =
-    updatePayload.audience !== undefined || updatePayload.visibility !== undefined;
 
-  if (fields.length === 0 && !touchesAudience) {
+  if (fields.length === 0 && !touchesAudience && !touchesAttachments) {
     const current = await db.query(
-      `SELECT * FROM posts WHERE id = $1 AND author_id = $2;`,
+      `SELECT p.*, ${POST_ATTACHMENTS_SQL} FROM posts p WHERE p.id = $1 AND p.author_id = $2;`,
       [id, authorId]
     );
-    return current.rows[0];
+    return withDerivedImages(current.rows[0]);
   }
 
   return db.withTransaction(async (client) => {
@@ -682,6 +798,46 @@ const updatePost = async (id, authorId, postData) => {
     // Return before touching the audience list.
     if (!post) return undefined;
 
+    let persistedAttachments = [];
+    if (touchesAttachments) {
+      await client.query(
+        `DELETE FROM public.post_attachments WHERE post_id = $1`,
+        [id]
+      );
+      if (Array.isArray(candidateAttachments) && candidateAttachments.length > 0) {
+        for (let i = 0; i < candidateAttachments.length; i++) {
+          const att = candidateAttachments[i];
+          const attRes = await client.query(
+            `INSERT INTO public.post_attachments (post_id, storage_key, file_name, mime_type, size_bytes, sort_order)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (post_id, storage_key) DO UPDATE
+             SET file_name = EXCLUDED.file_name,
+                 mime_type = EXCLUDED.mime_type,
+                 size_bytes = EXCLUDED.size_bytes,
+                 sort_order = EXCLUDED.sort_order
+             RETURNING *;`,
+            [id, att.storage_key, att.file_name, att.mime_type, att.size_bytes ?? null, i]
+          );
+          persistedAttachments.push(attRes.rows[0]);
+        }
+      }
+      const imgAttachments = (candidateAttachments || []).filter(
+        (a) => a.mime_type && a.mime_type.startsWith("image/")
+      );
+      const imgKeys = imgAttachments.map((a) => a.storage_key);
+      await client.query(
+        `UPDATE posts SET image_urls = $1, image_url = $2 WHERE id = $3`,
+        [imgKeys, imgKeys[0] || null, id]
+      );
+    } else {
+      const existingAtt = await client.query(
+        `SELECT id, storage_key, file_name, mime_type, size_bytes, sort_order
+         FROM public.post_attachments WHERE post_id = $1 ORDER BY sort_order`,
+        [id]
+      );
+      persistedAttachments = existingAtt.rows;
+    }
+
     if (post.visibility === 'custom') {
       if (postData.audience !== undefined) {
         await setPostAudience(client, post.id, postData.audience);
@@ -690,7 +846,7 @@ const updatePost = async (id, authorId, postData) => {
       await setPostAudience(client, post.id, []);
     }
 
-    return post;
+    return withDerivedImages({ ...post, attachments: persistedAttachments });
   });
 };
 
@@ -815,12 +971,17 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
       p.author_id,
       p.content,
       p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
       p.pinned,
       p.image_url,
       p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
       p.visibility,
       p.moderation_status,
       p.moderation_reason,
@@ -842,7 +1003,7 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
     ORDER BY p.created_at DESC;
   `;
   const result = await db.query(sql, params);
-  return result.rows;
+  return result.rows.map(withDerivedImages);
 };
 
 const getFlaggedComments = async ({ departmentId = null } = {}) => {
@@ -945,6 +1106,8 @@ const deleteCommentByAuthor = async (id, postId, userId) => {
 };
 
 module.exports = {
+  withDerivedImages,
+  POST_ATTACHMENTS_SQL,
   getAllPosts,
   getPostById,
   visiblePostsFor,
