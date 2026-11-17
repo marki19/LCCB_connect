@@ -6,6 +6,7 @@ const notificationService = require("../services/notificationService");
 const previewService = require("../services/previewService");
 const { resolveAudience } = require("../services/visibilityService");
 const { signedStorageUrl } = require("../services/storageService");
+const mentionsService = require("../services/mentions");
 const { normalizeRole } = require("../utils/roles");
 
 const STAFF_ROLES = new Set(["faculty", "departmentadmin", "admin", "superadmin"]);
@@ -115,11 +116,34 @@ const createPost = async (req, res, next) => {
       }
     }
 
+    const mention_ids = Array.isArray(req.body.mention_ids) ? req.body.mention_ids : [];
+    const { allowed: allowedMentions, rejected: rejectedMentions } =
+      await mentionsService.resolveMentionIds(
+        req.user.id,
+        postPayload.content || "",
+        mention_ids,
+        { visibility: postPayload.visibility || "public" }
+      );
+    if (rejectedMentions.length > 0) {
+      return res.status(400).json({
+        error: "One or more mentioned users cannot be mentioned",
+        code: "mention_not_allowed",
+        rejected: rejectedMentions,
+      });
+    }
+
     const newPost = await postModel.createPost({
       ...postPayload,
-      type: postPayload.type || "post",
+      type:
+        postPayload.type ||
+        (postPayload.kind === "repository"
+          ? postPayload.repository_type || "project"
+          : postPayload.kind === "announcement"
+          ? "announcement"
+          : "text"),
       content: postPayload.content ?? null,
       author_id: req.user.id,
+      mentions: allowedMentions,
     });
     res.status(201).json(newPost);
 
@@ -170,6 +194,36 @@ const updatePost = async (req, res, next) => {
           // Non-blocking fallback
         }
       }
+    }
+
+    const mention_ids = req.body.mention_ids;
+    const tokens = mentionsService.extractTokens(updatePayload.content || "");
+    const explicitMentionIds = Array.isArray(mention_ids) ? mention_ids : [];
+
+    if (tokens.length > 0 || explicitMentionIds.length > 0) {
+      const existing = await postModel.getPostById(id, { includeHidden: true, userId: req.user.id });
+      if (!existing) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+      const targetContent = updatePayload.content !== undefined ? updatePayload.content : existing.content;
+      const targetVisibility = updatePayload.visibility !== undefined ? updatePayload.visibility : (existing.visibility || "public");
+
+      const { allowed, rejected } = await mentionsService.resolveMentionIds(
+        req.user.id,
+        targetContent || "",
+        explicitMentionIds,
+        { visibility: targetVisibility }
+      );
+      if (rejected.length > 0) {
+        return res.status(400).json({
+          error: "One or more mentioned users cannot be mentioned",
+          code: "mention_not_allowed",
+          rejected,
+        });
+      }
+      updatePayload.mentions = allowed;
+    } else if (mention_ids !== undefined) {
+      updatePayload.mentions = [];
     }
 
     // Ownership is enforced in SQL (author_id = caller). An unauthorized caller
@@ -234,7 +288,7 @@ const getComments = async (req, res, next) => {
 const addComment = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { content } = req.body;
+    const { content, mention_ids = [] } = req.body;
     const post = await postModel.getPostById(id, {
       includeHidden: false,
       userId: req.user?.id || null,
@@ -243,8 +297,23 @@ const addComment = async (req, res, next) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
+    const { allowed, rejected } = await mentionsService.resolveMentionIds(
+      req.user.id,
+      content || "",
+      Array.isArray(mention_ids) ? mention_ids : [],
+      { visibility: post.visibility || "public" }
+    );
+    if (rejected.length > 0) {
+      return res.status(400).json({
+        error: "One or more mentioned users cannot be mentioned",
+        code: "mention_not_allowed",
+        rejected,
+      });
+    }
+
     const comment = await postModel.addComment(id, req.user.id, content, {
       moderation_status: "approved",
+      mention_ids: allowed,
     });
     res.status(201).json(comment);
 
@@ -276,16 +345,46 @@ const addComment = async (req, res, next) => {
 const updateComment = async (req, res, next) => {
   try {
     const { id: postId, commentId } = req.params;
-    const { content } = req.body;
+    const { content, mention_ids } = req.body;
+
+    const tokens = mentionsService.extractTokens(content || "");
+    const explicitMentionIds = Array.isArray(mention_ids) ? mention_ids : [];
+
+    let allowedMentions = null;
+    if (tokens.length > 0 || explicitMentionIds.length > 0) {
+      const post = await postModel.getPostById(postId, {
+        includeHidden: false,
+        userId: req.user?.id || null,
+      });
+      if (!post) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
+      const { allowed, rejected } = await mentionsService.resolveMentionIds(
+        req.user.id,
+        content || "",
+        explicitMentionIds,
+        { visibility: post.visibility || "public" }
+      );
+      if (rejected.length > 0) {
+        return res.status(400).json({
+          error: "One or more mentioned users cannot be mentioned",
+          code: "mention_not_allowed",
+          rejected,
+        });
+      }
+      allowedMentions = allowed;
+    } else if (mention_ids !== undefined) {
+      allowedMentions = [];
+    }
+
     // Ownership is enforced in SQL (user_id = caller, and the comment must be
     // attached to the post in the path). An unauthorized or hidden comment
     // receives the same 404 as a missing one.
-    const updated = await postModel.updateCommentByAuthor(
-      commentId,
-      postId,
-      req.user.id,
-      content
-    );
+    const updated = allowedMentions !== null
+      ? await postModel.updateCommentByAuthor(commentId, postId, req.user.id, content, { mention_ids: allowedMentions })
+      : await postModel.updateCommentByAuthor(commentId, postId, req.user.id, content);
+
     if (!updated) {
       return res.status(404).json({ message: "Comment not found" });
     }

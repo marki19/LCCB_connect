@@ -1,6 +1,7 @@
 const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
 const { escapeLike } = require("../utils/queryFilters");
+const mentionsService = require("../services/mentions");
 
 const POST_ATTACHMENTS_SQL = `
   COALESCE((
@@ -14,6 +15,19 @@ const POST_ATTACHMENTS_SQL = `
     ) ORDER BY a.sort_order)
     FROM public.post_attachments a WHERE a.post_id = p.id
   ), '[]'::json) AS attachments
+`;
+
+const POST_MENTIONS_SQL = `
+  COALESCE((
+    SELECT json_agg(json_build_object(
+      'user_id', m.mentioned_user_id,
+      'username', pr_m.username,
+      'full_name', pr_m.full_name
+    ) ORDER BY pr_m.full_name)
+    FROM public.post_mentions m
+    JOIN public.profiles pr_m ON pr_m.id = m.mentioned_user_id
+    WHERE m.post_id = p.id AND m.comment_id IS NULL
+  ), '[]'::json) AS mentions
 `;
 
 function withDerivedImages(row) {
@@ -35,6 +49,7 @@ function withDerivedImages(row) {
     attachments,
     image_urls: imageUrls,
     image_url: imageUrl,
+    mentions: Array.isArray(row.mentions) ? row.mentions : [],
   };
 }
 
@@ -173,6 +188,7 @@ const getAllPosts = async ({
       p.image_url,
       p.image_urls,
       ${POST_ATTACHMENTS_SQL},
+      ${POST_MENTIONS_SQL},
       p.preview_metadata,
       p.visibility,
       p.moderation_status,
@@ -240,6 +256,7 @@ const getPostById = async (id, options = {}) => {
       p.image_url,
       p.image_urls,
       ${POST_ATTACHMENTS_SQL},
+      ${POST_MENTIONS_SQL},
       p.preview_metadata,
       p.visibility,
       p.moderation_status,
@@ -303,6 +320,7 @@ const buildPostSelect = (paramsLength, viewerId) => {
       p.image_url,
       p.image_urls,
       ${POST_ATTACHMENTS_SQL},
+      ${POST_MENTIONS_SQL},
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
@@ -358,6 +376,7 @@ const buildRepostSelect = (paramsLength, viewerId) => {
       p.image_url,
       p.image_urls,
       ${POST_ATTACHMENTS_SQL},
+      ${POST_MENTIONS_SQL},
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
@@ -757,7 +776,22 @@ const createPost = async (postData) => {
     if (post.visibility === 'custom') {
       await setPostAudience(client, post.id, audience);
     }
-    return withDerivedImages({ ...post, attachments: persistedAttachments });
+
+    let persistedMentions = [];
+    if (Array.isArray(postData.mentions) && postData.mentions.length > 0) {
+      await mentionsService.replacePostMentions(post.id, null, postData.mentions, client);
+      const mRes = await client.query(
+        `SELECT m.mentioned_user_id AS user_id, pr.username, pr.full_name
+         FROM public.post_mentions m
+         JOIN public.profiles pr ON pr.id = m.mentioned_user_id
+         WHERE m.post_id = $1 AND m.comment_id IS NULL
+         ORDER BY pr.full_name`,
+        [post.id]
+      );
+      persistedMentions = mRes.rows;
+    }
+
+    return withDerivedImages({ ...post, attachments: persistedAttachments, mentions: persistedMentions });
   });
 };
 
@@ -806,7 +840,7 @@ const updatePost = async (id, authorId, postData) => {
 
   if (fields.length === 0 && !touchesAudience && !touchesAttachments) {
     const current = await db.query(
-      `SELECT p.*, ${POST_ATTACHMENTS_SQL} FROM posts p WHERE p.id = $1 AND p.author_id = $2;`,
+      `SELECT p.*, ${POST_ATTACHMENTS_SQL}, ${POST_MENTIONS_SQL} FROM posts p WHERE p.id = $1 AND p.author_id = $2;`,
       [id, authorId]
     );
     return withDerivedImages(current.rows[0]);
@@ -891,7 +925,31 @@ const updatePost = async (id, authorId, postData) => {
       await setPostAudience(client, post.id, []);
     }
 
-    return withDerivedImages({ ...post, attachments: persistedAttachments });
+    let persistedMentions = [];
+    if (postData.mentions !== undefined) {
+      await mentionsService.replacePostMentions(id, null, postData.mentions, client);
+      const mRes = await client.query(
+        `SELECT m.mentioned_user_id AS user_id, pr.username, pr.full_name
+         FROM public.post_mentions m
+         JOIN public.profiles pr ON pr.id = m.mentioned_user_id
+         WHERE m.post_id = $1 AND m.comment_id IS NULL
+         ORDER BY pr.full_name`,
+        [id]
+      );
+      persistedMentions = mRes.rows;
+    } else {
+      const mRes = await client.query(
+        `SELECT m.mentioned_user_id AS user_id, pr.username, pr.full_name
+         FROM public.post_mentions m
+         JOIN public.profiles pr ON pr.id = m.mentioned_user_id
+         WHERE m.post_id = $1 AND m.comment_id IS NULL
+         ORDER BY pr.full_name`,
+        [id]
+      );
+      persistedMentions = mRes.rows;
+    }
+
+    return withDerivedImages({ ...post, attachments: persistedAttachments, mentions: persistedMentions });
   });
 };
 
@@ -939,6 +997,16 @@ const getComments = async (postId, { includeHidden = false, viewerId = null } = 
       c.moderation_status,
       c.moderation_reason,
       c.created_at,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+          'user_id', m.mentioned_user_id,
+          'username', pr_m.username,
+          'full_name', pr_m.full_name
+        ) ORDER BY pr_m.full_name)
+        FROM public.post_mentions m
+        JOIN public.profiles pr_m ON pr_m.id = m.mentioned_user_id
+        WHERE m.comment_id = c.id
+      ), '[]'::json) AS mentions,
       json_build_object(
         'id', pr.id,
         'full_name', pr.full_name,
@@ -971,6 +1039,16 @@ const getCommentById = async (id) => {
       c.moderation_status,
       c.moderation_reason,
       c.created_at,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+          'user_id', m.mentioned_user_id,
+          'username', pr_m.username,
+          'full_name', pr_m.full_name
+        ) ORDER BY pr_m.full_name)
+        FROM public.post_mentions m
+        JOIN public.profiles pr_m ON pr_m.id = m.mentioned_user_id
+        WHERE m.comment_id = c.id
+      ), '[]'::json) AS mentions,
       json_build_object(
         'id', pr.id,
         'full_name', pr.full_name,
@@ -989,14 +1067,30 @@ const getCommentById = async (id) => {
   return result.rows[0];
 };
 
-const addComment = async (postId, userId, content, { moderation_status = 'approved', moderation_reason = null } = {}) => {
+const addComment = async (postId, userId, content, { moderation_status = 'approved', moderation_reason = null, mention_ids = [] } = {}) => {
   const sql = `
     INSERT INTO comments (post_id, user_id, content, moderation_status, moderation_reason)
     VALUES ($1, $2, $3, $4, $5)
     RETURNING *;
   `;
   const result = await db.query(sql, [postId, userId, content, moderation_status, moderation_reason]);
-  return result.rows[0];
+  const comment = result.rows[0];
+
+  let persistedMentions = [];
+  if (Array.isArray(mention_ids) && mention_ids.length > 0) {
+    await mentionsService.replacePostMentions(postId, comment.id, mention_ids);
+    const mRes = await db.query(
+      `SELECT m.mentioned_user_id AS user_id, pr.username, pr.full_name
+       FROM public.post_mentions m
+       JOIN public.profiles pr ON pr.id = m.mentioned_user_id
+       WHERE m.comment_id = $1
+       ORDER BY pr.full_name`,
+      [comment.id]
+    );
+    persistedMentions = mRes.rows;
+  }
+
+  return { ...comment, mentions: persistedMentions };
 };
 
 // ---- MODERATION SPECIFIC QUERIES -------------------------------------------
@@ -1027,6 +1121,7 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
       p.image_url,
       p.image_urls,
       ${POST_ATTACHMENTS_SQL},
+      ${POST_MENTIONS_SQL},
       p.visibility,
       p.moderation_status,
       p.moderation_reason,
@@ -1129,7 +1224,7 @@ const deleteComment = async (id) => {
 // be edited by its author (`moderation_status != 'hidden'`), so a hide cannot
 // be edited away.
 
-const updateCommentByAuthor = async (id, postId, userId, content) => {
+const updateCommentByAuthor = async (id, postId, userId, content, { mention_ids = null } = {}) => {
   const sql = `
     UPDATE comments
     SET content = $1, moderation_status = 'approved', moderation_reason = NULL
@@ -1137,7 +1232,11 @@ const updateCommentByAuthor = async (id, postId, userId, content) => {
     RETURNING *;
   `;
   const result = await db.query(sql, [content, id, postId, userId]);
-  return result.rows[0];
+  const comment = result.rows[0];
+  if (comment && Array.isArray(mention_ids)) {
+    await mentionsService.replacePostMentions(postId, id, mention_ids);
+  }
+  return comment;
 };
 
 const deleteCommentByAuthor = async (id, postId, userId) => {

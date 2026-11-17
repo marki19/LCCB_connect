@@ -152,6 +152,7 @@ const postFields = {
   visibility: Visibility.optional(),
   audience: Audience.optional(),
   allow_reposts: z.boolean().optional(),
+  mention_ids: z.array(z.string().trim().min(1)).max(50).optional(),
 };
 
 const withPostContentRule = (schema) =>
@@ -229,13 +230,19 @@ const updatePostSchema = withCustomAudienceRule(z.object(postFields).strict());
 
 // ---- comments --------------------------------------------------------------
 const createCommentSchema = z
-  .object({ content: z.string().trim().min(1).max(2000) })
+  .object({
+    content: z.string().trim().min(1).max(2000),
+    mention_ids: z.array(z.string().trim().min(1)).max(50).optional(),
+  })
   .strict();
 
 // Author edit: same shape as creation — identity is never accepted from the
 // body, so `.strict()` rejects an attempted `user_id`/`post_id` override.
 const updateCommentSchema = z
-  .object({ content: z.string().trim().min(1).max(2000) })
+  .object({
+    content: z.string().trim().min(1).max(2000),
+    mention_ids: z.array(z.string().trim().min(1)).max(50).optional(),
+  })
   .strict();
 
 // ---- catalog: departments & courses (admin-managed runtime data) -----------
