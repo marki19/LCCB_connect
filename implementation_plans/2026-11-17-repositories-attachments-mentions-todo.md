@@ -6,7 +6,7 @@ Plan: `implementation_plans/2026-11-17-repositories-attachments-mentions.md`
 
 - [x] Task 1: Schema — `kind`, `repository_type`, `post_attachments` table (migration `054_repository_posts.sql`)
 - [x] Task 2: File policy — support `.pptx`, `.ppt`, `.doc` with OLE / OOXML magic bytes (`backend/services/filePolicy.js`)
-- [ ] Task 3: Frontend upload — document picker & Office MIME types (`frontend/src/lib/upload.ts`)
+- [x] Task 3: Frontend upload — document picker & Office MIME types (`frontend/src/lib/upload.ts`)
 - [ ] Task 4: Backend validation — `attachmentSchema`, `createPostSchema`, `updatePostSchema` (`backend/validation/index.js`)
 - [ ] Task 5: Post read projection — query & attach `post_attachments` (`backend/models/postModel.js`)
 - [ ] Task 6: Post create/update — transactionally persist attachments (`backend/models/postModel.js`)

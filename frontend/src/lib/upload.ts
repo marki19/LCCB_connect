@@ -17,6 +17,8 @@ const BUCKET_MIME_TYPES: Record<string, string[]> = {
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/msword',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-powerpoint',
   ],
   videos: ['video/mp4', 'video/webm'],
   snaps: ['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'],
@@ -37,9 +39,40 @@ export const MAX_UPLOAD_BYTES = {
   image: 5 * 1024 * 1024, // 5 MB
   /** Thesis manuscripts (free-plan ceiling). */
   pdf: 50 * 1024 * 1024, // 50 MB
+  /** Repository / project documents (.pdf, .docx, .doc, .pptx, .ppt) */
+  document: 25 * 1024 * 1024, // 25 MB
   /** Quick Snap media (image/video). */
   snap: 25 * 1024 * 1024, // 25 MB
 } as const;
+
+export function extensionForMime(mime: string): string {
+  const m = (mime || '').toLowerCase().trim();
+  switch (m) {
+    case 'image/png':
+      return '.png';
+    case 'image/webp':
+      return '.webp';
+    case 'image/jpeg':
+    case 'image/jpg':
+      return '.jpg';
+    case 'application/pdf':
+      return '.pdf';
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+      return '.docx';
+    case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+      return '.pptx';
+    case 'application/msword':
+      return '.doc';
+    case 'application/vnd.ms-powerpoint':
+      return '.ppt';
+    case 'video/mp4':
+      return '.mp4';
+    case 'video/webm':
+      return '.webm';
+    default:
+      return '.jpg';
+  }
+}
 
 function isAllowedMime(bucketName: string, contentType: string): boolean {
   const allowed = BUCKET_MIME_TYPES[bucketName];
@@ -195,6 +228,39 @@ export async function pickMultipleImages(options: { selectionLimit?: number } = 
   return [];
 }
 
+export interface PickedDocument {
+  uri: string;
+  type: string;
+  name: string;
+  size?: number;
+}
+
+/**
+ * Prompts the user to pick one or more documents (PDF, DOCX, DOC, PPTX, PPT).
+ */
+export async function pickDocuments(): Promise<PickedDocument[]> {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/msword',
+      'application/vnd.ms-powerpoint',
+    ],
+    multiple: true,
+    copyToCacheDirectory: true,
+  });
+  if (!result.canceled && result.assets && result.assets.length > 0) {
+    return result.assets.map((asset) => ({
+      uri: asset.uri,
+      type: asset.mimeType || 'application/octet-stream',
+      name: asset.name,
+      size: asset.size,
+    }));
+  }
+  return [];
+}
+
 /**
  * Prompts the user to pick a PDF document from their device files.
  * The repository accepts PDF manuscripts only.
@@ -284,12 +350,7 @@ export async function uploadToStorage(
         return null;
       }
 
-      let ext = '.jpg';
-      if (detectedMime === 'image/png') ext = '.png';
-      else if (detectedMime === 'image/webp') ext = '.webp';
-      else if (detectedMime === 'application/pdf') ext = '.pdf';
-      else if (detectedMime === 'video/mp4') ext = '.mp4';
-      else if (detectedMime === 'video/webm') ext = '.webm';
+      const ext = extensionForMime(detectedMime);
 
       let fileName = path ? path.split('/').pop() || `upload${ext}` : `upload-${Date.now()}${ext}`;
       if (!fileName.includes('.')) fileName = `${fileName}${ext}`;
@@ -299,23 +360,17 @@ export async function uploadToStorage(
     } else {
       const uriLower = uri.split('?')[0].toLowerCase();
       let detectedType = contentType;
-      let ext = '.jpg';
-      if (uriLower.endsWith('.png') || contentType === 'image/png') {
-        detectedType = 'image/png';
-        ext = '.png';
-      } else if (uriLower.endsWith('.webp') || contentType === 'image/webp') {
-        detectedType = 'image/webp';
-        ext = '.webp';
-      } else if (uriLower.endsWith('.pdf') || contentType === 'application/pdf') {
-        detectedType = 'application/pdf';
-        ext = '.pdf';
-      } else if (uriLower.endsWith('.mp4') || contentType === 'video/mp4') {
-        detectedType = 'video/mp4';
-        ext = '.mp4';
-      } else if (uriLower.endsWith('.webm') || contentType === 'video/webm') {
-        detectedType = 'video/webm';
-        ext = '.webm';
-      }
+      if (uriLower.endsWith('.png')) detectedType = 'image/png';
+      else if (uriLower.endsWith('.webp')) detectedType = 'image/webp';
+      else if (uriLower.endsWith('.pdf')) detectedType = 'application/pdf';
+      else if (uriLower.endsWith('.docx')) detectedType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      else if (uriLower.endsWith('.pptx')) detectedType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      else if (uriLower.endsWith('.doc')) detectedType = 'application/msword';
+      else if (uriLower.endsWith('.ppt')) detectedType = 'application/vnd.ms-powerpoint';
+      else if (uriLower.endsWith('.mp4')) detectedType = 'video/mp4';
+      else if (uriLower.endsWith('.webm')) detectedType = 'video/webm';
+
+      const ext = extensionForMime(detectedType);
 
       const error = validateUpload(category, detectedType, sizeBytes ?? 0, maxBytes);
       if (error) {
