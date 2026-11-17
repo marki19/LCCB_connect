@@ -221,14 +221,7 @@ export async function updatePost(
     repository_type?: RepositoryType | null;
     repository_category?: string | null;
     live_url?: string | null;
-    attachments?: Array<{
-      id?: string;
-      storage_key: string;
-      file_name: string;
-      mime_type: string;
-      size_bytes?: number | null;
-      sort_order?: number;
-    }>;
+    attachments?: PostAttachment[];
     preview_metadata?: any;
     visibility?: ContentVisibility;
     audience?: string[];

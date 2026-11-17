@@ -15,7 +15,7 @@ Plan: `implementation_plans/2026-11-17-repositories-attachments-mentions.md`
 - [x] Task 9: Frontend types & API client — `PostAttachment`, `kind`, `repository_type` (`frontend/src/types.ts`, `frontend/src/lib/api.ts`)
 - [x] Task 10: Two-door composer — Discussion vs Repository tabs, typed fields, document attachment list (`frontend/app/create.tsx`)
 - [x] Task 11: Post display — render document chips, repository badges, and attachment gallery (`frontend/src/components/PostCard.tsx`, `frontend/app/post/[id].tsx`)
-- [ ] Task 12: Feed filters & tabs — filter feeds by repository types (`frontend/src/lib/feedFilters.ts`, `frontend/app/(tabs)/index.tsx`)
+- [x] Task 12: Feed filters & tabs — filter feeds by repository types (`frontend/src/lib/feedFilters.ts`, `frontend/app/(tabs)/index.tsx`)
 
 ## Part 2 — Thesis Merge (Tasks 13–16)
 

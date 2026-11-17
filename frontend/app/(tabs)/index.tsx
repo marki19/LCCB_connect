@@ -48,6 +48,7 @@ import IdentityBanner from "../../src/components/IdentityBanner";
 import SuggestionCarousel from "../../src/components/SuggestionCarousel";
 import { resolveFileUrl, resolveFileUrls } from "../../src/lib/files";
 import { useFeedFilter, type FeedCategory } from "../../src/contexts/FeedFilterContext";
+import { matchesFeedFilter } from "../../src/lib/feedFilters";
 
 type FilterValue = FeedCategory;
 
@@ -285,14 +286,8 @@ export default function HomeScreen() {
 
     let unified = [...postItems, ...thesisItems].sort((a, b) => b.rawDate - a.rawDate);
 
-    if (filter === "theses") {
-      unified = unified.filter((item) => item.type === "thesis");
-    } else if (filter === "websites") {
-      unified = unified.filter((item) => item.type === "website");
-    } else if (filter === "projects") {
-      unified = unified.filter((item) => item.type === "project" || item.type === "capstone");
-    } else if (filter === "discussions") {
-      unified = unified.filter((item) => item.type === "text" || item.type === "image" || item.type === "discussion");
+    if (filter && filter !== "all") {
+      unified = unified.filter((item) => matchesFeedFilter(item, filter));
     }
 
     setPosts(unified);
