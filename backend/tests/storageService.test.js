@@ -145,6 +145,17 @@ describe("withStorageUrls", () => {
     ]);
   });
 
+  it("resolves attachment storage keys by their category prefix", async () => {
+    const out = await withStorageUrls({
+      attachments: [
+        { storage_key: "posts/a.png", mime_type: "image/png" },
+        { storage_key: "documents/b.pdf", mime_type: "application/pdf" },
+      ],
+    });
+    assert.match(out.attachments[0].url, /^\/api\/files\/posts\//);
+    assert.match(out.attachments[1].url, /^https?:/);
+  });
+
   it("normalises nested authors and arrays of rows", async () => {
     const resolved = await withStorageUrls([
       { id: "p1", image_url: "a.jpg", author: { id: "u1", avatar_url: "me.png" } },

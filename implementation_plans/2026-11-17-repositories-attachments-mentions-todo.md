@@ -10,7 +10,7 @@ Plan: `implementation_plans/2026-11-17-repositories-attachments-mentions.md`
 - [x] Task 4: Backend validation — `attachmentSchema`, `createPostSchema`, `updatePostSchema` (`backend/validation/index.js`)
 - [x] Task 5: Post read projection — query & attach `post_attachments` (`backend/models/postModel.js`)
 - [x] Task 6: Post create/update — transactionally persist attachments (`backend/models/postModel.js`)
-- [ ] Task 7: Storage service — resolve attachment signed/public URLs (`backend/services/storageService.js`)
+- [x] Task 7: Storage service — resolve attachment signed/public URLs (`backend/services/storageService.js`)
 - [ ] Task 8: Post controller & routes — filter by `kind`, `repository_type`, `repository_category` (`backend/controllers/postController.js`)
 - [ ] Task 9: Frontend types & API client — `PostAttachment`, `kind`, `repository_type` (`frontend/src/types.ts`, `frontend/src/lib/api.ts`)
 - [ ] Task 10: Two-door composer — Discussion vs Repository tabs, typed fields, document attachment list (`frontend/app/create.tsx`)

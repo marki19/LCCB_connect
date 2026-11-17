@@ -26,6 +26,7 @@ const FILE_FIELD_BUCKETS = {
   avatar_url: "avatars",
   video_url: "videos",
   cover_url: "covers",
+  attachments: "documents",
 };
 
 /** Bucket name → key prefix. `assets` is the legacy name for post images. */
@@ -173,6 +174,25 @@ function expand(value) {
       );
     }
 
+    if (Array.isArray(output.attachments)) {
+      output.attachments = output.attachments.map((att) => {
+        if (!att || typeof att !== "object") return att;
+        const key = att.storage_key;
+        if (typeof key !== "string" || isAbsoluteUrl(key)) {
+          return { ...att, url: att.url || key };
+        }
+        const category = key.split("/")[0];
+        const bucket = category === "posts" ? "assets" : category;
+        const url = isPublicCategory(category)
+          ? `/api/files/${objectKey(bucket, key)}`
+          : signKey(bucket, key);
+        return {
+          ...att,
+          url,
+        };
+      });
+    }
+
     if (output.author && typeof output.author === "object" && !(output.author instanceof Date)) {
       output.author = expand(output.author);
     }
@@ -183,6 +203,7 @@ function expand(value) {
         typeof nested === "object" &&
         !(nested instanceof Date) &&
         key !== "image_urls" &&
+        key !== "attachments" &&
         key !== "author"
       ) {
         output[key] = expand(nested);
