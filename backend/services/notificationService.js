@@ -40,7 +40,7 @@ async function createNotifications(adminIds, { actorId, type, targetId, departme
 
   const sql = `
     INSERT INTO public.notifications (user_id, actor_id, type, target_id, department_id, department, message)
-    SELECT unnest($1::uuid[]), $2, $3, $4, $5, $6, $7;
+    SELECT unnest($1::text[]), $2, $3, $4, $5, $6, $7;
   `;
   await db.query(sql, [
     adminIds,
@@ -161,10 +161,33 @@ async function notifyUser({ userId, actorId = null, type, targetId = null, messa
   );
 }
 
+/**
+ * Notifies users mentioned in a post or comment.
+ * Never notifies the author/actor.
+ */
+async function notifyMentionedUsers({ mentionedUserIds, actorId, actorUsername, targetId, client = db }) {
+  if (!mentionedUserIds || mentionedUserIds.length === 0) return;
+  const filteredIds = Array.from(new Set(mentionedUserIds)).filter((id) => id && id !== actorId);
+  if (filteredIds.length === 0) return;
+
+  const handle = actorUsername ? `@${actorUsername}` : "Someone";
+  const message = `${handle} mentioned you.`;
+
+  const run = (text, params) => (client ? client.query(text, params) : db.query(text, params));
+  const sql = `
+    INSERT INTO public.notifications (user_id, actor_id, type, target_id, message)
+    SELECT u.id, $2, 'mention', $3::uuid, $4
+    FROM unnest($1::text[]) AS u(id)
+    ON CONFLICT DO NOTHING;
+  `;
+  await run(sql, [filteredIds, actorId || null, targetId || null, message]);
+}
+
 module.exports = {
   getTargetAdmins,
   createNotifications,
   notifyUser,
+  notifyMentionedUsers,
   notifyAdminsOnPostCreated,
   notifyAdminsOnThesisCreated,
   notifyAdminsOnFlaggedContent,

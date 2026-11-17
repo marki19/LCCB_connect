@@ -2,6 +2,7 @@ const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
 const { escapeLike } = require("../utils/queryFilters");
 const mentionsService = require("../services/mentions");
+const notificationService = require("../services/notificationService");
 
 const POST_ATTACHMENTS_SQL = `
   COALESCE((
@@ -704,9 +705,10 @@ const createPost = async (postData) => {
   return db.withTransaction(async (client) => {
     // Snapshot author's department and course at post creation time
     const profileResult = await client.query(
-      `SELECT department_id, course_id FROM profiles WHERE id = $1`,
+      `SELECT username, department_id, course_id FROM profiles WHERE id = $1`,
       [author_id]
     );
+    const author_username = profileResult.rows[0]?.username || null;
     const author_department_id = profileResult.rows[0]?.department_id || null;
     const author_course_id = profileResult.rows[0]?.course_id || null;
 
@@ -789,6 +791,14 @@ const createPost = async (postData) => {
         [post.id]
       );
       persistedMentions = mRes.rows;
+
+      await notificationService.notifyMentionedUsers({
+        mentionedUserIds: postData.mentions,
+        actorId: author_id,
+        actorUsername: author_username,
+        targetId: post.id,
+        client,
+      });
     }
 
     return withDerivedImages({ ...post, attachments: persistedAttachments, mentions: persistedMentions });
@@ -1088,6 +1098,14 @@ const addComment = async (postId, userId, content, { moderation_status = 'approv
       [comment.id]
     );
     persistedMentions = mRes.rows;
+
+    const uRes = await db.query(`SELECT username FROM profiles WHERE id = $1`, [userId]);
+    await notificationService.notifyMentionedUsers({
+      mentionedUserIds: mention_ids,
+      actorId: userId,
+      actorUsername: uRes.rows[0]?.username || null,
+      targetId: postId,
+    });
   }
 
   return { ...comment, mentions: persistedMentions };

@@ -323,4 +323,32 @@ describe("mentions service and post/comment integration", () => {
     );
     assert.equal(checkAfter.rows[0].count, 0);
   });
+
+  it("creates mention notifications for mentioned friends on post creation", async () => {
+    const req = {
+      user: { id: uAuthor },
+      profile: { role: "student", profile_completed: true, department_id: deptA },
+      body: {
+        content: `Hey @${uFriendOtherDept}_u check this out!`,
+        visibility: "public",
+        kind: "discussion",
+      },
+    };
+    const res = mockResponse();
+    let errOccurred;
+    await postController.createPost(req, res, (err) => { errOccurred = err; });
+    if (errOccurred) throw errOccurred;
+    assert.equal(res.statusCode, 201);
+    createdPostIds.push(res.body.id);
+
+    const notifRes = await db.query(
+      `SELECT user_id, actor_id, type, message FROM public.notifications WHERE target_id = $1`,
+      [res.body.id]
+    );
+    const mentionNotif = notifRes.rows.find((n) => n.type === "mention");
+    assert.ok(mentionNotif, "mention notification was created");
+    assert.equal(mentionNotif.user_id, uFriendOtherDept);
+    assert.equal(mentionNotif.actor_id, uAuthor);
+    assert.equal(mentionNotif.message, `@${uAuthor}_u mentioned you.`);
+  });
 });
