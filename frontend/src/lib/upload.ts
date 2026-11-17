@@ -262,13 +262,10 @@ export async function uploadToStorage(
 ): Promise<{ key: string } | null> {
   if (!uri || typeof uri !== 'string') return null;
 
-  // If already an existing storage key (e.g. "posts/abc1234.jpg"), don't re-upload
-  if (/^[a-z]+\/[0-9a-f]{16,64}\.[a-z0-9]+$/i.test(uri)) {
-    return { key: uri };
-  }
-  const extractedKey = fileKeyFromUrl(uri);
-  if (extractedKey) {
-    return { key: extractedKey };
+  // If already an existing canonical storage key or storage URL, don't re-upload
+  const existingKey = fileKeyFromUrl(uri);
+  if (existingKey) {
+    return { key: existingKey };
   }
 
   const category = bucket === 'assets' ? 'posts' : bucket;
