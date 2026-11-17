@@ -40,6 +40,8 @@ export interface OtpInputProps {
   onComplete?: (code: string) => void;
   /** Called with the joined digits after every edit. */
   onChange?: (code: string) => void;
+  /** Called when the user presses Enter on the final box or submits. */
+  onSubmit?: (code: string) => void;
   disabled?: boolean;
   /** Renders destructive borders, e.g. after a rejected code. */
   error?: boolean;
@@ -53,6 +55,7 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(
       length = 6,
       onComplete,
       onChange,
+      onSubmit,
       disabled = false,
       error = false,
       autoFocus = false,
@@ -75,8 +78,10 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(
     const completedCode = useRef<string | null>(null);
     const onChangeRef = useRef(onChange);
     const onCompleteRef = useRef(onComplete);
+    const onSubmitRef = useRef(onSubmit);
     onChangeRef.current = onChange;
     onCompleteRef.current = onComplete;
+    onSubmitRef.current = onSubmit;
 
     const code = digits.join("");
 
@@ -180,6 +185,16 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(
                   caretHidden
                   selectTextOnFocus
                   autoFocus={autoFocus && index === 0}
+                  returnKeyType={index === length - 1 ? "done" : "next"}
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => {
+                    if (index < length - 1) {
+                      focusBox(index + 1);
+                    } else if (code.length === length) {
+                      onCompleteRef.current?.(code);
+                      onSubmitRef.current?.(code);
+                    }
+                  }}
                 />
               );
             })}

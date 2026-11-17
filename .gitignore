@@ -38,5 +38,9 @@ frontend/supabase/.temp/
 .vitest/
 */.vitest/
 
+# Local uploaded files (keep directory structure, ignore binary files)
+backend/uploads/*
+!backend/uploads/**/.gitkeep
+
 # desloppify local state
 .desloppify/

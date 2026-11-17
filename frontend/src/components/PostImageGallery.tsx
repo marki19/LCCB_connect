@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
   View,
-  Image,
   Pressable,
   Modal,
   StyleSheet,
@@ -12,6 +11,8 @@ import {
 } from "react-native";
 import { X, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
+import { resolveFileUrl, resolveFileUrls } from "../lib/files";
+import { AppImage } from "./AppImage";
 
 interface PostImageGalleryProps {
   images?: string[];
@@ -30,10 +31,11 @@ export function PostImageGallery({
   // Consolidate images into a clean array of valid URLs
   const imageList = React.useMemo(() => {
     if (Array.isArray(images) && images.length > 0) {
-      return images.filter(Boolean);
+      return resolveFileUrls(images);
     }
     if (fallbackImageUrl) {
-      return [fallbackImageUrl];
+      const resolved = resolveFileUrl(fallbackImageUrl);
+      return resolved ? [resolved] : [];
     }
     return [];
   }, [images, fallbackImageUrl]);
@@ -84,10 +86,10 @@ export function PostImageGallery({
           accessibilityLabel="View photo in fullscreen"
           style={[styles.singleWrapper, { borderColor: colors.border }]}
         >
-          <Image
+          <AppImage
             source={{ uri: imageList[0] }}
             style={styles.singleImage}
-            resizeMode="cover"
+            contentFit="cover"
           />
         </Pressable>
       )}
@@ -106,10 +108,10 @@ export function PostImageGallery({
                 { borderColor: colors.border, height: 210 },
               ]}
             >
-              <Image
+              <AppImage
                 source={{ uri }}
                 style={styles.fillImage}
-                resizeMode="cover"
+                contentFit="cover"
               />
             </Pressable>
           ))}
@@ -128,10 +130,10 @@ export function PostImageGallery({
               { borderColor: colors.border, height: 180 },
             ]}
           >
-            <Image
+            <AppImage
               source={{ uri: imageList[0] }}
               style={styles.fillImage}
-              resizeMode="cover"
+              contentFit="cover"
             />
           </Pressable>
           <View style={styles.row}>
@@ -146,10 +148,10 @@ export function PostImageGallery({
                   { borderColor: colors.border, height: 130 },
                 ]}
               >
-                <Image
+                <AppImage
                   source={{ uri }}
                   style={styles.fillImage}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
               </Pressable>
             ))}
@@ -172,10 +174,10 @@ export function PostImageGallery({
                   { borderColor: colors.border, height: 135 },
                 ]}
               >
-                <Image
+                <AppImage
                   source={{ uri }}
                   style={styles.fillImage}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
               </Pressable>
             ))}
@@ -192,10 +194,10 @@ export function PostImageGallery({
                   { borderColor: colors.border, height: 135 },
                 ]}
               >
-                <Image
+                <AppImage
                   source={{ uri }}
                   style={styles.fillImage}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
               </Pressable>
             ))}
@@ -230,10 +232,10 @@ export function PostImageGallery({
 
             {/* Main Full-Size Image Container */}
             <View style={styles.lightboxImageContainer}>
-              <Image
+              <AppImage
                 source={{ uri: imageList[lightboxIndex] }}
                 style={styles.lightboxImage}
-                resizeMode="contain"
+                contentFit="contain"
               />
 
               {/* Navigation Chevrons */}

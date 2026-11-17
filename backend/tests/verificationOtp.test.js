@@ -60,6 +60,7 @@ const model = {
   updatePending: stub(verificationModel, "updatePending"),
   listQueue: stub(verificationModel, "listQueue"),
   resolveReviewers: stub(verificationModel, "resolveReviewers"),
+  markEscalated: stub(verificationModel, "markEscalated"),
   approve: stub(verificationModel, "approve"),
   decline: stub(verificationModel, "decline"),
 };
@@ -138,8 +139,21 @@ describe("POST /api/verification/otp", () => {
     const res = await request(app).post("/api/verification/otp").set(AUTH).send({});
 
     assert.equal(res.status, 403);
-    assert.match(res.body.error, /Superadmin/);
+    assert.match(res.body.error, /does not verify/);
     assert.equal(otp.issue.calls.length, 0);
+  });
+
+  it("issues a code to an account that has not chosen a role yet", async () => {
+    profile = baseProfile({ role: "user" });
+    otp.issue.setImpl(async () => ({
+      code: "654321",
+      expiresAt: "2026-11-12T10:10:00.000Z",
+    }));
+
+    const res = await request(app).post("/api/verification/otp").set(AUTH).send({});
+
+    assert.equal(res.status, 202);
+    assert.equal(otp.issue.calls.length, 1);
   });
 
   it("refuses an account that is not a school account", async () => {
@@ -259,6 +273,65 @@ describe("POST /api/verification", () => {
 
     assert.equal(res.status, 409);
   });
+
+  describe("an account that has not chosen a role", () => {
+    beforeEach(() => {
+      profile = baseProfile({ role: "user" });
+    });
+
+    it("files the request under the role it picked", async () => {
+      model.createPending.setImpl(async () => pendingRequest({ role: "faculty" }));
+      model.resolveReviewers.setImpl(async () => [{ id: "dept-admin" }]);
+
+      const res = await request(app)
+        .post("/api/verification")
+        .set(AUTH)
+        .send({ ...studentBody, role: "faculty" });
+
+      assert.equal(res.status, 201);
+      assert.equal(model.createPending.calls[0][1].role, "faculty");
+    });
+
+    it("is told to choose when it sends no role", async () => {
+      const res = await request(app).post("/api/verification").set(AUTH).send(studentBody);
+
+      assert.equal(res.status, 400);
+      assert.match(res.body.error, /Choose an account type/);
+      assert.equal(model.createPending.calls.length, 0);
+    });
+
+    it("cannot ask for superadmin", async () => {
+      const res = await request(app)
+        .post("/api/verification")
+        .set(AUTH)
+        .send({ ...studentBody, role: "superadmin" });
+
+      assert.equal(res.status, 400);
+      assert.equal(model.createPending.calls.length, 0);
+    });
+  });
+
+  it("escalates to campus reviewers when the department has none", async () => {
+    profile = baseProfile({ role: "user" });
+    model.createPending.setImpl(async () => pendingRequest());
+    model.markEscalated.setImpl(async () => pendingRequest({ escalated_at: "2026-11-14T00:00:00Z" }));
+    model.resolveReviewers.setImpl(async (query) =>
+      query.campusRoles.length > 0 ? [{ id: "campus-admin" }] : []
+    );
+
+    const res = await request(app)
+      .post("/api/verification")
+      .set(AUTH)
+      .send({ ...studentBody, role: "student" });
+
+    assert.equal(res.status, 201);
+    assert.equal(model.markEscalated.calls.length, 1);
+    assert.equal(model.markEscalated.calls[0][0], REQUEST_ID);
+
+    const escalatedQuery = model.resolveReviewers.calls[1][0];
+    assert.deepEqual(escalatedQuery.campusRoles, ["admin", "superadmin"]);
+    assert.deepEqual(notify.createNotifications.calls[0][0], ["campus-admin"]);
+  });
 });
 
 describe("PUT /api/verification/mine", () => {
@@ -280,6 +353,65 @@ describe("PUT /api/verification/mine", () => {
     assert.equal(res.status, 200);
     assert.equal(otp.verifyAndConsume.calls.length, 1);
     assert.equal(model.updatePending.calls[0][1].role, "student");
+  });
+
+  it("keeps the role the pending request was filed under", async () => {
+    profile = baseProfile({ role: "user" });
+    model.getLatestForUser.setImpl(async () => pendingRequest({ role: "faculty" }));
+    model.updatePending.setImpl(async () => pendingRequest({ role: "faculty" }));
+
+    const res = await request(app)
+      .put("/api/verification/mine")
+      .set(AUTH)
+      .send({ ...studentBody, role: "student" });
+
+    assert.equal(res.status, 200);
+    assert.equal(model.updatePending.calls[0][1].role, "faculty");
+  });
+});
+
+describe("GET /api/verification/mine", () => {
+  it("offers the selectable roles to an account that has not chosen one", async () => {
+    profile = baseProfile({ role: "user" });
+    model.getLatestForUser.setImpl(async () => undefined);
+
+    const res = await request(app).get("/api/verification/mine").set(AUTH);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.role, null);
+    assert.equal(res.body.fields, null);
+    assert.deepEqual(res.body.selectable_roles, ["student", "faculty", "departmentAdmin", "admin"]);
+  });
+
+  it("previews the form shape for a role it is considering", async () => {
+    profile = baseProfile({ role: "user" });
+    model.getLatestForUser.setImpl(async () => undefined);
+
+    const res = await request(app).get("/api/verification/mine?role=student").set(AUTH);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.role, "student");
+    assert.deepEqual(res.body.fields, { department: true, course: true, yearLevel: true });
+  });
+
+  it("withholds the picker from an account that already has a role", async () => {
+    model.getLatestForUser.setImpl(async () => undefined);
+
+    const res = await request(app).get("/api/verification/mine").set(AUTH);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.role, "student");
+    assert.equal(res.body.selectable_roles, null);
+  });
+
+  it("ignores a role preview on an account whose role is already fixed", async () => {
+    model.getLatestForUser.setImpl(async () => undefined);
+
+    const res = await request(app).get("/api/verification/mine?role=admin").set(AUTH);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.role, "student");
+    assert.deepEqual(res.body.fields, { department: true, course: true, yearLevel: true });
   });
 });
 

@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   bio TEXT,
   course TEXT,
   year_level TEXT,
-  role TEXT DEFAULT 'student' CHECK (
+  role TEXT DEFAULT 'user' CHECK (
     role IN (
-      'student', 'faculty', 'departmentAdmin', 'department_admin',
+      'user', 'student', 'faculty', 'departmentAdmin', 'department_admin',
       'admin', 'superadmin', 'superAdmin'
     )
   ),
@@ -41,130 +41,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_student_id
   ON public.profiles (upper(student_id))
   WHERE student_id IS NOT NULL;
 
--- 1b. Identity verification requests (migration 016). Holds a snapshot of what
--- the student submitted, so a later edit cannot change what the reviewer saw.
-CREATE TABLE IF NOT EXISTS public.profile_verification_requests (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending','approved','declined')),
-  full_name TEXT NOT NULL,
-  student_id TEXT NOT NULL,
-  department_id UUID NOT NULL REFERENCES public.departments(id),
-  course_id UUID NOT NULL REFERENCES public.courses(id),
-  year_level TEXT NOT NULL,
-  birthdate DATE,
-  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  reviewed_by TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
-  reviewed_at TIMESTAMPTZ,
-  review_note TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_verification_one_pending
-  ON public.profile_verification_requests (user_id)
-  WHERE status = 'pending';
-CREATE INDEX IF NOT EXISTS idx_verification_status
-  ON public.profile_verification_requests (status, submitted_at DESC);
-CREATE INDEX IF NOT EXISTS idx_verification_department
-  ON public.profile_verification_requests (department_id, status);
-
-DROP TRIGGER IF EXISTS set_verification_updated_at
-  ON public.profile_verification_requests;
-CREATE TRIGGER set_verification_updated_at
-  BEFORE UPDATE ON public.profile_verification_requests
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
--- 2. Posts table
-CREATE TABLE IF NOT EXISTS public.posts (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  author_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  content TEXT,
-  type TEXT DEFAULT 'text' CHECK (type IN ('text', 'image', 'project', 'capstone', 'website')),
-  title TEXT,
-  technologies TEXT[],
-  github_url TEXT,
-  image_url TEXT,
-  preview_metadata JSONB,
-  moderation_status TEXT DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'hidden')),
-  moderation_reason TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 3. Theses table
-CREATE TABLE IF NOT EXISTS public.theses (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  uploader_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  abstract TEXT NOT NULL,
-  -- Authoritative department link (derived from the uploader); the TEXT column is
-  -- a denormalized display value and may be null for campus admins. See 005. The
-  -- FK is added after `departments` is created (table order in this file).
-  department_id UUID,
-  department TEXT,
-  category TEXT NOT NULL,
-  pdf_url TEXT NOT NULL,
-  moderation_status TEXT DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'hidden')),
-  moderation_reason TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 4. Likes table
-CREATE TABLE IF NOT EXISTS public.likes (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(post_id, user_id)
-);
-
--- 5. Comments table
-CREATE TABLE IF NOT EXISTS public.comments (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  content TEXT NOT NULL,
-  moderation_status TEXT DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'hidden')),
-  moderation_reason TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 6. Notifications table
-CREATE TABLE IF NOT EXISTS public.notifications (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  actor_id TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
-  type TEXT NOT NULL,
-  target_id UUID,
-  department_id UUID,
-  department TEXT,
-  message TEXT NOT NULL,
-  is_read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 6a. Append-only governance audit log (migration 010).
--- `actor_id` and `target_id` intentionally have no foreign keys: rows must
--- outlive deleted accounts and content. Only the Express API (table owner)
--- writes here; anon/authenticated are revoked below.
-CREATE TABLE IF NOT EXISTS public.admin_audit_log (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  actor_id TEXT NOT NULL,
-  actor_username TEXT,
-  actor_role TEXT,
-  action TEXT NOT NULL,
-  target_type TEXT NOT NULL,
-  target_id TEXT,
-  target_label TEXT,
-  reason TEXT,
-  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- 6b. Admin-managed catalog: departments & courses (Messaging_plan.md §3).
+-- 2. Admin-managed catalog: departments & courses (Messaging_plan.md §3).
 -- Runtime data — created/edited by admins in the app, never hardcoded. Rows are
 -- deactivated (is_active=false), never deleted, so profile/course references
 -- stay valid.
@@ -206,25 +83,145 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS last_seen_visible BOOLEAN NOT NULL DEFAULT FALSE;
 
--- Department FKs for tables that appear earlier in this file (theses,
--- notifications). Added here, after the catalog exists, and idempotently so a
--- re-run is a no-op. Names match Postgres' default `<table>_<column>_fkey`
--- (also what migrations/005_department_scope.sql creates).
+-- Pre-seed default academic catalog for fresh installations & testing
+INSERT INTO public.departments (id, code, name, sort_order) VALUES
+  ('d1111111-1111-1111-1111-111111111111', 'CCS', 'College of Computer Studies', 1),
+  ('d2222222-2222-2222-2222-222222222222', 'CBA', 'College of Business and Accountancy', 2),
+  ('d3333333-3333-3333-3333-333333333333', 'CAS', 'College of Arts and Sciences', 3),
+  ('d4444444-4444-4444-4444-444444444444', 'CHM', 'College of Hospitality Management', 4)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO public.courses (id, department_id, code, name, sort_order) VALUES
+  ('c1111111-1111-1111-1111-111111111111', 'd1111111-1111-1111-1111-111111111111', 'BSIT', 'BS Information Technology', 1),
+  ('c2222222-2222-2222-2222-222222222222', 'd1111111-1111-1111-1111-111111111111', 'BSCS', 'BS Computer Science', 2),
+  ('c3333333-3333-3333-3333-333333333333', 'd1111111-1111-1111-1111-111111111111', 'BSIS', 'BS Information Systems', 3),
+  ('c4444444-4444-4444-4444-444444444444', 'd2222222-2222-2222-2222-222222222222', 'BSA', 'BS Accountancy', 4),
+  ('c5555555-5555-5555-5555-555555555555', 'd2222222-2222-2222-2222-222222222222', 'BSBA', 'BS Business Administration', 5)
+ON CONFLICT DO NOTHING;
+
+-- 3. Content Visibility Enum
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'theses_department_id_fkey') THEN
-    ALTER TABLE public.theses
-      ADD CONSTRAINT theses_department_id_fkey
-      FOREIGN KEY (department_id) REFERENCES public.departments(id) ON DELETE SET NULL;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'notifications_department_id_fkey') THEN
-    ALTER TABLE public.notifications
-      ADD CONSTRAINT notifications_department_id_fkey
-      FOREIGN KEY (department_id) REFERENCES public.departments(id) ON DELETE SET NULL;
-  END IF;
+  CREATE TYPE public.content_visibility AS ENUM (
+    'public', 'friends', 'department', 'announcement', 'custom', 'private'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
 END $$;
 
--- 6c. Messaging, presence & social graph (Messaging_plan.md §5–§8).
+-- 4. Posts table
+CREATE TABLE IF NOT EXISTS public.posts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  author_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content TEXT,
+  type TEXT DEFAULT 'text' CHECK (type IN ('text', 'image', 'project', 'capstone', 'website', 'announcement')),
+  title TEXT,
+  technologies TEXT[],
+  github_url TEXT,
+  image_url TEXT,
+  image_urls TEXT[],
+  preview_metadata JSONB,
+  moderation_status TEXT DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'hidden')),
+  moderation_reason TEXT,
+  visibility public.content_visibility NOT NULL DEFAULT 'public',
+  allow_reposts BOOLEAN NOT NULL DEFAULT TRUE,
+  author_department_id UUID REFERENCES public.departments(id),
+  author_course_id UUID REFERENCES public.courses(id),
+  repost_count INT NOT NULL DEFAULT 0,
+  deleted_at TIMESTAMPTZ,
+  edited_at TIMESTAMPTZ,
+  audience_role TEXT,
+  audience_department_id UUID REFERENCES public.departments(id) ON DELETE SET NULL,
+  audience_course_id UUID REFERENCES public.courses(id) ON DELETE SET NULL,
+  audience_year_level TEXT,
+  pinned BOOLEAN NOT NULL DEFAULT FALSE,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Reposts table
+CREATE TABLE IF NOT EXISTS public.reposts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reposter_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  original_post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+  caption TEXT,
+  visibility public.content_visibility NOT NULL DEFAULT 'public',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at TIMESTAMPTZ,
+  CONSTRAINT reposts_unique_reposter_original UNIQUE (reposter_id, original_post_id)
+);
+
+-- 6. Theses table
+CREATE TABLE IF NOT EXISTS public.theses (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  uploader_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  abstract TEXT NOT NULL,
+  department_id UUID REFERENCES public.departments(id) ON DELETE SET NULL,
+  department TEXT,
+  category TEXT NOT NULL,
+  pdf_url TEXT NOT NULL,
+  moderation_status TEXT DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'hidden')),
+  moderation_reason TEXT,
+  visibility public.content_visibility NOT NULL DEFAULT 'public',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. Likes table
+CREATE TABLE IF NOT EXISTS public.likes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(post_id, user_id)
+);
+
+-- 5. Comments table
+CREATE TABLE IF NOT EXISTS public.comments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  moderation_status TEXT DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'hidden')),
+  moderation_reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. Notifications table
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  actor_id TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
+  type TEXT NOT NULL,
+  target_id UUID,
+  department_id UUID REFERENCES public.departments(id) ON DELETE SET NULL,
+  department TEXT,
+  message TEXT NOT NULL,
+  is_read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6a. Append-only governance audit log (migration 010).
+-- `actor_id` and `target_id` intentionally have no foreign keys: rows must
+-- outlive deleted accounts and content. Only the Express API (table owner)
+-- writes here; anon/authenticated are revoked below.
+CREATE TABLE IF NOT EXISTS public.admin_audit_log (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  actor_id TEXT NOT NULL,
+  actor_username TEXT,
+  actor_role TEXT,
+  action TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT,
+  target_label TEXT,
+  reason TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 6b. Messaging, presence & social graph (Messaging_plan.md §5–§8).
 -- Writes are never granted to anon/authenticated: the Express API is the only
 -- write path. The read-only widening (GRANT SELECT + participant RLS) exists so
 -- Supabase Realtime can deliver committed rows; see §8 below and
@@ -327,6 +324,70 @@ CREATE TRIGGER set_device_tokens_updated_at
   BEFORE UPDATE ON public.device_tokens
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+-- 6d. Identity verification requests (migration 016, 042). Holds a snapshot of what
+-- the requester submitted, so a later edit cannot change what the reviewer saw.
+CREATE TABLE IF NOT EXISTS public.profile_verification_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'student',
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'approved', 'declined')),
+  full_name TEXT NOT NULL,
+  student_id TEXT NOT NULL,
+  department_id UUID REFERENCES public.departments(id),
+  course_id UUID REFERENCES public.courses(id),
+  year_level TEXT,
+  birthdate DATE,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reviewed_by TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  review_note TEXT,
+  escalated_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_verification_role_shape CHECK (
+    role = ANY (ARRAY['student','faculty','departmentAdmin','admin'])
+    AND (
+      (
+        role = 'student'
+        AND department_id IS NOT NULL
+        AND course_id IS NOT NULL
+        AND year_level IS NOT NULL
+      )
+      OR (
+        role = ANY (ARRAY['faculty','departmentAdmin'])
+        AND department_id IS NOT NULL
+        AND course_id IS NULL
+        AND year_level IS NULL
+      )
+      OR (
+        role = 'admin'
+        AND department_id IS NULL
+        AND course_id IS NULL
+        AND year_level IS NULL
+      )
+    )
+  )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_verification_one_pending
+  ON public.profile_verification_requests (user_id)
+  WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_verification_status
+  ON public.profile_verification_requests (status, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_verification_department
+  ON public.profile_verification_requests (department_id, status);
+CREATE INDEX IF NOT EXISTS idx_verification_escalated
+  ON public.profile_verification_requests (escalated_at)
+  WHERE escalated_at IS NOT NULL;
+
+DROP TRIGGER IF EXISTS set_verification_updated_at
+  ON public.profile_verification_requests;
+CREATE TRIGGER set_verification_updated_at
+  BEFORE UPDATE ON public.profile_verification_requests
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_updated_at();
+
 -- Filtered UPDATE delivery (delivered/seen) for Postgres Changes.
 ALTER TABLE public.messages REPLICA IDENTITY FULL;
 
@@ -409,7 +470,7 @@ BEGIN
   FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
       EXECUTE format(
-        'REVOKE ALL ON public.profiles, public.posts, public.theses, public.likes, public.comments, public.notifications, public.admin_audit_log, public.departments, public.courses, public.friendships, public.message_policy_departments, public.conversations, public.messages, public.conversation_state, public.device_tokens, public.blocks, public.message_reports, public.profile_verification_requests FROM %I',
+        'REVOKE ALL ON public.profiles, public.posts, public.reposts, public.theses, public.likes, public.comments, public.notifications, public.admin_audit_log, public.departments, public.courses, public.friendships, public.message_policy_departments, public.conversations, public.messages, public.conversation_state, public.device_tokens, public.blocks, public.message_reports, public.profile_verification_requests FROM %I',
         r
       );
       EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
@@ -510,17 +571,6 @@ CREATE TRIGGER enforce_signup_email_domain
 -- moderator who cannot see a hidden or private row cannot moderate it.
 -- EXECUTE is revoked from the public API roles because the viewer argument is
 -- caller-supplied: whoever can call visible_posts() could pass any user id.
-DO $$
-BEGIN
-  CREATE TYPE public.content_visibility AS ENUM ('public', 'friends', 'custom', 'private');
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-END $$;
-
-ALTER TABLE public.posts
-  ADD COLUMN IF NOT EXISTS visibility public.content_visibility NOT NULL DEFAULT 'public';
-ALTER TABLE public.theses
-  ADD COLUMN IF NOT EXISTS visibility public.content_visibility NOT NULL DEFAULT 'public';
 
 CREATE TABLE IF NOT EXISTS public.post_audience (
   post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
@@ -538,6 +588,16 @@ CREATE INDEX IF NOT EXISTS idx_post_audience_user
   ON public.post_audience (user_id);
 CREATE INDEX IF NOT EXISTS idx_thesis_audience_user
   ON public.thesis_audience (user_id);
+
+-- Role normalizer for case-insensitive role comparisons
+CREATE OR REPLACE FUNCTION public.normalize_role(value text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT LOWER(REPLACE(REPLACE(COALESCE(value, ''), '_', ''), '-', ''));
+$$;
 
 -- Normalized pair comparison so the existing uq_friends_pair expression index
 -- is used. least()/greatest() ignore NULLs, so a guest viewer (NULL) can never
@@ -566,9 +626,41 @@ AS $$
   SELECT p.*
   FROM public.posts p
   WHERE p.moderation_status <> 'hidden'
+    AND p.deleted_at IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM public.blocks b
+      WHERE (b.blocker_id = p.author_id AND b.blocked_id = viewer)
+         OR (b.blocker_id = viewer AND b.blocked_id = p.author_id)
+    )
     AND (
+      -- The author always sees their own post, including an expired announcement.
       p.author_id = viewer
+      OR (
+        p.visibility = 'announcement'
+        AND (p.expires_at IS NULL OR p.expires_at > NOW())
+        AND EXISTS (
+          SELECT 1
+          FROM public.profiles v
+          WHERE v.id = viewer
+            AND (
+              p.audience_role IS NULL
+              OR public.normalize_role(v.role) = public.normalize_role(p.audience_role)
+            )
+            AND (p.audience_department_id IS NULL OR v.department_id = p.audience_department_id)
+            AND (p.audience_course_id IS NULL OR v.course_id = p.audience_course_id)
+            AND (p.audience_year_level IS NULL OR v.year_level = p.audience_year_level)
+        )
+      )
       OR p.visibility = 'public'
+      OR (
+        p.visibility = 'department'
+        AND EXISTS (
+          SELECT 1 FROM public.profiles viewer_pr
+          WHERE viewer_pr.id = viewer
+            AND viewer_pr.department_id IS NOT NULL
+            AND viewer_pr.department_id = p.author_department_id
+        )
+      )
       OR (p.visibility = 'friends' AND public.is_friend(p.author_id, viewer))
       OR (
         p.visibility = 'custom'
@@ -577,6 +669,10 @@ AS $$
           FROM public.post_audience a
           WHERE a.post_id = p.id AND a.user_id = viewer
         )
+      )
+      OR (
+        p.visibility = 'private'
+        AND p.author_id = viewer
       )
     );
 $$;
@@ -593,6 +689,15 @@ AS $$
     AND (
       t.uploader_id = viewer
       OR t.visibility = 'public'
+      OR (
+        t.visibility = 'department'
+        AND EXISTS (
+          SELECT 1 FROM public.profiles viewer_pr
+          WHERE viewer_pr.id = viewer
+            AND viewer_pr.department_id IS NOT NULL
+            AND viewer_pr.department_id = t.department_id
+        )
+      )
       OR (t.visibility = 'friends' AND public.is_friend(t.uploader_id, viewer))
       OR (
         t.visibility = 'custom'
@@ -601,6 +706,58 @@ AS $$
           FROM public.thesis_audience a
           WHERE a.thesis_id = t.id AND a.user_id = viewer
         )
+      )
+      OR (
+        t.visibility = 'private'
+        AND t.uploader_id = viewer
+      )
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION public.visible_reposts(viewer text)
+RETURNS SETOF public.reposts
+LANGUAGE sql
+STABLE
+PARALLEL SAFE
+AS $$
+  SELECT r.*
+  FROM public.reposts r
+  JOIN public.posts p ON p.id = r.original_post_id
+  WHERE r.deleted_at IS NULL
+    AND p.moderation_status <> 'hidden'
+    AND p.deleted_at IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public.visible_posts(viewer) vp WHERE vp.id = p.id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.blocks b
+      WHERE (b.blocker_id = r.reposter_id AND b.blocked_id = viewer)
+         OR (b.blocker_id = viewer AND b.blocked_id = r.reposter_id)
+    )
+    AND (
+      r.reposter_id = viewer
+      OR r.visibility = 'public'
+      OR (
+        r.visibility = 'department'
+        AND EXISTS (
+          SELECT 1 FROM public.profiles viewer_pr
+          WHERE viewer_pr.id = viewer
+            AND viewer_pr.department_id IS NOT NULL
+            AND viewer_pr.department_id = (SELECT pr.department_id FROM public.profiles pr WHERE pr.id = r.reposter_id)
+        )
+      )
+      OR (r.visibility = 'friends' AND public.is_friend(r.reposter_id, viewer))
+      OR (
+        r.visibility = 'custom'
+        AND EXISTS (
+          SELECT 1
+          FROM public.post_audience a
+          WHERE a.post_id = p.id AND a.user_id = viewer
+        )
+      )
+      OR (
+        r.visibility = 'private'
+        AND r.reposter_id = viewer
       )
     );
 $$;
@@ -612,6 +769,8 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
       EXECUTE format('REVOKE ALL ON FUNCTION public.visible_posts(text) FROM %I', r);
       EXECUTE format('REVOKE ALL ON FUNCTION public.visible_theses(text) FROM %I', r);
+      EXECUTE format('REVOKE ALL ON FUNCTION public.visible_reposts(text) FROM %I', r);
+      EXECUTE format('REVOKE ALL ON FUNCTION public.normalize_role(text) FROM %I', r);
       EXECUTE format('REVOKE ALL ON FUNCTION public.is_friend(text, text) FROM %I', r);
       EXECUTE format('REVOKE ALL ON public.post_audience, public.thesis_audience FROM %I', r);
     END IF;
@@ -620,9 +779,12 @@ END $$;
 
 REVOKE ALL ON FUNCTION public.visible_posts(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.visible_theses(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.visible_reposts(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.normalize_role(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.is_friend(text, text) FROM PUBLIC;
 REVOKE ALL ON public.post_audience, public.thesis_audience FROM PUBLIC;
 
+ALTER TABLE public.reposts         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.post_audience   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.thesis_audience ENABLE ROW LEVEL SECURITY;
 

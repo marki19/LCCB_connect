@@ -1,12 +1,14 @@
 const postModel = require("../models/postModel");
 const { clampLimit } = require("../models/pagination");
-const { parseSearch, parseUuidFilter } = require("../utils/queryFilters");
+const { parseSearch, parseUuidFilter, parseTextFilter } = require("../utils/queryFilters");
 const moderationService = require("../services/moderationService");
 const notificationService = require("../services/notificationService");
 const previewService = require("../services/previewService");
 const { resolveAudience } = require("../services/visibilityService");
 const { signedStorageUrl } = require("../services/storageService");
 const { normalizeRole } = require("../utils/roles");
+
+const STAFF_ROLES = new Set(["faculty", "departmentadmin", "admin", "superadmin"]);
 
 /**
  * A custom-visibility write must name accepted friends. Returns the normalized
@@ -26,12 +28,9 @@ const resolveRequestBodyAudience = async (authorId, body) => {
 // server-side and returns a generic message (never the raw DB error).
 const getPosts = async (req, res, next) => {
   try {
-    // Optional filters: ?q=<text>&author_id=<uuid>&visibility=<public|friends|...>
+    // Optional filters: ?q=<text>&author_id=<text>&visibility=<public|friends|...>
     // plus keyset pagination: ?limit=<1..100>&cursor=<created_at>|<id>
-    const author = parseUuidFilter(req.query.author_id, "author_id");
-    if (author.error) {
-      return res.status(400).json({ error: author.error });
-    }
+    const authorId = parseTextFilter(req.query.author_id, 100);
 
     const dept = parseUuidFilter(req.query.department_id, "department_id");
     if (dept.error) {
@@ -48,7 +47,7 @@ const getPosts = async (req, res, next) => {
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
       q: parseSearch(req.query.q),
-      authorId: author.value,
+      authorId,
       ...(dept.value ? { departmentId: dept.value } : {}),
       ...(course.value ? { courseId: course.value } : {}),
       ...(req.query.type ? { type: req.query.type } : {}),
@@ -81,8 +80,8 @@ const getPost = async (req, res, next) => {
 const createPost = async (req, res, next) => {
   try {
     const role = normalizeRole(req.profile?.role);
-    // Students must complete their academic profile before creating posts (verified students are exempt)
-    if (role === "student" && !req.profile?.profile_completed && req.profile?.verification_status !== "verified") {
+    // Non-staff must complete their academic profile before creating posts (verified users are exempt)
+    if (!STAFF_ROLES.has(role) && !req.profile?.profile_completed && req.profile?.verification_status !== "verified") {
       return res.status(403).json({
         error: "Profile incomplete",
         message: "Complete your profile (full name, student ID, department, and course) before creating posts.",

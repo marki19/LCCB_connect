@@ -1,6 +1,7 @@
+import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { supabase } from './supabase';
+import { apiFetchMultipart } from './api';
 
 /**
  * Per-bucket upload policy. Anything not listed here (or not matching the
@@ -9,7 +10,14 @@ import { supabase } from './supabase';
 const BUCKET_MIME_TYPES: Record<string, string[]> = {
   avatars: ['image/png', 'image/jpeg', 'image/webp'],
   assets: ['image/png', 'image/jpeg', 'image/webp'],
+  posts: ['image/png', 'image/jpeg', 'image/webp'],
   theses: ['application/pdf'],
+  documents: [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword',
+  ],
+  videos: ['video/mp4', 'video/webm'],
 };
 
 /**
@@ -135,14 +143,12 @@ export function validateUpload(
 }
 
 /**
- * Direct Supabase upload for public buckets.
+ * Uploads a file through the backend storage endpoint.
  *
- * Manuscripts (theses) are NOT uploaded through this path — they go through
- * the backend so the bytes never touch the client's Supabase key. Avatars
- * stay here because `avatars` is a public bucket and the client's anon key is
- * sufficient; the server only needs the object key to render the profile.
+ * Saves into categorized subdirectories (avatars, posts, theses, documents, videos)
+ * with cryptographic SHA-256 collision-free hashing.
  *
- * @returns The object key on success, or null on failure.
+ * @returns The object key (e.g. "posts/a1b2c3d4.jpg") on success, or null on failure.
  */
 export async function uploadToStorage(
   uri: string,
@@ -152,30 +158,40 @@ export async function uploadToStorage(
   maxBytes: number = MAX_UPLOAD_BYTES.image,
   sizeBytes: number | null = null
 ): Promise<{ key: string } | null> {
-  const finalPath = path || `uploads/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.jpg`;
-  const error = validateUpload(bucket, contentType, sizeBytes ?? 0, maxBytes);
+  const category = bucket === 'assets' ? 'posts' : bucket;
+  const error = validateUpload(category, contentType, sizeBytes ?? 0, maxBytes);
   if (error) {
     console.error("[upload] validation failed:", error);
     return null;
   }
 
-  // Convert uri to binary Blob so Supabase stores real image bytes on both web and native
-  let body: any = uri;
   try {
-    const res = await fetch(uri);
-    body = await res.blob();
-  } catch (e) {
-    console.warn("[upload] fetch blob failed, falling back to uri:", e);
-  }
+    const formData = new FormData();
+    const fileName = path ? path.split('/').pop() || 'upload.jpg' : `upload-${Date.now()}.jpg`;
 
-  const { error: uploadError } = await supabase.storage
-    .from(bucket)
-    .upload(finalPath, body, { contentType, upsert: true });
+    if (Platform.OS === 'web') {
+      const res = await fetch(uri);
+      const blob = await res.blob();
+      formData.append('file', blob, fileName);
+    } else {
+      formData.append('file', {
+        uri,
+        name: fileName,
+        type: contentType,
+      } as any);
+    }
 
-  if (uploadError) {
-    console.error("[upload] Supabase upload failed:", uploadError.message);
+    const res = await apiFetchMultipart(`/upload/${category}`, formData);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      console.error("[upload] backend upload failed:", errData.error || res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    return { key: data.filename };
+  } catch (err: any) {
+    console.error("[upload] exception during upload:", err?.message || err);
     return null;
   }
-
-  return { key: finalPath };
 }

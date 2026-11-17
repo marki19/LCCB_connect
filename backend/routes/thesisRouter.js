@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const thesisController = require("../controllers/thesisController");
 const { loadProfile, requireVerified } = require("../middleware/auth");
-const { upload } = require("../middleware/upload");
+const { uploadFor } = require("../middleware/upload");
 const { thesisUploadLimiter } = require("../middleware/actionLimits");
 const {
   validate,
@@ -18,11 +18,11 @@ router.post(
   thesisUploadLimiter,
   loadProfile,
   requireVerified,
-  upload.single("pdf"),
+  uploadFor("theses").single("pdf"),
   thesisController.createThesis
 );
 router.get("/:id/file", thesisController.getThesisFile);
-router.put("/:id", requireVerified, upload.single("pdf"), validate(updateThesisSchema), thesisController.updateThesis);
+router.put("/:id", requireVerified, uploadFor("theses").single("pdf"), validate(updateThesisSchema), thesisController.updateThesis);
 router.delete("/:id", requireVerified, thesisController.deleteThesis);
 
 module.exports = router;

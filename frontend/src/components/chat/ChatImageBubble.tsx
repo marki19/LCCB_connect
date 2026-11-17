@@ -1,21 +1,20 @@
 /**
  * ChatImageBubble.tsx — Renders photo attachments in chat bubbles.
- * Resolves private bucket signed URLs and provides a tap target for the lightbox.
+ * Resolves the stored object key into a renderable URL and provides a tap
+ * target for the lightbox.
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
-  Platform,
 } from "react-native";
-import { Image as ImageIcon } from "lucide-react-native";
-import { getResolvedMediaUrl } from "../../lib/chatMedia";
+import { resolveMediaUrl } from "../../lib/chatMedia";
 import { useTheme } from "../../contexts/ThemeContext";
+import { AppImage } from "../AppImage";
 
 interface ChatImageBubbleProps {
   mediaUrl: string;
@@ -37,43 +36,23 @@ export default function ChatImageBubble({
   maxWidth = 240,
 }: ChatImageBubbleProps) {
   const { colors } = useTheme();
-  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
-  const [imageLoading, setImageLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    if (!mediaUrl) {
-      setResolvedUrl(null);
-      setImageLoading(false);
-      return;
-    }
+  // Resolution is a pure string join, so it belongs in render rather than in an
+  // effect: no state, no loading window, no double render.
+  const resolvedUrl = resolveMediaUrl(mediaUrl);
+  const [imageLoading, setImageLoading] = useState(Boolean(resolvedUrl));
+  const [loadError, setLoadError] = useState(!resolvedUrl);
+  const [trackedUrl, setTrackedUrl] = useState(resolvedUrl);
 
-    // If already a local file/blob or full URL
-    if (
-      mediaUrl.startsWith("file://") ||
-      mediaUrl.startsWith("blob:") ||
-      mediaUrl.startsWith("data:")
-    ) {
-      setResolvedUrl(mediaUrl);
-      return;
-    }
-
-    getResolvedMediaUrl(mediaUrl)
-      .then((url) => {
-        if (active) {
-          setResolvedUrl(url);
-          if (!url) setLoadError(true);
-        }
-      })
-      .catch(() => {
-        if (active) setLoadError(true);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [mediaUrl]);
+  // A bubble normally renders one attachment for its lifetime, but if the key
+  // is swapped the previous failure must not stick. Adjusting state during
+  // render is React's documented alternative to an effect that would render
+  // twice and briefly show the old error.
+  if (trackedUrl !== resolvedUrl) {
+    setTrackedUrl(resolvedUrl);
+    setLoadError(!resolvedUrl);
+    setImageLoading(Boolean(resolvedUrl));
+  }
 
   const handlePress = () => {
     if (resolvedUrl && onPressImage) {
@@ -103,10 +82,10 @@ export default function ChatImageBubble({
       >
         {resolvedUrl && !loadError ? (
           <>
-            <Image
+            <AppImage
               source={{ uri: resolvedUrl }}
               style={styles.image}
-              resizeMode="cover"
+              contentFit="cover"
               onLoadStart={() => setImageLoading(true)}
               onLoadEnd={() => setImageLoading(false)}
               onError={() => {

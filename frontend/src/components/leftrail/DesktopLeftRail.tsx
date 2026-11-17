@@ -55,6 +55,19 @@ export default function DesktopLeftRail() {
   const isSearchActive = activeSegment === "search";
   const isNotificationsActive = activeSegment === "notifications";
 
+  const itemRowStyle = (active: boolean = false) => ({ pressed, hovered }: any): any => [
+    styles.itemRow,
+    {
+      cursor: "pointer",
+      backgroundColor: active
+        ? colors.actionSurface
+        : pressed || hovered
+        ? colors.surfaceSunken
+        : "transparent",
+      transform: [{ scale: pressed ? 0.98 : 1 }],
+    },
+  ];
+
   return (
     <View
       style={[
@@ -76,14 +89,11 @@ export default function DesktopLeftRail() {
             accessibilityRole="button"
             accessibilityLabel="View your profile"
             onPress={() => router.push("/(tabs)/profile")}
-            style={({ pressed }) => [
-              styles.itemRow,
-              isProfileActive && { backgroundColor: colors.actionSurface },
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle(isProfileActive)}
           >
             <Avatar
               name={profile?.full_name ?? profile?.username}
+              avatarUrl={profile?.avatar_url}
               size={36}
             />
             <Text
@@ -106,10 +116,7 @@ export default function DesktopLeftRail() {
               accessibilityRole="button"
               accessibilityLabel="Friends"
               onPress={() => router.push("/friends")}
-              style={({ pressed }) => [
-                styles.itemRow,
-                pressed && { backgroundColor: colors.surfaceSunken },
-              ]}
+              style={itemRowStyle()}
             >
               <View style={[styles.iconCircle, { backgroundColor: "#1877F2" }]}>
                 <Users size={20} color="#FFFFFF" />
@@ -127,16 +134,39 @@ export default function DesktopLeftRail() {
             </Pressable>
           )}
 
+<<<<<<< HEAD
+=======
+          {/* Messages */}
+          {!isGuest && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Messages"
+              onPress={() => router.push("/(tabs)/messages")}
+              style={itemRowStyle()}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: "#06B6D4" }]}>
+                <MessageCircle size={20} color="#FFFFFF" />
+              </View>
+              <Text style={[styles.itemLabel, { color: colors.textPrimary }]}>
+                Messages
+              </Text>
+              {unreadCount > 0 && (
+                <View style={[styles.badge, { backgroundColor: "#EF4444" }]}>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          )}
+
+>>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
           {/* Repository (Student Theses & Projects) */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Repository"
             onPress={() => router.push("/(tabs)/search")}
-            style={({ pressed }) => [
-              styles.itemRow,
-              isSearchActive && { backgroundColor: colors.actionSurface },
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle(isSearchActive)}
           >
             <View style={[styles.iconCircle, { backgroundColor: "#10B981" }]}>
               <BookOpen size={20} color="#FFFFFF" />
@@ -151,10 +181,7 @@ export default function DesktopLeftRail() {
             accessibilityRole="button"
             accessibilityLabel="Capstones"
             onPress={() => router.push({ pathname: "/(tabs)/search", params: { type: "capstone" } })}
-            style={({ pressed }) => [
-              styles.itemRow,
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle()}
           >
             <View style={[styles.iconCircle, { backgroundColor: "#F59E0B" }]}>
               <GraduationCap size={20} color="#FFFFFF" />
@@ -170,11 +197,7 @@ export default function DesktopLeftRail() {
               accessibilityRole="button"
               accessibilityLabel="Notifications"
               onPress={() => router.push("/(tabs)/notifications")}
-              style={({ pressed }) => [
-                styles.itemRow,
-                isNotificationsActive && { backgroundColor: colors.actionSurface },
-                pressed && { backgroundColor: colors.surfaceSunken },
-              ]}
+              style={itemRowStyle(isNotificationsActive)}
             >
               <View style={[styles.iconCircle, { backgroundColor: "#8B5CF6" }]}>
                 <Bell size={20} color="#FFFFFF" />
@@ -184,6 +207,47 @@ export default function DesktopLeftRail() {
               </Text>
             </Pressable>
           )}
+<<<<<<< HEAD
+=======
+
+          {/* Admin / Moderation Console */}
+          {(adminUser || departmentAdmin) && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={adminUser ? "Admin Console" : "Moderation Console"}
+              onPress={async () => {
+                if (adminUser) {
+                  try {
+                    const status = await checkAdminSessionStatus();
+                    if (status.isAdmin && !status.valid) {
+                      setMfaModalVisible(true);
+                      return;
+                    }
+                  } catch {
+                    // Non-blocking fallback
+                  }
+                  setAdminAppPreview(false);
+                  router.push("/(admin)");
+                } else {
+                  router.push("/(moderation)" as any);
+                }
+              }}
+              style={itemRowStyle()}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: "#F43F5E" }]}>
+                <Shield size={20} color="#FFFFFF" />
+              </View>
+              <Text
+                style={[
+                  styles.itemLabel,
+                  { color: adminUser ? colors.brand : colors.action, fontWeight: "700" },
+                ]}
+              >
+                {adminUser ? "Admin Console" : "Moderation"}
+              </Text>
+            </Pressable>
+          )}
+>>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
         </View>
 
         {/* Divider */}
@@ -200,10 +264,7 @@ export default function DesktopLeftRail() {
             accessibilityRole="button"
             accessibilityLabel={profile?.department_name || "Campus Community"}
             onPress={() => router.push("/(tabs)/search")}
-            style={({ pressed }) => [
-              styles.itemRow,
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle()}
           >
             <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSunken }]}>
               <Building2 size={20} color={colors.action} />
@@ -218,10 +279,7 @@ export default function DesktopLeftRail() {
             accessibilityRole="button"
             accessibilityLabel="Saved posts"
             onPress={() => router.push("/saved")}
-            style={({ pressed }) => [
-              styles.itemRow,
-              pressed && { backgroundColor: colors.surfaceSunken },
-            ]}
+            style={itemRowStyle()}
           >
             <View style={[styles.iconCircle, { backgroundColor: "rgba(139, 92, 246, 0.15)" }]}>
               <Bookmark size={20} color="#8B5CF6" />
@@ -230,6 +288,73 @@ export default function DesktopLeftRail() {
               Saved Posts
             </Text>
           </Pressable>
+<<<<<<< HEAD
+=======
+
+          {/* Toggle More / Less */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setShowMoreShortcuts((v) => !v)}
+            style={itemRowStyle()}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSunken }]}>
+              {showMoreShortcuts ? (
+                <ChevronUp size={20} color={colors.textSecondary} />
+              ) : (
+                <ChevronDown size={20} color={colors.textSecondary} />
+              )}
+            </View>
+            <Text style={[styles.itemLabel, { color: colors.textSecondary }]}>
+              {showMoreShortcuts ? "See less" : "See more"}
+            </Text>
+          </Pressable>
+
+          {showMoreShortcuts && (
+            <View style={{ marginTop: 2 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Settings"
+                onPress={openSettingsSidebar}
+                style={itemRowStyle()}
+              >
+                <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSunken }]}>
+                  <Settings size={20} color={colors.textSecondary} />
+                </View>
+                <Text style={[styles.itemLabel, { color: colors.textPrimary }]}>
+                  Settings & Privacy
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Switch theme"
+                onPress={() => void toggleTheme()}
+                style={itemRowStyle()}
+              >
+                <View style={[styles.iconCircle, { backgroundColor: colors.surfaceSunken }]}>
+                  {isDark ? (
+                    <Sun size={20} color="#F59E0B" />
+                  ) : (
+                    <Moon size={20} color="#6366F1" />
+                  )}
+                </View>
+                <Text style={[styles.itemLabel, { color: colors.textPrimary }]}>
+                  Display & Dark Mode ({isDark ? "Dark" : "Light"})
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+
+        {/* 4. Facebook-Style Meta Footer */}
+        <View style={styles.footerContainer}>
+          <Text style={[styles.footerText, { color: colors.textTertiary }]}>
+            Privacy · Terms · Advertising · Cookies · More
+          </Text>
+          <Text style={[styles.footerCopyright, { color: colors.textTertiary }]}>
+            LCCB Connect © 2026
+          </Text>
+>>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
         </View>
       </ScrollView>
 

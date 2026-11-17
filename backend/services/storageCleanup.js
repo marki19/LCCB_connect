@@ -1,30 +1,26 @@
 /**
- * Best-effort Storage cleanup.
+ * Best-effort object cleanup.
  *
  * Deleting a thesis row must not leave its 50 MB PDF behind. The database row
- * and the Storage object are two separate systems, so a failure to remove the
+ * and the storage object are two separate systems, so a failure to remove the
  * file must never roll back the successful delete — the row is gone either way.
  */
 
-const { getSupabaseAdmin, AdminAuthUnavailableError } = require("./supabaseAdmin");
+const objectStorage = require("./objectStorage");
+const { objectKey } = require("./storageService");
 
+/**
+ * @param {string} bucket  Column bucket name (`theses`, `assets`, `avatars`).
+ * @param {string} key     Stored key, with or without its category prefix.
+ */
 async function deleteStorageObject(bucket, key) {
   if (!key) return;
-  let admin;
-  try {
-    admin = getSupabaseAdmin();
-  } catch (err) {
-    if (err instanceof AdminAuthUnavailableError) {
-      console.warn("[storage] cannot clean up %s/%s: service role not configured", bucket, key);
-      return;
-    }
-    throw err;
-  }
 
-  const { error } = await admin.storage.from(bucket).remove([key]);
-  if (error) {
+  try {
+    await objectStorage.deleteObject(objectKey(bucket, key));
+  } catch (err) {
     // Non-fatal: the row is already gone. Log and move on.
-    console.error("[storage] failed to remove %s/%s: %s", bucket, key, error.message);
+    console.error("[storage] failed to remove %s/%s: %s", bucket, key, err.message);
   }
 }
 

@@ -21,7 +21,7 @@ function normalizeOrigin(origin) {
 
 function getAllowedOrigins({
   env = process.env.NODE_ENV,
-  corsOrigins = process.env.CORS_ORIGINS,
+  corsOrigins = process.env.CORS_ORIGINS || process.env.FRONTEND_URL,
 } = {}) {
   const isProd = env === "production";
 
@@ -61,7 +61,17 @@ function createCorsOptions(options = {}) {
       }
 
       const normalized = normalizeOrigin(origin);
-      if (allowed.includes(normalized)) {
+      const isAllowed = allowed.some((allowedOrigin) => {
+        if (allowedOrigin === normalized) return true;
+        // Support wildcard subdomains e.g. https://*.vercel.app
+        if (allowedOrigin.startsWith("https://*.")) {
+          const suffix = allowedOrigin.slice("https://*.".length);
+          return normalized.startsWith("https://") && normalized.endsWith("." + suffix);
+        }
+        return false;
+      });
+
+      if (isAllowed) {
         return callback(null, true);
       }
 

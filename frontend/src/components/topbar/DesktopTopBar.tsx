@@ -246,7 +246,14 @@ export default function DesktopTopBar({
         <View style={styles.left}>
           <Pressable
             onPress={() => router.push("/(tabs)/")}
-            style={styles.brand}
+            style={({ pressed, hovered }: any) => [
+              styles.brand,
+              {
+                cursor: "pointer",
+                opacity: pressed ? 0.8 : hovered ? 0.92 : 1,
+                transform: [{ scale: pressed ? 0.97 : 1 }],
+              },
+            ]}
             accessibilityRole="link"
             accessibilityLabel="LCCB Connect home"
           >
@@ -382,9 +389,13 @@ export default function DesktopTopBar({
                 accessibilityLabel={label}
                 accessibilityState={{ selected: isActive }}
                 {...(Platform.OS === "web" ? ({ title: label } as any) : {})}
-                style={({ pressed }) => [
+                style={({ pressed, hovered }: any) => [
                   styles.navTab,
-                  pressed && { backgroundColor: colors.hoverOverlay },
+                  {
+                    cursor: "pointer",
+                    backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                  },
                 ]}
               >
                 <View style={styles.navTabContent}>
@@ -446,22 +457,25 @@ export default function DesktopTopBar({
             onPress={() => toggle("account")}
             accessibilityRole="button"
             accessibilityLabel="Open account menu"
-            style={({ pressed }) => [
+            style={({ pressed, hovered }: any) => [
               styles.avatarBtn,
               {
+                cursor: "pointer",
                 backgroundColor:
-                  activePopover === "account" || pressed
-                    ? colors.panelInset
+                  activePopover === "account" || pressed || hovered
+                    ? colors.hoverOverlay
                     : colors.panelInset,
                 borderColor:
                   activePopover === "account"
                     ? colors.brand
                     : "transparent",
+                transform: [{ scale: pressed ? 0.94 : 1 }],
               },
             ]}
           >
             <Avatar
               name={profile?.full_name ?? profile?.username}
+              avatarUrl={profile?.avatar_url}
               size={30}
             />
             <ChevronDown size={12} color={colors.inkFaint} strokeWidth={2.5} />
@@ -508,17 +522,22 @@ function TopBarButton({
   colors,
   children,
 }: TopBarButtonProps) {
+  const [hovered, setHovered] = useState(false);
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ expanded: active }}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
       style={({ pressed }) => [
         styles.iconBtn,
         {
+          cursor: "pointer",
           backgroundColor:
-            active || pressed ? colors.hoverOverlay : colors.panelInset,
+            active || pressed || hovered ? colors.hoverOverlay : colors.panelInset,
+          transform: [{ scale: pressed ? 0.93 : 1 }],
         },
       ]}
     >

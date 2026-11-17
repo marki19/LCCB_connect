@@ -27,6 +27,7 @@ import {
   Search,
 } from "lucide-react-native";
 import Avatar from "../src/components/Avatar";
+import { resolveFileUrl } from "../src/lib/files";
 import PeerPicker from "../src/components/PeerPicker";
 import DesktopTopBar, { TOP_BAR_HEIGHT } from "../src/components/topbar/DesktopTopBar";
 import { usePresence } from "../src/contexts/PresenceContext";
@@ -110,7 +111,7 @@ export default function FriendsScreen() {
         openChat({
           peerId: peer.id,
           peerName: (peer.full_name || peer.username) || undefined,
-          avatarUrl: peer.avatar_url || undefined,
+          avatarUrl: resolveFileUrl(peer.avatar_url) || undefined,
         });
       } else {
         const conversation = await openConversation(peer.id);
@@ -186,7 +187,7 @@ export default function FriendsScreen() {
                 Friends
               </Text>
               <TouchableOpacity
-                onPress={() => setPickerOpen(true)}
+                onPress={() => router.push("/find-friends")}
                 style={[styles.findFriendsBtn, { backgroundColor: colors.actionSurface }]}
                 accessibilityRole="button"
                 accessibilityLabel="Find Friends"
@@ -337,7 +338,11 @@ export default function FriendsScreen() {
                         ]}
                       >
                         <View style={styles.cardAvatarContainer}>
-                          <Avatar name={name} size={72} />
+                          <Avatar
+                            name={name}
+                            avatarUrl={item.requester.avatar_url}
+                            size={72}
+                          />
                         </View>
                         <View style={styles.cardBody}>
                           <Text
@@ -427,6 +432,7 @@ export default function FriendsScreen() {
                         <View style={styles.cardAvatarContainer}>
                           <Avatar
                             name={name}
+                            avatarUrl={item.peer.avatar_url}
                             size={72}
                             showPresence
                             mode={modeOf(item.peer.id)}
@@ -509,9 +515,9 @@ export default function FriendsScreen() {
         </View>
         <IconButton
                   icon={UserPlus}
-                  label="Add a friend"
+                  label="Find friends"
                   variant="subtle"
-                  onPress={() => setPickerOpen(true)}
+                  onPress={() => router.push("/find-friends")}
                   style={[styles.findFriendsBtn, { backgroundColor: colors.actionSurface }]}
                 />
       </View>
@@ -596,6 +602,7 @@ export default function FriendsScreen() {
             >
               <Avatar
                 name={item.requester.full_name || item.requester.username}
+                avatarUrl={item.requester.avatar_url}
                 size={48}
                 showPresence
                 mode={modeOf(item.requester.id)}
@@ -646,6 +653,7 @@ export default function FriendsScreen() {
             >
               <Avatar
                 name={item.peer.full_name || item.peer.username}
+                avatarUrl={item.peer.avatar_url}
                 size={48}
                 showPresence
                 mode={modeOf(item.peer.id)}

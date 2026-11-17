@@ -6,7 +6,7 @@ import {
   Platform,
   useWindowDimensions,
 } from "react-native";
-import { AlignJustify, Search, MessageSquare, Sun, Moon } from "lucide-react-native";
+import { Search, MessageSquare, UserPlus } from "lucide-react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
@@ -39,14 +39,16 @@ function IconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={4}
-      style={({ pressed }) => ({
+      style={({ pressed, hovered }: any) => ({
         width: 44,
         height: 44,
         borderRadius: RADIUS.md,
-        backgroundColor,
+        backgroundColor: hovered ? colors.hoverOverlay : backgroundColor,
         alignItems: "center",
         justifyContent: "center",
+        cursor: "pointer",
         opacity: pressed ? 0.72 : 1,
+        transform: [{ scale: pressed ? 0.94 : 1 }],
       })}
     >
       <Icon size={19} color={iconColor} strokeWidth={2.1} />
@@ -101,66 +103,63 @@ export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
         ...elevation("sm", colors),
       }}
     >
-      {/* Left: menu + seal + wordmark */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x2, flexShrink: 1 }}>
-        <IconButton
-          onPress={onMenuPress}
-          label="Open navigation menu"
-          icon={AlignJustify}
-          iconColor={colors.brand}
-          backgroundColor={colors.brandWash}
-        />
-
-        <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x2, minWidth: 0 }}>
-          <View
+      {/* Left: clickable logo & wordmark to open drawer */}
+      <Pressable
+        onPress={onMenuPress}
+        accessibilityRole="button"
+        accessibilityLabel="Open sidebar menu"
+        style={({ pressed }: any) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          gap: SPACE.x2,
+          minWidth: 0,
+          cursor: "pointer",
+          opacity: pressed ? 0.75 : 1,
+          transform: [{ scale: pressed ? 0.97 : 1 }],
+        })}
+      >
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: RADIUS.md,
+            backgroundColor: colors.panelInset,
+            borderWidth: 1,
+            borderColor: colors.line,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Image
+            source={require("../../assets/images/logo-seal.png")}
+            style={{ width: 28, height: 28 }}
+            resizeMode="contain"
+          />
+        </View>
+        <View style={{ minWidth: 0 }}>
+          <Text
+            numberOfLines={1}
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: RADIUS.md,
-              backgroundColor: colors.panelInset,
-              borderWidth: 1,
-              borderColor: colors.line,
-              alignItems: "center",
-              justifyContent: "center",
+              ...TYPE.title,
+              fontSize: compact ? 15 : 17,
+              color: colors.ink,
+              letterSpacing: -0.5,
+              fontWeight: "700",
             }}
           >
-            <Image
-              source={require("../../assets/images/logo-seal.png")}
-              style={{ width: 26, height: 26 }}
-              resizeMode="contain"
-            />
-          </View>
-          <View style={{ minWidth: 0 }}>
-            <Text
-              numberOfLines={1}
-              style={{
-                ...TYPE.title,
-                fontSize: compact ? 14 : 16,
-                color: colors.ink,
-                letterSpacing: -0.5,
-              }}
-            >
-              LCCB <Text style={{ color: colors.brand }}>Connect</Text>
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={{ ...TYPE.micro, fontSize: 7.5, color: colors.inkFaint, marginTop: 1 }}
-            >
-              Campus network
-            </Text>
-          </View>
+            LCCB <Text style={{ color: colors.brand }}>Connect</Text>
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={{ ...TYPE.micro, fontSize: 8, color: colors.inkFaint, marginTop: 1 }}
+          >
+            Campus network
+          </Text>
         </View>
-      </View>
+      </Pressable>
 
-      {/* Right: theme, search, messages */}
+      {/* Right: search, find friends, messages */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x1 }}>
-        <IconButton
-          onPress={() => void toggleTheme()}
-          label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          icon={isDark ? Sun : Moon}
-          iconColor={colors.inkSoft}
-          backgroundColor={colors.panelInset}
-        />
         <IconButton
           onPress={() => router.push("/(tabs)/search")}
           label="Search the repository"
@@ -169,7 +168,14 @@ export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
           backgroundColor={colors.panelInset}
         />
         <IconButton
-          onPress={() => router.push("/messages")}
+          onPress={() => router.push("/find-friends")}
+          label="Find friends"
+          icon={UserPlus}
+          iconColor={colors.inkSoft}
+          backgroundColor={colors.panelInset}
+        />
+        <IconButton
+          onPress={() => router.push("/(tabs)/messages")}
           label={unreadCount > 0 ? `Messages, ${unreadCount} unread` : "Open messages"}
           icon={MessageSquare}
           iconColor={colors.brand}

@@ -13,6 +13,8 @@ import Reveal from "../../src/components/ui/Reveal";
 import SectionHeader from "../../src/components/ui/SectionHeader";
 import StatusBadge from "../../src/components/admin/StatusBadge";
 import EmptyState from "../../src/components/admin/EmptyState";
+import Avatar from "../../src/components/Avatar";
+import { resolveFileUrl } from "../../src/lib/files";
 
 function getInitials(name: string | null) {
   if (!name) return "??";
@@ -26,6 +28,7 @@ function formatPostRows(rows: any[], user: any) {
       id: user.id,
       name: user.full_name,
       initials: getInitials(user.full_name),
+      avatarUrl: resolveFileUrl(user.avatar_url),
       course: user.department_name,
       yearLevel: user.year_level,
     },
@@ -34,7 +37,7 @@ function formatPostRows(rows: any[], user: any) {
     type: row.type || "text",
     tags: row.technologies || row.tags || [],
     previewUrl: row.github_url || row.preview_url,
-    imageUrl: row.image_url,
+    imageUrl: resolveFileUrl(row.image_url) || undefined,
     likes: row.likes || 0,
     comments: row.comments || 0,
     createdAt: new Date(row.created_at).toLocaleDateString(),
@@ -228,23 +231,17 @@ export default function ProfileScreen() {
           <Reveal style={{ marginTop: -56 }}>
             <Card elevated style={{ padding: SPACE.x5 }}>
               <View style={{ flexDirection: "row", alignItems: "flex-start", gap: SPACE.x4 }}>
-                <View
+                <Avatar
+                  name={isGuest ? "Guest Visitor" : currentUser.full_name}
+                  avatarUrl={isGuest ? null : currentUser.avatar_url}
+                  size={96}
                   style={{
-                    width: 96,
-                    height: 96,
-                    borderRadius: 48,
-                    backgroundColor: colors.brandWash,
+                    marginTop: -40,
                     borderWidth: 4,
                     borderColor: colors.surface,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginTop: -40,
+                    borderRadius: 48,
                   }}
-                >
-                  <Text style={{ fontSize: 32, fontWeight: "800", color: colors.brand }}>
-                    {getInitials(isGuest ? "Guest Visitor" : currentUser.full_name)}
-                  </Text>
-                </View>
+                />
 
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <View

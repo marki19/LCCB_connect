@@ -20,6 +20,13 @@ const rejectUnauthorized =
   process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false" &&
   process.env.DATABASE_REJECT_UNAUTHORIZED !== "false";
 
+if (!isLocalhost && rejectUnauthorized && !SUPABASE_CA) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("[db] FATAL: Supabase root CA certificate is missing. Refusing insecure TLS connection in production.");
+  }
+  console.warn("[db] Warning: Supabase root CA certificate is missing. Connecting with rejectUnauthorized: false.");
+}
+
 const sslConfig = isLocalhost
   ? false
   : SUPABASE_CA && rejectUnauthorized

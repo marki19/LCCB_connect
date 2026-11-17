@@ -15,6 +15,9 @@ export async function fetchDepartments(): Promise<Department[]> {
 }
 
 export async function fetchCourses(departmentId: string): Promise<Course[]> {
-  const data = await apiJson<Course[]>(`/public/departments/${departmentId}/courses`);
+  if (!departmentId || typeof departmentId !== "string" || !departmentId.trim()) {
+    return [];
+  }
+  const data = await apiJson<Course[]>(`/public/departments/${encodeURIComponent(departmentId.trim())}/courses`);
   return Array.isArray(data) ? data : [];
 }

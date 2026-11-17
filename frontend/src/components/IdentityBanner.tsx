@@ -8,8 +8,9 @@ import { SPACE, RADIUS, TYPE, elevation } from "../lib/tokens";
 import { dismissBanner } from "../lib/api";
 
 /**
- * One-row banner prompting unverified students to complete their profile.
- * Only shows for students with identity_complete === false.
+ * One-row banner prompting an unverified account to finish onboarding.
+ * Shows for a student whose identity is incomplete, and for a new 'user'
+ * account that has not chosen a role yet.
  * Can be dismissed (persisted via backend).
  */
 export default function IdentityBanner() {
@@ -22,7 +23,11 @@ export default function IdentityBanner() {
     return null;
   }
 
-  if (profile?.role !== "student" || profile?.identity_complete !== false) {
+  const role = profile?.role;
+  const needsIdentity = role === "user" || role === "student";
+  const incomplete = role === "user" || profile?.identity_complete === false;
+
+  if (!needsIdentity || !incomplete) {
     return null;
   }
 

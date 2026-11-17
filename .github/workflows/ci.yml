@@ -40,6 +40,8 @@ jobs:
       OTP_PEPPER: test-otp-pepper-value-0123456789
       BREVO_WEBHOOK_SECRET: test-webhook-secret-32-chars!!
       JWT_SECRET: test-jwt-secret-value-32-chars-long
+      JWT_REFRESH_SECRET: test-jwt-refresh-secret-value-32-chars
+      MFA_CHALLENGE_SECRET: test-mfa-challenge-secret-value-32-chars
       PUSH_ENABLED: "false"
       RATE_LIMIT_MAX: "1000000"
       RATE_LIMIT_WRITE_MAX: "1000000"

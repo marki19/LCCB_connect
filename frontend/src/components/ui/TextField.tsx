@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { forwardRef, useState, type ComponentRef, type ReactNode } from "react";
 import {
   Text,
   TextInput,
@@ -11,7 +11,7 @@ import {
 import { useTheme } from "../../contexts/ThemeContext";
 import { focusRing, RADIUS, SPACE } from "../../lib/tokens";
 
-type TextFieldProps = {
+export type TextFieldProps = {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
@@ -29,36 +29,46 @@ type TextFieldProps = {
   leadingIcon?: (props: { size: number; color: string }) => ReactNode;
   autoFocus?: boolean;
   returnKeyType?: TextInputProps["returnKeyType"];
-  onSubmitEditing?: () => void;
+  enterKeyHint?: TextInputProps["enterKeyHint"];
+  blurOnSubmit?: boolean;
+  /** Ref of the next input field to focus when pressing Enter/Return. */
+  nextRef?: { current: any };
+  onSubmitEditing?: (e?: any) => void;
   onBlur?: () => void;
   maxLength?: number;
   inputStyle?: StyleProp<TextStyle>;
   minHeight?: number;
 };
 
-export default function TextField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  hint,
-  error,
-  secureTextEntry,
-  keyboardType,
-  autoCapitalize = "none",
-  autoComplete,
-  multiline = false,
-  editable = true,
-  right,
-  leadingIcon,
-  autoFocus,
-  returnKeyType,
-  onSubmitEditing,
-  onBlur,
-  maxLength,
-  inputStyle,
-  minHeight,
-}: TextFieldProps) {
+const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldProps>(function TextField(
+  {
+    label,
+    value,
+    onChangeText,
+    placeholder,
+    hint,
+    error,
+    secureTextEntry,
+    keyboardType,
+    autoCapitalize = "none",
+    autoComplete,
+    multiline = false,
+    editable = true,
+    right,
+    leadingIcon,
+    autoFocus,
+    returnKeyType,
+    enterKeyHint,
+    blurOnSubmit,
+    nextRef,
+    onSubmitEditing,
+    onBlur,
+    maxLength,
+    inputStyle,
+    minHeight,
+  },
+  ref
+) {
   const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
   const borderColor = error
@@ -66,6 +76,21 @@ export default function TextField({
     : focused
     ? colors.inputBorderFocus
     : colors.inputBorder;
+
+  // Resolve sensible returnKeyType and blurOnSubmit defaults for chaining
+  const effectiveReturnKeyType =
+    returnKeyType ?? (nextRef ? "next" : onSubmitEditing ? "done" : undefined);
+  const effectiveBlurOnSubmit =
+    blurOnSubmit ?? (nextRef ? false : !multiline);
+  const effectiveEnterKeyHint =
+    enterKeyHint ?? (nextRef ? "next" : onSubmitEditing ? "done" : undefined);
+
+  const handleSubmitEditing = (e: any) => {
+    if (nextRef && nextRef.current && typeof nextRef.current.focus === "function") {
+      nextRef.current.focus();
+    }
+    onSubmitEditing?.(e);
+  };
 
   return (
     <View style={{ marginBottom: SPACE.x4 }}>
@@ -101,6 +126,7 @@ export default function TextField({
           </View>
         ) : null}
         <TextInput
+          ref={ref}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -112,8 +138,10 @@ export default function TextField({
           multiline={multiline}
           editable={editable}
           autoFocus={autoFocus}
-          returnKeyType={returnKeyType}
-          onSubmitEditing={onSubmitEditing}
+          returnKeyType={effectiveReturnKeyType}
+          enterKeyHint={effectiveEnterKeyHint}
+          blurOnSubmit={effectiveBlurOnSubmit}
+          onSubmitEditing={handleSubmitEditing}
           maxLength={maxLength}
           textAlignVertical={multiline ? "top" : "center"}
           onFocus={() => setFocused(true)}
@@ -148,4 +176,6 @@ export default function TextField({
       ) : null}
     </View>
   );
-}
+});
+
+export default TextField;

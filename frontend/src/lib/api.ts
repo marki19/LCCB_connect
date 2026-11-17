@@ -1,6 +1,8 @@
 import { create, isAxiosError } from "axios";
-import { supabase } from "./supabase";
+import { getSession, isExpired, clearSession } from "./session";
+import { refreshSession } from "./auth";
 import type { ContentVisibility } from "../types";
+import { fileUrl, resolveFileUrl, resolveFileUrls } from "./files";
 
 const API_URL = (
   process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api"
@@ -8,30 +10,31 @@ const API_URL = (
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
 // One shared instance so the interceptor is registered once.
-// Default timeout is 15s to fail fast on stalled backends; uploads extend to 60s.
-const client = create({ baseURL: API_URL, timeout: 15000 });
+// Default timeout is 60s to accommodate free-tier cold starts (Render spin-up takes 30-50s); uploads extend to 120s.
+const client = create({ baseURL: API_URL, timeout: 60000 });
 
-// Attach the Supabase Bearer token before every request and rewrite
+// Attach the Bearer token before every request and rewrite
 // guest GET paths to the public read-only endpoints.
 client.interceptors.request.use(async (config) => {
-  // Allow uploads / FormData to take up to 60s
+  // Allow uploads / FormData to take up to 120s
   const isUpload =
     (typeof FormData !== "undefined" && config.data instanceof FormData) ||
     (typeof config.url === "string" && config.url.includes("/upload"));
-  if (isUpload && (config.timeout === undefined || config.timeout === 15000)) {
-    config.timeout = 60000;
+  if (isUpload && (config.timeout === undefined || config.timeout === 60000)) {
+    config.timeout = 120000;
   }
-  let {
-    data: { session },
-  } = await supabase.auth.getSession();
+
+  let session = await getSession();
 
   // If token is expired or within 60s of expiring, proactively refresh it
-  if (session?.expires_at && session.expires_at * 1000 <= Date.now() + 60000) {
+  // (skip if the request is to /auth/refresh or /auth/logout)
+  const isAuthPath =
+    typeof config.url === "string" &&
+    (config.url.includes("/auth/refresh") || config.url.includes("/auth/logout"));
+  if (!isAuthPath && session?.access_token && isExpired(session, 60)) {
     try {
-      const { data: refreshed, error } = await supabase.auth.refreshSession();
-      if (!error && refreshed?.session) {
-        session = refreshed.session;
-      }
+      await refreshSession();
+      session = await getSession();
     } catch {
       // Continue with current session or fallback
     }
@@ -70,29 +73,32 @@ client.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const isAuthPath =
+      typeof originalRequest?.url === "string" &&
+      (originalRequest.url.includes("/auth/refresh") ||
+        originalRequest.url.includes("/auth/login"));
+
     if (
       error.response?.status === 401 &&
       originalRequest &&
-      !originalRequest._retry
+      !originalRequest._retry &&
+      !isAuthPath
     ) {
       if (error.response?.data?.code === "session_expired") {
         if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
           window.dispatchEvent(new CustomEvent("admin_session_expired"));
         }
       }
-      const errMsg = error.response?.data?.error || "";
-      if (/token|jwt/i.test(errMsg)) {
-        originalRequest._retry = true;
-        try {
-          const { data, error: refreshErr } = await supabase.auth.refreshSession();
-          if (!refreshErr && data?.session?.access_token) {
-            originalRequest.headers = originalRequest.headers || {};
-            originalRequest.headers["Authorization"] = `Bearer ${data.session.access_token}`;
-            return client(originalRequest);
-          }
-        } catch {
-          // Refresh failed
+      originalRequest._retry = true;
+      try {
+        const newAccessToken = await refreshSession();
+        if (newAccessToken) {
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
+          return client(originalRequest);
         }
+      } catch {
+        await clearSession();
       }
     }
     return Promise.reject(error);
@@ -278,6 +284,12 @@ export async function deleteThesis(id: string | number): Promise<void> {
   return apiJson(`/theses/${id}`, { method: "DELETE" });
 }
 
+export async function deleteAvatar(): Promise<{ message: string; avatar_url: null }> {
+  return apiJson<{ message: string; avatar_url: null }>("/users/me/avatar", {
+    method: "DELETE",
+  });
+}
+
 /**
  * Fetches a short-lived signed URL for a thesis' manuscript.
  *
@@ -318,6 +330,18 @@ export async function getPostImageUrls(id: string | number): Promise<string[]> {
   }
   return [];
 }
+
+/**
+ * Absolute URL for a stored file key.
+ *
+ * The backend authorises the request and answers with a redirect to a
+ * short-lived presigned URL, so the client never holds storage credentials and
+ * the URL it renders stays valid as long as it keeps being requested. That is
+ * why this is a plain string rather than a signed URL fetched ahead of time.
+ *
+ * @param key A `<category>/<filename>` key, as returned by `uploadToStorage`.
+ */
+export { fileUrl, resolveFileUrl, resolveFileUrls };
 
 // ============================================================================
 // Repost endpoints
@@ -435,6 +459,7 @@ export function adaptPost(row: any): any {
   if (!row) return null;
   const authorName = row.author?.full_name || row.author?.name || "Unknown Author";
   const initials = (authorName.split(" ").map((n: string) => n[0]).join("").substring(0, 2) || "LC").toUpperCase();
+  const authorAvatarUrl = resolveFileUrl(row.author?.avatar_url || row.author?.avatarUrl);
   return {
     id: String(row.id),
     author: {
@@ -442,6 +467,7 @@ export function adaptPost(row: any): any {
       name: authorName,
       initials,
       avatarColor: row.author?.avatarColor || "#BFDBFE",
+      avatarUrl: authorAvatarUrl,
       course: row.author?.department_name || row.department_name || "—",
       yearLevel: row.author?.year_level || "—",
       username: row.author?.username,
@@ -452,7 +478,16 @@ export function adaptPost(row: any): any {
     type: row.type || "text",
     tags: row.technologies || row.tags || [],
     previewUrl: row.github_url || row.preview_url || row.previewUrl,
-    imageUrl: row.image_url || row.imageUrl,
+    imageUrl: resolveFileUrl(row.image_url || row.imageUrl) || undefined,
+    image_urls: resolveFileUrls(
+      Array.isArray(row.image_urls)
+        ? row.image_urls
+        : Array.isArray(row.imageUrls)
+        ? row.imageUrls
+        : row.image_url
+        ? [row.image_url]
+        : []
+    ),
     preview_metadata: row.preview_metadata || null,
     likes: Number(row.like_count ?? row.likes ?? 0),
     comments: Number(row.comment_count ?? row.comments ?? 0),
@@ -466,6 +501,16 @@ export function adaptPost(row: any): any {
     edited_at: row.edited_at || null,
     deleted_at: row.deleted_at || null,
     kind: row.kind || "post",
+    repost: row.repost
+      ? {
+          caption: row.repost.caption,
+          created_at: row.repost.created_at,
+          reposter: {
+            ...row.repost.reposter,
+            avatarUrl: resolveFileUrl(row.repost.reposter?.avatar_url || row.repost.reposter?.avatarUrl),
+          },
+        }
+      : undefined,
   };
 }
 

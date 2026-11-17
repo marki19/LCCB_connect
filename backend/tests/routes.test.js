@@ -41,24 +41,17 @@ const revokeSessions = stub(accountService, "revokeSessions", async () => ({
 }));
 const deleteAuthUser = stub(accountService, "deleteAuthUser", async () => true);
 
-// The response middleware resolves private storage keys through Supabase. In
-// the test suite there is no Supabase, so the resolution is a no-op: the body
-// is shipped as-is. This keeps the HTTP contract assertions hermetic.
+// The response middleware expands stored keys into presigned URLs. In the test
+// suite there is no bucket, so expansion is a no-op: the body ships as-is and
+// the HTTP contract assertions stay hermetic.
 const storageService = require("../services/storageService");
 stub(storageService, "withStorageUrls", async (body) => body);
 
-// The thesis upload path calls getSupabaseAdmin() to push bytes into Storage.
-// The model is stubbed, so the upload itself never runs in these tests — but
-// the factory must still resolve, otherwise the controller throws.
-const supabaseAdmin = require("../services/supabaseAdmin");
-stub(supabaseAdmin, "getSupabaseAdmin", () => ({
-  storage: {
-    from: () => ({
-      upload: async () => ({ error: null }),
-      remove: async () => ({ error: null }),
-    }),
-  },
-}));
+// Uploads are streamed to object storage. The transport is stubbed so the suite
+// needs neither credentials nor a bucket; the stored key is asserted instead.
+const objectStorage = require("../services/objectStorage");
+const putObject = stub(objectStorage, "putObject", async () => undefined);
+stub(objectStorage, "deleteObject", async () => undefined);
 
 const STORAGE_URL = "https://test-project.supabase.co/storage/v1/object/public";
 
@@ -130,6 +123,8 @@ beforeEach(() => {
     fn.calls.length = 0;
     fn.setImpl(() => undefined);
   }
+  putObject.calls.length = 0;
+  putObject.setImpl(async () => undefined);
   session.id = "u1";
   session.role = "student";
   session.department_id = null;
@@ -628,13 +623,12 @@ describe("file uploads use storage object keys", () => {
       .attach("pdf", Buffer.from("%PDF-1.4 fake manuscript"), "u1/2.pdf");
 
     assert.equal(res.status, 201);
-    // The path is `theses/<uid>/<timestamp>.pdf`; the filename comes from the
-    // upload, the prefix from the caller's identity.
+    // Every category uses one key shape: `<category>/<hashed>.<ext>`. Ownership
+    // is recorded on the row, not encoded in the path, and the flat shape is
+    // what `/api/files/:category/:filename` can route.
     const storedKey = m.createThesis.calls.at(-1)[0].pdf_url;
-    assert.ok(
-      storedKey.startsWith("theses/u1/") && storedKey.endsWith(".pdf"),
-      `unexpected stored key: ${storedKey}`
-    );
+    assert.match(storedKey, /^theses\/[0-9a-f]{32}\.pdf$/);
+    assert.equal(putObject.calls.at(-1)[0].contentType, "application/pdf");
   });
 
   it("returns the created image as a raw key (assets is private)", async () => {
@@ -777,15 +771,15 @@ describe("post list filters", () => {
         assert.equal(call[0].q.length, 100);
       });
 
-  it("rejects a malformed author_id instead of letting Postgres cast it", async () => {
-      const res = await request(app)
-        .get("/api/posts?author_id=not-a-uuid")
-        .set(AUTH);
+  it("passes text author_id filter to visiblePostsFor", async () => {
+    const res = await request(app)
+      .get("/api/posts?author_id=adm_test123")
+      .set(AUTH);
 
-      assert.equal(res.status, 400);
-      assert.deepEqual(res.body, { error: "Invalid author_id" });
-      assert.equal(m.visiblePostsFor.calls.length, 0);
-    });
+    assert.equal(res.status, 200);
+    const call = m.visiblePostsFor.calls.at(-1);
+    assert.equal(call[0].authorId, "adm_test123");
+  });
 });
 
 describe("thesis list filters", () => {

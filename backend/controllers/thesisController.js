@@ -8,9 +8,9 @@ const {
 const moderationService = require("../services/moderationService");
 const notificationService = require("../services/notificationService");
 const { resolveAudience } = require("../services/visibilityService");
-const { assertPdfMagic } = require("../middleware/upload");
+const { storeUpload } = require("../services/uploadService");
 const { deleteStorageObject } = require("../services/storageCleanup");
-const { getSupabaseAdmin } = require("../services/supabaseAdmin");
+const { respondToUploadError } = require("../middleware/upload");
 
 /**
  * A custom-visibility write must name accepted friends. Returns the normalized
@@ -76,9 +76,8 @@ const getThesis = async (req, res, next) => {
  * thesisRouter.js), so this handler receives `req.file` already parsed. It
  * accepts multipart/form-data with a `pdf` file field (required) and the usual
  * text fields (title, abstract, category, visibility, audience). The PDF is
- * validated for magic bytes and size, then uploaded to Supabase Storage as
- * `theses/<uid>/<timestamp>.pdf`. The API stores only the object key, never
- * the full URL.
+ * validated for magic bytes and size, then stored as `theses/<hashed>.pdf`. The
+ * API stores only the object key, never the full URL.
  */
 const createThesis = async (req, res, next) => {
   try {
@@ -86,12 +85,11 @@ const createThesis = async (req, res, next) => {
       return res.status(400).json({ error: "PDF manuscript is required" });
     }
 
-    // Validate magic bytes
-    try {
-      assertPdfMagic(req.file.buffer);
-    } catch (err) {
-      return res.status(400).json({ error: err.message });
-    }
+    const stored = await storeUpload({
+      category: "theses",
+      originalName: req.file.originalname,
+      buffer: req.file.buffer,
+    });
 
     // Extract text fields from req.body (multer parses form fields)
     const {
@@ -102,22 +100,6 @@ const createThesis = async (req, res, next) => {
       audience,
     } = req.body;
 
-    // Build the storage path
-    const path = `theses/${req.user.id}/${Date.now()}.pdf`;
-
-    // Upload via service-role key (never exposed to the client)
-    const supabase = getSupabaseAdmin();
-    const { error: uploadError } = await supabase.storage
-      .from("theses")
-      .upload(path, req.file.buffer, {
-        contentType: "application/pdf",
-        upsert: false,
-      });
-
-    if (uploadError) {
-      throw uploadError;
-    }
-
     // Persist the thesis row with the storage key only
     const newThesis = await thesisModel.createThesis({
       uploader_id: req.user.id,
@@ -126,7 +108,7 @@ const createThesis = async (req, res, next) => {
       department_id: req.profile?.department_id || null,
       department: req.profile?.department_name || null,
       category: category || "Undergraduate Capstone",
-      pdf_url: path,
+      pdf_url: stored.key,
       visibility,
       audience,
       moderation_status: "approved",
@@ -159,6 +141,7 @@ const createThesis = async (req, res, next) => {
 
     res.status(201).json(newThesis);
   } catch (error) {
+    if (respondToUploadError(res, error)) return;
     next(error);
   }
 };
@@ -167,33 +150,23 @@ const updateThesis = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // If a new manuscript was uploaded alongside the edit, upload it first and
+    // If a new manuscript was uploaded alongside the edit, store it first and
     // point the row at the new key. The old file is cleaned up best-effort.
     let pdfUrl;
     if (req.file) {
-      try {
-        assertPdfMagic(req.file.buffer);
-      } catch (err) {
-        return res.status(400).json({ error: err.message });
-      }
+      const stored = await storeUpload({
+        category: "theses",
+        originalName: req.file.originalname,
+        buffer: req.file.buffer,
+      });
 
-      // Remove the old file before storing the new one (best-effort).
+      // Remove the old file after the new one is safely stored (best-effort).
       const oldKey = await thesisModel.getThesisFileKey(id);
-      const path = `theses/${req.user.id}/${Date.now()}.pdf`;
-
-      const supabase = getSupabaseAdmin();
-      const { error: uploadError } = await supabase.storage
-        .from("theses")
-        .upload(path, req.file.buffer, {
-          contentType: "application/pdf",
-          upsert: false,
-        });
-      if (uploadError) throw uploadError;
 
       deleteStorageObject("theses", oldKey).catch((err) => {
         console.error("[cleanup] failed to remove old thesis PDF:", err);
       });
-      pdfUrl = path;
+      pdfUrl = stored.key;
     }
 
     // Allow partial updates. `pdf_url` is never accepted from the JSON body —
@@ -220,6 +193,7 @@ const updateThesis = async (req, res, next) => {
     }
     res.json(updated);
   } catch (error) {
+    if (respondToUploadError(res, error)) return;
     next(error);
   }
 };

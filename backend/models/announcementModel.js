@@ -243,8 +243,17 @@ async function list({ viewerId, isCampusAdmin, departmentId, limit = 25, cursor 
   }
 
   const result = await db.query(
-    `SELECT ${ANNOUNCEMENT_COLUMNS}
+    `SELECT ${ANNOUNCEMENT_COLUMNS},
+            pr.username AS actor_username,
+            pr.full_name AS author_name,
+            (
+              SELECT COUNT(*)::int
+                FROM public.notifications n
+               WHERE n.type = 'announcement'
+                 AND n.target_id = p.id
+            ) AS recipients
        FROM public.posts p
+       LEFT JOIN public.profiles pr ON pr.id = p.author_id
       WHERE p.type = 'announcement'
         AND p.deleted_at IS NULL
         AND (

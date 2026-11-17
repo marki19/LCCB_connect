@@ -26,7 +26,13 @@ import {
   registerForPush,
 } from "../src/lib/push";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
+import { Image as ExpoImage } from "expo-image";
 import "../global.css";
+
+// Cap iOS image disk cache at 200 MB (Android Glide caps at 250 MB automatically)
+if (Platform.OS === "ios") {
+  ExpoImage.configureCache({ maxDiskSize: 200 * 1024 * 1024 });
+}
 
 
 
@@ -109,13 +115,15 @@ function RouteGuard() {
         } else if (profileStatus === "error") {
           router.replace("/(tabs)/"); // fail open; let the app render degraded
         } else if (
-          profile?.role === "student" &&
-          profile.verification_status !== "verified"
+          // A new account starts at 'user' and has to say what it is before the
+          // feed makes sense for it. Unverified students are the legacy case.
+          profile?.role == null ||
+          profile.role === "user" ||
+          (profile.role === "student" && profile.verification_status !== "verified")
         ) {
-          // One-time post-login hop: unverified students complete identity
-          // before they reach the feed. After that, IdentityBanner prompts
-          // them inside the app instead — so "Back to App" from onboarding
-          // lands on the feed and stays there.
+          // One-time post-login hop: complete identity before reaching the feed.
+          // After that, IdentityBanner prompts them inside the app instead — so
+          // "Back to App" from onboarding lands on the feed and stays there.
           router.replace("/onboarding");
         } else {
           router.replace("/(tabs)/");
@@ -164,7 +172,6 @@ function RouteGuard() {
         <Stack.Screen name="(moderation)" />
         <Stack.Screen name="suspended" />
         <Stack.Screen name="onboarding" />
-        <Stack.Screen name="verify-requests" />
         <Stack.Screen
           name="create"
           options={{
@@ -178,6 +185,7 @@ function RouteGuard() {
         <Stack.Screen name="messages/index" />
         <Stack.Screen name="messages/[id]" />
         <Stack.Screen name="friends" />
+        <Stack.Screen name="find-friends" />
         <Stack.Screen name="saved" />
         <Stack.Screen name="settings" options={{ presentation: "modal" }} />
       </Stack>

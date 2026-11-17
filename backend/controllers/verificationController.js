@@ -59,17 +59,20 @@ function snapshotFor(role, body) {
 }
 
 /**
- * Checks the caller's role and school account before anything is emailed or
- * stored. Returns an error message, or null when the caller may verify.
+ * Checks the caller's school account and resolves the role this submission is
+ * for. A `'user'` account picks its role here; everyone else is fixed by their
+ * profile. Returns `{ role }` or `{ error }`.
  */
-function verifiableAccountError(profile) {
-  if (!policy.fieldsFor(profile?.role)) {
-    return "Superadmin accounts are not verified";
-  }
+function resolveSubmission(profile, requestedRole) {
   if (!policy.isSchoolAccount(profile?.email)) {
-    return `Verification is only available to ${policy.SCHOOL_EMAIL_DOMAIN} accounts`;
+    return { error: `Verification is only available to ${policy.SCHOOL_EMAIL_DOMAIN} accounts` };
   }
-  return null;
+  const resolved = policy.resolveRequestRole(profile?.role, requestedRole);
+  if (resolved.error) return resolved;
+  if (!policy.fieldsFor(resolved.role)) {
+    return { error: "This account does not verify" };
+  }
+  return resolved;
 }
 
 /** True when the profile already carries the identity its role has to prove. */
@@ -129,15 +132,30 @@ function reviewerContext(profile) {
   return { roles, departmentId: profile.department_id };
 }
 
-/** Notifies everyone the matrix says may act on this request. */
+/**
+ * Notifies everyone the matrix says may act on this request.
+ *
+ * When nobody in the requester's department can decide it, the request is
+ * stamped `escalated_at` and handed to the campus reviewers instead. Without
+ * that stamp a department that never hired an admin would leave its students'
+ * requests in a queue no one reads, and no error would ever surface.
+ */
 async function notifyReviewers(request) {
   const groups = policy.reviewersForRequest(request.role);
-  const reviewers = await verificationModel.resolveReviewers({
+  let reviewers = await verificationModel.resolveReviewers({
     campusRoles: groups.campusRoles,
     departmentRoles: groups.departmentRoles,
     departmentId: request.department_id,
   });
-  if (reviewers.length === 0) return;
+
+  if (reviewers.length === 0) {
+    const escalated = await verificationModel.markEscalated(request.id);
+    if (!escalated) return; // already escalated by a concurrent submit
+    reviewers = await verificationModel.resolveReviewers({
+      campusRoles: policy.ESCALATION_REVIEWER_ROLES,
+    });
+    if (reviewers.length === 0) return;
+  }
 
   await notificationService.createNotifications(
     reviewers.map((r) => r.id),
@@ -157,8 +175,14 @@ async function notifyReviewers(request) {
 /** POST /api/verification/otp — email a code to the caller's school account. */
 const sendOtp = async (req, res, next) => {
   try {
-    const error = verifiableAccountError(req.profile);
-    if (error) return res.status(403).json({ error });
+    if (!policy.canVerify(req.profile?.role)) {
+      return res.status(403).json({ error: "This account does not verify" });
+    }
+    if (!policy.isSchoolAccount(req.profile?.email)) {
+      return res
+        .status(403)
+        .json({ error: `Verification is only available to ${policy.SCHOOL_EMAIL_DOMAIN} accounts` });
+    }
 
     const email = req.profile.email.trim().toLowerCase();
     const { code, expiresAt } = await verificationOtpModel.issue({
@@ -188,14 +212,19 @@ const submit = async (req, res, next) => {
     const userId = req.user.id;
     const profile = req.profile;
 
-    const accountError = verifiableAccountError(profile);
-    if (accountError) return res.status(403).json({ error: accountError });
+    const resolved = resolveSubmission(profile, req.body.role);
+    if (resolved.error) {
+      // A role the caller may not pick is a bad request, not a permission
+      // failure; the account itself is allowed to verify.
+      const status = policy.isSchoolAccount(profile?.email) ? 400 : 403;
+      return res.status(status).json({ error: resolved.error });
+    }
 
     if (profile.verification_status === "verified" && identityComplete(profile)) {
       return res.status(409).json({ error: "Your account is already verified" });
     }
 
-    const { snapshot, error } = snapshotFor(profile.role, req.body);
+    const { snapshot, error } = snapshotFor(resolved.role, req.body);
     if (error) return res.status(400).json({ error });
 
     if (!(await requireVerifiedCode(req, res))) return;
@@ -252,15 +281,21 @@ const updateMine = async (req, res, next) => {
     const userId = req.user.id;
     const profile = req.profile;
 
-    const accountError = verifiableAccountError(profile);
-    if (accountError) return res.status(403).json({ error: accountError });
-
     const existing = await verificationModel.getLatestForUser(userId);
     if (!existing || existing.status !== "pending") {
       return res.status(404).json({ error: "No pending request to update" });
     }
 
-    const { snapshot, error } = snapshotFor(profile.role, req.body);
+    // The role is settled when the request is created. A pending request is
+    // already in a reviewer's queue under that role, so editing it would move
+    // the work without moving the notification.
+    const resolved = resolveSubmission(profile, existing.role);
+    if (resolved.error) {
+      const status = policy.isSchoolAccount(profile?.email) ? 400 : 403;
+      return res.status(status).json({ error: resolved.error });
+    }
+
+    const { snapshot, error } = snapshotFor(resolved.role, req.body);
     if (error) return res.status(400).json({ error });
 
     if (!(await requireVerifiedCode(req, res))) return;
@@ -290,19 +325,31 @@ const updateMine = async (req, res, next) => {
   }
 };
 
-/** GET /api/verification/mine — caller's latest request, plus the form shape. */
+/**
+ * GET /api/verification/mine — caller's latest request, plus the form shape.
+ *
+ * A `'user'` account has not chosen a role yet, so it may preview one with
+ * `?role=student` without committing to it; the preview drives the form. The
+ * field table stays here rather than in the client, so the two cannot drift.
+ */
 const getMine = async (req, res, next) => {
   try {
+    const profile = req.profile;
     const request = await verificationModel.getLatestForUser(req.user.id);
-    const fields = policy.fieldsFor(req.profile?.role);
+
+    const preview = policy.needsRoleChoice(profile?.role) ? req.query.role ?? null : null;
+    const resolved = policy.resolveRequestRole(profile?.role, preview ?? request?.role ?? null);
+    const role = resolved.role ?? null;
 
     res.json({
       request,
       can_resubmit: !request || request.status === "declined",
-      // The authoritative form shape for the caller's role, so the client does
-      // not have to keep its own copy of which fields each role proves.
-      fields,
-      school_account: policy.isSchoolAccount(req.profile?.email),
+      // What the form renders for, or null while the role is still unchosen.
+      role,
+      fields: role ? policy.fieldsFor(role) : null,
+      // Only an account that still has to choose gets the list.
+      selectable_roles: policy.needsRoleChoice(profile?.role) ? policy.SELECTABLE_ROLES : null,
+      school_account: policy.isSchoolAccount(profile?.email),
     });
   } catch (err) {
     next(err);
@@ -326,6 +373,7 @@ const queue = async (req, res, next) => {
     const rows = await verificationModel.listQueue({
       roles: context.roles,
       departmentId: context.departmentId,
+      escalatedRoles: policy.escalationRolesFor(req.profile?.role),
       status,
       limit,
       cursor,
@@ -357,6 +405,7 @@ async function authorizeReview(req, res) {
     reviewerDepartmentId: req.profile?.department_id,
     requestRole: request.role,
     requestDepartmentId: request.department_id,
+    requestEscalated: Boolean(request.escalated_at),
   });
   if (!allowed) {
     res.status(403).json({ error: "Forbidden: this request is outside your scope" });
@@ -467,4 +516,5 @@ module.exports = {
   // exported for unit tests
   snapshotFor,
   identityComplete,
+  resolveSubmission,
 };

@@ -132,7 +132,7 @@ function FloatingChatInner({
     if (attachedImage) {
       setUploading(true);
       try {
-        const key = await uploadChatImage(attachedImage.uri, conversationId);
+        const key = await uploadChatImage(attachedImage.uri);
         if (!key) {
           Alert.alert("Upload failed", "Could not upload image. Please try again.");
           setUploading(false);
@@ -189,7 +189,7 @@ function FloatingChatInner({
           accessibilityLabel={`Open chat with ${peer.peerName || "peer"}`}
         >
           <View style={styles.avatarWrap}>
-            <Avatar name={peer.peerName} size={28} />
+            <Avatar name={peer.peerName} avatarUrl={peer.avatarUrl} size={28} />
             {peerOnline && <View style={[styles.presenceDotSmall, { borderColor: colors.surface }]} />}
           </View>
           <Text style={[styles.headerName, { color: colors.ink }]} numberOfLines={1}>
@@ -233,7 +233,7 @@ function FloatingChatInner({
           accessibilityLabel="Toggle chat window"
         >
           <View style={styles.avatarWrap}>
-            <Avatar name={peer.peerName} size={32} />
+            <Avatar name={peer.peerName} avatarUrl={peer.avatarUrl} size={32} />
             {peerOnline && <View style={[styles.presenceDot, { borderColor: colors.surface }]} />}
           </View>
           <View style={styles.headerText}>
@@ -284,7 +284,7 @@ function FloatingChatInner({
           </View>
         ) : messages.length === 0 && pending.length === 0 ? (
           <View style={styles.emptyWrap}>
-            <Avatar name={peer.peerName} size={50} />
+            <Avatar name={peer.peerName} avatarUrl={peer.avatarUrl} size={50} />
             <Text style={[styles.emptyName, { color: colors.ink }]}>
               {peer.peerName || "Friend"}
             </Text>

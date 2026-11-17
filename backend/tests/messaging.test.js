@@ -27,7 +27,7 @@ stub(auth, "requireAuth", (req, res, next) => {
   return next();
 });
 stub(auth, "loadProfile", (req, res, next) => {
-  req.profile = { id: session.id, full_name: "Ana Cruz", profile_completed: true };
+  req.profile = { id: session.id, full_name: "Ana Cruz", profile_completed: true, verification_status: "verified" };
   return next();
 });
 

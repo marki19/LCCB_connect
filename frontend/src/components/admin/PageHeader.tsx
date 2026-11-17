@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import Animated, {
@@ -8,6 +9,17 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+=======
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Animated,
+  Easing,
+  Pressable,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
+>>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
 import { RefreshCw } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { focusRing, RADIUS, SPACE } from "../../lib/tokens";
@@ -34,27 +46,35 @@ function RefreshButton({
   label?: string;
 }) {
   const { colors } = useTheme();
-  const reduced = useReducedMotion();
-  const rotation = useSharedValue(0);
+  const spinAnim = useRef(new Animated.Value(0)).current;
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
-    if (refreshing && !reduced) {
-      rotation.value = 0;
-      rotation.value = withRepeat(
-        withTiming(360, { duration: 900, easing: Easing.linear }),
-        -1,
-        false
+    if (refreshing) {
+      const loop = Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.linear,
+          useNativeDriver: false,
+        })
       );
+      loop.start();
+      return () => loop.stop();
     } else {
-      rotation.value = withTiming(0, { duration: 120 });
+      Animated.timing(spinAnim, {
+        toValue: 0,
+        duration: 120,
+        useNativeDriver: false,
+      }).start();
     }
-  }, [refreshing, reduced, rotation]);
+  }, [refreshing, spinAnim]);
 
-  const spin = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
+  const spinInterpolation = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
 
   return (
     <Pressable
@@ -82,8 +102,13 @@ function RefreshButton({
         focusRing(colors, focused),
       ]}
     >
+<<<<<<< HEAD
       <Animated.View style={spin}>
         <RefreshCw size={14} color={colors.inkSoft} />
+=======
+      <Animated.View style={{ transform: [{ rotate: spinInterpolation }] }}>
+        <RefreshCw size={15} color={colors.inkSoft} />
+>>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
       </Animated.View>
       <Text style={{ ...CONSOLE_TEXT.strong, fontSize: 13, color: colors.inkSoft }}>
         {label}

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AlertCircle } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -7,6 +7,7 @@ import { fetchDepartments, fetchCourses } from "../../lib/catalog";
 import { buildFieldDefs, validateAll } from "../../lib/verification";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import type { Department, Course } from "../../types";
+import type { SelectableRole, VerificationRole } from "../../lib/verification";
 import Button from "../ui/Button";
 import Card from "../ui/Card";
 import Modal from "../ui/Modal";
@@ -16,8 +17,8 @@ import TextField from "../ui/TextField";
 import DatePickerField from "../ui/DatePickerField";
 
 type Props = {
-  /** The caller's role from the server — determines which fields render. */
-  role: string;
+  /** The role the form renders for — the chosen role, or the profile's own. */
+  role: VerificationRole;
   /** Field shape from GET /verification/mine (the authoritative `fields` object). */
   fields: { department: boolean; course: boolean; yearLevel: boolean } | null;
   /** Whether the caller's email ends with @lccbonline.edu.ph. */
@@ -41,6 +42,7 @@ type Props = {
   onSendOtp: () => Promise<{ ok: boolean; expires_at?: string; error?: string }>;
   /** Called when the user submits — should POST /verification or PUT /verification/mine. */
   onSubmit: (payload: {
+    role: SelectableRole;
     full_name: string;
     student_id: string;
     department_id: string | null;
@@ -106,10 +108,20 @@ export default function VerificationForm({
 
   const isSuperadmin = role === "superadmin";
 
+  const textInputRefs = useRef<Record<string, ComponentRef<typeof TextInput> | null>>({});
+
   const fieldDefs = useMemo(
     () =>
       buildFieldDefs(fields, role as any, departments, courses, academicLevels.map((l) => l.value), fullNameLocked),
     [fields, role, departments, courses, academicLevels, fullNameLocked]
+  );
+
+  const textKeys = useMemo(
+    () =>
+      fieldDefs
+        .filter((d) => !d.options?.length && d.key !== "birthdate" && !d.locked)
+        .map((d) => d.key),
+    [fieldDefs]
   );
 
   const canEdit = requestStatus === "declined" || requestStatus === "unverified" || requestStatus === null;
@@ -144,14 +156,9 @@ export default function VerificationForm({
     []
   );
 
-  const loadLevels = useCallback(async () => {
-    setLoadingCatalog((l) => ({ ...l, levels: true }));
-    try {
-      // No server endpoint for academic levels yet; keep defaults
-      await fetchCourses(""); // fetchCourses without department_id won't work, so we skip
-    } finally {
-      setLoadingCatalog((l) => ({ ...l, levels: false }));
-    }
+  const loadLevels = useCallback(() => {
+    // Academic levels are statically configured in DEFAULT_ACADEMIC_LEVELS
+    setLoadingCatalog((l) => ({ ...l, levels: false }));
   }, []);
 
   // Initial catalog load
@@ -261,6 +268,7 @@ export default function VerificationForm({
       }
 
       const payload = {
+        role: role as SelectableRole,
         full_name: form.full_name?.trim() ?? "",
         student_id: form.student_id?.trim().toUpperCase() ?? "",
         department_id: form.department_id || null,
@@ -575,9 +583,16 @@ export default function VerificationForm({
                     );
                   }
 
+                  const textIndex = textKeys.indexOf(def.key);
+                  const nextKey =
+                    textIndex >= 0 && textIndex < textKeys.length - 1 ? textKeys[textIndex + 1] : null;
+
                   return (
                     <TextField
                       key={def.key}
+                      ref={(node) => {
+                        textInputRefs.current[def.key] = node;
+                      }}
                       label={def.label}
                       value={form[def.key] ?? ""}
                       onChangeText={(v) => handleChange(def.key, v)}
@@ -589,6 +604,15 @@ export default function VerificationForm({
                       editable={canEdit && !def.locked}
                       error={fieldError(def.key)}
                       hint={def.locked ? def.lockHint : def.patternHint}
+                      returnKeyType={nextKey ? "next" : "done"}
+                      blurOnSubmit={false}
+                      onSubmitEditing={() => {
+                        if (nextKey) {
+                          textInputRefs.current[nextKey]?.focus();
+                        } else if (otpSent && canEdit && !submitting) {
+                          void handleSubmit();
+                        }
+                      }}
                       right={
                         def.key === "otp_code" && !otpSent ? (
                           <Button

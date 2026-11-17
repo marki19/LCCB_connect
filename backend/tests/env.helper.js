@@ -1,8 +1,7 @@
 // Deterministic environment for the test suite. Must be required BEFORE
 // `../app.js` — the app reads these at load time.
-//
-// These are throwaway values: no test contacts Supabase or Postgres (the
-// Supabase token check and every model function are stubbed).
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
+
 process.env.NODE_ENV = "test";
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || "https://test-project.supabase.co";
 process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "test-anon-key";
@@ -40,3 +39,13 @@ process.env.RATE_LIMIT_VERIFICATION_OTP_MAX =
 // Push is best-effort and would otherwise try to reach Postgres/Expo; the
 // service short-circuits when disabled. push.test.js re-enables it locally.
 process.env.PUSH_ENABLED = process.env.PUSH_ENABLED || "false";
+
+// Object storage credentials are scrubbed so no test can reach the real
+// bucket. Tests that exercise storage inject a signer or stub the transport;
+// leaving real keys in place would let a stray call upload or delete live
+// objects.
+process.env.R2_ACCOUNT_ID = "";
+process.env.R2_ACCESS_KEY_ID = "";
+process.env.R2_SECRET_ACCESS_KEY = "";
+process.env.R2_BUCKET = "";
+process.env.R2_ENDPOINT = "";

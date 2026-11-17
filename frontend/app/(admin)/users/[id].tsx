@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { AppImage } from "../../../src/components/AppImage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeft,
@@ -40,6 +40,7 @@ import { useTheme } from "../../../src/contexts/ThemeContext";
 import { useToast } from "../../../src/contexts/ToastContext";
 import { ThemeTokens } from "../../../src/lib/tokens";
 import ActionDialog from "../../../src/components/admin/ActionDialog";
+import { resolveFileUrl } from "../../../src/lib/files";
 
 type DialogKind = "role" | "suspend" | "unsuspend" | "force" | "delete" | null;
 
@@ -390,9 +391,10 @@ export default function AdminUserDossierScreen() {
                 }}
               >
                 {target.avatar_url ? (
-                  <Image
-                    source={{ uri: target.avatar_url }}
+                  <AppImage
+                    source={{ uri: resolveFileUrl(target.avatar_url) || target.avatar_url }}
                     style={{ width: 96, height: 96 }}
+                    contentFit="cover"
                   />
                 ) : (
                   <Text style={{ fontSize: 32, fontWeight: "900", color: colors.primary }}>

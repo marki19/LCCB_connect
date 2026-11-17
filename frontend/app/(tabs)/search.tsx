@@ -36,6 +36,7 @@ import { useFloatingChat } from "../../src/contexts/FloatingChatContext";
 import { apiFetch, getThesisFileUrl, searchEverything, adaptPost } from "../../src/lib/api";
 import { openConversation } from "../../src/lib/messages";
 import Avatar from "../../src/components/Avatar";
+import { resolveFileUrl } from "../../src/lib/files";
 import PostCard from "../../src/components/PostCard";
 import { RADIUS, SPACE, elevation } from "../../src/lib/tokens";
 
@@ -183,7 +184,7 @@ export default function SearchScreen() {
       openChat({
         peerId: person.id,
         peerName: name,
-        avatarUrl: person.avatar_url,
+        avatarUrl: resolveFileUrl(person.avatar_url) || undefined,
       });
     } else {
       try {
@@ -208,6 +209,7 @@ export default function SearchScreen() {
       >
         <Avatar
           name={name}
+          avatarUrl={person.avatar_url}
           size={52}
           showPresence
           mode={modeOf(person.id)}

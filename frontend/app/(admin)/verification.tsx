@@ -107,8 +107,14 @@ function normalizeRequest(raw: any): VerificationRequest {
     user_id: raw.user_id,
     username: raw.username ?? (email ? email.split("@")[0] : ""),
     email,
+<<<<<<< HEAD
     full_name: raw.full_name ?? "Unnamed student",
     student_id: raw.student_id ?? "Not set",
+=======
+    full_name: raw.full_name ?? "Unnamed account",
+    role: raw.role ?? "user",
+    student_id: raw.student_id ?? "—",
+>>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
     department_id: raw.department_id ?? "",
     department_name: raw.department_name ?? "No department",
     course_id: raw.course_id ?? "",

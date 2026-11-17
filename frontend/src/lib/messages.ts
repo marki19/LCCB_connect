@@ -3,6 +3,7 @@ import type {
   Conversation,
   Friend,
   FriendRequests,
+  FriendSuggestion,
   Message,
   MessagePolicy,
   MessagePolicySetting,
@@ -188,6 +189,13 @@ export function declineFriendRequest(requestId: string): Promise<unknown> {
 
 export function removeFriend(userId: string): Promise<unknown> {
   return apiJson(`/friends/${userId}`, { method: "DELETE" });
+}
+
+/** Ranked "people you may know". Empty array = nothing to suggest. */
+export function listFriendSuggestions(limit?: number): Promise<FriendSuggestion[]> {
+  return apiJson<FriendSuggestion[]>(
+    `/friends/suggestions${limit ? `?limit=${limit}` : ""}`
+  );
 }
 
 // ---- blocks (§7) -----------------------------------------------------------

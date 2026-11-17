@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 import { useCallback, useEffect, useState } from "react";
 import { ScrollView, View, Text, SafeAreaView } from "react-native";
+=======
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ScrollView, View, Text, SafeAreaView, Platform, Pressable } from "react-native";
+>>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
 import { useRouter } from "expo-router";
+import { ChevronRight } from "lucide-react-native";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { useToast } from "../src/contexts/ToastContext";
@@ -10,7 +16,13 @@ import Button from "../src/components/ui/Button";
 import Card from "../src/components/ui/Card";
 import Modal from "../src/components/ui/Modal";
 import Reveal from "../src/components/ui/Reveal";
+<<<<<<< HEAD
 import VerificationForm from "../src/components/verification/VerificationForm";
+=======
+import VerificationForm, { DEFAULT_ACADEMIC_LEVELS } from "../src/components/verification/VerificationForm";
+import { fetchDepartments, fetchCourses } from "../src/lib/catalog";
+import type { SelectableRole, VerificationRole } from "../src/lib/verification";
+>>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
 
 type VerificationStatus = "unverified" | "pending" | "approved" | "declined";
 
@@ -36,11 +48,23 @@ interface VerificationRequest {
 interface MineResponse {
   request: VerificationRequest | null;
   can_resubmit: boolean;
+  /** The role the form renders for, or null while the role is still unchosen. */
+  role: VerificationRole | null;
   fields: { department: boolean; course: boolean; yearLevel: boolean } | null;
+  /** The roles this account may still pick, or null once one is set. */
+  selectable_roles: SelectableRole[] | null;
   school_account: boolean;
 }
 
 type Notice = { title: string; message: string };
+
+/** The onboarding choices, in the order the picker shows them. */
+const ROLE_CHOICES: { role: SelectableRole; title: string; blurb: string }[] = [
+  { role: "student", title: "Student", blurb: "Enrolled in a course at LCCB." },
+  { role: "faculty", title: "Faculty", blurb: "Teaching staff of a department." },
+  { role: "departmentAdmin", title: "Department admin", blurb: "Runs a department and reviews its requests." },
+  { role: "admin", title: "Campus admin", blurb: "Reviews requests across the whole campus." },
+];
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -51,47 +75,62 @@ export default function OnboardingScreen() {
   const [mine, setMine] = useState<MineResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
+  /** The role a not-yet-verified account is previewing, before it commits. */
+  const [previewRole, setPreviewRole] = useState<SelectableRole | null>(null);
 
-  const loadMine = useCallback(async () => {
-    try {
-      const data = await apiJson<MineResponse>("/verification/mine");
-      setMine(data);
-    } catch (error: any) {
-      if (error instanceof ApiError && error.status === 403) {
-        // Non-school account or superadmin — the form will handle it
-        setMine({
-          request: null,
-          can_resubmit: true,
-          fields: null,
-          school_account: false,
-        });
-      } else if (error instanceof ApiError && error.status === 404) {
-        setMine({
-          request: null,
-          can_resubmit: true,
-          fields: null,
-          school_account: profile?.email?.endsWith("@lccbonline.edu.ph") ?? false,
-        });
-      } else {
-        console.error("Failed to load verification:", error);
-        setNotice({
-          title: "Could not load your status",
-          message: "We couldn't check your verification status. Pull to refresh.",
-        });
+  const loadMine = useCallback(
+    async (role?: SelectableRole | null) => {
+      try {
+        const query = role ? `?role=${encodeURIComponent(role)}` : "";
+        const data = await apiJson<MineResponse>(`/verification/mine${query}`);
+        setMine(data);
+      } catch (error: any) {
+        if (error instanceof ApiError && error.status === 403) {
+          // Non-school account or superadmin — the form will handle it
+          setMine({
+            request: null,
+            can_resubmit: true,
+            role: null,
+            fields: null,
+            selectable_roles: null,
+            school_account: false,
+          });
+        } else if (error instanceof ApiError && error.status === 404) {
+          setMine({
+            request: null,
+            can_resubmit: true,
+            role: null,
+            fields: null,
+            selectable_roles: null,
+            school_account: profile?.email?.endsWith("@lccbonline.edu.ph") ?? false,
+          });
+        } else {
+          console.error("Failed to load verification:", error);
+          setNotice({
+            title: "Could not load your status",
+            message: "We couldn't check your verification status. Pull to refresh.",
+          });
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [profile?.email]);
+    },
+    [profile?.email]
+  );
 
   useEffect(() => {
-    loadMine();
-  }, [loadMine]);
+    loadMine(previewRole);
+  }, [loadMine, previewRole]);
 
-  const role = profile?.role ?? "student";
+  // The server resolves the role: the profile's own once one is granted, or the
+  // one being previewed while the account has not chosen yet.
+  const role: VerificationRole | null = mine
+    ? mine.role
+    : ((profile?.role as VerificationRole | undefined) ?? null);
   const isAdmin = role === "superadmin" || role === "admin";
   const isSuperadmin = role === "superadmin";
   const fullNameLocked = !!profile?.full_name;
+  const needsRole = !role && !!mine?.selectable_roles?.length;
 
   // Build initial values from latest request or profile
   const initialValues = mine?.request
@@ -126,6 +165,7 @@ export default function OnboardingScreen() {
 
   const handleSubmit = useCallback(
     async (payload: {
+      role: SelectableRole;
       full_name: string;
       student_id: string;
       department_id: string | null;
@@ -146,7 +186,7 @@ export default function OnboardingScreen() {
             body: JSON.stringify(payload),
           });
         }
-        await loadMine();
+        await loadMine(previewRole);
         await refreshProfile();
         showToast({
           message: "Verification submitted successfully.",
@@ -163,7 +203,7 @@ export default function OnboardingScreen() {
         return { ok: false, error: "Submission failed" };
       }
     },
-    [mine?.request?.status]
+    [mine, loadMine, previewRole, refreshProfile, showToast]
   );
 
   const handleSkip = useCallback(() => {
@@ -349,6 +389,80 @@ export default function OnboardingScreen() {
               </Text>
               <View style={{ marginTop: SPACE.x6, alignSelf: "stretch" }}>
                 <Button label="Continue to app" fullWidth size="lg" onPress={() => router.replace("/(tabs)/")} />
+              </View>
+            </Card>
+          </Reveal>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // No role yet — the account chooses what it is before the form makes sense.
+  if (needsRole) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
+          <View style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
+            <Reveal>
+              <Text style={{ ...TYPE.h1, color: colors.ink }}>What are you at LCCB?</Text>
+              <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2, marginBottom: SPACE.x6 }}>
+                This decides who reviews your request.
+              </Text>
+              <Card style={{ padding: 0, overflow: "hidden" }}>
+                {ROLE_CHOICES.map((choice, index) => (
+                  <Pressable
+                    key={choice.role}
+                    onPress={() => setPreviewRole(choice.role)}
+                    accessibilityRole="button"
+                    accessibilityLabel={choice.title}
+                    style={{
+                      paddingHorizontal: SPACE.x5,
+                      paddingVertical: SPACE.x4,
+                      borderTopWidth: index === 0 ? 0 : 1,
+                      borderTopColor: colors.line,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: SPACE.x4,
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ ...TYPE.bodyStrong, color: colors.ink }}>{choice.title}</Text>
+                        <Text style={{ ...TYPE.caption, color: colors.inkSoft, marginTop: 2 }}>
+                          {choice.blurb}
+                        </Text>
+                      </View>
+                      <ChevronRight size={18} color={colors.inkFaint} />
+                    </View>
+                  </Pressable>
+                ))}
+              </Card>
+            </Reveal>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // No verification path (a superadmin, or a non-school account).
+  if (!role) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
+          <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
+            <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
+              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>
+                This account does not verify
+              </Text>
+              <Text style={{ ...TYPE.body, color: colors.inkSoft, textAlign: "center", marginTop: SPACE.x2 }}>
+                Verification is only available to @lccbonline.edu.ph accounts.
+              </Text>
+              <View style={{ marginTop: SPACE.x6, alignSelf: "stretch" }}>
+                <Button label="Back to app" variant="secondary" fullWidth onPress={() => router.replace("/(tabs)/")} />
               </View>
             </Card>
           </Reveal>

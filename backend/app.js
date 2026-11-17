@@ -87,7 +87,11 @@ const isWrite = (req) => ["POST", "PUT", "PATCH", "DELETE"].includes(req.method)
 // --- global middleware ------------------------------------------------------
 app.disable("x-powered-by");
 app.use(compression());
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(cors(corsOptions));
 app.use(requestId);
 
@@ -123,6 +127,20 @@ app.use("/api", (req, res, next) => (isWrite(req) ? writeLimiter(req, res, next)
 
 // Public read-only endpoints (no token required)
 app.use("/api/public", publicRouter);
+
+// Local file storage serving (public/protected file streaming, Range request support)
+const fileRouter = require("./routes/fileRouter");
+app.use("/api/files", fileRouter);
+
+// Local file uploads (authenticated users)
+const uploadRouter = require("./routes/uploadRouter");
+app.use(
+  "/api/upload",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  uploadRouter
+);
 
 // Authentication routes (no requireAuth! Must come before authenticated routes)
 const authRouter = require("./routes/authRouter");
@@ -256,6 +274,17 @@ app.use(
   auth.requireRole("departmentAdmin", "admin", "superadmin"),
   announcementRouter
 );
+
+// Health check route for Render and uptime monitors
+app.get("/health", async (req, res) => {
+  try {
+    const db = require("./db");
+    await db.query("SELECT 1");
+    res.status(200).json({ status: "healthy", timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ status: "unhealthy", error: "Database connectivity error" });
+  }
+});
 
 // Test route
 app.get("/", (req, res) => {

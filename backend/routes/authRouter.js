@@ -14,6 +14,7 @@ const {
   mfaUnenroll,
   mfaList,
   logout,
+  refreshSession,
   requestPasswordReset,
   verifyPasswordReset,
 } = require("../controllers/authController");
@@ -187,10 +188,16 @@ router.post("/mfa/step-up", mfaStepUp);
 router.get("/mfa/admin-session", checkAdminSession);
 
 /**
+ * POST /api/auth/refresh
+ * Refreshes an expired access token using a valid refresh token.
+ */
+router.post("/refresh", refreshSession);
+
+/**
  * POST /api/auth/logout
  * Records logout event and returns success.
  * Requires authenticated user.
  */
-router.post("/logout", logout);
+router.post("/logout", requireAuth, logout);
 
 module.exports = router;

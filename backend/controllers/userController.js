@@ -1,8 +1,11 @@
+const db = require("../db");
+const objectStorage = require("../services/objectStorage");
 const userModel = require("../models/userModel");
 const departmentModel = require("../models/departmentModel");
 const accountService = require("../services/accountService");
 const { AdminAuthUnavailableError } = require("../services/supabaseAdmin");
 const { clampLimit } = require("../models/pagination");
+const { sanitizeProfile } = require("../utils/profile");
 const {
   isAdmin,
   canManage,
@@ -20,7 +23,7 @@ const getUsers = async (req, res, next) => {
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
     });
-    res.json(users);
+    res.json(users.map(sanitizeProfile));
   } catch (error) {
     next(error);
   }
@@ -84,7 +87,7 @@ const getUser = async (req, res, next) => {
     const identity_complete = Boolean(
       user.full_name && user.student_id && user.department_id && user.course_id
     );
-    res.json({ ...user, identity_complete });
+    res.json({ ...sanitizeProfile(user), identity_complete });
   } catch (error) {
     next(error);
   }
@@ -149,7 +152,7 @@ const createUser = async (req, res, next) => {
     // is used in updateUser for admin updates and profile completion.
 
     const newUser = await userModel.createUser(payload);
-    res.status(201).json(newUser);
+    res.status(201).json(sanitizeProfile(newUser));
   } catch (error) {
     next(error);
   }
@@ -250,7 +253,7 @@ const updateUser = async (req, res, next) => {
     if (!updatedUser) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.json(updatedUser);
+    res.json(sanitizeProfile(updatedUser));
   } catch (error) {
     next(error);
   }
@@ -279,7 +282,7 @@ const disableUser = async (req, res, next) => {
     if (!disabledUser) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.json({ message: "Account disabled successfully", user: disabledUser });
+    res.json({ message: "Account disabled successfully", user: sanitizeProfile(disabledUser) });
   } catch (error) {
     if (
       error instanceof AdminAuthUnavailableError ||
@@ -294,6 +297,43 @@ const disableUser = async (req, res, next) => {
   }
 };
 
+const removeAvatar = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Fetch current avatar info
+    const { rows } = await db.query(
+      "SELECT avatar_url, avatar_source FROM public.profiles WHERE id = $1",
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const { avatar_url, avatar_source } = rows[0];
+
+    // 2. Null all avatar-related columns
+    await db.query(
+      `UPDATE public.profiles
+       SET avatar_url = NULL,
+           avatar_source = NULL,
+           google_avatar_url = NULL
+       WHERE id = $1`,
+      [userId]
+    );
+
+    // If an uploaded file key was used, clean up object from storage after DB update
+    if (avatar_url && avatar_source === "upload" && !avatar_url.startsWith("http")) {
+      objectStorage.deleteObject(avatar_url).catch(() => {});
+    }
+
+    res.json({ message: "Avatar removed successfully", avatar_url: null });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getUsers,
   getUser,
@@ -303,4 +343,5 @@ module.exports = {
   updateUser,
   disableUser,
   validateCatalogReferences,
+  removeAvatar,
 };

@@ -297,7 +297,6 @@ export default function AdminAnnouncementsScreen() {
       setPinned(false);
       setExpiresAt("");
       const successMsg = `Announcement sent to ${result.recipients} recipient${result.recipients === 1 ? "" : "s"}.`;
-      setNotice(successMsg);
       showToast({ message: successMsg, tone: "success" });
       await loadHistory(null, false);
     } catch (e: any) {
@@ -327,7 +326,6 @@ export default function AdminAnnouncementsScreen() {
         expires_at: editExpiresAt || null,
       });
       setEditingId(null);
-      setNotice("Announcement updated.");
       showToast({ message: "Announcement updated.", tone: "success" });
       await loadHistory(null, false);
     } catch (e: any) {
@@ -345,7 +343,6 @@ export default function AdminAnnouncementsScreen() {
     try {
       await deleteAnnouncement(deletingId);
       setDeletingId(null);
-      setNotice("Announcement deleted.");
       showToast({ message: "Announcement deleted.", tone: "info" });
       await loadHistory(null, false);
     } catch (e: any) {
@@ -820,7 +817,7 @@ export default function AdminAnnouncementsScreen() {
                       </Text>
                       <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
                         <Text style={{ fontSize: 12, color: colors.textTertiary }}>
-                          {item.recipients} recipient{item.recipients === 1 ? "" : "s"} ·{" "}
+                          {item.recipients ?? 0} recipient{item.recipients === 1 ? "" : "s"} ·{" "}
                           {formatDate(item.created_at)} · {item.actor_username || "system"}
                         </Text>
                         <Text style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, color: colors.textTertiary }}>

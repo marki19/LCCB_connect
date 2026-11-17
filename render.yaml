@@ -1,0 +1,90 @@
+# Render blueprint for the LCCB Connect API.
+#
+# Files live in Cloudflare R2, so this service needs no persistent disk: the
+# instance filesystem is treated as scratch space and a redeploy cannot lose
+# uploads.
+#
+# Secrets are marked `sync: false`, which means Render prompts for them on the
+# first deploy and never reads them from this file. Fill them from
+# backend/.env.example.
+
+services:
+  - type: web
+    name: lccb-connect-api
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: node index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render terminates TLS in front of the app, so rate limiting must read
+      # the client address from X-Forwarded-For. Without this, every request
+      # shares one bucket and the limiters reject everyone at once.
+      - key: TRUST_PROXY
+        value: "1"
+      - key: NODE_VERSION
+        value: "24"
+      # The free instance is small and Supabase caps concurrent connections;
+      # the default pool of 20 is too wide for one dyno plus migrations.
+      - key: PG_POOL_MAX
+        value: "10"
+
+      # --- required secrets (prompted on first deploy) ----------------------
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: MFA_CHALLENGE_SECRET
+        sync: false
+      - key: TOTP_SECRET_KEY
+        sync: false
+      - key: OTP_PEPPER
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+
+      # --- required in production: email -------------------------------------
+      # In production the mailer refuses to drop mail silently, so signup
+      # verification and password resets fail their requests until SMTP is
+      # configured. Without it, no new account can complete onboarding.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+
+      # --- required values that are not secret ------------------------------
+      # Must be the HTTPS origin of the Vercel deployment, or the browser
+      # blocks every API call. Native builds send no Origin and are unaffected.
+      - key: CORS_ORIGINS
+        sync: false
+      # Push needs an EAS dev build with FCM/APNs credentials; the API stays
+      # healthy without it, it just stops sending notifications.
+      - key: PUSH_ENABLED
+        value: "false"

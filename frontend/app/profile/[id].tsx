@@ -43,6 +43,7 @@ import {
   getThesisFileUrl,
   adaptPost,
 } from "../../src/lib/api";
+import { resolveFileUrl } from "../../src/lib/files";
 import {
   openConversation,
   sendFriendRequest,
@@ -108,7 +109,12 @@ export default function UserProfileScreen() {
       const res = await apiFetch(`/posts?author_id=${id}&limit=30`);
       if (res.ok) {
         const data = await res.json();
-        setPosts((data || []).map(adaptPost));
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.posts)
+          ? data.posts
+          : [];
+        setPosts(list.map(adaptPost));
       }
     } catch (err) {
       console.error("Failed to load user posts:", err);
@@ -154,7 +160,7 @@ export default function UserProfileScreen() {
       openChat({
         peerId: userData.id,
         peerName: userData.full_name || userData.username,
-        avatarUrl: userData.avatar_url || undefined,
+        avatarUrl: resolveFileUrl(userData.avatar_url) || undefined,
       });
     } else {
       try {
@@ -276,6 +282,7 @@ export default function UserProfileScreen() {
         <View style={styles.avatarWrapper}>
           <Avatar
             name={userData.full_name}
+            avatarUrl={userData.avatar_url}
             size={90}
             showPresence
             mode={modeOf(userData.id)}

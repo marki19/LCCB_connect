@@ -1,6 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const userModel = require("../models/userModel");
 const mfaService = require("../services/mfaService");
+const nativeAuth = require("../services/nativeAuth");
 const { normalizeRole, ROLES, ADMIN_ROLES, DEPARTMENT_ADMIN_ROLES, FACULTY_ROLES, ALL_ROLES } = require("../utils/roles");
 
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
@@ -25,50 +26,54 @@ const SUPABASE_ISSUER = process.env.SUPABASE_URL
   : null;
 
 /**
- * Verifies a Supabase access token.
+ * Verifies an access token.
  *
- * `getUser` is authoritative, but it rejects tokens whose session was revoked
- * (including the session revocation performed when an account is suspended).
- * In that case, verify the JWT locally against Supabase's JWKS. The signature
- * and expiry still have to be valid, so a suspended caller can reach
- * `requireActiveAccount` and receive the 403 that drives the suspended screen,
- * instead of falling through as an unauthenticated 401.
+ * First checks locally using native JWT verification (0ms latency, zero cloud
+ * roundtrips). Falls back to Supabase client only if unverified, ensuring zero
+ * downtime during local on-premise migration.
  */
 async function verifyAccessToken(token) {
-  const { data, error } = await supabase.auth.getUser(token);
-  if (!error && data?.user) return data.user;
-
-  // Only fall back when Supabase rejected an otherwise-valid session. A forged
-  // or malformed JWT must stay a hard 401.
-  const message = error?.message || "";
-  if (!/session.*(missing|not found|invalid)|banned|revoked/i.test(message)) {
-    return null;
+  // 1. Fast, offline-first check: verify native self-hosted JWT in memory
+  const nativeUser = nativeAuth.verifyAccessToken(token);
+  if (nativeUser) {
+    return nativeUser;
   }
 
-  try {
-    const { data: claimsData, error: claimsError } =
-      await supabase.auth.getClaims(token);
-    const claims = claimsData?.claims;
-    if (claimsError || !claims?.sub) return null;
-    if (claims.aud && claims.aud !== "authenticated") return null;
-    if (SUPABASE_ISSUER && claims.iss && claims.iss !== SUPABASE_ISSUER) {
+  // 2. Legacy fallback to Supabase (for existing sessions / during migration)
+  if (supabase && typeof supabase.auth?.getUser === "function") {
+    try {
+      const { data, error } = await supabase.auth.getUser(token);
+      if (!error && data?.user) return data.user;
+
+      const message = error?.message || "";
+      if (!/session.*(missing|not found|invalid)|banned|revoked/i.test(message)) {
+        return null;
+      }
+
+      const { data: claimsData, error: claimsError } =
+        await supabase.auth.getClaims(token);
+      const claims = claimsData?.claims;
+      if (claimsError || !claims?.sub) return null;
+      if (claims.aud && claims.aud !== "authenticated") return null;
+      if (SUPABASE_ISSUER && claims.iss && claims.iss !== SUPABASE_ISSUER) {
+        return null;
+      }
+      if (claims.exp && claims.exp * 1000 <= Date.now()) return null;
+
+      const profile = await userModel.getUserById(claims.sub);
+      if (!profile) return null;
+
+      return {
+        id: claims.sub,
+        email: claims.email || null,
+        user_metadata: claims.user_metadata || {},
+      };
+    } catch {
       return null;
     }
-    if (claims.exp && claims.exp * 1000 <= Date.now()) return null;
-
-    // A deleted account can leave a valid JWT until it expires. Accept the
-    // fallback only while a profile still exists; account deletion removes it.
-    const profile = await userModel.getUserById(claims.sub);
-    if (!profile) return null;
-
-    return {
-      id: claims.sub,
-      email: claims.email || null,
-      user_metadata: claims.user_metadata || {},
-    };
-  } catch {
-    return null;
   }
+
+  return null;
 }
 
 /**
@@ -226,6 +231,7 @@ function isStudent(req) {
  * An unrecognised or absent role ranks -1, so it can never manage anyone.
  */
 const ROLE_RANK = {
+  user: 0,
   student: 0,
   guest: 0,
   faculty: 1,
@@ -286,9 +292,16 @@ function requireRole(...allowedRoles) {
  * without this middleware, and profile edits stay open because bio, avatar,
  * and year level remain editable after approval (D11).
  */
+const STAFF_VERIFICATION_EXEMPT = new Set([
+  "faculty",
+  "departmentadmin",
+  "admin",
+  "superadmin",
+]);
+
 function requireVerified(req, res, next) {
   const role = normalizeRole(getRole(req));
-  if (role !== "student") return next();
+  if (STAFF_VERIFICATION_EXEMPT.has(role)) return next();
   if (req.profile?.verification_status === "verified") return next();
   return res.status(403).json({
     error: "Verify your identity to do that",

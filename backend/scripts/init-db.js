@@ -77,6 +77,9 @@ async function initDB() {
           console.log(`Applied migration: ${file}`);
         } catch (migErr) {
           console.warn(`Migration notice for ${file}: ${migErr.message}`);
+          try {
+            await db.query("ROLLBACK;");
+          } catch (_) {}
         }
       }
     }

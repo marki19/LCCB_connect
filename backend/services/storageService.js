@@ -1,408 +1,230 @@
 /**
- * Storage helpers for local object keys stored in PostgreSQL.
+ * Turns stored file keys into URLs a client can render.
  *
- * Postgres stores the storage path (relative to the object's bucket), not the
- * full URL. This service is the only place that knows how to turn a stored key
- * back into something a client can render.
+ * PostgreSQL records an opaque key (`<category>/<filename>`), never a URL, so
+ * the bucket can change without a data migration. This service is the only
+ * place that knows how to expand a key.
  *
- * Buckets (migration 015):
- *   avatars  — public. Profile pictures render to guests with no plumbing
- *              changes, so they keep their plain public URL.
- *   assets   — private. Post images; resolved through the backend.
- *   theses   — private. Manuscripts; resolved through the backend after a
- *              visibility check, never handed out directly.
+ * Signing is a local HMAC, not a network call, so expansion is synchronous and
+ * cannot fail on a storage outage. That is why there is no cache here: an
+ * in-process cache would cost more bookkeeping than the signature it saves.
  */
 
-const { getSupabaseAdmin, AdminAuthUnavailableError } = require("./supabaseAdmin");
+const objectStorage = require("./objectStorage");
+const { isCategory, isPublicCategory } = require("./filePolicy");
 
-/**
- * Injectable admin-client factory. Tests swap this out so the async URL
- * resolver never touches the network; production uses the real service-role
- * client.
- */
-let getAdmin = () => getSupabaseAdmin();
-function __setAdminFactory(fn) {
-  getAdmin = fn;
-}
-
-const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
-const PUBLIC_OBJECT_ROOT = `${SUPABASE_URL}/storage/v1/object/public`;
-
-/** Default signed-URL expiry, in seconds. */
+/** Default presigned-URL lifetime, in seconds. */
 const DEFAULT_SIGNED_URL_EXPIRES = 300;
 
-/** Bucket each file column points into; used to expand the stored key. */
+/**
+ * Which bucket each file column points into. The bucket name selects the key
+ * prefix, so legacy column names (`assets`) keep working.
+ */
 const FILE_FIELD_BUCKETS = {
   image_url: "assets",
   pdf_url: "theses",
   avatar_url: "avatars",
+  video_url: "videos",
 };
 
-/** Buckets whose objects are readable by anonymous visitors. */
-const PUBLIC_BUCKETS = new Set(["avatars"]);
+/** Bucket name → key prefix. `assets` is the legacy name for post images. */
+const BUCKET_CATEGORY = {
+  avatars: "avatars",
+  assets: "posts",
+  posts: "posts",
+  theses: "theses",
+  documents: "documents",
+  videos: "videos",
+};
 
-/** True when a string already looks like an absolute URL. */
+/**
+ * Injectable signer. Tests replace it so expansion never needs credentials.
+ * @type {(key: string, expiresIn: number) => string}
+ */
+let sign = (key, expiresIn) => objectStorage.presignGet(key, expiresIn);
+
+function __setSigner(fn) {
+  sign = fn;
+}
+
+function __resetSigner() {
+  sign = (key, expiresIn) => objectStorage.presignGet(key, expiresIn);
+}
+
+/** True when a string is already a URL a client can use as-is. */
 function isAbsoluteUrl(value) {
-  return /^https?:\/\//i.test(value);
+  return /^(https?:|data:|blob:|file:)/i.test(value);
 }
 
 /**
- * In-memory LRU cache for signed storage URLs.
- * Key: `${bucket}:${key}` -> { url: string, expiresAt: number }
- */
-const MAX_CACHE_SIZE = 1000;
-const urlCache = new Map();
-
-function __clearStorageCache() {
-  urlCache.clear();
-}
-
-function getCachedUrl(bucket, key) {
-  const cacheKey = `${bucket}:${key}`;
-  const entry = urlCache.get(cacheKey);
-  if (!entry) return null;
-  if (entry.expiresAt <= Date.now()) {
-    urlCache.delete(cacheKey);
-    return null;
-  }
-  // Refresh recency
-  urlCache.delete(cacheKey);
-  urlCache.set(cacheKey, entry);
-  return entry.url;
-}
-
-function setCachedUrl(bucket, key, url, ttlMs) {
-  const cacheKey = `${bucket}:${key}`;
-  if (urlCache.size >= MAX_CACHE_SIZE) {
-    const oldestKey = urlCache.keys().next().value;
-    if (oldestKey) urlCache.delete(oldestKey);
-  }
-  urlCache.set(cacheKey, {
-    url,
-    expiresAt: Date.now() + ttlMs,
-  });
-}
-
-/**
- * Builds the public URL of a stored object.
- * @param {string} bucket Storage bucket (`avatars` / `assets` / `theses`).
- * @param {string} key Object path inside the bucket.
- * @returns {string|null} Public URL, or `null` when no key is available.
- */
-function publicStorageUrl(bucket, key) {
-  if (!key) return null;
-  if (isAbsoluteUrl(key)) return key;
-  return `${PUBLIC_OBJECT_ROOT}/${bucket}/${key}`;
-}
-
-/**
- * Issues a short-lived signed URL for a private object.
+ * Normalises a stored value into a `<category>/<filename>` object key.
  *
- * `avatars` is public, so callers asking for one get the plain URL instead —
- * that path never touches Supabase and stays cheap.
+ * Tolerates three historical shapes: a bare filename, a key already prefixed
+ * with its category, and the old `uploads/` prefix from local-disk days.
+ *
+ * @param {string} bucket
+ * @param {string} key
+ * @returns {string}
+ */
+function objectKey(bucket, key) {
+  const rest = String(key).replace(/^\/+/, "").replace(/^uploads\//, "");
+  const first = rest.split("/")[0];
+
+  if (isCategory(first)) {
+    return rest;
+  }
+
+  return `${BUCKET_CATEGORY[bucket] || "posts"}/${rest}`;
+}
+
+/**
+ * Presigns a stored key.
+ * @returns {string|null} `null` when the key is empty or storage is unconfigured.
+ */
+function signKey(bucket, key, expiresIn = DEFAULT_SIGNED_URL_EXPIRES) {
+  if (!key || typeof key !== "string") return null;
+  if (isAbsoluteUrl(key)) return key;
+
+  try {
+    return sign(objectKey(bucket, key), expiresIn);
+  } catch {
+    // Unconfigured or malformed credentials: hand back the key rather than
+    // failing the whole response. The client will show a broken image, which
+    // is a better outcome than an empty feed.
+    return key;
+  }
+}
+
+/**
+ * Presigns a single stored key.
  *
  * @param {string} bucket
  * @param {string} key
  * @param {object} [opts]
- * @param {number} [opts.expiresIn] Signed-URL TTL in seconds (default 300).
+ * @param {number} [opts.expiresIn]
  * @returns {Promise<{ url: string | null; error?: string }>}
  */
 async function signedStorageUrl(bucket, key, { expiresIn = DEFAULT_SIGNED_URL_EXPIRES } = {}) {
   if (!key) return { url: null };
-  if (PUBLIC_BUCKETS.has(bucket)) return { url: publicStorageUrl(bucket, key) };
 
-  const cached = getCachedUrl(bucket, key);
-  if (cached) return { url: cached };
-
-  let admin;
   try {
-    admin = getAdmin();
+    return { url: signKey(bucket, key, expiresIn) };
   } catch (err) {
-    if (err instanceof AdminAuthUnavailableError) {
-      return { url: null, error: "Storage is not configured" };
-    }
-    throw err;
+    return { url: null, error: err.message };
   }
-
-  const { data, error } = await admin.storage
-    .from(bucket)
-    .createSignedUrl(key, expiresIn);
-
-  if (error || !data?.signedUrl) {
-    return { url: null, error: error?.message || "Could not sign storage URL" };
-  }
-
-  const ttlMs = Math.max((expiresIn - 60) * 1000, 1000);
-  setCachedUrl(bucket, key, data.signedUrl, ttlMs);
-  return { url: data.signedUrl };
 }
 
 /**
- * Resolves a stored key into a URL the client can use, choosing the public or
- * signed path based on the bucket.
- * @param {string} bucket
- * @param {string} key
+ * Convenience wrapper returning just the URL.
  * @returns {Promise<string | null>}
  */
 async function resolveStorageUrl(bucket, key) {
-  if (!key) return null;
-  if (PUBLIC_BUCKETS.has(bucket)) return publicStorageUrl(bucket, key);
   const { url } = await signedStorageUrl(bucket, key);
   return url;
 }
 
 /**
- * Signs a batch of keys in a single bucket with a 3000ms timeout guard.
- * Returns a Map of `key -> signedUrl`.
- * Invariant: NEVER throws. On error or timeout, unresolvable keys return raw keys.
+ * Kept for callers that expand a single key synchronously.
+ * @returns {string|null}
  */
-async function bulkSignBucket(bucket, keys, { expiresIn = DEFAULT_SIGNED_URL_EXPIRES } = {}) {
-  const resultMap = new Map();
-  if (!keys || keys.length === 0) return resultMap;
+function publicStorageUrl(bucket, key) {
+  return signKey(bucket, key);
+}
 
-  if (PUBLIC_BUCKETS.has(bucket)) {
-    for (const key of keys) {
-      resultMap.set(key, publicStorageUrl(bucket, key));
-    }
-    return resultMap;
+function resolveFieldForSerialization(bucket, rawValue) {
+  if (!rawValue || typeof rawValue !== "string" || isAbsoluteUrl(rawValue)) {
+    return rawValue;
   }
-
-  // Check cache first
-  const uncached = [];
-  for (const key of keys) {
-    const cached = getCachedUrl(bucket, key);
-    if (cached) {
-      resultMap.set(key, cached);
-    } else {
-      uncached.push(key);
-    }
+  const category = BUCKET_CATEGORY[bucket] || bucket;
+  if (isPublicCategory(category)) {
+    return objectKey(bucket, rawValue);
   }
-
-  if (uncached.length === 0) return resultMap;
-
-  let admin;
-  try {
-    admin = getAdmin();
-  } catch {
-    for (const key of uncached) resultMap.set(key, key);
-    return resultMap;
-  }
-
-  const BATCH_SIZE = 100;
-  const ttlMs = Math.max((expiresIn - 60) * 1000, 1000);
-
-  for (let i = 0; i < uncached.length; i += BATCH_SIZE) {
-    const chunk = uncached.slice(i, i + BATCH_SIZE);
-    try {
-      const signPromise = (async () => {
-        const fromBucket = admin.storage.from(bucket);
-        if (typeof fromBucket.createSignedUrls === "function") {
-          return await fromBucket.createSignedUrls(chunk, expiresIn);
-        }
-        // Fallback for stubs or clients without createSignedUrls
-        if (typeof fromBucket.createSignedUrl === "function") {
-          const results = await Promise.all(
-            chunk.map(async (k) => {
-              try {
-                const res = await fromBucket.createSignedUrl(k, expiresIn);
-                return { path: k, signedUrl: res.data?.signedUrl || null, error: res.error };
-              } catch (e) {
-                return { path: k, signedUrl: null, error: e };
-              }
-            })
-          );
-          return { data: results, error: null };
-        }
-        return { data: null, error: new Error("createSignedUrls unavailable") };
-      })();
-
-      let timeoutTimer = null;
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutTimer = setTimeout(() => reject(new Error("Storage signing timed out")), 3000);
-        if (typeof timeoutTimer.unref === "function") timeoutTimer.unref();
-      });
-
-      try {
-        const { data, error } = await Promise.race([signPromise, timeoutPromise]);
-
-        if (error || !Array.isArray(data)) {
-          for (const k of chunk) resultMap.set(k, k);
-          continue;
-        }
-
-        for (const item of data) {
-          const path = item.path || item.error?.path;
-          if (path && item.signedUrl && !item.error) {
-            resultMap.set(path, item.signedUrl);
-            setCachedUrl(bucket, path, item.signedUrl, ttlMs);
-          } else if (path) {
-            resultMap.set(path, path);
-          }
-        }
-
-        for (const k of chunk) {
-          if (!resultMap.has(k)) resultMap.set(k, k);
-        }
-      } finally {
-        // The race usually resolves well before the 3s guard; without this the
-        // timer lingers for every batch on every response.
-        if (timeoutTimer) clearTimeout(timeoutTimer);
-      }
-    } catch {
-      // Timeout or network rejection: return raw keys to unblock response
-      for (const k of chunk) resultMap.set(k, k);
-    }
-  }
-
-  return resultMap;
+  return signKey(bucket, rawValue);
 }
 
 /**
- * Synchronous expansion pass. Public buckets (`avatars`) are expanded inline;
- * private buckets (`assets`, `theses`) keep their raw key so the client can
- * ask the backend for a signed URL. Used by `withStorageUrlsSync`.
+ * Expands every recognised file field in a value, recursively.
+ *
+ * Invariant: never throws. Keys that cannot be signed are returned untouched.
  */
-function withStorageUrlsSync(value) {
-  if (Array.isArray(value)) {
-    return value.map((item) => withStorageUrlsSync(item));
-  }
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const output = { ...value };
-    for (const [field, bucket] of Object.entries(FILE_FIELD_BUCKETS)) {
-      if (typeof output[field] === "string" && !isAbsoluteUrl(output[field])) {
-        if (PUBLIC_BUCKETS.has(bucket)) {
-          output[field] = publicStorageUrl(bucket, output[field]);
-        }
-      }
-    }
-    if (output.author && typeof output.author === "object") {
-      if (typeof output.author.avatar_url === "string" && !isAbsoluteUrl(output.author.avatar_url)) {
-        output.author.avatar_url = publicStorageUrl("avatars", output.author.avatar_url);
-      }
-    }
-    return output;
-  }
-  return value;
-}
+function expand(value) {
+  if (value instanceof Date) return value;
 
-function collectStorageKeys(value, bucketKeys) {
-  if (!value) return;
   if (Array.isArray(value)) {
-    for (const item of value) collectStorageKeys(item, bucketKeys);
-    return;
+    return value.map((item) => expand(item));
   }
-  if (typeof value === "object") {
-    for (const [field, bucket] of Object.entries(FILE_FIELD_BUCKETS)) {
-      if (typeof value[field] === "string" && !isAbsoluteUrl(value[field])) {
-        if (!PUBLIC_BUCKETS.has(bucket)) {
-          if (!bucketKeys.has(bucket)) bucketKeys.set(bucket, new Set());
-          bucketKeys.get(bucket).add(value[field]);
-        }
-      }
-    }
-    if (Array.isArray(value.image_urls)) {
-      for (const key of value.image_urls) {
-        if (typeof key === "string" && !isAbsoluteUrl(key)) {
-          if (!bucketKeys.has("assets")) bucketKeys.set("assets", new Set());
-          bucketKeys.get("assets").add(key);
-        }
-      }
-    }
-    for (const [k, v] of Object.entries(value)) {
-      if (v && typeof v === "object" && k !== "image_urls") {
-        collectStorageKeys(v, bucketKeys);
-      }
-    }
-  }
-}
 
-async function resolveAllBuckets(bucketKeys) {
-  const resolved = new Map();
-  const promises = [];
-  for (const [bucket, keySet] of bucketKeys.entries()) {
-    const keysArray = Array.from(keySet);
-    promises.push(
-      bulkSignBucket(bucket, keysArray).then((map) => {
-        for (const [k, url] of map.entries()) {
-          resolved.set(`${bucket}:${k}`, url);
-        }
-      })
-    );
-  }
-  await Promise.all(promises);
-  return resolved;
-}
-
-function applyStorageUrls(value, resolvedMap) {
-  if (Array.isArray(value)) {
-    return value.map((item) => applyStorageUrls(item, resolvedMap));
-  }
   if (value && typeof value === "object") {
     const output = { ...value };
+
     for (const [field, bucket] of Object.entries(FILE_FIELD_BUCKETS)) {
       if (typeof output[field] === "string" && !isAbsoluteUrl(output[field])) {
-        if (PUBLIC_BUCKETS.has(bucket)) {
-          output[field] = publicStorageUrl(bucket, output[field]);
-        } else {
-          output[field] = resolvedMap.get(`${bucket}:${output[field]}`) || output[field];
-        }
+        output[field] = resolveFieldForSerialization(bucket, output[field]);
       }
     }
+
     if (Array.isArray(output.image_urls)) {
-      output.image_urls = output.image_urls.map((key) => {
-        if (typeof key === "string" && !isAbsoluteUrl(key)) {
-          return resolvedMap.get(`assets:${key}`) || key;
-        }
-        return key;
-      });
+      output.image_urls = output.image_urls.map((key) =>
+        typeof key === "string" && !isAbsoluteUrl(key)
+          ? resolveFieldForSerialization("assets", key)
+          : key
+      );
     }
-    if (output.author && typeof output.author === "object") {
-      output.author = { ...output.author };
-      if (typeof output.author.avatar_url === "string" && !isAbsoluteUrl(output.author.avatar_url)) {
-        output.author.avatar_url = publicStorageUrl("avatars", output.author.avatar_url);
+
+    if (output.author && typeof output.author === "object" && !(output.author instanceof Date)) {
+      output.author = expand(output.author);
+    }
+
+    for (const [key, nested] of Object.entries(output)) {
+      if (
+        nested &&
+        typeof nested === "object" &&
+        !(nested instanceof Date) &&
+        key !== "image_urls" &&
+        key !== "author"
+      ) {
+        output[key] = expand(nested);
       }
     }
-    for (const [k, v] of Object.entries(output)) {
-      if (v && typeof v === "object" && k !== "image_urls" && k !== "author") {
-        output[k] = applyStorageUrls(v, resolvedMap);
-      }
-    }
+
     return output;
   }
+
   return value;
 }
 
 /**
- * Asynchronous expansion pass. Resolves stored keys into renderable URLs
- * using two-phase bulk resolution and LRU caching.
- *
- * Invariant: NEVER throws. On any error or timeout, unresolvable keys return raw keys.
- *
+ * Asynchronous expansion, awaited by the response-serialisation middleware.
  * @returns {Promise<any>}
  */
 async function withStorageUrls(value) {
   try {
-    const bucketKeys = new Map();
-    collectStorageKeys(value, bucketKeys);
-    if (bucketKeys.size === 0) {
-      return applyStorageUrls(value, new Map());
-    }
-    const resolvedMap = await resolveAllBuckets(bucketKeys);
-    return applyStorageUrls(value, resolvedMap);
+    return expand(value);
+  } catch {
+    return value;
+  }
+}
+
+/** Synchronous variant, for callers that build a response by hand. */
+function withStorageUrlsSync(value) {
+  try {
+    return expand(value);
   } catch {
     return value;
   }
 }
 
 module.exports = {
+  isAbsoluteUrl,
+  objectKey,
   publicStorageUrl,
   signedStorageUrl,
   resolveStorageUrl,
   withStorageUrls,
   withStorageUrlsSync,
   FILE_FIELD_BUCKETS,
-  PUBLIC_BUCKETS,
+  BUCKET_CATEGORY,
   DEFAULT_SIGNED_URL_EXPIRES,
-  __setAdminFactory,
-  __clearStorageCache,
+  __setSigner,
+  __resetSigner,
 };

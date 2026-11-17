@@ -68,24 +68,28 @@ const { rtlMock } = vi.hoisted(() => ({
 
 vi.mock("@testing-library/react-native", () => rtlMock);
 
-const { mockGetSession, mockSignOut, mockOnAuthStateChange, mockApiFetch } = vi.hoisted(() => ({
+const { mockGetSession, mockSubscribe, mockLogout, mockApiJson } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
-  mockSignOut: vi.fn(),
-  mockOnAuthStateChange: vi.fn((callback) => {
-    callback("SIGNED_IN", { access_token: "token", user: { id: "user-123", role: "student", email: "test@lccbonline.edu.ph" } });
-    return { data: { subscription: { unsubscribe: vi.fn() } } };
+  mockSubscribe: vi.fn((callback) => {
+    callback({ access_token: "token", user: { id: "user-123", role: "student", email: "test@lccbonline.edu.ph" } });
+    return () => {};
   }),
-  mockApiFetch: vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ user: { id: "user-123", role: "student", email: "test@lccbonline.edu.ph" } }) }),
+  mockLogout: vi.fn().mockResolvedValue(undefined),
+  mockApiJson: vi.fn().mockResolvedValue({ id: "user-123", role: "student", email: "test@lccbonline.edu.ph" }),
 }));
 
-vi.mock("../lib/supabase", () => ({
-  supabase: {
-    auth: {
-      getSession: mockGetSession,
-      signOut: mockSignOut,
-      onAuthStateChange: mockOnAuthStateChange,
-    },
-  },
+vi.mock("../lib/session", () => ({
+  getSession: mockGetSession,
+  subscribe: mockSubscribe,
+  clearSession: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../lib/auth", () => ({
+  logout: mockLogout,
+}));
+
+vi.mock("../lib/push", () => ({
+  unregisterForPush: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("expo-secure-store", () => ({
@@ -95,7 +99,13 @@ vi.mock("expo-secure-store", () => ({
 }));
 
 vi.mock("../lib/api", () => ({
-  apiFetch: mockApiFetch,
+  apiJson: mockApiJson,
+  ApiError: class ApiError extends Error {
+    constructor(message: string, public status: number) {
+      super(message);
+      this.name = "ApiError";
+    }
+  },
 }));
 
 const TestComponent = () => {
@@ -128,13 +138,13 @@ describe("AuthContext", () => {
     mockRenderState.session = "null";
     mockButtonHandlers.signOut.mockReset();
     mockButtonHandlers.refreshProfile.mockReset();
-    mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
-    mockSignOut.mockResolvedValue({ error: null });
-    mockOnAuthStateChange.mockImplementation((callback) => {
-      callback("SIGNED_IN", { access_token: "token", user: { id: "user-123", role: "student", email: "test@lccbonline.edu.ph" } });
-      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    mockGetSession.mockResolvedValue(null);
+    mockLogout.mockResolvedValue(undefined);
+    mockSubscribe.mockImplementation((callback) => {
+      callback({ access_token: "token", user: { id: "user-123", role: "student", email: "test@lccbonline.edu.ph" } });
+      return () => {};
     });
-    mockApiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ user: { id: "user-123", role: "student", email: "test@lccbonline.edu.ph" } }) });
+    mockApiJson.mockResolvedValue({ id: "user-123", role: "student", email: "test@lccbonline.edu.ph" });
   });
 
   afterEach(() => {
@@ -142,8 +152,8 @@ describe("AuthContext", () => {
   });
 
   it("initializes with no session", async () => {
-    mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
-    mockOnAuthStateChange.mockImplementation(() => ({ data: { subscription: { unsubscribe: vi.fn() } } }));
+    mockGetSession.mockResolvedValue(null);
+    mockSubscribe.mockImplementation(() => () => {});
 
     // @ts-expect-error - mock render returns sync object but types expect Promise
     const { getByTestId } = render(
@@ -161,14 +171,14 @@ describe("AuthContext", () => {
 
   it("fetches profile and sets user on sign-in", async () => {
     mockGetSession.mockResolvedValue({
-      data: { session: { access_token: "token", user: { id: "user-123", role: "student" } } },
-      error: null,
+      access_token: "token",
+      user: { id: "user-123", role: "student" },
     });
-    mockOnAuthStateChange.mockImplementation((callback) => {
+    mockSubscribe.mockImplementation((callback) => {
       setTimeout(() => {
-        callback("SIGNED_IN", { access_token: "token", user: { id: "user-123", role: "student", email: "test@lccbonline.edu.ph" } });
+        callback({ access_token: "token", user: { id: "user-123", role: "student", email: "test@lccbonline.edu.ph" } });
       }, 0);
-      return { data: { subscription: { unsubscribe: vi.fn() } } };
+      return () => {};
     });
 
     // @ts-expect-error - mock render returns sync object but types expect Promise
@@ -188,18 +198,18 @@ describe("AuthContext", () => {
 
   it("clears session on signOut", async () => {
     mockGetSession.mockResolvedValue({
-      data: { session: { access_token: "token", user: { id: "user-123", role: "student" } } },
-      error: null,
+      access_token: "token",
+      user: { id: "user-123", role: "student" },
     });
-    mockOnAuthStateChange.mockImplementation((callback) => {
+    mockSubscribe.mockImplementation((callback) => {
       setTimeout(() => {
-        callback("SIGNED_IN", { access_token: "token", user: { id: "user-123", role: "student" } });
+        callback({ access_token: "token", user: { id: "user-123", role: "student" } });
       }, 0);
-      return { data: { subscription: { unsubscribe: vi.fn() } } };
+      return () => {};
     });
 
-    // Set up button handler to call mockSignOut
-    mockButtonHandlers.signOut.mockImplementation(() => mockSignOut());
+    // Set up button handler to call mockLogout
+    mockButtonHandlers.signOut.mockImplementation(() => mockLogout());
 
     // @ts-expect-error - mock render returns sync object but types expect Promise
     const { getByTestId } = render(
@@ -220,24 +230,24 @@ describe("AuthContext", () => {
     });
 
     await waitFor(() => {
-      expect(mockSignOut).toHaveBeenCalled();
+      expect(mockLogout).toHaveBeenCalled();
     });
   });
 
   it("refreshes profile", async () => {
     mockGetSession.mockResolvedValue({
-      data: { session: { access_token: "token", user: { id: "user-123", role: "student" } } },
-      error: null,
+      access_token: "token",
+      user: { id: "user-123", role: "student" },
     });
-    mockOnAuthStateChange.mockImplementation((callback) => {
+    mockSubscribe.mockImplementation((callback) => {
       setTimeout(() => {
-        callback("SIGNED_IN", { access_token: "token", user: { id: "user-123", role: "student" } });
+        callback({ access_token: "token", user: { id: "user-123", role: "student" } });
       }, 0);
-      return { data: { subscription: { unsubscribe: vi.fn() } } };
+      return () => {};
     });
 
-    // Set up button handler to call mockApiFetch
-    mockButtonHandlers.refreshProfile.mockImplementation(() => mockApiFetch());
+    // Set up button handler to call mockApiJson
+    mockButtonHandlers.refreshProfile.mockImplementation(() => mockApiJson("/users/user-123"));
 
     // @ts-expect-error - mock render returns sync object but types expect Promise
     const { getByTestId } = render(
@@ -258,7 +268,7 @@ describe("AuthContext", () => {
     });
 
     await waitFor(() => {
-      expect(mockApiFetch).toHaveBeenCalledTimes(1);
+      expect(mockApiJson).toHaveBeenCalled();
     });
   });
 });
