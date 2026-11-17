@@ -135,4 +135,41 @@ describe("api library", () => {
       await expect(api.apiJson("/test", { method: "GET" })).rejects.toThrow("Internal server error");
     });
   });
+
+  describe("updatePost", () => {
+    it("sends kind, repository_type, and attachments payload", async () => {
+      mockGetSession.mockResolvedValue({ access_token: "token" });
+      mockRequest.mockResolvedValue({ data: { success: true } });
+
+      await api.updatePost("p123", {
+        kind: "repository",
+        repository_type: "project",
+        attachments: [
+          {
+            storage_key: "documents/doc1.pdf",
+            file_name: "doc1.pdf",
+            mime_type: "application/pdf",
+          },
+        ],
+      });
+
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: "/posts/p123",
+          method: "PUT",
+          data: JSON.stringify({
+            kind: "repository",
+            repository_type: "project",
+            attachments: [
+              {
+                storage_key: "documents/doc1.pdf",
+                file_name: "doc1.pdf",
+                mime_type: "application/pdf",
+              },
+            ],
+          }),
+        })
+      );
+    });
+  });
 });

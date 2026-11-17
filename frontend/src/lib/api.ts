@@ -2,7 +2,7 @@ import { create, isAxiosError } from "axios";
 import { getSession, isExpired, clearSession } from "./session";
 import { refreshSession } from "./sessionRefresh";
 import { ApiError } from "./errors";
-import type { ContentVisibility } from "../types";
+import type { ContentVisibility, PostKind, RepositoryType, PostAttachment } from "../types";
 import { fileUrl, resolveFileUrl, resolveFileUrls } from "./files";
 
 const API_URL = (
@@ -217,6 +217,18 @@ export async function updatePost(
     image_url?: string | null;
     image_urls?: string[] | null;
     type?: string;
+    kind?: PostKind;
+    repository_type?: RepositoryType | null;
+    repository_category?: string | null;
+    live_url?: string | null;
+    attachments?: Array<{
+      id?: string;
+      storage_key: string;
+      file_name: string;
+      mime_type: string;
+      size_bytes?: number | null;
+      sort_order?: number;
+    }>;
     preview_metadata?: any;
     visibility?: ContentVisibility;
     audience?: string[];
@@ -489,6 +501,16 @@ export function adaptPost(row: any): any {
     edited_at: row.edited_at || null,
     deleted_at: row.deleted_at || null,
     kind: row.kind || "post",
+    post_kind: row.post_kind,
+    repository_type: row.repository_type || null,
+    repository_category: row.repository_category || null,
+    live_url: row.live_url || null,
+    attachments: Array.isArray(row.attachments)
+      ? row.attachments.map((att: any) => ({
+          ...att,
+          url: resolveFileUrl(att.url || att.storage_key),
+        }))
+      : [],
     repost: row.repost
       ? {
           caption: row.repost.caption,

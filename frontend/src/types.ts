@@ -1,5 +1,18 @@
 export type PostType = "text" | "image" | "project" | "capstone" | "website" | "thesis" | "discussion";
 
+export type PostKind = "discussion" | "repository" | "announcement" | "repost";
+export type RepositoryType = "project" | "capstone" | "thesis";
+
+export type PostAttachment = {
+  id?: string;
+  storage_key: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes?: number | null;
+  sort_order?: number;
+  url?: string;
+};
+
 /** Who may read a post or thesis. Enforced in Postgres (see migration 014). */
 export type ContentVisibility = "public" | "department" | "friends" | "custom" | "private";
 
@@ -56,7 +69,12 @@ export type Post = {
   allow_reposts: boolean;
   edited_at?: string | null;
   deleted_at?: string | null;
-  kind: "post" | "repost";
+  kind: PostKind | "post";
+  post_kind?: PostKind;
+  repository_type?: RepositoryType | null;
+  repository_category?: string | null;
+  live_url?: string | null;
+  attachments?: PostAttachment[];
   repost?: RepostInfo;
   author_department_id?: string | null;
   author_course_id?: string | null;
