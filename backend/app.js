@@ -17,7 +17,6 @@ installConsoleRedactor();
 // Route modules
 const userRouter = require("./routes/userRouter");
 const postRouter = require("./routes/postRouter");
-const thesisRouter = require("./routes/thesisRouter");
 const moderationRouter = require("./routes/moderationRouter");
 const publicRouter = require("./routes/publicRouter");
 const adminRouter = require("./routes/adminRouter");
@@ -185,13 +184,7 @@ app.use(
   auth.requireActiveAccount,
   blockRouter
 );
-app.use(
-  "/api/theses",
-  auth.requireAuth,
-  auth.loadProfile,
-  auth.requireActiveAccount,
-  thesisRouter
-);
+
 app.use(
   "/api/search",
   auth.requireAuth,

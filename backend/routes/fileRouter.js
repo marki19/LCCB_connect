@@ -37,7 +37,11 @@ async function verifyFileOwnership(category, filename, user) {
 
   if (category === "theses") {
     const { rows } = await db.query(
-      `SELECT uploader_id FROM public.theses WHERE pdf_url ILIKE $1 LIMIT 1`,
+      `SELECT p.author_id AS uploader_id
+         FROM public.post_attachments a
+         JOIN public.posts p ON p.id = a.post_id
+        WHERE a.storage_key ILIKE $1
+        LIMIT 1`,
       [likePattern]
     );
     if (!rows.length) return false;

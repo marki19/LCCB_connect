@@ -238,26 +238,6 @@ const updateCommentSchema = z
   .object({ content: z.string().trim().min(1).max(2000) })
   .strict();
 
-// ---- theses ----------------------------------------------------------------
-// `department` is deliberately absent: it is derived server-side from the
-// uploader's profile, so a caller cannot attribute a thesis to another
-// department (`.strict()` rejects an attempted `department` field).
-const thesisFields = {
-  title: z.string().trim().min(1).max(300),
-  abstract: z.string().trim().min(1).max(10000),
-  category: z.string().trim().min(1).max(100),
-  pdf_url: StorageKey,
-  visibility: Visibility.optional(),
-  audience: Audience.optional(),
-};
-
-const createThesisSchema = withCustomAudienceRule(
-  z.object(thesisFields).strict()
-);
-const updateThesisSchema = withCustomAudienceRule(
-  z.object(thesisFields).partial().strict()
-);
-
 // ---- catalog: departments & courses (admin-managed runtime data) -----------
 const departmentFields = {
   name: z.string().trim().min(1).max(200),
@@ -726,8 +706,6 @@ const validate = (schema) => (req, res, next) => {
   updatePostSchema,
   createCommentSchema,
   updateCommentSchema,
-  createThesisSchema,
-  updateThesisSchema,
   createProfileSchema,
   updateProfileSchema,
   createDepartmentSchema,

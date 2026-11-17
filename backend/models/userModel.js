@@ -255,8 +255,8 @@ const getPublicProfile = async (targetId, viewerId = null) => {
         WHERE vp.author_id = p.id AND vp.deleted_at IS NULL
       ) AS posts_count,
       (
-        SELECT COUNT(*)::int FROM visible_theses($2::text) vt
-        WHERE vt.uploader_id = p.id
+        SELECT COUNT(*)::int FROM visible_posts($2::text) vp
+        WHERE vp.author_id = p.id AND vp.deleted_at IS NULL AND vp.kind = 'repository' AND vp.repository_type = 'thesis'
       ) AS theses_count,
       (
         SELECT COUNT(*)::int FROM public.friendships f

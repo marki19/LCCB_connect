@@ -25,7 +25,6 @@ stub(auth, "loadProfile", (req, res, next) => {
 });
 
 const postModel = require("../models/postModel");
-const thesisModel = require("../models/thesisModel");
 const app = require("../app");
 
 describe("feed faceted filters", () => {
@@ -69,31 +68,12 @@ describe("feed faceted filters", () => {
     });
   });
 
-  describe("GET /api/theses department filter", () => {
-    it("rejects non-uuid department_id with 400", async () => {
+  describe("legacy /api/theses endpoint", () => {
+    it("returns 404 because theses are now merged into posts", async () => {
       const res = await request(app)
-        .get("/api/theses?department_id=bad-uuid")
+        .get("/api/theses")
         .set("Authorization", "Bearer valid");
-      assert.equal(res.status, 400);
-      assert.match(res.body.error, /department_id/i);
-    });
-
-    it("passes valid department_id to thesisModel.getAllTheses", async () => {
-      let capturedArgs = null;
-      stub(thesisModel, "getAllTheses", async (args) => {
-        capturedArgs = args;
-        return [];
-      });
-
-      const deptId = "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
-
-      const res = await request(app)
-        .get(`/api/theses?department_id=${deptId}`)
-        .set("Authorization", "Bearer valid");
-
-      assert.equal(res.status, 200);
-      assert.ok(capturedArgs);
-      assert.equal(capturedArgs.departmentId, deptId);
+      assert.equal(res.status, 404);
     });
   });
 });

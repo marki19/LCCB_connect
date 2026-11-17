@@ -11,7 +11,6 @@ const request = require("supertest");
 const { stub } = require("./stub.helper");
 const auth = require("../middleware/auth");
 const postModel = require("../models/postModel");
-const thesisModel = require("../models/thesisModel");
 const messageModel = require("../models/messageModel");
 const auditService = require("../services/auditService");
 
@@ -44,9 +43,6 @@ const reports = {
   listOpenMessageReports: stub(messageModel, "listOpenMessageReports"),
   getMessageReportById: stub(messageModel, "getMessageReportById"),
   resolveMessageReport: stub(messageModel, "resolveMessageReport"),
-};
-const theses = {
-  getFlaggedTheses: stub(thesisModel, "getFlaggedTheses", async () => []),
 };
 stub(auditService, "recordRequest", async () => undefined);
 

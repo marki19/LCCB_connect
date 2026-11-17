@@ -6,15 +6,12 @@ const request = require("supertest");
 
 const { stub } = require("./stub.helper");
 const postModel = require("../models/postModel");
-const thesisModel = require("../models/thesisModel");
 const userModel = require("../models/userModel");
 
 const m = {
   getAllPosts: stub(postModel, "getAllPosts", async () => []),
   getPostById: stub(postModel, "getPostById", async () => null),
   getComments: stub(postModel, "getComments", async () => []),
-  getAllTheses: stub(thesisModel, "getAllTheses", async () => []),
-  getThesisById: stub(thesisModel, "getThesisById", async () => null),
   getAllUsers: stub(userModel, "getAllUsers", async () => []),
 };
 
@@ -97,8 +94,8 @@ describe("Public read-only endpoints (Guest Mode)", () => {
   });
 
   it("allows unauthenticated GET /api/public/theses", async () => {
-    m.getAllTheses.setImpl(async () => [
-      { id: "t1", title: "Thesis Research", department: "BSIT" },
+    m.getAllPosts.setImpl(async () => [
+      { id: "t1", title: "Thesis Research", department: "BSIT", moderation_status: "approved" },
     ]);
 
     const res = await request(app).get("/api/public/theses");
@@ -109,7 +106,7 @@ describe("Public read-only endpoints (Guest Mode)", () => {
 
   it("passes public thesis search, uploader, and category filters to the model", async () => {
     const uploaderId = "22222222-2222-4222-8222-222222222222";
-    m.getAllTheses.setImpl(async () => []);
+    m.getAllPosts.setImpl(async () => []);
 
     await request(app)
       .get("/api/public/theses")
@@ -120,12 +117,14 @@ describe("Public read-only endpoints (Guest Mode)", () => {
         limit: 5,
       });
 
-    assert.deepEqual(m.getAllTheses.calls.at(-1), [
+    assert.deepEqual(m.getAllPosts.calls.at(-1), [
       {
         limit: 5,
         cursor: null,
         q: "ai",
-        uploaderId,
+        authorId: uploaderId,
+        kind: "repository",
+        repository_type: "thesis",
         categories: ["Graduate Dissertation"],
       },
     ]);
@@ -136,11 +135,11 @@ describe("Public read-only endpoints (Guest Mode)", () => {
 
     assert.equal(res.status, 400);
     assert.deepEqual(res.body, { error: "Invalid uploader_id" });
-    assert.equal(m.getAllTheses.calls.length, 0);
+    assert.equal(m.getAllPosts.calls.length, 0);
   });
 
   it("excludes hidden theses from the public response even if the model leaks one", async () => {
-    m.getAllTheses.setImpl(async () => [
+    m.getAllPosts.setImpl(async () => [
       { id: "t1", title: "Visible", moderation_status: "approved" },
       { id: "t2", title: "Hidden", moderation_status: "hidden" },
     ]);

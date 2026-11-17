@@ -20,8 +20,8 @@ Plan: `implementation_plans/2026-11-17-repositories-attachments-mentions.md`
 ## Part 2 — Thesis Merge (Tasks 13–16)
 
 - [x] Task 13: Schema migration — migrate `theses` table into `posts` with PDF attachment (`backend/migrations/055_theses_into_posts.sql`)
-- [ ] Task 14: Backend deprecation — remove `thesisModel.js` and `/api/theses` routes
-- [ ] Task 15: Admin & moderation — update thesis queues to query repository posts
+- [x] Task 14: Backend deprecation — remove `thesisModel.js` and `/api/theses` routes
+- [x] Task 15: Admin & moderation — update thesis queues to query repository posts
 - [ ] Task 16: Frontend migration — redirect `/upload-thesis` and query posts in capstones/profile/search
 
 ## Part 3 — Mentions (Tasks 17–22)

@@ -1,5 +1,4 @@
 const postModel = require("../models/postModel");
-const thesisModel = require("../models/thesisModel");
 const messageModel = require("../models/messageModel");
 const notificationModel = require("../models/notificationModel");
 const notificationService = require("../services/notificationService");
@@ -75,13 +74,19 @@ const getModerationQueue = async (req, res, next) => {
       return res.status(403).json({ error: "Forbidden: insufficient moderation permissions" });
     }
 
-    const [flaggedPosts, flaggedComments, flaggedTheses, messageReports] =
+    const [allFlaggedPosts, flaggedComments, messageReports] =
       await Promise.all([
         postModel.getFlaggedPosts({ departmentId }),
         postModel.getFlaggedComments({ departmentId }),
-        thesisModel.getFlaggedTheses({ departmentId }),
         messageModel.listOpenMessageReports({ departmentId }),
       ]);
+
+    const flaggedPosts = allFlaggedPosts.filter(
+      (p) => !(p.kind === "repository" && p.repository_type === "thesis")
+    );
+    const flaggedTheses = allFlaggedPosts.filter(
+      (p) => p.kind === "repository" && p.repository_type === "thesis"
+    );
 
     res.json({
       department_id: departmentId,
@@ -261,12 +266,12 @@ const moderateThesis = async (req, res, next) => {
     }
 
     // Moderators must be able to see and restore a hidden thesis.
-    const thesis = await thesisModel.getThesisById(id, { includeHidden: true });
+    const thesis = await postModel.getPostById(id, { includeHidden: true });
     if (!thesis) {
       return res.status(404).json({ error: "Thesis not found" });
     }
 
-    if (!withinDepartmentScope(req, res, thesis.uploader?.department_id)) return;
+    if (!withinDepartmentScope(req, res, thesis.author?.department_id)) return;
 
     const reason = readReason(req, res);
     if (!reason) return;
@@ -278,10 +283,10 @@ const moderateThesis = async (req, res, next) => {
     }
 
     if (action === "restore") {
-      const updated = await thesisModel.updateThesisModeration(id, "approved", reason);
+      const updated = await postModel.updatePostModeration(id, "approved", reason);
       await auditService.recordRequest(req, {
         action: ACTIONS.CONTENT_RESTORE,
-        targetType: "thesis",
+        targetType: "post",
         targetId: id,
         targetLabel: contentLabel(thesis, "Thesis"),
         reason,
@@ -291,15 +296,15 @@ const moderateThesis = async (req, res, next) => {
     }
 
     if (action === "hide") {
-      const updated = await thesisModel.updateThesisModeration(id, "hidden", reason);
+      const updated = await postModel.updatePostModeration(id, "hidden", reason);
       await notificationService.notifyAuthorOnAction({
-        authorId: thesis.uploader_id,
+        authorId: thesis.author_id,
         actorId: req.user.id,
-        message: `Your thesis "${thesis.title}" was hidden by an administrator: ${reason}`,
+        message: `Your thesis "${thesis.title || thesis.content?.slice(0, 30)}" was hidden by an administrator: ${reason}`,
       });
       await auditService.recordRequest(req, {
         action: ACTIONS.CONTENT_HIDE,
-        targetType: "thesis",
+        targetType: "post",
         targetId: id,
         targetLabel: contentLabel(thesis, "Thesis"),
         reason,
@@ -308,15 +313,15 @@ const moderateThesis = async (req, res, next) => {
       return res.json({ message: "Thesis hidden", thesis: updated });
     }
 
-    await thesisModel.adminDeleteThesis(id);
+    await postModel.adminDeletePost(id);
     await notificationService.notifyAuthorOnAction({
-      authorId: thesis.uploader_id,
+      authorId: thesis.author_id,
       actorId: req.user.id,
-      message: `Your thesis "${thesis.title}" was removed by an administrator: ${reason}`,
+      message: `Your thesis "${thesis.title || thesis.content?.slice(0, 30)}" was removed by an administrator: ${reason}`,
     });
     await auditService.recordRequest(req, {
       action: ACTIONS.CONTENT_DELETE,
-      targetType: "thesis",
+      targetType: "post",
       targetId: id,
       targetLabel: contentLabel(thesis, "Thesis"),
       reason,

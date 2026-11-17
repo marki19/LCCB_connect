@@ -1,5 +1,4 @@
 const postModel = require("../models/postModel");
-const thesisModel = require("../models/thesisModel");
 const userModel = require("../models/userModel");
 const { clampLimit } = require("../models/pagination");
 const {
@@ -75,17 +74,18 @@ const getTheses = async (req, res, next) => {
       return res.status(400).json({ error: uploader.error });
     }
 
-    const theses = await thesisModel.getAllTheses({
+    const posts = await postModel.getAllPosts({
       limit: clampLimit(req.query.limit),
       cursor: req.query.cursor || null,
       q: parseSearch(req.query.q),
-      uploaderId: uploader.value,
+      authorId: uploader.value,
+      kind: "repository",
+      repository_type: "thesis",
       categories: parseCategoryFilter(req.query.category),
     });
-    // The model already filters hidden rows; keep the controller boundary safe
-    // too so a future query change cannot expose one.
-    const publicTheses = (theses || []).filter(
-      (thesis) => thesis.moderation_status !== "hidden"
+    // Ensure hidden content is never leaked to public visitors
+    const publicTheses = (posts || []).filter(
+      (p) => p.moderation_status !== "hidden"
     );
     res.json(publicTheses);
   } catch (error) {
@@ -96,11 +96,11 @@ const getTheses = async (req, res, next) => {
 const getThesisById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const thesis = await thesisModel.getThesisById(id);
-    if (!thesis) {
+    const post = await postModel.getPostById(id, { includeHidden: false });
+    if (!post || post.moderation_status === "hidden" || post.kind !== "repository" || post.repository_type !== "thesis") {
       return res.status(404).json({ error: "Thesis not found" });
     }
-    res.json(thesis);
+    res.json(post);
   } catch (error) {
     next(error);
   }

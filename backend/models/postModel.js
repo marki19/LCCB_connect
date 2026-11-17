@@ -57,6 +57,10 @@ const getAllPosts = async ({
   departmentId = null,
   courseId = null,
   userId = null,
+  kind = null,
+  repository_type = null,
+  repository_category = null,
+  categories = null,
 } = {}) => {
   const params = [];
   const conditions = [];
@@ -82,6 +86,24 @@ const getAllPosts = async ({
   if (courseId) {
     params.push(courseId);
     conditions.push(`(p.author_course_id = $${params.length}::uuid OR pr.course_id = $${params.length}::uuid)`);
+  }
+
+  if (kind && ['discussion', 'repository', 'announcement'].includes(kind)) {
+    params.push(kind);
+    conditions.push(`p.kind = $${params.length}`);
+  }
+
+  if (repository_type && ['project', 'capstone', 'thesis'].includes(repository_type)) {
+    params.push(repository_type);
+    conditions.push(`p.repository_type = $${params.length}`);
+  }
+
+  if (repository_category) {
+    params.push(repository_category);
+    conditions.push(`p.repository_category = $${params.length}`);
+  } else if (Array.isArray(categories) && categories.length > 0) {
+    params.push(categories);
+    conditions.push(`p.repository_category = ANY($${params.length}::text[])`);
   }
 
   if (cursor) {
