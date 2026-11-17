@@ -14,6 +14,7 @@ const {
 // CRUD routes (global requireAuth is applied when this router is mounted in app.js)
 router.get("/", userController.getUsers);
 router.get("/directory", userController.getDirectory);   // <-- before /:id
+router.get("/mentionable", userController.getMentionableUsers); // <-- before /:id
 router.delete("/me/avatar", auth.requireAuth, userController.removeAvatar); // <-- before /:id
 router.put("/me/cover", auth.requireAuth, userController.updateCover);       // <-- before /:id
 router.delete("/me/cover", auth.requireAuth, userController.removeCover);    // <-- before /:id

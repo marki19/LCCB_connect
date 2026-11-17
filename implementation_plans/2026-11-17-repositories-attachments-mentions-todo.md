@@ -27,7 +27,7 @@ Plan: `implementation_plans/2026-11-17-repositories-attachments-mentions.md`
 ## Part 3 — Mentions (Tasks 17–22)
 
 - [x] Task 17: Schema & policy — `post_mentions` table and `can_mention` function (`backend/migrations/056_post_mentions.sql`)
-- [ ] Task 18: Mention service — parse `@handle` tokens, enforce friends ∪ department rule (`backend/services/mentions.js`)
+- [x] Task 18: Mention service — parse `@handle` tokens, enforce friends ∪ department rule (`backend/services/mentions.js`)
 - [ ] Task 19: Mention autocomplete API — `/api/users/mentionable` endpoint
 - [ ] Task 20: Notification fan-out — deliver notifications for valid post and comment mentions
 - [ ] Task 21: Frontend mention components — `MentionInput` and `RichText`

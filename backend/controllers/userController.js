@@ -5,6 +5,7 @@ const userModel = require("../models/userModel");
 const friendModel = require("../models/friendModel");
 const departmentModel = require("../models/departmentModel");
 const accountService = require("../services/accountService");
+const mentionsService = require("../services/mentions");
 const { AdminAuthUnavailableError } = require("../services/supabaseAdmin");
 const { clampLimit } = require("../models/pagination");
 const { sanitizeProfile } = require("../utils/profile");
@@ -476,11 +477,23 @@ const clearNote = async (req, res, next) => {
   }
 };
 
+const getMentionableUsers = async (req, res, next) => {
+  try {
+    const q = req.query.q || "";
+    const limit = req.query.limit || 8;
+    const users = await mentionsService.getMentionableUsers(req.user.id, q, limit);
+    res.json({ users });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getUsers,
   getUser,
   getPublicProfile,
   getDirectory,
+  getMentionableUsers,
   createUser,
   updateUser,
   disableUser,
