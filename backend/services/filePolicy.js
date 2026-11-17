@@ -30,6 +30,8 @@ const EXTENSION_MIME = {
   ".pdf": "application/pdf",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".doc": "application/msword",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".ppt": "application/vnd.ms-powerpoint",
   ".mp4": "video/mp4",
   ".webm": "video/webm",
 };
@@ -52,11 +54,13 @@ const CATEGORY_RULES = {
   },
   documents: {
     maxBytes: 25 * 1024 * 1024, // 25 MB
-    allowedExtensions: [".pdf", ".docx", ".doc"],
+    allowedExtensions: [".pdf", ".docx", ".doc", ".pptx", ".ppt"],
     allowedMimes: [
       "application/pdf",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "application/msword",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.ms-powerpoint",
     ],
   },
   videos: {
@@ -131,12 +135,28 @@ function verifyMagicBytes(buffer, extension) {
     case ".pdf":
       return buffer.subarray(0, 5).toString("ascii") === "%PDF-";
     case ".docx":
+    case ".pptx":
       // Office Open XML is a zip container starting with PK\x03\x04
       return (
         buffer[0] === 0x50 &&
         buffer[1] === 0x4b &&
         buffer[2] === 0x03 &&
         buffer[3] === 0x04
+      );
+    case ".doc":
+    case ".ppt":
+      // Legacy Microsoft Compound File Binary Format (OLE CFBF)
+      // D0 CF 11 E0 A1 B1 1A E1
+      return (
+        buffer.length >= 8 &&
+        buffer[0] === 0xd0 &&
+        buffer[1] === 0xcf &&
+        buffer[2] === 0x11 &&
+        buffer[3] === 0xe0 &&
+        buffer[4] === 0xa1 &&
+        buffer[5] === 0xb1 &&
+        buffer[6] === 0x1a &&
+        buffer[7] === 0xe1
       );
     case ".mp4":
       return (

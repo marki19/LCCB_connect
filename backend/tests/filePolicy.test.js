@@ -178,6 +178,20 @@ describe("resolveUpload", () => {
     assert.match(resolved.key, /^posts\/[0-9a-f]{32}\.png$/);
     assert.equal(resolved.contentType, "image/png");
   });
+
+  test("accepts pptx and ppt in documents", () => {
+    const pptx = Buffer.concat([Buffer.from([0x50,0x4b,0x03,0x04]), Buffer.alloc(64)]);
+    const ppt  = Buffer.concat([Buffer.from([0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1]), Buffer.alloc(64)]);
+    assert.match(resolveUpload({ category:"documents", originalName:"deck.pptx", buffer:pptx }).key, /\.pptx$/);
+    assert.match(resolveUpload({ category:"documents", originalName:"deck.ppt",  buffer:ppt  }).key, /\.ppt$/);
+  });
+
+  test("still rejects an executable renamed to .doc", () => {
+    assert.throws(
+      () => resolveUpload({ category:"documents", originalName:"x.doc", buffer: Buffer.from("MZ\x90\x00\x03") }),
+      /do not match the expected format/
+    );
+  });
 });
 
 describe("parseKey", () => {
