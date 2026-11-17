@@ -52,6 +52,9 @@ import Modal from "../../src/components/ui/Modal";
 import EmptyState from "../../src/components/admin/EmptyState";
 import { PostImageGallery } from "../../src/components/PostImageGallery";
 import AttachmentStrip from "../../src/components/AttachmentStrip";
+import RichText from "../../src/components/mentions/RichText";
+import MentionInput from "../../src/components/mentions/MentionInput";
+import type { MentionToken } from "../../src/lib/mentions";
 
 function getTypeConfig(
   post: Post,
@@ -110,10 +113,12 @@ export default function PostDetailScreen() {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [commentText, setCommentText] = useState("");
+  const [commentMentions, setCommentMentions] = useState<MentionToken[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [commentMenuId, setCommentMenuId] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [editCommentMentions, setEditCommentMentions] = useState<MentionToken[]>([]);
 
   const [confirmDeletePost, setConfirmDeletePost] = useState(false);
   const [deletingPost, setDeletingPost] = useState(false);
@@ -162,6 +167,7 @@ export default function PostDetailScreen() {
               createdAt: new Date(postData.created_at).toLocaleDateString(),
               isLiked: Boolean(postData.is_liked),
               visibility: postData.visibility,
+              mentions: Array.isArray(postData.mentions) ? postData.mentions : [],
             });
 
             setImageUrls(initialUrls);
@@ -184,6 +190,7 @@ export default function PostDetailScreen() {
                   initials: getInitials(cName),
                   avatar_url: c.user?.avatar_url,
                   text: c.content,
+                  mentions: Array.isArray(c.mentions) ? c.mentions : [],
                   time: new Date(c.created_at).toLocaleDateString(),
                 };
               })
@@ -232,7 +239,9 @@ export default function PostDetailScreen() {
     }
 
     const text = commentText.trim();
+    const mentionIds = commentMentions.map((m) => m.user_id || m.id).filter(Boolean) as string[];
     setCommentText("");
+    setCommentMentions([]);
     const tempId = "temp-" + Date.now();
 
     const newComment = {
@@ -242,6 +251,7 @@ export default function PostDetailScreen() {
       initials: getInitials(profile.full_name || profile.username || "You"),
       avatar_url: profile.avatar_url,
       text,
+      mentions: commentMentions,
       time: "Just now",
     };
     setComments((prev) => [newComment, ...prev]);
@@ -249,7 +259,7 @@ export default function PostDetailScreen() {
     try {
       const res = await apiFetch(`/posts/${post.id}/comments`, {
         method: "POST",
-        body: JSON.stringify({ content: text }),
+        body: JSON.stringify({ content: text, mention_ids: mentionIds }),
       });
 
       if (!res.ok) {
@@ -268,7 +278,7 @@ export default function PostDetailScreen() {
       const created = await res.json().catch(() => null);
       if (created?.id) {
         setComments((prev) =>
-          prev.map((c) => (c.id === tempId ? { ...c, id: created.id } : c))
+          prev.map((c) => (c.id === tempId ? { ...c, id: created.id, mentions: created.mentions || c.mentions } : c))
         );
       }
     } catch (err: any) {
@@ -282,11 +292,13 @@ export default function PostDetailScreen() {
     setCommentMenuId(null);
     setEditingCommentId(c.id);
     setEditingText(c.text);
+    setEditCommentMentions(c.mentions || []);
   };
 
   const cancelEditComment = () => {
     setEditingCommentId(null);
     setEditingText("");
+    setEditCommentMentions([]);
   };
 
   const handleSaveComment = async (c: any) => {
@@ -295,10 +307,15 @@ export default function PostDetailScreen() {
       cancelEditComment();
       return;
     }
+    const mentionIds = editCommentMentions.map((m) => m.user_id || m.id).filter(Boolean) as string[];
     try {
-      const updated: any = await updateComment(post.id, c.id, text);
+      const updated: any = await updateComment(post.id, c.id, text, mentionIds);
       setComments((prev) =>
-        prev.map((item) => (item.id === c.id ? { ...item, text: updated?.content ?? text } : item))
+        prev.map((item) =>
+          item.id === c.id
+            ? { ...item, text: updated?.content ?? text, mentions: updated?.mentions ?? editCommentMentions }
+            : item
+        )
       );
       cancelEditComment();
     } catch (e: any) {
@@ -349,6 +366,7 @@ export default function PostDetailScreen() {
         editVisibility: post.visibility ?? "public",
         editImages: JSON.stringify(postImages),
         editAttachments: JSON.stringify(post.attachments ?? []),
+        editMentions: JSON.stringify(post.mentions ?? []),
       },
     });
   };
@@ -528,7 +546,9 @@ export default function PostDetailScreen() {
 
         {/* Post Description */}
         {post.description ? (
-          <Text
+          <RichText
+            text={post.description}
+            mentions={post.mentions}
             style={{
               ...TYPE.body,
               fontSize: 15,
@@ -536,9 +556,7 @@ export default function PostDetailScreen() {
               marginBottom: SPACE.x4,
               lineHeight: 23,
             }}
-          >
-            {post.description}
-          </Text>
+          />
         ) : null}
 
         {/* Tech Tags */}
@@ -846,9 +864,11 @@ export default function PostDetailScreen() {
 
                       {isEditingComment ? (
                         <View>
-                          <TextInput
+                          <MentionInput
                             value={editingText}
                             onChangeText={setEditingText}
+                            onMentionsChange={setEditCommentMentions}
+                            knownMentions={editCommentMentions}
                             multiline
                             autoFocus
                             placeholder="Edit your comment…"
@@ -884,9 +904,11 @@ export default function PostDetailScreen() {
                           </View>
                         </View>
                       ) : (
-                        <Text style={{ ...TYPE.caption, color: colors.inkSoft, lineHeight: 18 }}>
-                          {c.text}
-                        </Text>
+                        <RichText
+                          text={c.text}
+                          mentions={c.mentions}
+                          style={{ ...TYPE.caption, color: colors.inkSoft, lineHeight: 18 }}
+                        />
                       )}
                     </View>
 
@@ -1013,18 +1035,20 @@ export default function PostDetailScreen() {
               size={34}
             />
 
-            <TextInput
+            <MentionInput
               ref={inputRef}
               value={commentText}
               onChangeText={setCommentText}
+              onMentionsChange={setCommentMentions}
+              knownMentions={commentMentions}
               placeholder="Write a comment…"
               placeholderTextColor={colors.inkFaint}
               onFocus={() => setComposerFocused(true)}
               onBlur={() => setComposerFocused(false)}
               accessibilityLabel="Write a comment"
+              containerStyle={{ flex: 1 }}
               style={[
                 {
-                  flex: 1,
                   backgroundColor: isDark ? colors.surfaceSunken : "#F0F2F5",
                   borderRadius: RADIUS.pill,
                   borderWidth: 1,
@@ -1393,17 +1417,17 @@ export default function PostDetailScreen() {
               </Text>
             ) : null}
             {post.description ? (
-              <Text
-                style={{
-                  ...(post.title ? TYPE.body : TYPE.bodyStrong),
-                  color: post.title ? colors.inkSoft : colors.ink,
-                  paddingHorizontal: SPACE.x4,
-                  marginBottom: SPACE.x4,
-                  lineHeight: post.title ? 22 : 26,
-                }}
-              >
-                {post.description}
-              </Text>
+              <View style={{ paddingHorizontal: SPACE.x4, marginBottom: SPACE.x4 }}>
+                <RichText
+                  text={post.description}
+                  mentions={post.mentions}
+                  style={{
+                    ...(post.title ? TYPE.body : TYPE.bodyStrong),
+                    color: post.title ? colors.inkSoft : colors.ink,
+                    lineHeight: post.title ? 22 : 26,
+                  }}
+                />
+              </View>
             ) : null}
 
             {mediaList.length > 0 ? (
@@ -1512,18 +1536,20 @@ export default function PostDetailScreen() {
                   avatarUrl={profile?.avatar_url}
                   size={36}
                 />
-                <TextInput
+                <MentionInput
                   ref={inputRef}
                   value={commentText}
                   onChangeText={setCommentText}
+                  onMentionsChange={setCommentMentions}
+                  knownMentions={commentMentions}
                   placeholder="Write a comment…"
                   placeholderTextColor={colors.inkFaint}
                   onFocus={() => setComposerFocused(true)}
                   onBlur={() => setComposerFocused(false)}
                   accessibilityLabel="Write a comment"
+                  containerStyle={{ flex: 1 }}
                   style={[
                     {
-                      flex: 1,
                       backgroundColor: colors.panel,
                       borderRadius: RADIUS.pill,
                       borderWidth: 1,
@@ -1536,6 +1562,7 @@ export default function PostDetailScreen() {
                     } as any,
                     focusRing(colors, composerFocused),
                   ]}
+                  onSubmitEditing={() => void handleComment()}
                 />
                 <Pressable
                   onPress={() => void handleComment()}
@@ -1613,9 +1640,11 @@ export default function PostDetailScreen() {
                           </View>
                           {isEditingComment ? (
                             <View>
-                              <TextInput
+                              <MentionInput
                                 value={editingText}
                                 onChangeText={setEditingText}
+                                onMentionsChange={setEditCommentMentions}
+                                knownMentions={editCommentMentions}
                                 multiline
                                 autoFocus
                                 placeholder="Edit your comment…"
@@ -1638,7 +1667,11 @@ export default function PostDetailScreen() {
                               </View>
                             </View>
                           ) : (
-                            <Text style={{ ...TYPE.caption, color: colors.inkSoft, lineHeight: 20 }}>{c.text}</Text>
+                            <RichText
+                              text={c.text}
+                              mentions={c.mentions}
+                              style={{ ...TYPE.caption, color: colors.inkSoft, lineHeight: 20 }}
+                            />
                           )}
                         </View>
                       </View>

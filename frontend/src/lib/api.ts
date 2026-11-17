@@ -222,6 +222,7 @@ export async function updatePost(
     repository_category?: string | null;
     live_url?: string | null;
     attachments?: PostAttachment[];
+    mention_ids?: string[];
     preview_metadata?: any;
     visibility?: ContentVisibility;
     audience?: string[];
@@ -241,11 +242,12 @@ export async function deletePost(id: string | number): Promise<void> {
 export async function updateComment(
   postId: string | number,
   commentId: string | number,
-  content: string
+  content: string,
+  mention_ids?: string[]
 ): Promise<void> {
   return apiJson(`/posts/${postId}/comments/${commentId}`, {
     method: "PUT",
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, ...(mention_ids ? { mention_ids } : {}) }),
   });
 }
 
@@ -503,6 +505,7 @@ export function adaptPost(row: any): any {
           url: resolveFileUrl(att.url || att.storage_key),
         }))
       : [],
+    mentions: Array.isArray(row.mentions) ? row.mentions : [],
     repost: row.repost
       ? {
           caption: row.repost.caption,

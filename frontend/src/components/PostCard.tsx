@@ -20,6 +20,7 @@ import Avatar from "./Avatar";
 import { resolveFileUrl, resolveFileUrls } from "../lib/files";
 import { AppImage } from "./AppImage";
 import AttachmentStrip from "./AttachmentStrip";
+import RichText from "./mentions/RichText";
 
 function getTypeConfig(post: Post, colors: ThemeTokens): { label: string; bg: string; text: string } {
   if (post.kind === "repository" && post.repository_type) {
@@ -166,6 +167,7 @@ export default function PostCard({
         editVisibility: post.visibility ?? "public",
         editImages: JSON.stringify(postImages),
         editAttachments: JSON.stringify(post.attachments ?? []),
+        editMentions: JSON.stringify(post.mentions ?? []),
       },
     });
   };
@@ -356,7 +358,12 @@ export default function PostCard({
           <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary, marginBottom: 5 }}>{primaryTitle}</Text>
         ) : null}
         {primaryText ? (
-          <Text numberOfLines={isTextBased ? 0 : 2} style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>{primaryText}</Text>
+          <RichText
+            text={primaryText}
+            mentions={post.mentions}
+            numberOfLines={isTextBased ? 0 : 2}
+            style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}
+          />
         ) : null}
       </View>
 

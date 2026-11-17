@@ -31,7 +31,7 @@ Plan: `implementation_plans/2026-11-17-repositories-attachments-mentions.md`
 - [x] Task 19: Wire mentions into create, update, and comments — validation, `postController`, `postModel`
 - [x] Task 20: Notification fan-out — deliver notifications for valid post and comment mentions
 - [x] Task 21: Frontend mention components — `MentionInput` and `RichText`
-- [ ] Task 22: Composer & comment integration — replace inputs with `MentionInput`
+- [x] Task 22: Composer & comment integration — replace inputs with `MentionInput`
 
 ## Contract Migration (Task 23)
 

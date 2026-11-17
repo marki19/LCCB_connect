@@ -75,6 +75,7 @@ export type Post = {
   repository_category?: string | null;
   live_url?: string | null;
   attachments?: PostAttachment[];
+  mentions?: Array<{ user_id?: string; username: string; full_name?: string }>;
   repost?: RepostInfo;
   author_department_id?: string | null;
   author_course_id?: string | null;

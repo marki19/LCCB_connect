@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, type ComponentRef } from "react";
 import {
   View,
   TextInput,
@@ -31,16 +31,19 @@ interface MentionInputProps extends TextInputProps {
   knownMentions?: MentionToken[];
 }
 
-export function MentionInput({
-  value = "",
-  onChangeText,
-  onMentionsChange,
-  knownMentions = [],
-  containerStyle,
-  style,
-  onSelectionChange,
-  ...rest
-}: MentionInputProps) {
+export const MentionInput = React.forwardRef<ComponentRef<typeof TextInput>, MentionInputProps>(function MentionInput(
+  {
+    value = "",
+    onChangeText,
+    onMentionsChange,
+    knownMentions = [],
+    containerStyle,
+    style,
+    onSelectionChange,
+    ...rest
+  }: MentionInputProps,
+  ref
+) {
   const { colors } = useTheme();
   const [caret, setCaret] = useState<number>(value.length);
   const [queryState, setQueryState] = useState<{ query: string; start: number } | null>(null);
@@ -156,6 +159,7 @@ export function MentionInput({
   return (
     <View style={[styles.container, containerStyle]}>
       <TextInput
+        ref={ref}
         value={value}
         onChangeText={handleTextChange}
         onSelectionChange={handleSelectionChange}
@@ -228,7 +232,7 @@ export function MentionInput({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

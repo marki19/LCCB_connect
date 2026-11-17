@@ -59,6 +59,8 @@ import VisibilityPicker from "../src/components/VisibilityPicker";
 import Avatar from "../src/components/Avatar";
 import RepositoryFields from "../src/components/composer/RepositoryFields";
 import AttachmentList, { ComposerAttachmentItem } from "../src/components/composer/AttachmentList";
+import MentionInput from "../src/components/mentions/MentionInput";
+import type { MentionToken } from "../src/lib/mentions";
 import type { ContentVisibility, PostKind, RepositoryType } from "../src/types";
 import { focusRing, RADIUS, SPACE, TYPE } from "../src/lib/tokens";
 import { badgeTone, type BadgeTone } from "../src/components/admin/StatusBadge";
@@ -95,6 +97,7 @@ export default function CreatePostModal() {
     editVisibility,
     editImages,
     editAttachments,
+    editMentions,
   } = useLocalSearchParams<{
     postId?: string;
     type?: string;
@@ -111,6 +114,7 @@ export default function CreatePostModal() {
     editVisibility?: string;
     editImages?: string;
     editAttachments?: string;
+    editMentions?: string;
   }>();
 
   const isEditing = !!postId;
@@ -182,6 +186,15 @@ export default function CreatePostModal() {
             key: att.storage_key,
           }));
         }
+      } catch {}
+    }
+    return [];
+  });
+  const [mentions, setMentions] = useState<MentionToken[]>(() => {
+    if (editMentions) {
+      try {
+        const parsed = JSON.parse(editMentions);
+        if (Array.isArray(parsed)) return parsed;
       } catch {}
     }
     return [];
@@ -452,6 +465,8 @@ export default function CreatePostModal() {
         ? { visibility, ...(visibility === "custom" ? { audience } : {}) }
         : {};
 
+      const mentionIds = mentions.map((m) => m.user_id || m.id).filter(Boolean) as string[];
+
       if (isEditing && postId) {
         // Edit mode — PUT /posts/:id
         await updatePost(postId, {
@@ -463,6 +478,7 @@ export default function CreatePostModal() {
               : null,
           live_url: postKind === "repository" && repositoryType === "project" ? (liveUrl.trim() || null) : null,
           attachments: attachmentsPayload,
+          mention_ids: mentionIds,
           content: trimmedContent || undefined,
           type: effectivePostType,
           title: trimmedTitle || finalPreviewMetadata?.title || null,
@@ -487,6 +503,7 @@ export default function CreatePostModal() {
                 : null,
             live_url: postKind === "repository" && repositoryType === "project" ? (liveUrl.trim() || null) : null,
             attachments: attachmentsPayload,
+            mention_ids: mentionIds,
             content: trimmedContent || null,
             type: effectivePostType,
             title: trimmedTitle || finalPreviewMetadata?.title || null,
@@ -740,13 +757,15 @@ export default function CreatePostModal() {
           />
         )}
         {/* Main Textarea */}
-        <TextInput
+        <MentionInput
           placeholder={postKind === "discussion" ? `What's on your mind, ${firstName}?` : "Write a caption…"}
           placeholderTextColor={colors.textTertiary}
           multiline
           autoFocus={!isEditing}
           value={content}
           onChangeText={handleContentChange}
+          onMentionsChange={setMentions}
+          knownMentions={mentions}
           style={{
             minHeight: 120,
             fontSize: content.length > 80 ? 16 : 18,
