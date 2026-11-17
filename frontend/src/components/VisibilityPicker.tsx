@@ -25,9 +25,17 @@ type Props = {
   visibility: ContentVisibility;
   audience: string[];
   onChange: (visibility: ContentVisibility, audience: string[]) => void;
+  compact?: boolean;
+  onClose?: () => void;
 };
 
-export default function VisibilityPicker({ visibility, audience, onChange }: Props) {
+export default function VisibilityPicker({
+  visibility,
+  audience,
+  onChange,
+  compact = false,
+  onClose,
+}: Props) {
   const { colors } = useTheme();
   const [friends, setFriends] = useState<Friend[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -60,6 +68,130 @@ export default function VisibilityPicker({ visibility, audience, onChange }: Pro
       : [...audience, id];
     onChange("custom", next);
   };
+
+  if (compact) {
+    return (
+      <View style={{ width: "100%" }}>
+        {OPTIONS.map(({ value, label, Icon }) => {
+          const selected = visibility === value;
+          return (
+            <TouchableOpacity
+              key={value}
+              onPress={() => {
+                onChange(value, value === "custom" ? audience : []);
+                if (value !== "custom") onClose?.();
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 8,
+                paddingVertical: 7,
+                borderRadius: 6,
+                backgroundColor: selected ? colors.actionSurface : "transparent",
+              }}
+            >
+              <Icon size={14} color={selected ? colors.action : colors.textSecondary} />
+              <Text
+                style={{
+                  marginLeft: 8,
+                  fontSize: 12.5,
+                  fontWeight: selected ? "700" : "500",
+                  color: selected ? colors.action : colors.textPrimary,
+                  flex: 1,
+                }}
+              >
+                {label}
+              </Text>
+              {selected && <Check size={14} color={colors.action} strokeWidth={2.5} />}
+            </TouchableOpacity>
+          );
+        })}
+
+        {visibility === "custom" && (
+          <View
+            style={{
+              marginTop: 6,
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              paddingTop: 6,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: colors.textSecondary,
+                marginBottom: 4,
+                paddingHorizontal: 4,
+              }}
+            >
+              Select Friends:
+            </Text>
+            {loading ? (
+              <ActivityIndicator size="small" color={colors.action} style={{ padding: 8 }} />
+            ) : (friends?.length ?? 0) === 0 ? (
+              <Text style={{ padding: 6, color: colors.textTertiary, fontSize: 11 }}>
+                No friends yet
+              </Text>
+            ) : (
+              <View style={{ maxHeight: 120 }}>
+                {friends!.map(({ peer }) => {
+                  const selected = audience.includes(peer.id);
+                  return (
+                    <TouchableOpacity
+                      key={peer.id}
+                      onPress={() => toggleFriend(peer.id)}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: 4,
+                        paddingHorizontal: 6,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: 4,
+                          borderWidth: 1.5,
+                          borderColor: selected ? colors.action : colors.borderStrong,
+                          backgroundColor: selected ? colors.action : "transparent",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginRight: 6,
+                        }}
+                      >
+                        {selected && <Check size={10} color={colors.textOnPrimary} strokeWidth={3} />}
+                      </View>
+                      <Text
+                        numberOfLines={1}
+                        style={{ fontSize: 12, color: colors.textPrimary, flex: 1 }}
+                      >
+                        {peer.full_name || peer.username || "Friend"}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+            <TouchableOpacity
+              onPress={onClose}
+              style={{
+                marginTop: 6,
+                alignSelf: "flex-end",
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 6,
+                backgroundColor: colors.action,
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={{ marginBottom: 20 }}>

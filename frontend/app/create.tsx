@@ -384,15 +384,23 @@ export default function CreatePostModal() {
 
   // ── COMPOSER BODY (Shared between desktop and mobile modal) ────────────────
   const renderComposerContent = () => (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, position: "relative" }}>
+      {/* Invisible backdrop when visibility picker is open to close on tap outside */}
+      {showVisibilityPicker && (
+        <Pressable
+          onPress={() => setShowVisibilityPicker(false)}
+          style={[StyleSheet.absoluteFill, { zIndex: 90 }]}
+        />
+      )}
+
       {/* User Row (Facebook style) */}
-      <View style={styles.modalUserRow}>
+      <View style={[styles.modalUserRow, { position: "relative", zIndex: 100 }]}>
         <Avatar
           name={profile?.full_name ?? profile?.username}
           avatarUrl={profile?.avatar_url}
           size={44}
         />
-        <View style={{ marginLeft: 12, flex: 1 }}>
+        <View style={{ marginLeft: 12, flex: 1, position: "relative" }}>
           <Text
             style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}
             numberOfLines={1}
@@ -407,7 +415,7 @@ export default function CreatePostModal() {
               styles.modalAudiencePill,
               {
                 backgroundColor: colors.surfaceSunken,
-                borderColor: colors.border,
+                borderColor: showVisibilityPicker ? colors.action : colors.border,
               },
             ]}
             accessibilityRole="button"
@@ -437,6 +445,43 @@ export default function CreatePostModal() {
             </Text>
             <ChevronDown size={13} color={colors.textSecondary} />
           </TouchableOpacity>
+
+          {/* Small Floating Dropdown Popover */}
+          {showVisibilityPicker && (
+            <Animated.View
+              entering={FadeIn.duration(150)}
+              exiting={FadeOut.duration(100)}
+              style={{
+                position: "absolute",
+                top: 48,
+                left: 0,
+                width: 200,
+                zIndex: 1000,
+                backgroundColor: isDark ? colors.surfaceSunken : "#FFFFFF",
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: 4,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.25,
+                shadowRadius: 10,
+                elevation: 10,
+              }}
+            >
+              <VisibilityPicker
+                visibility={visibility}
+                audience={audience}
+                compact
+                onChange={(v, a) => {
+                  setVisibility(v);
+                  setAudience(a);
+                  setVisibilityTouched(true);
+                }}
+                onClose={() => setShowVisibilityPicker(false)}
+              />
+            </Animated.View>
+          )}
         </View>
 
         {postType !== "text" && (
@@ -482,45 +527,6 @@ export default function CreatePostModal() {
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Visibility Picker Dropdown */}
-        {showVisibilityPicker && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(150)}
-            layout={Layout.springify()}
-            style={{
-              padding: 14,
-              borderRadius: 12,
-              backgroundColor: colors.surfaceSunken,
-              marginBottom: 14,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <VisibilityPicker
-              visibility={visibility}
-              audience={audience}
-              onChange={(v, a) => {
-                setVisibility(v);
-                setAudience(a);
-                setVisibilityTouched(true);
-              }}
-            />
-            <TouchableOpacity
-              onPress={() => setShowVisibilityPicker(false)}
-              style={{
-                alignSelf: "flex-end",
-                paddingVertical: 4,
-                paddingHorizontal: 12,
-                borderRadius: 6,
-                backgroundColor: colors.actionSurface,
-              }}
-            >
-              <Text style={{ fontSize: 12, fontWeight: "700", color: colors.action }}>Done</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
-
         {/* Project Showcase Extra Fields */}
         {postType === "project" && (
           <Animated.View
