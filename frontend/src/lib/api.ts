@@ -215,6 +215,7 @@ export async function updatePost(
     technologies?: string[] | null;
     github_url?: string | null;
     image_url?: string | null;
+    image_urls?: string[] | null;
     type?: string;
     preview_metadata?: any;
     visibility?: ContentVisibility;

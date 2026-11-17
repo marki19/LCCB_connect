@@ -132,6 +132,10 @@ export default function PostCard({
       });
       return;
     }
+    const postImages = post.image_urls && post.image_urls.length > 0
+      ? post.image_urls
+      : (post.imageUrl ? [post.imageUrl] : []);
+
     router.push({
       pathname: "/create",
       params: {
@@ -142,6 +146,7 @@ export default function PostCard({
         editTech: (post.tags ?? []).join(", "),
         editUrl: post.previewUrl ?? "",
         editVisibility: post.visibility ?? "public",
+        editImages: JSON.stringify(postImages),
       },
     });
   };
@@ -378,7 +383,42 @@ export default function PostCard({
               style={{ width: "100%", height: 160, backgroundColor: colors.surfaceSunken }}
               contentFit="cover"
             />
-          ) : null}
+          ) : (
+            <View
+              style={{
+                width: "100%",
+                height: 80,
+                backgroundColor: colors.surface,
+                justifyContent: "center",
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+                paddingHorizontal: 16,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    backgroundColor: "rgba(2, 132, 199, 0.15)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Globe size={22} color="#0284C7" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}>
+                    {post.preview_metadata.title || post.preview_metadata.siteName || "Live Web Application"}
+                  </Text>
+                  <Text numberOfLines={1} style={{ fontSize: 11.5, color: colors.action, fontWeight: "600", marginTop: 2 }}>
+                    {post.preview_metadata.url}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
           <View style={{ padding: 12 }}>
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
               <ExternalLink size={13} color={colors.action} />

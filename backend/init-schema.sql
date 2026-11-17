@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   year_level TEXT,
   role TEXT DEFAULT 'user' CHECK (
     role IN (
-      'user', 'student', 'faculty', 'departmentAdmin', 'department_admin',
+      'guest', 'user', 'student', 'faculty', 'departmentAdmin', 'department_admin',
       'admin', 'superadmin', 'superAdmin'
     )
   ),
@@ -94,6 +94,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   course_id UUID REFERENCES public.courses(id) ON DELETE SET NULL,
   message_policy TEXT NOT NULL DEFAULT 'department'
     CHECK (message_policy IN ('everyone', 'department', 'selected', 'nobody')),
+  contact_scope TEXT NOT NULL DEFAULT 'organization'
+    CHECK (contact_scope IN ('public', 'organization', 'private')),
   profile_completed BOOLEAN NOT NULL DEFAULT FALSE,
   profile_banner_dismissed BOOLEAN NOT NULL DEFAULT FALSE,
   last_seen_at TIMESTAMPTZ,

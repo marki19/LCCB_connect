@@ -169,7 +169,7 @@ export default function DesktopLayout({
       {/* LEFT SIDEBAR - Facebook Style Shortcuts Rail */}
       {showLeftSidebar && (
         <View style={{ marginTop: TOP_BAR_HEIGHT }}>
-          {leftSidebar ? leftSidebar : <DesktopLeftRail unreadCount={unreadCount} />}
+          {leftSidebar ? leftSidebar : <DesktopLeftRail />}
         </View>
       )}
 

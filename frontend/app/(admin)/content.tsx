@@ -79,9 +79,9 @@ const STATUS_OPTIONS = [
 ];
 
 function formatDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "Not set";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Not set";
   return date.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -387,8 +387,8 @@ export default function AdminContentScreen() {
       showsVerticalScrollIndicator={false}
     >
       <PageHeader
-        eyebrow="Governance / moderation"
-        title="Reports & Content"
+        eyebrow="Admin console"
+        title="Reports and content"
         description="Work the moderation queue or audit the full content library. Every decision carries a reason."
         onRefresh={refresh}
         refreshing={queueLoading || libraryLoading}
@@ -926,7 +926,7 @@ export default function AdminContentScreen() {
                         "Unknown"}
                     </Text>
                     <Text style={{ flex: 1, paddingRight: 8, fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
-                      {item.department_name || "—"}
+                      {item.department_name || "Not set"}
                     </Text>
                     <View style={{ width: 96 }}>
                       <View

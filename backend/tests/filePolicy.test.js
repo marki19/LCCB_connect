@@ -168,6 +168,16 @@ describe("resolveUpload", () => {
       /do not match the expected format/
     );
   });
+
+  test("auto-corrects mismatched extension when buffer matches an allowed extension", () => {
+    const resolved = resolveUpload({
+      category: "posts",
+      originalName: "upload.jpg",
+      buffer: samplePng,
+    });
+    assert.match(resolved.key, /^posts\/[0-9a-f]{32}\.png$/);
+    assert.equal(resolved.contentType, "image/png");
+  });
 });
 
 describe("parseKey", () => {

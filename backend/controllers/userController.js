@@ -426,7 +426,27 @@ const getUserPhotos = async (req, res, next) => {
       LIMIT $3;
     `;
     const result = await db.query(sql, [viewerId, targetId, limit]);
-    res.json(result.rows);
+
+    // Flatten into individual photo objects so multi-image posts display properly in photo grids
+    const photos = [];
+    for (const post of result.rows) {
+      const urls = Array.isArray(post.image_urls) && post.image_urls.length > 0
+        ? post.image_urls
+        : (post.image_url ? [post.image_url] : []);
+      for (let i = 0; i < urls.length; i++) {
+        photos.push({
+          id: `${post.id}-img-${i}`,
+          post_id: post.id,
+          image_url: urls[i],
+          image_urls: [urls[i]],
+          created_at: post.created_at,
+        });
+        if (photos.length >= limit) break;
+      }
+      if (photos.length >= limit) break;
+    }
+
+    res.json(photos);
   } catch (error) {
     next(error);
   }

@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { apiFetchMultipart } from './api';
+import { fileKeyFromUrl } from './files';
 
 /**
  * Per-bucket upload policy. Anything not listed here (or not matching the
@@ -128,10 +129,12 @@ export async function pickImage(options: { allowsEditing?: boolean } = {}): Prom
   });
   if (!result.canceled && result.assets && result.assets.length > 0) {
     const asset = result.assets[0];
+    const mime = asset.mimeType || 'image/jpeg';
+    const ext = mime === 'image/png' ? '.png' : mime === 'image/webp' ? '.webp' : '.jpg';
     return {
       uri: asset.uri,
-      type: 'image/jpeg',
-      name: asset.fileName || `image-${Date.now()}.jpg`,
+      type: mime,
+      name: asset.fileName || `image-${Date.now()}${ext}`,
       width: asset.width,
       height: asset.height,
     };
@@ -152,10 +155,12 @@ export async function pickCoverImage(): Promise<PickedImage | null> {
   if (!result.canceled && result.assets && result.assets.length > 0) {
     const asset = result.assets[0];
     const uri = asset.uri;
-    const fileName = asset.fileName || uri.split('/').pop() || `cover-${Date.now()}.jpg`;
+    const mime = asset.mimeType || 'image/jpeg';
+    const ext = mime === 'image/png' ? '.png' : mime === 'image/webp' ? '.webp' : '.jpg';
+    const fileName = asset.fileName || uri.split('/').pop() || `cover-${Date.now()}${ext}`;
     return {
       uri,
-      type: 'image/jpeg',
+      type: mime,
       name: fileName,
       width: asset.width,
       height: asset.height,
@@ -175,13 +180,17 @@ export async function pickMultipleImages(options: { selectionLimit?: number } = 
     quality: 0.8,
   });
   if (!result.canceled && result.assets && result.assets.length > 0) {
-    return result.assets.map((asset, index) => ({
-      uri: asset.uri,
-      type: 'image/jpeg',
-      name: asset.fileName || `image-${Date.now()}-${index}.jpg`,
-      width: asset.width,
-      height: asset.height,
-    }));
+    return result.assets.map((asset, index) => {
+      const mime = asset.mimeType || 'image/jpeg';
+      const ext = mime === 'image/png' ? '.png' : mime === 'image/webp' ? '.webp' : '.jpg';
+      return {
+        uri: asset.uri,
+        type: mime,
+        name: asset.fileName || `image-${Date.now()}-${index}${ext}`,
+        width: asset.width,
+        height: asset.height,
+      };
+    });
   }
   return [];
 }
@@ -251,26 +260,80 @@ export async function uploadToStorage(
   maxBytes: number = MAX_UPLOAD_BYTES.image,
   sizeBytes: number | null = null
 ): Promise<{ key: string } | null> {
-  const category = bucket === 'assets' ? 'posts' : bucket;
-  const error = validateUpload(category, contentType, sizeBytes ?? 0, maxBytes);
-  if (error) {
-    console.error("[upload] validation failed:", error);
-    return null;
+  if (!uri || typeof uri !== 'string') return null;
+
+  // If already an existing storage key (e.g. "posts/abc1234.jpg"), don't re-upload
+  if (/^[a-z]+\/[0-9a-f]{16,64}\.[a-z0-9]+$/i.test(uri)) {
+    return { key: uri };
   }
+  const extractedKey = fileKeyFromUrl(uri);
+  if (extractedKey) {
+    return { key: extractedKey };
+  }
+
+  const category = bucket === 'assets' ? 'posts' : bucket;
 
   try {
     const formData = new FormData();
-    const fileName = path ? path.split('/').pop() || 'upload.jpg' : `upload-${Date.now()}.jpg`;
 
     if (Platform.OS === 'web') {
       const res = await fetch(uri);
       const blob = await res.blob();
+      const detectedMime = blob.type || contentType;
+
+      const error = validateUpload(category, detectedMime, blob.size || sizeBytes || 0, maxBytes);
+      if (error) {
+        console.error("[upload] validation failed:", error);
+        return null;
+      }
+
+      let ext = '.jpg';
+      if (detectedMime === 'image/png') ext = '.png';
+      else if (detectedMime === 'image/webp') ext = '.webp';
+      else if (detectedMime === 'application/pdf') ext = '.pdf';
+      else if (detectedMime === 'video/mp4') ext = '.mp4';
+      else if (detectedMime === 'video/webm') ext = '.webm';
+
+      let fileName = path ? path.split('/').pop() || `upload${ext}` : `upload-${Date.now()}${ext}`;
+      if (!fileName.includes('.')) fileName = `${fileName}${ext}`;
+      else if (fileName.endsWith('.jpg') && ext !== '.jpg') fileName = fileName.replace(/\.jpg$/, ext);
+
       formData.append('file', blob, fileName);
     } else {
+      const uriLower = uri.split('?')[0].toLowerCase();
+      let detectedType = contentType;
+      let ext = '.jpg';
+      if (uriLower.endsWith('.png') || contentType === 'image/png') {
+        detectedType = 'image/png';
+        ext = '.png';
+      } else if (uriLower.endsWith('.webp') || contentType === 'image/webp') {
+        detectedType = 'image/webp';
+        ext = '.webp';
+      } else if (uriLower.endsWith('.pdf') || contentType === 'application/pdf') {
+        detectedType = 'application/pdf';
+        ext = '.pdf';
+      } else if (uriLower.endsWith('.mp4') || contentType === 'video/mp4') {
+        detectedType = 'video/mp4';
+        ext = '.mp4';
+      } else if (uriLower.endsWith('.webm') || contentType === 'video/webm') {
+        detectedType = 'video/webm';
+        ext = '.webm';
+      }
+
+      const error = validateUpload(category, detectedType, sizeBytes ?? 0, maxBytes);
+      if (error) {
+        console.error("[upload] validation failed:", error);
+        return null;
+      }
+
+      let fileName = path ? path.split('/').pop() || `upload${ext}` : `upload-${Date.now()}${ext}`;
+      if (!fileName.includes('.')) fileName = `${fileName}${ext}`;
+      else if (fileName.endsWith('.jpg') && ext !== '.jpg') fileName = fileName.replace(/\.jpg$/, ext);
+
       formData.append('file', {
         uri,
         name: fileName,
-        type: contentType,
+        type: detectedType,
       } as any);
     }
 

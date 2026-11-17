@@ -3,14 +3,8 @@ import { Pressable, Text, View } from "react-native";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { formatCount, useCountUp } from "../../hooks/useCountUp";
-import {
-  elevation,
-  focusRing,
-  RADIUS,
-  SPACE,
-  TYPE,
-  type ThemeTokens,
-} from "../../lib/tokens";
+import { focusRing, RADIUS, SPACE, type ThemeTokens } from "../../lib/tokens";
+import { CONSOLE_TEXT, consoleCard } from "./consoleTheme";
 
 export type KpiTone = "brand" | "accent" | "jade" | "coral";
 
@@ -42,8 +36,9 @@ function tonePalette(tone: KpiTone, colors: ThemeTokens) {
 }
 
 /**
- * Supporting metric tile. The hero KPI lives in the overview itself; these are
- * deliberately lighter so the page has one clear focal point.
+ * One number that matters, with a plain-language caption underneath. Tiles are
+ * flat and equally weighted so a row of them reads as a summary, not a
+ * hierarchy puzzle.
  */
 export default function KpiCard({
   label,
@@ -76,49 +71,36 @@ export default function KpiCard({
       onBlur={() => setFocused(false)}
       style={[
         {
+          ...consoleCard(colors),
           flex: 1,
-          minWidth: 220,
-          minHeight: 156,
-          backgroundColor: colors.panel,
-          borderRadius: RADIUS.xxl,
-          borderWidth: 1,
-          borderColor: hovered ? colors.lineStrong : colors.line,
+          minWidth: 216,
+          minHeight: 148,
           padding: SPACE.x5,
-          overflow: "hidden",
-          transform: [{ translateY: hovered && onPress ? -1 : 0 }],
-          ...elevation("sm", colors),
+          borderColor: hovered ? colors.lineStrong : colors.line,
+          backgroundColor: hovered ? colors.panelRaised : colors.panel,
         },
         focusRing(colors, focused),
       ]}
     >
-      <View
-        style={{
-          position: "absolute",
-          top: 0,
-          left: SPACE.x5,
-          right: SPACE.x5,
-          height: 3,
-          borderBottomLeftRadius: 3,
-          borderBottomRightRadius: 3,
-          backgroundColor: palette.solid,
-        }}
-      />
-
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={{ ...TYPE.micro, color: colors.inkFaint, flexShrink: 1 }}>{label}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3 }}>
         <View
           style={{
-            width: 34,
-            height: 34,
-            borderRadius: RADIUS.md,
+            width: 30,
+            height: 30,
+            borderRadius: RADIUS.sm,
             backgroundColor: palette.wash,
             alignItems: "center",
             justifyContent: "center",
-            marginLeft: SPACE.x2,
           }}
         >
-          <Icon size={17} color={palette.solid} strokeWidth={2.1} />
+          <Icon size={16} color={palette.solid} strokeWidth={2} />
         </View>
+        <Text
+          numberOfLines={1}
+          style={{ ...CONSOLE_TEXT.strong, fontSize: 13, color: colors.inkSoft, flexShrink: 1 }}
+        >
+          {label}
+        </Text>
       </View>
 
       <View
@@ -126,22 +108,24 @@ export default function KpiCard({
           flexDirection: "row",
           alignItems: "flex-end",
           gap: SPACE.x2,
-          marginTop: SPACE.x3,
+          marginTop: SPACE.x4,
           flexWrap: "wrap",
         }}
       >
-        <Text style={{ ...TYPE.kpi, color: colors.ink }}>{formatCount(displayed)}</Text>
+        <Text style={{ ...CONSOLE_TEXT.metric, color: colors.ink }}>
+          {formatCount(displayed)}
+        </Text>
         {delta ? (
           <View
             style={{
               flexDirection: "row",
               alignItems: "center",
               gap: 3,
-              marginBottom: 6,
-              borderRadius: RADIUS.pill,
+              marginBottom: 5,
+              borderRadius: RADIUS.sm,
               backgroundColor: delta.value >= 0 ? colors.jadeWash : colors.coralWash,
-              paddingHorizontal: SPACE.x2,
-              paddingVertical: 3,
+              paddingHorizontal: 6,
+              paddingVertical: 2,
             }}
           >
             {delta.value >= 0 ? (
@@ -151,7 +135,7 @@ export default function KpiCard({
             )}
             <Text
               style={{
-                ...TYPE.caption,
+                ...CONSOLE_TEXT.caption,
                 fontSize: 11,
                 fontWeight: "700",
                 color: delta.value >= 0 ? colors.jadeText : colors.coralText,
@@ -164,7 +148,13 @@ export default function KpiCard({
       </View>
 
       {detail ? (
-        <Text style={{ ...TYPE.caption, color: colors.inkSoft, marginTop: SPACE.x1 }}>
+        <Text
+          style={{
+            ...CONSOLE_TEXT.caption,
+            color: colors.inkSoft,
+            marginTop: SPACE.x1,
+          }}
+        >
           {detail}
         </Text>
       ) : null}

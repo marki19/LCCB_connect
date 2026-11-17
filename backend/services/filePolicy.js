@@ -162,7 +162,7 @@ function normalizeExtension(originalName) {
 }
 
 /** Collision-resistant filename that leaks nothing about the original. */
-function generateHashedFilename(originalName, buffer) {
+function generateHashedFilename(originalName, buffer, explicitExtension) {
   const hash = crypto
     .createHash("sha256")
     .update(buffer || "")
@@ -171,7 +171,8 @@ function generateHashedFilename(originalName, buffer) {
     .digest("hex")
     .slice(0, 32);
 
-  return `${hash}${normalizeExtension(originalName)}`;
+  const ext = explicitExtension || normalizeExtension(originalName);
+  return `${hash}${ext}`;
 }
 
 /**
@@ -201,21 +202,29 @@ function resolveUpload({ category, originalName, buffer }) {
     );
   }
 
-  const extension = normalizeExtension(originalName);
+  let extension = normalizeExtension(originalName);
 
-  if (!rules.allowedExtensions.includes(extension)) {
-    throw new UploadRejectedError(
-      `Extension "${extension || "(none)"}" is not allowed in category "${category}"`
+  if (!rules.allowedExtensions.includes(extension) || !verifyMagicBytes(buffer, extension)) {
+    // If extension is missing, disallowed, or magic bytes didn't match the claimed extension,
+    // check if the buffer is genuinely one of the allowed extensions for this category.
+    const matchedExtension = rules.allowedExtensions.find((ext) =>
+      verifyMagicBytes(buffer, ext)
     );
+    if (matchedExtension) {
+      extension = matchedExtension;
+    } else {
+      if (!rules.allowedExtensions.includes(extension)) {
+        throw new UploadRejectedError(
+          `Extension "${extension || "(none)"}" is not allowed in category "${category}"`
+        );
+      }
+      throw new UploadRejectedError(
+        `File contents do not match the expected format for ${extension}`
+      );
+    }
   }
 
-  if (!verifyMagicBytes(buffer, extension)) {
-    throw new UploadRejectedError(
-      `File contents do not match the expected format for ${extension}`
-    );
-  }
-
-  const filename = generateHashedFilename(originalName, buffer);
+  const filename = generateHashedFilename(originalName, buffer, extension);
 
   return {
     key: `${category}/${filename}`,

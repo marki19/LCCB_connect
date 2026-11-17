@@ -17,6 +17,7 @@ const HttpUrl = z
   .string()
   .trim()
   .max(2048)
+  .transform((val) => (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(val) ? val : `https://${val}`))
   .refine((value) => {
     try {
       const url = new URL(value);

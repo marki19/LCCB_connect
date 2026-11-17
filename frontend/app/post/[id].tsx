@@ -314,6 +314,10 @@ export default function PostDetailScreen() {
   const isOwner = !!profile?.id && !!post && profile.id === post.author.id;
 
   const handleEdit = () => {
+    const postImages = post.image_urls && post.image_urls.length > 0
+      ? post.image_urls
+      : (post.imageUrl ? [post.imageUrl] : []);
+
     router.push({
       pathname: "/create",
       params: {
@@ -324,6 +328,7 @@ export default function PostDetailScreen() {
         editTech: (post.tags ?? []).join(", "),
         editUrl: post.previewUrl ?? "",
         editVisibility: post.visibility ?? "public",
+        editImages: JSON.stringify(postImages),
       },
     });
   };

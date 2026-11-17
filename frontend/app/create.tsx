@@ -40,6 +40,7 @@ import { useTheme } from "../src/contexts/ThemeContext";
 import { useToast } from "../src/contexts/ToastContext";
 import { uploadToStorage, pickImage, pickMultipleImages } from "../src/lib/upload";
 import { apiFetch, updatePost } from "../src/lib/api";
+import { resolveFileUrl } from "../src/lib/files";
 import { fetchLinkPreview, LinkPreviewData } from "../src/lib/linkPreview";
 import { safeBack } from "../src/lib/navigation";
 import VisibilityPicker from "../src/components/VisibilityPicker";
@@ -54,6 +55,15 @@ import Modal from "../src/components/ui/Modal";
 import TextField from "../src/components/ui/TextField";
 
 type PostType = "text" | "image" | "project" | "capstone" | "website";
+
+function normalizeWebsiteUrl(raw: string): string {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
 
 export default function CreatePostModal() {
   const { profile } = useAuth();
@@ -73,6 +83,7 @@ export default function CreatePostModal() {
     editTech,
     editUrl,
     editVisibility,
+    editImages,
   } = useLocalSearchParams<{
     postId?: string;
     type?: string;
@@ -82,6 +93,7 @@ export default function CreatePostModal() {
     editTech?: string;
     editUrl?: string;
     editVisibility?: string;
+    editImages?: string;
   }>();
 
   const isEditing = !!postId;
@@ -100,7 +112,17 @@ export default function CreatePostModal() {
   const [technologies, setTechnologies] = useState(isEditing ? editTech ?? "" : "");
   const [githubUrl, setGithubUrl] = useState(isEditing ? editUrl ?? "" : "");
   const [allowReposts, setAllowReposts] = useState(true);
-  const [imageUris, setImageUris] = useState<string[]>([]);
+  const [imageUris, setImageUris] = useState<string[]>(() => {
+    if (editImages) {
+      try {
+        const parsed = JSON.parse(editImages);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((item): item is string => typeof item === "string" && Boolean(item));
+        }
+      } catch {}
+    }
+    return [];
+  });
   const [isPublishing, setIsPublishing] = useState(false);
   const [urlFocused, setUrlFocused] = useState(false);
 
@@ -121,10 +143,13 @@ export default function CreatePostModal() {
   }, []);
 
   const loadPreview = async (urlToFetch: string) => {
-    if (!urlToFetch || !urlToFetch.startsWith("http")) return;
+    const clean = (urlToFetch || "").trim();
+    if (!clean) return;
+    const normalized = normalizeWebsiteUrl(clean);
+    if (!normalized || !normalized.includes(".")) return;
     try {
       setFetchingPreview(true);
-      const data = await fetchLinkPreview(urlToFetch);
+      const data = await fetchLinkPreview(normalized);
       setPreviewData(data);
       if (data?.title && !title) {
         setTitle(data.title);
@@ -204,13 +229,22 @@ export default function CreatePostModal() {
           imageUris.map((uri) => uploadToStorage(uri))
         );
         finalImageKeys = uploadResults.map((r) => r?.key).filter(Boolean) as string[];
+        if (finalImageKeys.length < imageUris.length) {
+          Alert.alert(
+            "Upload Incomplete",
+            "One or more images could not be uploaded. Please verify the image file format and try again."
+          );
+          setIsPublishing(false);
+          return;
+        }
       }
       const finalImageKey = finalImageKeys.length > 0 ? finalImageKeys[0] : null;
 
+      const normalizedUrl = githubUrl.trim() ? normalizeWebsiteUrl(githubUrl) : null;
       let finalPreviewMetadata = previewData;
-      if (postType === "website" && githubUrl && !finalPreviewMetadata) {
+      if (postType === "website" && normalizedUrl && !finalPreviewMetadata) {
         try {
-          finalPreviewMetadata = await fetchLinkPreview(githubUrl);
+          finalPreviewMetadata = await fetchLinkPreview(normalizedUrl);
         } catch {
           // Non-blocking
         }
@@ -228,10 +262,11 @@ export default function CreatePostModal() {
           type: postType,
           title: trimmedTitle || finalPreviewMetadata?.title || null,
           technologies: techArray,
-          github_url: githubUrl.trim() || null,
+          github_url: normalizedUrl,
           preview_metadata: finalPreviewMetadata || null,
           allow_reposts: allowReposts,
-          ...(finalImageKeys.length > 0 ? { image_url: finalImageKey, image_urls: finalImageKeys } : {}),
+          image_url: finalImageKey,
+          image_urls: finalImageKeys,
           ...visibilityPayload,
         });
       } else {
@@ -243,7 +278,7 @@ export default function CreatePostModal() {
             type: postType,
             title: trimmedTitle || finalPreviewMetadata?.title || null,
             technologies: techArray,
-            github_url: githubUrl.trim() || null,
+            github_url: normalizedUrl,
             image_url: finalImageKey,
             image_urls: finalImageKeys,
             preview_metadata: finalPreviewMetadata || null,
@@ -255,20 +290,19 @@ export default function CreatePostModal() {
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          if (errData.code === "PROFILE_INCOMPLETE" || errData.code === "VERIFICATION_REQUIRED") {
+          const errMsg = errData.message || errData.error || "Failed to create post";
+          if (errData.code === "PROFILE_INCOMPLETE" || errData.code === "VERIFICATION_REQUIRED" || errData.code === "not_verified") {
             if (Platform.OS === "web") {
               const proceed = typeof window !== "undefined" && window.confirm
                 ? window.confirm(
-                    (errData.message || "Complete your profile before creating posts.") +
-                      "\n\nGo to profile setup now?"
+                    errMsg + "\n\nGo to profile setup now?"
                   )
                 : false;
               if (proceed) router.push("/onboarding");
             } else {
               Alert.alert(
                 "Complete Your Profile",
-                errData.message ||
-                  "Complete your profile (full name, student ID, department, and course) before creating posts.",
+                errMsg,
                 [
                   { text: "Cancel", style: "cancel" },
                   {
@@ -280,7 +314,7 @@ export default function CreatePostModal() {
             }
             return;
           }
-          throw new Error(errData.message || "Failed to create post");
+          throw new Error(errMsg);
         }
       }
 
@@ -607,12 +641,15 @@ export default function CreatePostModal() {
             </View>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <TextInput
-                placeholder="https://your-project.vercel.app"
+                placeholder="your-project.vercel.app or https://..."
                 placeholderTextColor={colors.textTertiary}
                 value={githubUrl}
                 onChangeText={(val) => {
                   setGithubUrl(val);
-                  if (val.startsWith("http")) loadPreview(val);
+                  const clean = val.trim();
+                  if (clean.includes(".") && clean.length >= 4) {
+                    loadPreview(clean);
+                  }
                 }}
                 autoCapitalize="none"
                 keyboardType="url"
@@ -657,8 +694,27 @@ export default function CreatePostModal() {
                   backgroundColor: colors.surface,
                 }}
               >
-                {previewData.image && (
-                  <AppImage source={{ uri: previewData.image }} style={{ width: "100%", height: 120 }} contentFit="cover" />
+                {previewData.image ? (
+                  <AppImage source={{ uri: previewData.image }} style={{ width: "100%", height: 130 }} contentFit="cover" />
+                ) : (
+                  <View
+                    style={{
+                      height: 70,
+                      backgroundColor: colors.surfaceSunken,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexDirection: "row",
+                      gap: 8,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                      paddingHorizontal: 12,
+                    }}
+                  >
+                    <Globe size={22} color="#0284C7" />
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }} numberOfLines={1}>
+                      {previewData.siteName || previewData.url}
+                    </Text>
+                  </View>
                 )}
                 <View style={{ padding: 10 }}>
                   <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>
@@ -764,7 +820,7 @@ export default function CreatePostModal() {
                     }}
                   >
                     <Image
-                      source={{ uri }}
+                      source={{ uri: resolveFileUrl(uri) || uri }}
                       style={{ width: "100%", height: "100%" }}
                       resizeMode="cover"
                     />

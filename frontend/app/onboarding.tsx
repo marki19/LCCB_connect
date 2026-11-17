@@ -197,14 +197,12 @@ export default function OnboardingScreen() {
     [mine, loadMine, previewRole, refreshProfile, showToast]
   );
 
-  const handleSuccess = useCallback(async () => {
-    showToast({
-      message: "Verification submitted for review.",
-      tone: "success",
-    });
-    await refreshProfile();
+  const handleSkip = useCallback(() => {
+    // Verification is optional at signup. The feed shows an identity banner
+    // that leads back here, and the server keeps posting locked until the
+    // profile is verified.
     router.replace("/(tabs)/");
-  }, [refreshProfile, router, showToast]);
+  }, [router]);
 
   if (loading) {
     return (
@@ -477,6 +475,7 @@ export default function OnboardingScreen() {
         declineNote={mine?.request?.note ?? null}
         onSendOtp={handleSendOtp}
         onSubmit={handleSubmit}
+        onSkip={handleSkip}
       />
 
       <Modal visible={!!notice} onClose={() => setNotice(null)} maxWidth={440} accessibilityLabel={notice?.title ?? "Notice"}>

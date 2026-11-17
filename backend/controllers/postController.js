@@ -300,9 +300,13 @@ const deleteComment = async (req, res, next) => {
 
 const generatePreview = async (req, res, next) => {
   try {
-    const { url } = req.body;
+    let { url } = req.body;
     if (!url || typeof url !== "string") {
       return res.status(400).json({ error: "A valid URL string is required" });
+    }
+    url = url.trim();
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url)) {
+      url = `https://${url}`;
     }
     const preview = await previewService.fetchLinkPreview(url);
     res.json(preview);
