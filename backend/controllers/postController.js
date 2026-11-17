@@ -51,6 +51,9 @@ const getPosts = async (req, res, next) => {
       ...(dept.value ? { departmentId: dept.value } : {}),
       ...(course.value ? { courseId: course.value } : {}),
       ...(req.query.type ? { type: req.query.type } : {}),
+      ...(req.query.kind ? { kind: req.query.kind } : {}),
+      ...(req.query.repository_type ? { repository_type: req.query.repository_type } : {}),
+      ...(req.query.repository_category ? { repository_category: req.query.repository_category } : {}),
       visibility: req.query.visibility || null,
     });
     res.json(posts);
@@ -105,9 +108,6 @@ const createPost = async (req, res, next) => {
           if (preview) {
             postPayload.github_url = preview.url || detectedUrl;
             postPayload.preview_metadata = preview;
-            if (postPayload.type === "text" || !postPayload.type) {
-              postPayload.type = "website";
-            }
           }
         } catch {
           // Non-blocking fallback

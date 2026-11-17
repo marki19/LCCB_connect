@@ -387,6 +387,9 @@ const visiblePostsFor = async ({
   departmentId = null,
   courseId = null,
   type = null,
+  kind = null,
+  repository_type = null,
+  repository_category = null,
   visibility = null,
   postId = null,
   includeReposts = true,
@@ -419,9 +422,24 @@ const visiblePostsFor = async ({
   }
 
   if (type && POST_TYPE_FILTERS.includes(type)) {
-      params.push(type);
-      conditions.push(`p.type = $${params.length}`);
-    }
+    params.push(type);
+    conditions.push(`p.type = $${params.length}`);
+  }
+
+  if (kind && ['discussion', 'repository', 'announcement'].includes(kind)) {
+    params.push(kind);
+    conditions.push(`p.kind = $${params.length}`);
+  }
+
+  if (repository_type && ['project', 'capstone', 'thesis'].includes(repository_type)) {
+    params.push(repository_type);
+    conditions.push(`p.repository_type = $${params.length}`);
+  }
+
+  if (repository_category) {
+    params.push(repository_category);
+    conditions.push(`p.repository_category = $${params.length}`);
+  }
 
     if (visibility && ['public', 'department', 'friends', 'private', 'custom'].includes(visibility)) {
       params.push(visibility);
@@ -527,6 +545,11 @@ const visiblePostsFor = async ({
 
     reposts = repostsResult.rows.map(row => ({
       kind: 'repost',
+      post_kind: row.kind || 'discussion',
+      repository_type: row.repository_type,
+      repository_category: row.repository_category,
+      live_url: row.live_url,
+      attachments: row.attachments || [],
       repost: {
         id: row.repost_id,
         reposter_id: row.reposter_id,
@@ -565,8 +588,8 @@ const visiblePostsFor = async ({
   }
 
   const posts = postsResult.rows.map(row => ({
-    kind: 'post',
     ...row,
+    kind: row.kind || 'discussion',
   }));
 
   // ---- 3. Merge and sort by created_at ---------------------------------------
