@@ -1,6 +1,8 @@
 const db = require("../db");
 const objectStorage = require("../services/objectStorage");
+const filePolicy = require("../services/filePolicy");
 const userModel = require("../models/userModel");
+const friendModel = require("../models/friendModel");
 const departmentModel = require("../models/departmentModel");
 const accountService = require("../services/accountService");
 const { AdminAuthUnavailableError } = require("../services/supabaseAdmin");
@@ -334,6 +336,100 @@ const removeAvatar = async (req, res, next) => {
   }
 };
 
+const updateCover = async (req, res, next) => {
+  try {
+    const { cover_url } = req.body;
+    if (!cover_url) {
+      return res.status(400).json({ error: "cover_url is required" });
+    }
+    const parsed = filePolicy.parseKey(cover_url);
+    if (!parsed || parsed.category !== "covers") {
+      return res.status(400).json({ error: "cover_url must be a valid key in the 'covers' category" });
+    }
+
+    const { rows } = await db.query(
+      "SELECT cover_url FROM public.profiles WHERE id = $1",
+      [req.user.id]
+    );
+    const oldCover = rows[0]?.cover_url;
+
+    const updated = await userModel.updateCover(req.user.id, cover_url);
+
+    if (oldCover && oldCover !== cover_url && !oldCover.startsWith("http")) {
+      objectStorage.deleteObject(oldCover).catch(() => {});
+    }
+
+    res.json({ message: "Cover photo updated successfully", cover_url: updated.cover_url });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const removeCover = async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      "SELECT cover_url FROM public.profiles WHERE id = $1",
+      [req.user.id]
+    );
+    const oldCover = rows[0]?.cover_url;
+
+    await userModel.removeCover(req.user.id);
+
+    if (oldCover && !oldCover.startsWith("http")) {
+      objectStorage.deleteObject(oldCover).catch(() => {});
+    }
+
+    res.json({ message: "Cover photo removed successfully", cover_url: null });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getUserFriends = async (req, res, next) => {
+  try {
+    const targetId = req.params.id;
+    const viewerId = req.user.id;
+
+    const profile = await userModel.getPublicProfile(targetId, viewerId);
+    if (!profile) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const limit = clampLimit(req.query.limit, 50);
+    const friends = await friendModel.listFriends(targetId, { limit });
+    res.json(friends);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getUserPhotos = async (req, res, next) => {
+  try {
+    const targetId = req.params.id;
+    const viewerId = req.user.id;
+
+    const profile = await userModel.getPublicProfile(targetId, viewerId);
+    if (!profile) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const limit = clampLimit(req.query.limit, 30);
+    const sql = `
+      SELECT vp.id, vp.image_url, vp.image_urls, vp.created_at
+      FROM visible_posts($1::text) vp
+      WHERE vp.author_id = $2
+        AND vp.deleted_at IS NULL
+        AND (vp.image_url IS NOT NULL OR (vp.image_urls IS NOT NULL AND jsonb_array_length(vp.image_urls) > 0))
+      ORDER BY vp.created_at DESC
+      LIMIT $3;
+    `;
+    const result = await db.query(sql, [viewerId, targetId, limit]);
+    res.json(result.rows);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getUsers,
   getUser,
@@ -344,4 +440,8 @@ module.exports = {
   disableUser,
   validateCatalogReferences,
   removeAvatar,
+  updateCover,
+  removeCover,
+  getUserFriends,
+  getUserPhotos,
 };

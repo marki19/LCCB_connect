@@ -25,6 +25,7 @@ const FILE_FIELD_BUCKETS = {
   pdf_url: "theses",
   avatar_url: "avatars",
   video_url: "videos",
+  cover_url: "covers",
 };
 
 /** Bucket name → key prefix. `assets` is the legacy name for post images. */
@@ -35,6 +36,7 @@ const BUCKET_CATEGORY = {
   theses: "theses",
   documents: "documents",
   videos: "videos",
+  covers: "covers",
 };
 
 /**

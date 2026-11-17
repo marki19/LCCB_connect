@@ -12,17 +12,17 @@ Tracks `implementation_plans/2026-11-16-profile-facebook-layout.md`.
 ---
 
 ## Phase 0 — Baseline Lock (15 min)
-- [ ] 0.1 Record baseline test and lint counts
+- [x] 0.1 Record baseline test and lint counts
 
 ## Phase 1 — Backend: Cover Photo, Friends List, Photos List (4h)
-- [ ] 1.1 Create migration `049_profile_cover.sql` (or next free number) adding `cover_url` to `profiles`
-- [ ] 1.2 Add `covers` category in `backend/services/filePolicy.js` (public, 5MB, jpg/png/webp)
-- [ ] 1.3 Add `covers` MIME types and 5MB limit to `frontend/src/lib/upload.ts`
-- [ ] 1.4 Add `PUT /api/users/me/cover` and `DELETE /api/users/me/cover` routes & controller
-- [ ] 1.5 Update `userModel.getPublicProfile` to include `cover_url`
-- [ ] 1.6 Add `GET /api/users/:id/friends` calling `friendModel.listFriends(id, { limit })`
-- [ ] 1.7 Add `GET /api/users/:id/photos` returning author's image posts
-- [ ] 1.8 Write tests in `backend/tests/profile-cover.test.js`
+- [x] 1.1 Create migration `049_profile_cover.sql` (or next free number) adding `cover_url` to `profiles`
+- [x] 1.2 Add `covers` category in `backend/services/filePolicy.js` (public, 5MB, jpg/png/webp)
+- [x] 1.3 Add `covers` MIME types and 5MB limit to `frontend/src/lib/upload.ts`
+- [x] 1.4 Add `PUT /api/users/me/cover` and `DELETE /api/users/me/cover` routes & controller
+- [x] 1.5 Update `userModel.getPublicProfile` to include `cover_url`
+- [x] 1.6 Add `GET /api/users/:id/friends` calling `friendModel.listFriends(id, { limit })`
+- [x] 1.7 Add `GET /api/users/:id/photos` returning author's image posts
+- [x] 1.8 Write tests in `backend/tests/profile-cover.test.js`
 
 ## Phase 2 — Extract Components with Zero Visual Change (5h)
 - [ ] 2.1 Create `frontend/src/components/profile/` directory

@@ -19,6 +19,7 @@ const BUCKET_MIME_TYPES: Record<string, string[]> = {
   ],
   videos: ['video/mp4', 'video/webm'],
   snaps: ['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'],
+  covers: ['image/png', 'image/jpeg', 'image/webp'],
 };
 
 /**
@@ -29,6 +30,8 @@ const BUCKET_MIME_TYPES: Record<string, string[]> = {
 export const MAX_UPLOAD_BYTES = {
   /** Profile pictures. */
   avatar: 2 * 1024 * 1024, // 2 MB
+  /** Profile cover banners. */
+  cover: 5 * 1024 * 1024, // 5 MB
   /** Post images. */
   image: 5 * 1024 * 1024, // 5 MB
   /** Thesis manuscripts (free-plan ceiling). */
@@ -129,6 +132,31 @@ export async function pickImage(options: { allowsEditing?: boolean } = {}): Prom
       uri: asset.uri,
       type: 'image/jpeg',
       name: asset.fileName || `image-${Date.now()}.jpg`,
+      width: asset.width,
+      height: asset.height,
+    };
+  }
+  return null;
+}
+
+/**
+ * Prompts the user to pick an image for a profile cover banner (16:9 aspect crop).
+ */
+export async function pickCoverImage(): Promise<PickedImage | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [16, 9],
+    quality: 0.85,
+  });
+  if (!result.canceled && result.assets && result.assets.length > 0) {
+    const asset = result.assets[0];
+    const uri = asset.uri;
+    const fileName = asset.fileName || uri.split('/').pop() || `cover-${Date.now()}.jpg`;
+    return {
+      uri,
+      type: 'image/jpeg',
+      name: fileName,
       width: asset.width,
       height: asset.height,
     };

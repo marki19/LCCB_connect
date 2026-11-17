@@ -14,7 +14,11 @@ const {
 router.get("/", userController.getUsers);
 router.get("/directory", userController.getDirectory);   // <-- before /:id
 router.delete("/me/avatar", auth.requireAuth, userController.removeAvatar); // <-- before /:id
+router.put("/me/cover", auth.requireAuth, userController.updateCover);       // <-- before /:id
+router.delete("/me/cover", auth.requireAuth, userController.removeCover);    // <-- before /:id
 router.get("/:id/profile", userController.getPublicProfile);
+router.get("/:id/friends", userController.getUserFriends);
+router.get("/:id/photos", userController.getUserPhotos);
 router.get("/:id", userController.getUser);
 router.post("/", validate(createProfileSchema), userController.createUser);
 

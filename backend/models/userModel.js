@@ -10,6 +10,7 @@ const PROFILE_COLUMNS = [
   "username",
   "full_name",
   "avatar_url",
+  "cover_url",
   "bio",
   "course",
   "year_level",
@@ -208,6 +209,7 @@ const getPublicProfile = async (targetId, viewerId = null) => {
       p.username,
       p.full_name,
       p.avatar_url,
+      p.cover_url,
       p.bio,
       p.year_level,
       p.role,
@@ -644,6 +646,30 @@ const updatePasswordHash = async (userId, passwordHash) => {
   return (result.rowCount ?? 0) > 0;
 };
 
+const updateCover = async (id, coverUrl) => {
+  const sql = `
+    UPDATE public.profiles
+    SET cover_url = $1,
+        updated_at = NOW()
+    WHERE id = $2
+    RETURNING ${PROFILE_RETURNING};
+  `;
+  const result = await db.query(sql, [coverUrl, id]);
+  return result.rows[0];
+};
+
+const removeCover = async (id) => {
+  const sql = `
+    UPDATE public.profiles
+    SET cover_url = NULL,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING ${PROFILE_RETURNING};
+  `;
+  const result = await db.query(sql, [id]);
+  return result.rows[0];
+};
+
 module.exports = {
   PROFILE_COLUMNS,
   getAllUsers,
@@ -652,6 +678,8 @@ module.exports = {
   getDirectory,
   createUser,
   updateUser,
+  updateCover,
+  removeCover,
   deleteUser,
   getLoginEmailByStudentId,
   getLoginEmailByUsername,

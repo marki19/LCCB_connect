@@ -10,14 +10,14 @@
 const crypto = require("crypto");
 const path = require("path");
 
-const CATEGORIES = ["avatars", "posts", "theses", "documents", "videos", "snaps"];
+const CATEGORIES = ["avatars", "posts", "theses", "documents", "videos", "snaps", "covers"];
 
 /**
  * Categories whose contents are safe for anonymous visitors: profile pictures,
- * post images, video attachments, and 24-hour snaps. Everything else is gated
- * behind an ownership check.
+ * post images, video attachments, 24-hour snaps, and cover photos. Everything
+ * else is gated behind an ownership check.
  */
-const PUBLIC_CATEGORIES = ["avatars", "posts", "videos", "snaps"];
+const PUBLIC_CATEGORIES = ["avatars", "posts", "videos", "snaps", "covers"];
 
 const PRIVATE_CATEGORIES = CATEGORIES.filter((c) => !PUBLIC_CATEGORIES.includes(c));
 
@@ -74,6 +74,11 @@ const CATEGORY_RULES = {
       "video/mp4",
       "video/webm",
     ],
+  },
+  covers: {
+    maxBytes: 5 * 1024 * 1024, // 5 MB
+    allowedExtensions: [".jpg", ".jpeg", ".png", ".webp"],
+    allowedMimes: ["image/jpeg", "image/png", "image/webp"],
   },
 };
 

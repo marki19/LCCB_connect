@@ -523,6 +523,7 @@ export interface UserProfileData {
   username: string;
   full_name: string;
   avatar_url?: string | null;
+  cover_url?: string | null;
   bio?: string | null;
   year_level?: string | null;
   role: string;
@@ -544,6 +545,34 @@ export interface UserProfileData {
 
 export async function getUserProfile(userId: string): Promise<UserProfileData> {
   return apiJson<UserProfileData>(`/users/${userId}/profile`);
+}
+
+export interface UserPhoto {
+  id: string;
+  image_url: string | null;
+  image_urls: string[] | null;
+  created_at: string;
+}
+
+export async function updateCover(coverUrl: string): Promise<{ message: string; cover_url: string }> {
+  return apiJson<{ message: string; cover_url: string }>('/users/me/cover', {
+    method: 'PUT',
+    body: JSON.stringify({ cover_url: coverUrl }),
+  });
+}
+
+export async function removeCover(): Promise<{ message: string; cover_url: null }> {
+  return apiJson<{ message: string; cover_url: null }>('/users/me/cover', {
+    method: 'DELETE',
+  });
+}
+
+export async function getUserFriends(userId: string, limit: number = 50): Promise<any[]> {
+  return apiJson<any[]>(`/users/${userId}/friends?limit=${limit}`);
+}
+
+export async function getUserPhotos(userId: string, limit: number = 30): Promise<UserPhoto[]> {
+  return apiJson<UserPhoto[]>(`/users/${userId}/photos?limit=${limit}`);
 }
 
 // ============================================================================

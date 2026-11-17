@@ -42,6 +42,7 @@ describe("category model", () => {
     assert.equal(isPublicCategory("posts"), true);
     assert.equal(isPublicCategory("videos"), true);
     assert.equal(isPublicCategory("snaps"), true);
+    assert.equal(isPublicCategory("covers"), true);
     assert.equal(isPublicCategory("theses"), false);
     assert.equal(isPublicCategory("documents"), false);
   });
