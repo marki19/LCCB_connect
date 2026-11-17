@@ -146,10 +146,26 @@ export function useProfileData(id?: string | null) {
     if (!id) return;
     setLoadingTheses(true);
     try {
-      const res = await apiFetch(`/theses?uploader_id=${id}&limit=30`);
+      const res = await apiFetch(
+        `/posts?author_id=${id}&kind=repository&repository_type=thesis&limit=30`
+      );
       if (res.ok) {
         const data = await res.json();
-        setTheses(Array.isArray(data) ? data : []);
+        const rawList = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.posts)
+          ? data.posts
+          : [];
+        setTheses(
+          rawList.map((p: any) => ({
+            ...p,
+            abstract: p.abstract || p.content,
+            category: p.category || p.repository_category,
+            pdf_url:
+              p.attachments?.find((a: any) => a.mime_type === "application/pdf")?.storage_key ||
+              p.pdf_url,
+          }))
+        );
       }
     } catch (err) {
       console.error("Failed to load user theses:", err);

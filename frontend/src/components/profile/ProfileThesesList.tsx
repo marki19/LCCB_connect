@@ -65,9 +65,13 @@ export default function ProfileThesesList({
 
           <Pressable
             onPress={async () => {
-              if (!item.pdf_url) return;
+              const pdfAttachment = item.attachments?.find(
+                (a: any) => a.mime_type === "application/pdf" || a.storage_key?.endsWith(".pdf")
+              );
+              const directUrl = pdfAttachment?.url;
+              if (!directUrl && !item.pdf_url && !pdfAttachment?.storage_key) return;
               try {
-                const url = await getThesisFileUrl(item.id);
+                const url = directUrl || (await getThesisFileUrl(item.id));
                 await Linking.openURL(url);
               } catch (e: any) {
                 Alert.alert("Error", e.message || "Failed to open manuscript");

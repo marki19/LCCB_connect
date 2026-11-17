@@ -267,14 +267,17 @@ export async function updateThesis(
     audience?: string[];
   }
 ): Promise<void> {
-  return apiJson(`/theses/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
+  return updatePost(id, {
+    title: data.title,
+    content: data.abstract,
+    repository_category: data.category,
+    visibility: data.visibility,
+    audience: data.audience,
   });
 }
 
 export async function deleteThesis(id: string | number): Promise<void> {
-  return apiJson(`/theses/${id}`, { method: "DELETE" });
+  return deletePost(id);
 }
 
 export async function deleteAvatar(): Promise<{ message: string; avatar_url: null }> {
@@ -285,13 +288,9 @@ export async function deleteAvatar(): Promise<{ message: string; avatar_url: nul
 
 /**
  * Fetches a short-lived signed URL for a thesis' manuscript.
- *
- * Manuscripts live in a private bucket (migration 015), so the client never
- * receives a usable URL directly — it asks the backend, which checks
- * visibility first, and gets back a URL that expires after 5 minutes.
  */
 export async function getThesisFileUrl(id: string | number): Promise<string> {
-  const data = await apiJson<{ url?: string }>(`/theses/${id}/file`);
+  const data = await apiJson<{ url?: string; urls?: string[] }>(`/posts/${id}/file`);
   if (!data?.url) {
     throw new ApiError("Could not generate file URL", 404);
   }

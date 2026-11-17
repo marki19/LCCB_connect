@@ -182,7 +182,12 @@ export default function SavedPostsScreen() {
       );
     }
     if (filterType === "capstones") {
-      return post.type === "capstone" || post.type === "thesis";
+      return (
+        post.type === "capstone" ||
+        post.type === "thesis" ||
+        (post.kind === "repository" &&
+          (post.repository_type === "capstone" || post.repository_type === "thesis"))
+      );
     }
     if (filterType === "links") {
       return Boolean(post.previewUrl || post.preview_metadata);
@@ -235,7 +240,10 @@ export default function SavedPostsScreen() {
             />
           ) : (
             <View style={styles.thumbnailFallback}>
-              {item.type === "capstone" || item.type === "thesis" ? (
+              {item.type === "capstone" ||
+              item.type === "thesis" ||
+              (item.kind === "repository" &&
+                (item.repository_type === "capstone" || item.repository_type === "thesis")) ? (
                 <FileText size={36} color={colors.action} />
               ) : (
                 <Bookmark size={36} color={colors.textTertiary} />

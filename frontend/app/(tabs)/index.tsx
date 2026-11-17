@@ -164,9 +164,7 @@ export default function HomeScreen() {
       if (!loadedRef.current) setLoading(true);
       setError("");
       let postItems: any[] = [];
-      let thesisItems: any[] = [];
       let postFailed = false;
-      let thesisFailed = false;
 
       try {
         const res = await apiFetch("/posts");
@@ -243,48 +241,11 @@ export default function HomeScreen() {
         console.error("Failed to load posts from SQL backend:", err);
       }
 
-    try {
-      const res = await apiFetch("/theses");
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : (Array.isArray(data?.theses) ? data.theses : []);
-        thesisItems = list.map((t: any) => {
-          const uploaderName = t.uploader?.full_name || t.author?.full_name || "Academic Author";
-          return {
-            id: t.id,
-            author: {
-              id: t.uploader_id,
-              name: uploaderName,
-              initials: getInitials(uploaderName),
-              course: t.uploader?.department_name || t.department || "—",
-              yearLevel: t.category || "Thesis",
-            },
-            title: t.title,
-            description: t.abstract,
-            type: "thesis",
-            tags: [t.uploader?.department_name || t.department, t.category].filter(Boolean),
-            previewUrl: t.pdf_url,
-            imageUrl: undefined,
-            likes: 0,
-            comments: 0,
-            createdAt: new Date(t.created_at).toLocaleDateString(),
-            rawDate: new Date(t.created_at).getTime(),
-            isLiked: false,
-          };
-        });
-      } else {
-        thesisFailed = true;
-      }
-    } catch (err) {
-      thesisFailed = true;
-      console.error("Failed to load theses from SQL backend:", err);
-    }
-
-    if (postFailed && thesisFailed) {
+    if (postFailed) {
       setError("We couldn't reach the campus feed. Check your connection and try again.");
     }
 
-    let unified = [...postItems, ...thesisItems].sort((a, b) => b.rawDate - a.rawDate);
+    let unified = postItems.sort((a, b) => b.rawDate - a.rawDate);
 
     if (filter && filter !== "all") {
       unified = unified.filter((item) => matchesFeedFilter(item, filter));
