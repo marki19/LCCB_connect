@@ -32,16 +32,12 @@ import {
 } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { focusRing, RADIUS, sansFamily, SPACE, type ThemeTokens } from "../../src/lib/tokens";
+import { focusRing, RADIUS, sansFamily, SPACE, TYPE, type ThemeTokens } from "../../src/lib/tokens";
 import { isAdminRole, isSuperAdminRole } from "../../src/lib/roles";
 import { setAdminAppPreview } from "../../src/lib/panelMode";
-<<<<<<< HEAD
 import { CONSOLE_TEXT } from "../../src/components/admin/consoleTheme";
-=======
-import StatusBadge from "../../src/components/admin/StatusBadge";
 import Button from "../../src/components/ui/Button";
 import { checkAdminSessionStatus, stepUpAdminMfa } from "../../src/lib/adminApi";
->>>>>>> 1b3ad26d1c7aca605347d1ca453d8df3ba988e6e
 
 const SIDEBAR_ANIMATION_MS = 220;
 
@@ -605,11 +601,7 @@ export default function AdminLayout() {
     { label: "Overview", path: "/(admin)", icon: LayoutDashboard },
     { label: "Users", path: "/(admin)/users", icon: Users },
     { label: "Verification", path: "/(admin)/verification", icon: UserCheck },
-<<<<<<< HEAD
     { label: "Reports and content", path: "/(admin)/content", icon: FileText },
-=======
-    { label: "Reports & Content", path: "/(admin)/content", icon: FileText },
->>>>>>> 1b3ad26d1c7aca605347d1ca453d8df3ba988e6e
     { label: "Announcements", path: "/(admin)/announcements", icon: Megaphone },
   ];
 

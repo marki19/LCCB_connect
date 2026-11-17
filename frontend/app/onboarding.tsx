@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ScrollView, View, Text, SafeAreaView, Platform } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ScrollView, View, Text, SafeAreaView } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
@@ -10,8 +10,7 @@ import Button from "../src/components/ui/Button";
 import Card from "../src/components/ui/Card";
 import Modal from "../src/components/ui/Modal";
 import Reveal from "../src/components/ui/Reveal";
-import VerificationForm, { DEFAULT_ACADEMIC_LEVELS } from "../src/components/verification/VerificationForm";
-import { fetchDepartments, fetchCourses } from "../src/lib/catalog";
+import VerificationForm from "../src/components/verification/VerificationForm";
 
 type VerificationStatus = "unverified" | "pending" | "approved" | "declined";
 
@@ -167,26 +166,12 @@ export default function OnboardingScreen() {
     [mine?.request?.status]
   );
 
-<<<<<<< HEAD
-  const handleSkip = () => {
+  const handleSkip = useCallback(() => {
     // Verification is optional at signup. The feed shows an identity banner
     // that leads back here, and the server keeps posting locked until the
     // profile is verified.
     router.replace("/(tabs)/");
-  };
-
-  const fieldError = (name: keyof typeof form) =>
-    touched[name] && errors[name] ? errors[name] : undefined;
-=======
-  const handleSuccess = useCallback(async () => {
-    showToast({
-      message: "Verification submitted for review.",
-      tone: "success",
-    });
-    await refreshProfile();
-    router.replace("/(tabs)/");
-  }, [refreshProfile, router, showToast]);
->>>>>>> 1b3ad26d1c7aca605347d1ca453d8df3ba988e6e
+  }, [router]);
 
   if (loading) {
     return (
@@ -385,195 +370,10 @@ export default function OnboardingScreen() {
         declineNote={mine?.request?.note ?? null}
         onSendOtp={handleSendOtp}
         onSubmit={handleSubmit}
+        onSkip={handleSkip}
       />
 
-<<<<<<< HEAD
-              <Card style={{ padding: SPACE.x6 }}>
-                {isDeclined && verification?.note ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: SPACE.x3,
-                      padding: SPACE.x3,
-                      borderRadius: RADIUS.md,
-                      borderWidth: 1,
-                      borderColor: colors.accent,
-                      backgroundColor: colors.accentWash,
-                      marginBottom: SPACE.x5,
-                    }}
-                  >
-                    <AlertTriangle size={16} color={colors.accentText} style={{ marginTop: 2 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ ...TYPE.micro, color: colors.accentText, marginBottom: 2 }}>
-                        Reviewer note
-                      </Text>
-                      <Text style={{ ...TYPE.caption, color: colors.ink, lineHeight: 18 }}>
-                        {verification.note}
-                      </Text>
-                    </View>
-                  </View>
-                ) : null}
-
-                <TextField
-                  label="Full name"
-                  value={form.full_name}
-                  onChangeText={(v) => handleChange("full_name", v)}
-                  onBlur={() => handleBlur("full_name")}
-                  placeholder="Juan Dela Cruz"
-                  autoCapitalize="words"
-                  editable={canEditName}
-                  error={fieldError("full_name")}
-                  hint={!canEditName ? "Locked to the name on your student record." : undefined}
-                  leadingIcon={(props) => <User {...props} />}
-                />
-
-                <TextField
-                  label="Student ID"
-                  value={form.student_id}
-                  onChangeText={(v) => handleChange("student_id", v)}
-                  onBlur={() => handleBlur("student_id")}
-                  placeholder="2023-12345"
-                  autoCapitalize="characters"
-                  editable={canEdit}
-                  error={fieldError("student_id")}
-                  leadingIcon={(props) => <IdCard {...props} />}
-                />
-
-                <View style={{ marginBottom: SPACE.x4 }}>
-                  <FieldLabel icon={Building2} label="Department" />
-                  <SelectField
-                    value={form.department_id || null}
-                    options={departments}
-                    onChange={(v) => handleChange("department_id", v)}
-                    placeholder="Select department"
-                    disabled={!canEdit || loadingDepartments}
-                    loading={loadingDepartments}
-                    error={touched.department_id && !!errors.department_id}
-                    emptyText="No departments available"
-                  />
-                  {fieldError("department_id") ? (
-                    <Text
-                      style={{
-                        ...TYPE.caption,
-                        color: colors.destructiveText,
-                        marginTop: SPACE.x2,
-                      }}
-                    >
-                      {fieldError("department_id")}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View style={{ marginBottom: SPACE.x4 }}>
-                  <FieldLabel icon={GraduationCap} label="Course" />
-                  <SelectField
-                    value={form.course_id || null}
-                    options={courses}
-                    onChange={(v) => handleChange("course_id", v)}
-                    placeholder={form.department_id ? "Select course" : "Select department first"}
-                    disabled={!canEdit || loadingCourses || !form.department_id}
-                    loading={loadingCourses}
-                    error={touched.course_id && !!errors.course_id}
-                    emptyText="No courses available for this department"
-                  />
-                  {fieldError("course_id") ? (
-                    <Text
-                      style={{
-                        ...TYPE.caption,
-                        color: colors.destructiveText,
-                        marginTop: SPACE.x2,
-                      }}
-                    >
-                      {fieldError("course_id")}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View style={{ marginBottom: SPACE.x4 }}>
-                  <FieldLabel icon={Calendar} label="Year level" />
-                  <SelectField
-                    value={form.year_level || null}
-                    options={academicLevels}
-                    onChange={(v) => handleChange("year_level", v)}
-                    placeholder="Select year level"
-                    disabled={!canEdit || loadingAcademicLevels}
-                    loading={loadingAcademicLevels}
-                    error={touched.year_level && !!errors.year_level}
-                  />
-                  {fieldError("year_level") ? (
-                    <Text
-                      style={{
-                        ...TYPE.caption,
-                        color: colors.destructiveText,
-                        marginTop: SPACE.x2,
-                      }}
-                    >
-                      {fieldError("year_level")}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <TextField
-                  label="Birthdate"
-                  value={form.birthdate}
-                  onChangeText={(v) => handleChange("birthdate", v)}
-                  onBlur={() => handleBlur("birthdate")}
-                  placeholder="2000-01-15"
-                  keyboardType="numbers-and-punctuation"
-                  editable={canEdit}
-                  error={fieldError("birthdate")}
-                  hint="Format: YYYY-MM-DD"
-                  leadingIcon={(props) => <Calendar {...props} />}
-                />
-
-                <View style={{ marginTop: SPACE.x2 }}>
-                  <Button
-                    label={isDeclined ? "Resubmit for verification" : "Submit for verification"}
-                    size="lg"
-                    fullWidth
-                    loading={submitting}
-                    disabled={!canEdit || submitting}
-                    onPress={() => void handleSubmit()}
-                  />
-                </View>
-
-                <View style={{ marginTop: SPACE.x2 }}>
-                  <Button
-                    label="Skip for now"
-                    variant="ghost"
-                    fullWidth
-                    disabled={submitting}
-                    onPress={handleSkip}
-                    accessibilityLabel="Skip identity verification for now"
-                  />
-                  <Text
-                    style={{
-                      ...TYPE.caption,
-                      color: colors.inkFaint,
-                      textAlign: "center",
-                      lineHeight: 18,
-                      marginTop: SPACE.x1,
-                    }}
-                  >
-                    You can verify later. Posting stays locked until a department admin confirms
-                    your identity.
-                  </Text>
-                </View>
-              </Card>
-            </Reveal>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      <Modal
-        visible={!!notice}
-        onClose={() => setNotice(null)}
-        maxWidth={440}
-        accessibilityLabel={notice?.title ?? "Notice"}
-      >
-=======
       <Modal visible={!!notice} onClose={() => setNotice(null)} maxWidth={440} accessibilityLabel={notice?.title ?? "Notice"}>
->>>>>>> 1b3ad26d1c7aca605347d1ca453d8df3ba988e6e
         <View style={{ padding: SPACE.x6 }}>
           <Text style={{ ...TYPE.h2, color: colors.ink }}>{notice?.title}</Text>
           <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>{notice?.message}</Text>
