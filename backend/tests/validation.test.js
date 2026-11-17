@@ -262,3 +262,24 @@ describe("validate middleware admin leniency", () => {
     assert.equal(res.status, 400);
   });
 });
+
+describe("repository and attachment validation", () => {
+  it("repository_type is required exactly when kind is repository", () => {
+    assert.equal(createPostSchema.safeParse({ kind: "repository", content: "x" }).success, false);
+    assert.equal(createPostSchema.safeParse({ kind: "repository", repository_type: "project", content: "x" }).success, true);
+    assert.equal(createPostSchema.safeParse({ kind: "discussion", repository_type: "project", content: "x" }).success, false);
+  });
+
+  it("a thesis needs at least one document attachment", () => {
+    assert.equal(createPostSchema.safeParse({
+      kind: "repository", repository_type: "thesis", title: "T", content: "c", attachments: []
+    }).success, false);
+  });
+
+  it("an attachment key must match its mime family", () => {
+    assert.equal(createPostSchema.safeParse({
+      kind: "repository", repository_type: "project", content: "c",
+      attachments: [{ storage_key: "avatars/abc.png", file_name: "a.png", mime_type: "image/png", size_bytes: 1 }]
+    }).success, false);
+  });
+});

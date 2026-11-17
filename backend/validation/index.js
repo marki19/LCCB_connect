@@ -91,15 +91,63 @@ const withCustomAudienceRule = (schema) =>
     }
   });
 
+// ---- attachments -----------------------------------------------------------
+const AttachmentMime = z.enum([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/msword",
+  "application/vnd.ms-powerpoint",
+]);
+
+const attachmentSchema = z
+  .object({
+    storage_key: StorageKey,
+    file_name: z.string().trim().min(1).max(255),
+    mime_type: AttachmentMime,
+    size_bytes: z.number().int().min(0).nullable().optional(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    const isImageMime = data.mime_type.startsWith("image/");
+    const isImageKey = data.storage_key.startsWith("posts/");
+    const isDocMime = !isImageMime;
+    const isDocKey =
+      data.storage_key.startsWith("documents/") ||
+      data.storage_key.startsWith("theses/");
+
+    if (isImageMime && !isImageKey) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["storage_key"],
+        message: "Image attachment storage_key must start with posts/",
+      });
+    } else if (isDocMime && !isDocKey) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["storage_key"],
+        message: "Document attachment storage_key must start with documents/ or theses/",
+      });
+    }
+  });
+
 // ---- posts -----------------------------------------------------------------
 const postFields = {
   content: z.string().max(5000).nullable().optional(),
   type: z.enum(["text", "image", "project", "capstone", "website"]).optional(),
+  kind: z.enum(["discussion", "repository", "announcement"]).optional(),
+  repository_type: z.enum(["project", "capstone", "thesis"]).nullable().optional(),
+  repository_category: optionalText(100),
+  live_url: optionalUrl(),
   title: optionalText(200),
   technologies: stringArray(30, 40),
   github_url: optionalUrl(),
   image_url: optionalStorageUrl(),
   image_urls: z.array(StorageKey).max(4).nullable().optional(),
+  attachments: z.array(attachmentSchema).max(10).optional(),
   preview_metadata: previewMetadataSchema,
   visibility: Visibility.optional(),
   audience: Audience.optional(),
@@ -108,16 +156,70 @@ const postFields = {
 
 const withPostContentRule = (schema) =>
   schema.superRefine((data, ctx) => {
+    const isRepository = data.kind === "repository";
+    if (isRepository) {
+      if (!data.repository_type) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["repository_type"],
+          message: "repository_type is required when kind is repository",
+        });
+      }
+    } else if (data.kind && data.kind !== "repository") {
+      if (data.repository_type) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["repository_type"],
+          message: "repository_type is only allowed when kind is repository",
+        });
+      }
+    }
+
+    if (data.kind === "repository" && data.repository_type === "thesis") {
+      const hasDoc =
+        Array.isArray(data.attachments) &&
+        data.attachments.some((a) => !a.mime_type.startsWith("image/"));
+      if (!hasDoc) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["attachments"],
+          message: "A thesis must have at least one document attachment",
+        });
+      }
+    }
+
+    if (Array.isArray(data.attachments)) {
+      const imageCount = data.attachments.filter((a) =>
+        a.mime_type.startsWith("image/")
+      ).length;
+      if (imageCount > 4) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["attachments"],
+          message: "Cannot attach more than 4 images",
+        });
+      }
+    }
+
     const hasContent = Boolean(data.content && data.content.trim().length > 0);
     const hasTitle = Boolean(data.title && data.title.trim().length > 0);
-    const hasImage = Boolean(data.image_url || (Array.isArray(data.image_urls) && data.image_urls.length > 0));
-    const hasPreview = Boolean(data.preview_metadata || data.github_url);
+    const hasImage = Boolean(
+      data.image_url ||
+        (Array.isArray(data.image_urls) && data.image_urls.length > 0)
+    );
+    const hasPreview = Boolean(
+      data.preview_metadata || data.github_url || data.live_url
+    );
+    const hasAttachment = Boolean(
+      Array.isArray(data.attachments) && data.attachments.length > 0
+    );
 
-    if (!hasContent && !hasTitle && !hasImage && !hasPreview) {
+    if (!hasContent && !hasTitle && !hasImage && !hasPreview && !hasAttachment) {
       ctx.addIssue({
         code: "custom",
         path: ["content"],
-        message: "A post must have at least content, an image, a title, or a link",
+        message:
+          "A post must have at least content, an image, a title, a link, or an attachment",
       });
     }
   });
@@ -619,6 +721,7 @@ const validate = (schema) => (req, res, next) => {
 
   module.exports = {
   validate,
+  attachmentSchema,
   createPostSchema,
   updatePostSchema,
   createCommentSchema,
