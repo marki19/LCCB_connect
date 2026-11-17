@@ -35,6 +35,7 @@ import {
 } from "lucide-react-native";
 import Avatar from "../../src/components/Avatar";
 import { AppImage } from "../../src/components/AppImage";
+import type { Post } from "../../src/types";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { elevation, focusRing, RADIUS, SPACE, TYPE, type ThemeTokens } from "../../src/lib/tokens";
@@ -50,11 +51,25 @@ import Card from "../../src/components/ui/Card";
 import Modal from "../../src/components/ui/Modal";
 import EmptyState from "../../src/components/admin/EmptyState";
 import { PostImageGallery } from "../../src/components/PostImageGallery";
+import AttachmentStrip from "../../src/components/AttachmentStrip";
 
 function getTypeConfig(
-  type: string,
+  post: Post,
   colors: ThemeTokens
 ): { label: string; bg: string; text: string } {
+  if (post.kind === "repository" && post.repository_type) {
+    if (post.repository_type === "capstone") {
+      return { label: "Capstone", bg: colors.badgeCapstoneBg, text: colors.badgeCapstoneText };
+    }
+    if (post.repository_type === "thesis") {
+      return { label: "Thesis", bg: colors.badgeThesisBg, text: colors.badgeThesisText };
+    }
+    return { label: "Project", bg: colors.badgeProjectBg, text: colors.badgeProjectText };
+  }
+  if (post.kind === "announcement") {
+    return { label: "Announcement", bg: colors.badgeAnnouncementBg, text: colors.badgeAnnouncementText };
+  }
+  const type = post.type || "text";
   const configs: Record<string, { label: string; bg: string; text: string }> = {
     website: { label: "Website", bg: colors.badgeWebsiteBg, text: colors.badgeWebsiteText },
     thesis: { label: "Thesis", bg: colors.badgeThesisBg, text: colors.badgeThesisText },
@@ -325,10 +340,15 @@ export default function PostDetailScreen() {
         editTitle: post.title ?? "",
         editContent: post.description ?? "",
         editType: post.type ?? "text",
+        editKind: post.kind ?? (post.repository_type ? "repository" : "discussion"),
+        editRepositoryType: post.repository_type ?? "",
+        editRepositoryCategory: post.repository_category ?? "",
+        editLiveUrl: post.live_url ?? "",
         editTech: (post.tags ?? []).join(", "),
         editUrl: post.previewUrl ?? "",
         editVisibility: post.visibility ?? "public",
         editImages: JSON.stringify(postImages),
+        editAttachments: JSON.stringify(post.attachments ?? []),
       },
     });
   };
@@ -384,7 +404,7 @@ export default function PostDetailScreen() {
     );
   }
 
-  const typeConfig = getTypeConfig(post.type, colors);
+  const typeConfig = getTypeConfig(post, colors);
   const mediaList = imageUrls.length > 0 ? imageUrls : imageUrl ? [imageUrl] : [];
   const currentMedia = mediaList[activeMediaIndex] || mediaList[0];
 
@@ -472,8 +492,8 @@ export default function PostDetailScreen() {
         contentContainerStyle={{ padding: SPACE.x5, paddingBottom: SPACE.x6 }}
         style={{ flex: 1 }}
       >
-        {/* Type Badge (Shown only for specialized post types like projects or capstones) */}
-        {post.type !== "text" && post.type !== "image" && (
+        {/* Type Badge (Shown for repositories and specialized post types like projects or capstones) */}
+        {(post.kind === "repository" || (post.type !== "text" && post.type !== "image")) && (
           <View style={{ marginBottom: SPACE.x2 }}>
             <View
               style={{
@@ -639,6 +659,9 @@ export default function PostDetailScreen() {
             </View>
           </Pressable>
         ) : null}
+
+        {/* Document Attachments */}
+        <AttachmentStrip attachments={post.attachments} />
 
         {/* Engagement Stats Bar */}
         <View
@@ -1346,7 +1369,7 @@ export default function PostDetailScreen() {
               </View>
             </View>
 
-            {post.type !== "text" && post.type !== "image" && (
+            {(post.kind === "repository" || (post.type !== "text" && post.type !== "image")) && (
               <View style={{ paddingHorizontal: SPACE.x4, marginBottom: SPACE.x3 }}>
                 <View
                   style={{
@@ -1399,6 +1422,9 @@ export default function PostDetailScreen() {
                 ))}
               </View>
             ) : null}
+
+            {/* Document Attachments */}
+            <AttachmentStrip attachments={post.attachments} />
 
             {/* Engagement */}
             <View style={{ height: 1, backgroundColor: colors.line }} />

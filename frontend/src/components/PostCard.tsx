@@ -19,8 +19,22 @@ import Modal from "./ui/Modal";
 import Avatar from "./Avatar";
 import { resolveFileUrl, resolveFileUrls } from "../lib/files";
 import { AppImage } from "./AppImage";
+import AttachmentStrip from "./AttachmentStrip";
 
-function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
+function getTypeConfig(post: Post, colors: ThemeTokens): { label: string; bg: string; text: string } {
+  if (post.kind === "repository" && post.repository_type) {
+    if (post.repository_type === "capstone") {
+      return { label: "Capstone", bg: colors.badgeCapstoneBg, text: colors.badgeCapstoneText };
+    }
+    if (post.repository_type === "thesis") {
+      return { label: "Thesis", bg: colors.badgeThesisBg, text: colors.badgeThesisText };
+    }
+    return { label: "Project", bg: colors.badgeProjectBg, text: colors.badgeProjectText };
+  }
+  if (post.kind === "announcement") {
+    return { label: "Announcement", bg: colors.badgeAnnouncementBg, text: colors.badgeAnnouncementText };
+  }
+  const type = post.type || "text";
   const configs: Record<string, { label: string; bg: string; text: string }> = {
     website:  { label: "Website",  bg: colors.badgeWebsiteBg,  text: colors.badgeWebsiteText },
     thesis:   { label: "Thesis",   bg: colors.badgeThesisBg,   text: colors.badgeThesisText },
@@ -124,8 +138,8 @@ export default function PostCard({
   const isOwner = !!profile?.id && profile.id === post.author.id;
 
   const handleEdit = () => {
-    if (post.type === "thesis") {
-      // Theses are edited in the deposit screen (backend: PUT /theses/:id).
+    if (post.type === "thesis" && post.kind !== "repository") {
+      // Legacy theses are edited in the deposit screen (backend: PUT /theses/:id).
       router.push({
         pathname: "/upload-thesis",
         params: { thesisId: String(post.id) },
@@ -143,10 +157,15 @@ export default function PostCard({
         editTitle: post.title ?? "",
         editContent: post.description ?? "",
         editType: post.type ?? "text",
+        editKind: post.kind ?? (post.repository_type ? "repository" : "discussion"),
+        editRepositoryType: post.repository_type ?? "",
+        editRepositoryCategory: post.repository_category ?? "",
+        editLiveUrl: post.live_url ?? "",
         editTech: (post.tags ?? []).join(", "),
         editUrl: post.previewUrl ?? "",
         editVisibility: post.visibility ?? "public",
         editImages: JSON.stringify(postImages),
+        editAttachments: JSON.stringify(post.attachments ?? []),
       },
     });
   };
@@ -241,7 +260,7 @@ export default function PostCard({
     }
   };
 
-  const typeConfig = getTypeConfig(post.type, colors);
+  const typeConfig = getTypeConfig(post, colors);
 
   // For text/image/discussion types, content is the primary body (not title/description)
   const isTextBased = post.type === "text" || post.type === "image" || post.type === "discussion";
@@ -451,6 +470,9 @@ export default function PostCard({
           <Text numberOfLines={1} style={{ fontSize: 12, color: colors.action, fontWeight: "600", marginLeft: 6, flex: 1 }}>{post.previewUrl}</Text>
         </TouchableOpacity>
       ) : null}
+
+      {/* Document Attachments */}
+      <AttachmentStrip attachments={post.attachments} />
 
       {/* Divider */}
       <View style={{ height: 1, backgroundColor: colors.divider }} />
