@@ -208,23 +208,50 @@ async function login(req, res, next) {
 
     if (error) {
       const existing = profile || (await userModel.getUserByEmailForLockout(email));
-      if (existing && !/not confirmed|not_confirmed/i.test(error.message)) {
-        const attempts = await userModel.incrementFailedLogins(existing.id);
-        const interval = lockoutIntervalFor(attempts);
-        if (interval) {
-          await userModel.lockAccount(existing.id, interval);
-          await record({
-            actor: { id: existing.id, role: existing.role },
-            action: ACTIONS.LOGIN_FAILED_LOCKOUT,
-            targetType: "user",
-            targetId: existing.id,
-            metadata: {
-              ip: req.ip,
-              identifier_type: identifierType,
-              attempts,
-              lock_interval: interval,
-            },
+      if (existing) {
+        // Protect Google-only accounts: never lock them out for nonexistent passwords (R1)
+        let isGoogleOnly = false;
+        try {
+          if (supabase && typeof supabase.auth?.admin?.getUserById === "function") {
+            const { data: supaUserData } = await supabase.auth.admin.getUserById(existing.id);
+            const identities = supaUserData?.user?.identities || [];
+            const hasEmail = identities.some((i) => i.provider === "email");
+            const hasGoogle =
+              identities.some((i) => i.provider === "google") ||
+              supaUserData?.user?.app_metadata?.provider === "google";
+            if (hasGoogle && !hasEmail && !existing.password_hash) {
+              isGoogleOnly = true;
+            }
+          }
+        } catch {
+          // Non-blocking
+        }
+
+        if (isGoogleOnly) {
+          return res.status(400).json({
+            error: "This account uses Google Sign-In. Please sign in with Google.",
+            code: "use_google_signin",
           });
+        }
+
+        if (!/not confirmed|not_confirmed/i.test(error.message)) {
+          const attempts = await userModel.incrementFailedLogins(existing.id);
+          const interval = lockoutIntervalFor(attempts);
+          if (interval) {
+            await userModel.lockAccount(existing.id, interval);
+            await record({
+              actor: { id: existing.id, role: existing.role },
+              action: ACTIONS.LOGIN_FAILED_LOCKOUT,
+              targetType: "user",
+              targetId: existing.id,
+              metadata: {
+                ip: req.ip,
+                identifier_type: identifierType,
+                attempts,
+                lock_interval: interval,
+              },
+            });
+          }
         }
       }
       if (/not confirmed|not_confirmed/i.test(error.message)) {
@@ -500,38 +527,60 @@ async function verifySignup(req, res, next) {
       return invalidCode();
     }
 
-    const newUserId = crypto.randomUUID();
-    let userId = newUserId;
+    // Ensure Supabase Admin client is available
+    const supabase = adminClientOr503(res);
+    if (!supabase) return;
+
+    // Check if email already registered in profiles
+    const existingProfile = await userModel.findProfileIdByEmail(normalizedEmail);
+    if (existingProfile) {
+      await userModel.deletePendingSignup(normalizedEmail);
+      return res.status(409).json({
+        error: "An account with this email already exists",
+        code: "email_already_registered",
+      });
+    }
+
+    const { data: supaUser, error: supaErr } = await supabase.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: pending.full_name,
+      },
+    });
+
+    if (supaErr || !supaUser?.user?.id) {
+      const errMsg = supaErr?.message?.toLowerCase() || "";
+      if (errMsg.includes("already registered") || errMsg.includes("already exists") || supaErr?.status === 422) {
+        await userModel.deletePendingSignup(normalizedEmail);
+        return res.status(409).json({
+          error: "An account with this email already exists",
+          code: "email_already_registered",
+        });
+      }
+      console.error(`[auth] Supabase admin.createUser failed for ${normalizedEmail}:`, supaErr);
+      return res.status(502).json({
+        error: "Failed to create authentication credentials. Please try again.",
+        code: "auth_provider_error",
+      });
+    }
+
+    const userId = supaUser.user.id;
     let session = null;
 
-    // Optional non-blocking sync with Supabase if configured (for hybrid cloud / test harness)
     try {
-      const supabase = getSupabaseAdmin();
-      if (supabase && typeof supabase.auth?.admin?.createUser === "function") {
-        const { data: supaUser } = await supabase.auth.admin.createUser({
-          email: normalizedEmail,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            full_name: pending.full_name,
-          },
-        });
-        if (supaUser?.user?.id) {
-          userId = supaUser.user.id;
-        }
-
-        const { data: sessionData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
-        });
-        if (sessionData?.session) {
-          session = sessionData.session;
-        } else if (signInError) {
-          console.warn(`[auth] Supabase sign-in mirror failed for ${normalizedEmail}: ${signInError.message}`);
-        }
+      const { data: sessionData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+      if (sessionData?.session) {
+        session = sessionData.session;
+      } else if (signInError) {
+        console.warn(`[auth] Supabase sign-in mirror failed for ${normalizedEmail}: ${signInError.message}`);
       }
     } catch (syncErr) {
-      console.warn(`[auth] Supabase signup mirror failed for ${normalizedEmail}: ${syncErr?.message || syncErr}`);
+      console.warn(`[auth] Supabase sign-in error for ${normalizedEmail}: ${syncErr?.message || syncErr}`);
     }
 
     // Create profile with password_hash directly in PostgreSQL

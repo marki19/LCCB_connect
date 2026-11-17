@@ -288,6 +288,55 @@ describe("POST /api/auth/verify-signup", () => {
     assert.equal(res.status, 400);
     assert.equal(res.body.fields?.[0]?.path, "email");
   });
+
+  it("returns 409 and burns pending record when email already exists in profiles (R2)", async () => {
+    getPendingSignupByEmail.setImpl(async () => pendingRow(NEW_EMAIL));
+    findProfileIdByEmail.setImpl(async () => "some-existing-uuid");
+
+    const res = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: CODE, password: PENDING_PASSWORD });
+
+    assert.equal(res.status, 409);
+    assert.equal(res.body.code, "email_already_registered");
+    assert.equal(createUser.calls.length, 0, "no duplicate profile created");
+    assert.equal(deletePendingSignup.calls.length, 1, "pending row cleaned up");
+  });
+
+  it("returns 409 and burns pending record when email already registered in Supabase auth (R2)", async () => {
+    getPendingSignupByEmail.setImpl(async () => pendingRow(NEW_EMAIL));
+    findProfileIdByEmail.setImpl(async () => null);
+    createUserAuthImpl = async () => ({
+      data: null,
+      error: { message: "User already registered", status: 422 },
+    });
+
+    const res = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: CODE, password: PENDING_PASSWORD });
+
+    assert.equal(res.status, 409);
+    assert.equal(res.body.code, "email_already_registered");
+    assert.equal(createUser.calls.length, 0, "no duplicate profile created");
+    assert.equal(deletePendingSignup.calls.length, 1, "pending row cleaned up");
+  });
+
+  it("returns 502 and creates zero orphan profiles when Supabase auth fails (R3)", async () => {
+    getPendingSignupByEmail.setImpl(async () => pendingRow(NEW_EMAIL));
+    findProfileIdByEmail.setImpl(async () => null);
+    createUserAuthImpl = async () => ({
+      data: null,
+      error: { message: "Database connection error", status: 500 },
+    });
+
+    const res = await request(app)
+      .post("/api/auth/verify-signup")
+      .send({ email: NEW_EMAIL, token: CODE, password: PENDING_PASSWORD });
+
+    assert.equal(res.status, 502);
+    assert.equal(res.body.code, "auth_provider_error");
+    assert.equal(createUser.calls.length, 0, "never creates an orphan profile without auth user");
+  });
 });
 
 describe("POST /api/auth/resend-signup", () => {

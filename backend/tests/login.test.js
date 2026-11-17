@@ -23,6 +23,7 @@ const SESSION = { access_token: "at-123", refresh_token: "rt-123", expires_at: 1
 // Behaviour is swapped per test through these bindings.
 let signInImpl;
 let lastSignInEmail;
+let supaGetUserByIdImpl = async () => ({ data: { user: null }, error: null });
 
 stub(supabaseAdmin, "getSupabaseAdmin", () => ({
   auth: {
@@ -37,6 +38,7 @@ stub(supabaseAdmin, "getSupabaseAdmin", () => ({
         },
         error: null,
       }),
+      getUserById: async (id) => supaGetUserByIdImpl(id),
     },
   },
 }));
@@ -203,6 +205,40 @@ describe("POST /api/auth/login", () => {
 
     assert.equal(res.status, 401);
     assert.equal(res.body.error, "Invalid email, student ID, or password");
+  });
+
+  it("rejects password login for a Google-only account without incrementing failed logins (R1)", async () => {
+    getUserAuthByIdentifier.setImpl(async () => ({
+      id: USER_ID,
+      email: "google.student@lccbonline.edu.ph",
+      role: "student",
+      password_hash: null,
+    }));
+    signInImpl = async () => ({
+      data: { user: null, session: null },
+      error: { message: "Invalid login credentials" },
+    });
+    supaGetUserByIdImpl = async () => ({
+      data: {
+        user: {
+          id: USER_ID,
+          app_metadata: { provider: "google" },
+          identities: [{ provider: "google" }],
+        },
+      },
+      error: null,
+    });
+
+    incrementFailedLogins.calls.length = 0;
+
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ identifier: "google.student@lccbonline.edu.ph", password: "somePassword123" });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.code, "use_google_signin");
+    assert.match(res.body.error, /Google Sign-In/i);
+    assert.equal(incrementFailedLogins.calls.length, 0, "failed-login count is never incremented for Google accounts");
   });
 });
 
