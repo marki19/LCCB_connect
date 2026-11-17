@@ -13,7 +13,7 @@ Plan: `implementation_plans/2026-11-17-repositories-attachments-mentions.md`
 - [x] Task 7: Storage service — resolve attachment signed/public URLs (`backend/services/storageService.js`)
 - [x] Task 8: Post controller & routes — filter by `kind`, `repository_type`, `repository_category` (`backend/controllers/postController.js`)
 - [x] Task 9: Frontend types & API client — `PostAttachment`, `kind`, `repository_type` (`frontend/src/types.ts`, `frontend/src/lib/api.ts`)
-- [ ] Task 10: Two-door composer — Discussion vs Repository tabs, typed fields, document attachment list (`frontend/app/create.tsx`)
+- [x] Task 10: Two-door composer — Discussion vs Repository tabs, typed fields, document attachment list (`frontend/app/create.tsx`)
 - [ ] Task 11: Post display — render document chips, repository badges, and attachment gallery (`frontend/src/components/PostCard.tsx`, `frontend/app/post/[id].tsx`)
 - [ ] Task 12: Feed filters & tabs — filter feeds by repository types (`frontend/src/lib/feedFilters.ts`, `frontend/app/(tabs)/index.tsx`)
 
