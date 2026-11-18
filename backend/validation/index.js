@@ -357,10 +357,7 @@ const verifySignupSchema = z
       .string()
       .trim()
       .toLowerCase()
-      .regex(
-        /^[^@\s]+@lccbonline\.edu\.ph$/,
-        "Must be an @lccbonline.edu.ph address"
-      ),
+      .email("Must be a valid email address"),
     token: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
     password: z.string().min(1).max(72),
   })
@@ -373,10 +370,7 @@ const resendSignupSchema = z
       .string()
       .trim()
       .toLowerCase()
-      .regex(
-        /^[^@\s]+@lccbonline\.edu\.ph$/,
-        "Must be an @lccbonline.edu.ph address"
-      ),
+      .email("Must be a valid email address"),
   })
   .strict();
 
@@ -389,10 +383,7 @@ const resendSignupSchema = z
        .string()
        .trim()
        .toLowerCase()
-       .regex(
-         /^[^@\s]+@lccbonline\.edu\.ph$/,
-         "Must be an @lccbonline.edu.ph address"
-       ),
+       .email("Must be a valid email address"),
      password: z
        .string()
        .min(8, "Password must be at least 8 characters")
@@ -414,10 +405,7 @@ const resendSignupSchema = z
        .string()
        .trim()
        .toLowerCase()
-       .regex(
-         /^[^@\s]+@lccbonline\.edu\.ph$/,
-         "Must be an @lccbonline.edu.ph address"
-       ),
+       .email("Must be a valid email address"),
    })
    .strict();
 
@@ -430,10 +418,7 @@ const resendSignupSchema = z
        .string()
        .trim()
        .toLowerCase()
-       .regex(
-         /^[^@\s]+@lccbonline\.edu\.ph$/,
-         "Must be an @lccbonline.edu.ph address"
-       ),
+       .email("Must be a valid email address"),
      token: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
      password: z.string().min(8, "Password must be at least 8 characters").max(72, "Password too long"),
    })

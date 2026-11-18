@@ -150,14 +150,22 @@ describe("POST /api/auth/request-signup", () => {
     assert.deepEqual(fresh.body, existing.body);
   });
 
-  it("rejects a non-LCCB email with 400", async () => {
+  it("rejects an invalid email format with 400", async () => {
     const res = await request(app)
       .post("/api/auth/request-signup")
-      .send({ email: NON_LCCB_EMAIL, password: "SecurePass123", full_name: "Ana Cruz" });
+      .send({ email: "invalid-email", password: "SecurePass123", full_name: "Ana Cruz" });
 
     assert.equal(res.status, 400);
     assert.equal(res.body.fields?.[0]?.path, "email");
     assert.equal(createPendingSignup.calls.length, 0);
+  });
+
+  it("allows non-LCCB email (e.g. gmail.com) to request signup", async () => {
+    const res = await request(app)
+      .post("/api/auth/request-signup")
+      .send({ email: NON_LCCB_EMAIL, password: "SecurePass123", full_name: "Ana Cruz" });
+
+    assert.equal(res.status, 202);
   });
 
   it("rejects a password shorter than 8 characters", async () => {
@@ -280,10 +288,10 @@ describe("POST /api/auth/verify-signup", () => {
     assert.notEqual(stored, PENDING_PASSWORD);
   });
 
-  it("rejects a non-LCCB email with 400", async () => {
+  it("rejects an invalid email format with 400", async () => {
     const res = await request(app)
       .post("/api/auth/verify-signup")
-      .send({ email: NON_LCCB_EMAIL, token: CODE, password: PENDING_PASSWORD });
+      .send({ email: "invalid-email", token: CODE, password: PENDING_PASSWORD });
 
     assert.equal(res.status, 400);
     assert.equal(res.body.fields?.[0]?.path, "email");

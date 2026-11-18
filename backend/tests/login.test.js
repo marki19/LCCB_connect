@@ -308,10 +308,10 @@ describe("POST /api/auth/verify-signup", () => {
     assert.equal(createUser.calls.length, 0);
   });
 
-  it("rejects a non-LCCB email address", async () => {
+  it("rejects an invalid email address format", async () => {
     const res = await request(app)
       .post("/api/auth/verify-signup")
-      .send({ email: "someone@gmail.com", token: "123456", password: TEST_PASSWORD });
+      .send({ email: "not-an-email", token: "123456", password: TEST_PASSWORD });
 
     assert.equal(res.status, 400);
     assert.equal(createUser.calls.length, 0);

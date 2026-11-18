@@ -1137,13 +1137,11 @@ async function googleAuth(req, res, next) {
     }
     const email = user.email?.toLowerCase();
 
-    // Enforce LCCB email domain for signups (Phase 1 domain trigger)
-    if (!email || !email.endsWith("@lccbonline.edu.ph")) {
-      // Clean up the rejected user so it does not persist in auth
+    if (!email) {
       await supabase.auth.admin.deleteUser(user.id).catch(() => {});
-      return res.status(403).json({
-        error: "Only @lccbonline.edu.ph accounts are allowed. Please sign in with your school Google account.",
-        code: "domain_not_allowed",
+      return res.status(400).json({
+        error: "Google account does not have an email address.",
+        code: "missing_email",
       });
     }
 
