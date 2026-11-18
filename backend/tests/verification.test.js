@@ -4,7 +4,7 @@ require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://postgres:postgrespassword@127.0.0.1:5432/lcc_connect_test";
 
-const test = require("node:test");
+const { test, after } = require("node:test");
 const assert = require("node:assert");
 const db = require("../db");
 const verificationModel = require("../models/verificationModel");
@@ -70,9 +70,17 @@ function datePart(val) {
 }
 
 async function getTestCatalog() {
-  const dept = await db.query(`SELECT id, code FROM public.departments WHERE is_active = true LIMIT 1`);
-  const course = await db.query(`SELECT id FROM public.courses WHERE department_id = $1 AND is_active = true LIMIT 1`, [dept.rows[0].id]);
-  return { deptId: dept.rows[0].id, courseId: course.rows[0].id };
+  const res = await db.query(
+    `SELECT d.id AS dept_id, c.id AS course_id
+     FROM public.departments d
+     JOIN public.courses c ON c.department_id = d.id AND c.is_active = true
+     WHERE d.is_active = true
+     LIMIT 1`
+  );
+  if (res.rows.length === 0) {
+    throw new Error("No active department with an active course found in catalog");
+  }
+  return { deptId: res.rows[0].dept_id, courseId: res.rows[0].course_id };
 }
 
 async function cleanupTestData(studentId, adminId) {
@@ -304,7 +312,7 @@ test("verification: getLatestForUser joins department and course names", async (
   await cleanupTestData(studentId);
 });
 
-test.after(async () => {
+after(async () => {
   await db.pool.end();
 });
 

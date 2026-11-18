@@ -14,10 +14,16 @@ async function applyModerationMigration() {
       ADD COLUMN IF NOT EXISTS moderation_status TEXT DEFAULT 'approved',
       ADD COLUMN IF NOT EXISTS moderation_reason TEXT;
 
-    -- 3. Add moderation columns to theses
-    ALTER TABLE public.theses 
-      ADD COLUMN IF NOT EXISTS moderation_status TEXT DEFAULT 'approved',
-      ADD COLUMN IF NOT EXISTS moderation_reason TEXT;
+    -- 3. Add moderation columns to theses (if table still exists)
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'theses') THEN
+        ALTER TABLE public.theses 
+          ADD COLUMN IF NOT EXISTS moderation_status TEXT DEFAULT 'approved',
+          ADD COLUMN IF NOT EXISTS moderation_reason TEXT;
+      END IF;
+    END
+    $$;
 
     -- 4. Constraint on moderation_status
     DO $$
@@ -30,9 +36,11 @@ async function applyModerationMigration() {
         ALTER TABLE public.comments ADD CONSTRAINT chk_comments_moderation 
           CHECK (moderation_status IN ('approved', 'flagged', 'hidden'));
       END IF;
-      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_theses_moderation') THEN
-        ALTER TABLE public.theses ADD CONSTRAINT chk_theses_moderation 
-          CHECK (moderation_status IN ('approved', 'flagged', 'hidden'));
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'theses') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_theses_moderation') THEN
+          ALTER TABLE public.theses ADD CONSTRAINT chk_theses_moderation 
+            CHECK (moderation_status IN ('approved', 'flagged', 'hidden'));
+        END IF;
       END IF;
     END
     $$;

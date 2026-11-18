@@ -460,7 +460,7 @@ export default function SearchScreen() {
         </View>
         <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No results found</Text>
         <Text style={[styles.emptySubtitle, { color: colors.textTertiary }]}>
-          We couldn't find matches for "{debouncedQuery}". Try another keyword or check spelling.
+          {"We couldn't find matches for \"" + debouncedQuery + "\". Try another keyword or check spelling."}
         </Text>
       </View>
     );

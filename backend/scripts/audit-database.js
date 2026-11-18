@@ -11,7 +11,7 @@ async function runAudit() {
     const nullCheckSql = `
       SELECT 'posts.author_id' AS column_name, COUNT(*) AS null_count FROM public.posts WHERE author_id IS NULL
       UNION ALL
-      SELECT 'theses.uploader_id', COUNT(*) FROM public.theses WHERE uploader_id IS NULL
+      SELECT 'post_attachments.post_id', COUNT(*) FROM public.post_attachments WHERE post_id IS NULL
       UNION ALL
       SELECT 'likes.post_id', COUNT(*) FROM public.likes WHERE post_id IS NULL
       UNION ALL

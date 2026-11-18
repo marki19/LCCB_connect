@@ -1,4 +1,6 @@
-const test = require("node:test");
+require("./env.helper");
+
+const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("../db");
 const postModel = require("../models/postModel");
@@ -6,12 +8,12 @@ const postModel = require("../models/postModel");
 let userId;
 let createdPostIds = [];
 
-test.before(async () => {
+before(async () => {
   const res = await db.query("SELECT id FROM profiles LIMIT 1");
   userId = res.rows[0].id;
 });
 
-test.after(async () => {
+after(async () => {
   if (createdPostIds.length > 0) {
     await db.query("DELETE FROM posts WHERE id = ANY($1::uuid[])", [createdPostIds]);
   }

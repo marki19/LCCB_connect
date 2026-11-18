@@ -8,8 +8,8 @@ const { withDerivedImages, POST_ATTACHMENTS_SQL } = require("./postModel");
  * Uses PostgreSQL Full-Text Search (tsvector + tsquery) combined with
  * Trigram fuzzy similarity (pg_trgm) for typo tolerance and relevance ranking.
  *
- * All posts and theses reads go through visible_posts() and visible_theses()
- * so content visibility rules are strictly respected.
+ * All posts reads go through visible_posts() so content visibility rules
+ * are strictly respected.
  */
 
 /**
