@@ -18,6 +18,7 @@ const BUCKET_MIME_TYPES: Record<string, string[]> = {
     'application/msword',
   ],
   videos: ['video/mp4', 'video/webm'],
+  snaps: ['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'],
 };
 
 /**
@@ -32,6 +33,8 @@ export const MAX_UPLOAD_BYTES = {
   image: 5 * 1024 * 1024, // 5 MB
   /** Thesis manuscripts (free-plan ceiling). */
   pdf: 50 * 1024 * 1024, // 50 MB
+  /** Quick Snap media (image/video). */
+  snap: 25 * 1024 * 1024, // 25 MB
 } as const;
 
 function isAllowedMime(bucketName: string, contentType: string): boolean {
@@ -46,6 +49,68 @@ export interface PickedImage {
   name: string;
   width?: number;
   height?: number;
+}
+
+export interface PickedSnapMedia {
+  uri: string;
+  type: string;
+  name: string;
+  mediaType: 'image' | 'video';
+  durationMs?: number;
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Prompts the user to capture a snap using their device camera (photo or video up to 30s).
+ */
+export async function captureSnap(): Promise<PickedSnapMedia | null> {
+  const result = await ImagePicker.launchCameraAsync({
+    mediaTypes: ['images', 'videos'],
+    videoMaxDuration: 30,
+    quality: 0.8,
+  });
+  if (!result.canceled && result.assets && result.assets.length > 0) {
+    const asset = result.assets[0];
+    const isVideo = asset.type === 'video' || (asset.mimeType && asset.mimeType.startsWith('video/'));
+    const ext = isVideo ? '.mp4' : '.jpg';
+    return {
+      uri: asset.uri,
+      type: asset.mimeType || (isVideo ? 'video/mp4' : 'image/jpeg'),
+      name: asset.fileName || `snap-${Date.now()}${ext}`,
+      mediaType: isVideo ? 'video' : 'image',
+      durationMs: asset.duration ? Math.round(asset.duration * 1000) : undefined,
+      width: asset.width,
+      height: asset.height,
+    };
+  }
+  return null;
+}
+
+/**
+ * Prompts the user to pick a snap media (photo or video up to 30s) from their gallery.
+ */
+export async function pickSnap(): Promise<PickedSnapMedia | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images', 'videos'],
+    videoMaxDuration: 30,
+    quality: 0.8,
+  });
+  if (!result.canceled && result.assets && result.assets.length > 0) {
+    const asset = result.assets[0];
+    const isVideo = asset.type === 'video' || (asset.mimeType && asset.mimeType.startsWith('video/'));
+    const ext = isVideo ? '.mp4' : '.jpg';
+    return {
+      uri: asset.uri,
+      type: asset.mimeType || (isVideo ? 'video/mp4' : 'image/jpeg'),
+      name: asset.fileName || `snap-${Date.now()}${ext}`,
+      mediaType: isVideo ? 'video' : 'image',
+      durationMs: asset.duration ? Math.round(asset.duration * 1000) : undefined,
+      width: asset.width,
+      height: asset.height,
+    };
+  }
+  return null;
 }
 
 /**

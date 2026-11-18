@@ -72,7 +72,13 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
     >
       {/* Profile card */}
       <Pressable
-        onPress={() => navigate("/(tabs)/profile")}
+        onPress={() => {
+          if (profile?.id) {
+            navigate(`/profile/${profile.id}`);
+          } else {
+            navigate("/(tabs)/profile");
+          }
+        }}
         accessibilityRole="button"
         accessibilityLabel="View your profile"
         style={({ pressed }) => [

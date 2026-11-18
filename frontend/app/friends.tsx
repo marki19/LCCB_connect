@@ -39,10 +39,12 @@ import {
   declineFriendRequest,
   listFriendRequests,
   listFriends,
+  listFriendSuggestions,
+  sendFriendRequest,
   openConversation,
   removeFriend,
 } from "../src/lib/messages";
-import type { ConversationPeer, Friend, FriendRequests } from "../src/types";
+import type { ConversationPeer, Friend, FriendRequests, FriendSuggestion } from "../src/types";
 import { safeBack } from "../src/lib/navigation";
 import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
 import Button, { IconButton } from "../src/components/ui/Button";
@@ -60,9 +62,13 @@ export default function FriendsScreen() {
   const { openChat } = useFloatingChat();
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<"requests" | "all">("requests");
+  const [activeTab, setActiveTab] = useState<"requests" | "suggestions" | "all">("requests");
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequests>({ incoming: [], outgoing: [] });
+  const [suggestions, setSuggestions] = useState<FriendSuggestion[]>([]);
+  const [sentSuggestionIds, setSentSuggestionIds] = useState<Set<string>>(new Set());
+  const [removedSuggestionIds, setRemovedSuggestionIds] = useState<Set<string>>(new Set());
+  const [suggestionBusyId, setSuggestionBusyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -70,9 +76,14 @@ export default function FriendsScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [friendList, requestList] = await Promise.all([listFriends(100), listFriendRequests(50)]);
+      const [friendList, requestList, suggestionList] = await Promise.all([
+        listFriends(100).catch(() => []),
+        listFriendRequests(50).catch(() => ({ incoming: [], outgoing: [] })),
+        listFriendSuggestions(24).catch(() => []),
+      ]);
       setFriends(friendList);
       setRequests(requestList);
+      setSuggestions(Array.isArray(suggestionList) ? suggestionList : []);
     } catch {
       // Best-effort
     } finally {
@@ -85,10 +96,15 @@ export default function FriendsScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const [friendList, requestList] = await Promise.all([listFriends(100), listFriendRequests(50)]);
+        const [friendList, requestList, suggestionList] = await Promise.all([
+          listFriends(100).catch(() => []),
+          listFriendRequests(50).catch(() => ({ incoming: [], outgoing: [] })),
+          listFriendSuggestions(24).catch(() => []),
+        ]);
         if (cancelled) return;
         setFriends(friendList);
         setRequests(requestList);
+        setSuggestions(Array.isArray(suggestionList) ? suggestionList : []);
       } catch {
         // Best-effort
       } finally {
@@ -158,6 +174,120 @@ export default function FriendsScreen() {
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const handleAddSuggestion = async (suggestionId: string) => {
+    setSuggestionBusyId(suggestionId);
+    try {
+      await sendFriendRequest(suggestionId);
+      setSentSuggestionIds((prev) => new Set(prev).add(suggestionId));
+      showToast({ message: "Friend request sent.", tone: "success" });
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Failed to send friend request.");
+    } finally {
+      setSuggestionBusyId(null);
+    }
+  };
+
+  const handleRemoveSuggestion = (suggestionId: string) => {
+    setRemovedSuggestionIds((prev) => new Set(prev).add(suggestionId));
+  };
+
+  const visibleSuggestions = suggestions.filter((s) => !removedSuggestionIds.has(s.id));
+
+  const renderSuggestionCard = (item: FriendSuggestion) => {
+    const isSent = sentSuggestionIds.has(item.id);
+    const isBusy = suggestionBusyId === item.id;
+    const name = item.full_name || item.username || "Student";
+    const subtitle =
+      item.mutual_count && item.mutual_count > 0
+        ? `${item.mutual_count} mutual friend${item.mutual_count > 1 ? "s" : ""}`
+        : item.department_name || item.course_name || "LCCB Student";
+
+    return (
+      <View
+        key={item.id}
+        style={[
+          styles.friendCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => router.push(`/profile/${item.id}`)}
+          style={styles.cardAvatarContainer}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${name}'s profile`}
+        >
+          <Avatar
+            name={name}
+            avatarUrl={item.avatar_url}
+            size={72}
+          />
+        </TouchableOpacity>
+        <View style={styles.cardBody}>
+          <TouchableOpacity onPress={() => router.push(`/profile/${item.id}`)}>
+            <Text
+              style={[styles.cardName, { color: colors.textPrimary }]}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+          </TouchableOpacity>
+          <Text
+            style={[styles.cardSubtitle, { color: colors.textTertiary }]}
+            numberOfLines={1}
+          >
+            {subtitle}
+          </Text>
+
+          <View style={styles.cardButtonsRow}>
+            <TouchableOpacity
+              onPress={() => void handleAddSuggestion(item.id)}
+              disabled={isBusy || isSent}
+              style={[
+                styles.primaryActionBtn,
+                { backgroundColor: isSent ? colors.surfaceSunken : colors.action },
+              ]}
+            >
+              {isBusy ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text
+                  style={[
+                    styles.primaryActionBtnText,
+                    isSent && { color: colors.textSecondary },
+                  ]}
+                >
+                  {isSent ? "Request Sent" : "Add Friend"}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {!isSent ? (
+              <TouchableOpacity
+                onPress={() => handleRemoveSuggestion(item.id)}
+                style={[
+                  styles.secondaryActionBtn,
+                  { backgroundColor: colors.surfaceSunken },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.secondaryActionBtnText,
+                    { color: colors.textPrimary },
+                  ]}
+                >
+                  Remove
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+      </View>
+    );
   };
 
   const incomingCount = requests.incoming.length;
@@ -240,6 +370,47 @@ export default function FriendsScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                onPress={() => setActiveTab("suggestions")}
+                style={[
+                  styles.menuItem,
+                  activeTab === "suggestions" && { backgroundColor: colors.surfaceSunken },
+                ]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === "suggestions" }}
+              >
+                <View
+                  style={[
+                    styles.menuIconCircle,
+                    {
+                      backgroundColor:
+                        activeTab === "suggestions" ? colors.action : colors.surfaceSunken,
+                    },
+                  ]}
+                >
+                  <UserPlus
+                    size={18}
+                    color={activeTab === "suggestions" ? "#FFFFFF" : colors.textSecondary}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.menuItemLabel,
+                    {
+                      color: colors.textPrimary,
+                      fontWeight: activeTab === "suggestions" ? "700" : "600",
+                    },
+                  ]}
+                >
+                  Suggestions
+                </Text>
+                {visibleSuggestions.length > 0 && (
+                  <Text style={{ fontSize: 13, color: colors.textTertiary, marginRight: 4 }}>
+                    {visibleSuggestions.length}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 onPress={() => setActiveTab("all")}
                 style={[
                   styles.menuItem,
@@ -293,6 +464,8 @@ export default function FriendsScreen() {
                   ? incomingCount > 0
                     ? `Friend Requests (${incomingCount})`
                     : "Friend Requests"
+                  : activeTab === "suggestions"
+                  ? "People You May Know"
                   : `All Friends (${friends.length})`}
               </Text>
             </View>
@@ -302,8 +475,129 @@ export default function FriendsScreen() {
                 <ActivityIndicator size="large" color={colors.action} />
               </View>
             ) : activeTab === "requests" ? (
-              /* Friend Requests Grid */
-              requests.incoming.length === 0 ? (
+              /* Friend Requests & Suggestions */
+              <View>
+                {requests.incoming.length > 0 ? (
+                  <View style={styles.cardGrid}>
+                    {requests.incoming.map((item) => {
+                      const name = item.requester.full_name || item.requester.username || "Student";
+                      const isBusy = processingId === item.id;
+
+                      return (
+                        <View
+                          key={item.id}
+                          style={[
+                            styles.friendCard,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                        >
+                          <TouchableOpacity
+                            onPress={() => router.push(`/profile/${item.requester.id}`)}
+                            style={styles.cardAvatarContainer}
+                            accessibilityRole="button"
+                            accessibilityLabel={`View ${name}'s profile`}
+                          >
+                            <Avatar
+                              name={name}
+                              avatarUrl={item.requester.avatar_url}
+                              size={72}
+                            />
+                          </TouchableOpacity>
+                          <View style={styles.cardBody}>
+                            <TouchableOpacity onPress={() => router.push(`/profile/${item.requester.id}`)}>
+                              <Text
+                                style={[styles.cardName, { color: colors.textPrimary }]}
+                                numberOfLines={1}
+                              >
+                                {name}
+                              </Text>
+                            </TouchableOpacity>
+                            <Text
+                              style={[styles.cardSubtitle, { color: colors.textTertiary }]}
+                              numberOfLines={1}
+                            >
+                              {item.requester.department_name || "LCCB Student"}
+                            </Text>
+
+                            <View style={styles.cardButtonsRow}>
+                              <TouchableOpacity
+                                onPress={() => void respond(item.id, "accept")}
+                                disabled={isBusy}
+                                style={[
+                                  styles.primaryActionBtn,
+                                  { backgroundColor: colors.action },
+                                ]}
+                              >
+                                <Text style={styles.primaryActionBtnText}>Confirm</Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                onPress={() => void respond(item.id, "decline")}
+                                disabled={isBusy}
+                                style={[
+                                  styles.secondaryActionBtn,
+                                  { backgroundColor: colors.surfaceSunken },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.secondaryActionBtnText,
+                                    { color: colors.textPrimary },
+                                  ]}
+                                >
+                                  Delete
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={[styles.emptyContainer, { paddingVertical: 24, marginBottom: 12 }]}>
+                    <View
+                      style={[
+                        styles.emptyIconCircle,
+                        {
+                          backgroundColor: colors.surfaceSunken,
+                          width: 52,
+                          height: 52,
+                          borderRadius: 26,
+                          marginBottom: 8,
+                        },
+                      ]}
+                    >
+                      <UserPlus size={24} color={colors.textTertiary} />
+                    </View>
+                    <Text style={[styles.emptyTitle, { color: colors.textPrimary, fontSize: 16 }]}>
+                      No Pending Requests
+                    </Text>
+                    <Text style={[styles.emptySubtitle, { color: colors.textTertiary, fontSize: 12 }]}>
+                      When people send you friend requests, they will appear here.
+                    </Text>
+                  </View>
+                )}
+
+                {/* People You May Know */}
+                {visibleSuggestions.length > 0 && (
+                  <View style={{ marginTop: requests.incoming.length > 0 ? 32 : 8 }}>
+                    <View style={styles.contentHeader}>
+                      <Text style={[styles.contentTitle, { color: colors.textPrimary }]}>
+                        People You May Know
+                      </Text>
+                    </View>
+                    <View style={styles.cardGrid}>
+                      {visibleSuggestions.map(renderSuggestionCard)}
+                    </View>
+                  </View>
+                )}
+              </View>
+            ) : activeTab === "suggestions" ? (
+              visibleSuggestions.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <View
                     style={[
@@ -311,87 +605,18 @@ export default function FriendsScreen() {
                       { backgroundColor: colors.surfaceSunken },
                     ]}
                   >
-                    <UserPlus size={32} color={colors.textTertiary} />
+                    <Users size={32} color={colors.textTertiary} />
                   </View>
                   <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-                    No Pending Requests
+                    No Suggestions Available
                   </Text>
                   <Text style={[styles.emptySubtitle, { color: colors.textTertiary }]}>
-                    When people send you friend requests, they will appear here.
+                    Check back later for new classmate suggestions.
                   </Text>
                 </View>
               ) : (
                 <View style={styles.cardGrid}>
-                  {requests.incoming.map((item) => {
-                    const name = item.requester.full_name || item.requester.username || "Student";
-                    const isBusy = processingId === item.id;
-
-                    return (
-                      <View
-                        key={item.id}
-                        style={[
-                          styles.friendCard,
-                          {
-                            backgroundColor: colors.surface,
-                            borderColor: colors.border,
-                          },
-                        ]}
-                      >
-                        <View style={styles.cardAvatarContainer}>
-                          <Avatar
-                            name={name}
-                            avatarUrl={item.requester.avatar_url}
-                            size={72}
-                          />
-                        </View>
-                        <View style={styles.cardBody}>
-                          <Text
-                            style={[styles.cardName, { color: colors.textPrimary }]}
-                            numberOfLines={1}
-                          >
-                            {name}
-                          </Text>
-                          <Text
-                            style={[styles.cardSubtitle, { color: colors.textTertiary }]}
-                            numberOfLines={1}
-                          >
-                            {item.requester.department_name || "LCCB Student"}
-                          </Text>
-
-                          <View style={styles.cardButtonsRow}>
-                            <TouchableOpacity
-                              onPress={() => void respond(item.id, "accept")}
-                              disabled={isBusy}
-                              style={[
-                                styles.primaryActionBtn,
-                                { backgroundColor: colors.action },
-                              ]}
-                            >
-                              <Text style={styles.primaryActionBtnText}>Confirm</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              onPress={() => void respond(item.id, "decline")}
-                              disabled={isBusy}
-                              style={[
-                                styles.secondaryActionBtn,
-                                { backgroundColor: colors.surfaceSunken },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.secondaryActionBtnText,
-                                  { color: colors.textPrimary },
-                                ]}
-                              >
-                                Delete
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
+                  {visibleSuggestions.map(renderSuggestionCard)}
                 </View>
               )
             ) : (
@@ -429,7 +654,12 @@ export default function FriendsScreen() {
                           },
                         ]}
                       >
-                        <View style={styles.cardAvatarContainer}>
+                        <TouchableOpacity
+                          onPress={() => router.push(`/profile/${item.peer.id}`)}
+                          style={styles.cardAvatarContainer}
+                          accessibilityRole="button"
+                          accessibilityLabel={`View ${name}'s profile`}
+                        >
                           <Avatar
                             name={name}
                             avatarUrl={item.peer.avatar_url}
@@ -437,14 +667,16 @@ export default function FriendsScreen() {
                             showPresence
                             mode={modeOf(item.peer.id)}
                           />
-                        </View>
+                        </TouchableOpacity>
                         <View style={styles.cardBody}>
-                          <Text
-                            style={[styles.cardName, { color: colors.textPrimary }]}
-                            numberOfLines={1}
-                          >
-                            {name}
-                          </Text>
+                          <TouchableOpacity onPress={() => router.push(`/profile/${item.peer.id}`)}>
+                            <Text
+                              style={[styles.cardName, { color: colors.textPrimary }]}
+                              numberOfLines={1}
+                            >
+                              {name}
+                            </Text>
+                          </TouchableOpacity>
                           <Text
                             style={[styles.cardSubtitle, { color: colors.textTertiary }]}
                             numberOfLines={1}
@@ -514,12 +746,12 @@ export default function FriendsScreen() {
           <Text style={[styles.mobileTitle, { color: colors.textPrimary }]}>Friends</Text>
         </View>
         <IconButton
-                  icon={UserPlus}
-                  label="Find friends"
-                  variant="subtle"
-                  onPress={() => router.push("/find-friends")}
-                  style={[styles.findFriendsBtn, { backgroundColor: colors.actionSurface }]}
-                />
+          icon={UserPlus}
+          label="Find friends"
+          variant="subtle"
+          onPress={() => router.push("/find-friends")}
+          style={[styles.findFriendsBtn, { backgroundColor: colors.actionSurface }]}
+        />
       </View>
 
       {/* Tabs */}
@@ -555,6 +787,42 @@ export default function FriendsScreen() {
                 ]}
               >
                 {incomingCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setActiveTab("suggestions")}
+          style={[
+            styles.mobileTabPill,
+            {
+              backgroundColor: activeTab === "suggestions" ? colors.action : colors.surfaceSunken,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.mobileTabPillText,
+              { color: activeTab === "suggestions" ? "#FFFFFF" : colors.textSecondary },
+            ]}
+          >
+            Suggestions
+          </Text>
+          {visibleSuggestions.length > 0 && (
+            <View
+              style={[
+                styles.mobileBadge,
+                { backgroundColor: activeTab === "suggestions" ? "#FFFFFF" : colors.action },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.mobileBadgeText,
+                  { color: activeTab === "suggestions" ? colors.action : "#FFFFFF" },
+                ]}
+              >
+                {visibleSuggestions.length}
               </Text>
             </View>
           )}
@@ -600,21 +868,26 @@ export default function FriendsScreen() {
                 },
               ]}
             >
-              <Avatar
-                name={item.requester.full_name || item.requester.username}
-                avatarUrl={item.requester.avatar_url}
-                size={48}
-                showPresence
-                mode={modeOf(item.requester.id)}
-              />
-              <View style={{ flex: 1, marginLeft: 12 }}>
+              <TouchableOpacity onPress={() => router.push(`/profile/${item.requester.id}`)}>
+                <Avatar
+                  name={item.requester.full_name || item.requester.username}
+                  avatarUrl={item.requester.avatar_url}
+                  size={48}
+                  showPresence
+                  mode={modeOf(item.requester.id)}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push(`/profile/${item.requester.id}`)}
+                style={{ flex: 1, marginLeft: 12 }}
+              >
                 <Text numberOfLines={1} style={[styles.mobileItemName, { color: colors.textPrimary }]}>
                   {item.requester.full_name || item.requester.username || "Student"}
                 </Text>
                 <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>
                   {item.requester.department_name || "Wants to be friends"}
                 </Text>
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => void respond(item.id, "decline")}
                 style={[styles.circleActionBtn, { backgroundColor: colors.surfaceSunken, marginRight: 8 }]}
@@ -632,6 +905,82 @@ export default function FriendsScreen() {
           ListEmptyComponent={
             <View style={styles.centeredContainer}>
               <Text style={{ fontSize: 14, color: colors.textTertiary }}>No friend requests</Text>
+            </View>
+          }
+        />
+      ) : activeTab === "suggestions" ? (
+        <FlatList
+          style={{ flex: 1, marginTop: 12 }}
+          data={visibleSuggestions}
+          keyExtractor={(item) => item.id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.action} />}
+          renderItem={({ item }) => {
+            const isSent = sentSuggestionIds.has(item.id);
+            const isBusy = suggestionBusyId === item.id;
+            const name = item.full_name || item.username || "Student";
+            const subtitle =
+              item.mutual_count && item.mutual_count > 0
+                ? `${item.mutual_count} mutual friend${item.mutual_count > 1 ? "s" : ""}`
+                : item.department_name || item.course_name || "LCCB";
+
+            return (
+              <View
+                style={[
+                  styles.mobileListItem,
+                  {
+                    backgroundColor: colors.surface,
+                    borderBottomColor: colors.border,
+                  },
+                ]}
+              >
+                <TouchableOpacity onPress={() => router.push(`/profile/${item.id}`)}>
+                  <Avatar
+                    name={name}
+                    avatarUrl={item.avatar_url}
+                    size={48}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => router.push(`/profile/${item.id}`)}
+                  style={{ flex: 1, marginLeft: 12 }}
+                >
+                  <Text numberOfLines={1} style={[styles.mobileItemName, { color: colors.textPrimary }]}>
+                    {name}
+                  </Text>
+                  <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>
+                    {subtitle}
+                  </Text>
+                </TouchableOpacity>
+                {!isSent ? (
+                  <TouchableOpacity
+                    onPress={() => handleRemoveSuggestion(item.id)}
+                    style={[styles.circleActionBtn, { backgroundColor: colors.surfaceSunken, marginRight: 8 }]}
+                  >
+                    <X size={17} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  onPress={() => void handleAddSuggestion(item.id)}
+                  disabled={isBusy || isSent}
+                  style={[
+                    styles.circleActionBtn,
+                    { backgroundColor: isSent ? colors.surfaceSunken : colors.action },
+                  ]}
+                >
+                  {isBusy ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : isSent ? (
+                    <Check size={17} color={colors.textSecondary} />
+                  ) : (
+                    <UserPlus size={17} color="#FFFFFF" />
+                  )}
+                </TouchableOpacity>
+              </View>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.centeredContainer}>
+              <Text style={{ fontSize: 14, color: colors.textTertiary }}>No suggestions available</Text>
             </View>
           }
         />

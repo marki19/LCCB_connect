@@ -42,7 +42,7 @@ export default function MessagesSplit({ initialId = null }: MessagesSplitProps) 
         <InboxPane
           onSelect={setSelectedId}
           activeId={selectedId}
-          showBack={true}
+          showBack={false}
           onBack={() => safeBack("/(tabs)")}
         />
       </View>
@@ -61,7 +61,7 @@ export default function MessagesSplit({ initialId = null }: MessagesSplitProps) 
           >
             <EmptyState
               icon={MessagesSquare}
-              title="Select a conversation"
+              title="No chats selected"
               body="Pick a chat from the list to read and reply without leaving the page."
               compact
             />

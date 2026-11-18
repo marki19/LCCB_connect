@@ -238,7 +238,23 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
           >
             <X size={20} color={colors.heroText} />
           </Pressable>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="View your profile"
+            onPress={() => {
+              if (profile?.id) {
+                go(`/profile/${profile.id}`);
+              } else {
+                go("/(tabs)/profile");
+              }
+            }}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: SPACE.x3,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
             <Avatar
               name={displayName}
               avatarUrl={profile?.avatar_url}
@@ -258,7 +274,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
                 {profile?.department_name || "No department"} · {profile?.year_level || "—"}
               </Text>
             </View>
-          </View>
+          </Pressable>
         </View>
 
         <ScrollView
