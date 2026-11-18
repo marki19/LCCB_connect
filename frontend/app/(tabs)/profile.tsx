@@ -66,6 +66,12 @@ export default function ProfileScreen() {
   const visiblePosts = isGuestUser ? [] : myPosts;
 
   useEffect(() => {
+    if (initialized && currentUser?.id && currentUser.id !== "guest" && !isGuest) {
+      router.replace(`/profile/${currentUser.id}`);
+    }
+  }, [initialized, currentUser?.id, isGuest, router]);
+
+  useEffect(() => {
     const user = currentUser;
     if (!user?.id || user.id === "guest" || isGuest) {
       return;

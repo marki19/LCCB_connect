@@ -1,9 +1,7 @@
 import { View, Platform, useWindowDimensions } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import InboxPane from "../../src/components/messages/InboxPane";
 import MessagesSplit from "../../src/components/messages/MessagesSplit";
-import DesktopTopBar, { TOP_BAR_HEIGHT } from "../../src/components/topbar/DesktopTopBar";
 import { useTheme } from "../../src/contexts/ThemeContext";
 
 /**
@@ -21,10 +19,7 @@ export default function ChatsTabScreen() {
   if (isSplit) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
-        <DesktopTopBar />
-        <View style={{ flex: 1, marginTop: TOP_BAR_HEIGHT }}>
-          <MessagesSplit />
-        </View>
+        <MessagesSplit />
       </View>
     );
   }

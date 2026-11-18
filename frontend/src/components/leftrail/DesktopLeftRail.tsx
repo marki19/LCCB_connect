@@ -51,7 +51,7 @@ export default function DesktopLeftRail() {
   const seg = segments as string[];
   const activeSegment = seg[1] || seg[0] || "index";
 
-  const isProfileActive = activeSegment === "profile";
+  const isProfileActive = activeSegment === "profile" || (seg[0] === "profile" && seg[1] === profile?.id);
   const isSearchActive = activeSegment === "search";
   const isNotificationsActive = activeSegment === "notifications";
 
@@ -88,7 +88,13 @@ export default function DesktopLeftRail() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="View your profile"
-            onPress={() => router.push("/(tabs)/profile")}
+            onPress={() => {
+              if (profile?.id && !isGuest) {
+                router.push(`/profile/${profile.id}`);
+              } else {
+                router.push("/(tabs)/profile");
+              }
+            }}
             style={itemRowStyle(isProfileActive)}
           >
             <Avatar

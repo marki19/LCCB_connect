@@ -272,16 +272,33 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
     >
       {/* Author row */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 }}>
-        <Avatar
-          name={post.author.name}
-          avatarUrl={post.author.avatarUrl}
-          size={44}
-          style={{ marginRight: 10 }}
-        />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }}>{post.author.name}</Text>
-          <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 1 }}>{post.author.course || "—"} · {post.author.yearLevel || "—"}</Text>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`View ${post.author.name}'s profile`}
+          onPress={(e) => {
+            e.stopPropagation?.();
+            if (post.author?.id) {
+              router.push(`/profile/${post.author.id}`);
+            }
+          }}
+          style={({ pressed }: any) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            flex: 1,
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <Avatar
+            name={post.author.name}
+            avatarUrl={post.author.avatarUrl}
+            size={44}
+            style={{ marginRight: 10 }}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary }}>{post.author.name}</Text>
+            <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 1 }}>{post.author.course || "—"} · {post.author.yearLevel || "—"}</Text>
+          </View>
+        </Pressable>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           {/* Visibility badge — shown for ALL viewers */}
           {post.visibility ? (
