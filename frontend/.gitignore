@@ -9,6 +9,9 @@ node_modules/
 .opencode
 .thinkrail
 
+# desloppify local state
+temp_status.json
+
 # Expo
 .expo/
 dist/

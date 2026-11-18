@@ -19,10 +19,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { listFriendRequests } from "../../lib/messages";
 import Avatar from "../Avatar";
-<<<<<<< HEAD
-=======
-import { useSettingsSidebar } from "../../contexts/SettingsSidebarContext";
->>>>>>> af4862446102d8df29b7fe2228bae330f1d86373
 
 export default function DesktopLeftRail() {
   const router = useRouter();
@@ -31,13 +27,6 @@ export default function DesktopLeftRail() {
   const { colors } = useTheme();
 
   const [friendRequestCount, setFriendRequestCount] = useState(0);
-<<<<<<< HEAD
-=======
-  const [showMoreShortcuts, setShowMoreShortcuts] = useState(false);
-
-  const adminUser = isAdminRole(profile?.role);
-  const departmentAdmin = isDepartmentAdminRole(profile?.role);
->>>>>>> af4862446102d8df29b7fe2228bae330f1d86373
 
   // Fetch incoming friend requests count for live badge
   useEffect(() => {
@@ -197,38 +186,6 @@ export default function DesktopLeftRail() {
               </Text>
             </Pressable>
           )}
-<<<<<<< HEAD
-=======
-
-          {/* Admin / Moderation Console */}
-          {(adminUser || departmentAdmin) && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={adminUser ? "Admin Console" : "Moderation Console"}
-              onPress={() => {
-                if (adminUser) {
-                  setAdminAppPreview(false);
-                  router.push("/(admin)");
-                } else {
-                  router.push("/(moderation)" as any);
-                }
-              }}
-              style={itemRowStyle()}
-            >
-              <View style={[styles.iconCircle, { backgroundColor: "#F43F5E" }]}>
-                <Shield size={20} color="#FFFFFF" />
-              </View>
-              <Text
-                style={[
-                  styles.itemLabel,
-                  { color: adminUser ? colors.brand : colors.action, fontWeight: "700" },
-                ]}
-              >
-                {adminUser ? "Admin Console" : "Moderation"}
-              </Text>
-            </Pressable>
-          )}
->>>>>>> af4862446102d8df29b7fe2228bae330f1d86373
         </View>
 
         {/* Divider */}
@@ -271,7 +228,6 @@ export default function DesktopLeftRail() {
           </Pressable>
         </View>
       </ScrollView>
-<<<<<<< HEAD
 
       {/* Meta footer — pinned to the bottom of the rail */}
       <View style={[styles.footerContainer, { borderTopColor: colors.border }]}>
@@ -282,8 +238,6 @@ export default function DesktopLeftRail() {
           LCCB Connect © 2026
         </Text>
       </View>
-=======
->>>>>>> af4862446102d8df29b7fe2228bae330f1d86373
     </View>
   );
 }

@@ -31,19 +31,10 @@ import {
 } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
-<<<<<<< HEAD
-import { focusRing, RADIUS, sansFamily, SPACE, TYPE, type ThemeTokens } from "../../src/lib/tokens";
-import { isAdminRole, isSuperAdminRole } from "../../src/lib/roles";
-import { setAdminAppPreview } from "../../src/lib/panelMode";
-import { CONSOLE_TEXT } from "../../src/components/admin/consoleTheme";
-import Button from "../../src/components/ui/Button";
-import { checkAdminSessionStatus, stepUpAdminMfa } from "../../src/lib/adminApi";
-=======
 import { focusRing, RADIUS, sansFamily, SPACE, type ThemeTokens } from "../../src/lib/tokens";
 import { isAdminRole, isSuperAdminRole } from "../../src/lib/roles";
 import { setAdminAppPreview } from "../../src/lib/panelMode";
 import { CONSOLE_TEXT } from "../../src/components/admin/consoleTheme";
->>>>>>> af4862446102d8df29b7fe2228bae330f1d86373
 
 const SIDEBAR_ANIMATION_MS = 220;
 
