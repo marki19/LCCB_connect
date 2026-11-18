@@ -1,6 +1,7 @@
 const db = require("../db");
 const { escapeLike } = require("../utils/queryFilters");
 const { DEFAULT_LIMIT } = require("./pagination");
+const { withDerivedImages, POST_ATTACHMENTS_SQL } = require("./postModel");
 
 /**
  * Multi-Entity Search Model
@@ -94,11 +95,14 @@ const searchPosts = async (query, viewerId = null, { limit = DEFAULT_LIMIT, offs
       p.id,
       p.author_id,
       p.content,
-      p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
-      p.image_url,
+      ${POST_ATTACHMENTS_SQL},
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
@@ -145,7 +149,7 @@ const searchPosts = async (query, viewerId = null, { limit = DEFAULT_LIMIT, offs
   `;
 
   const result = await db.query(sql, params);
-  return result.rows;
+  return result.rows.map(withDerivedImages);
 };
 
 /**

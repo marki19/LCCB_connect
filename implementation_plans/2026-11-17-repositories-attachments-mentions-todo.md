@@ -35,4 +35,4 @@ Plan: `implementation_plans/2026-11-17-repositories-attachments-mentions.md`
 
 ## Contract Migration (Task 23)
 
-- [ ] Task 23: Drop legacy columns — remove `posts.type`, `posts.image_url`, `posts.image_urls` (`backend/migrations/057_drop_legacy_post_columns.sql`)
+- [x] Task 23: Drop legacy columns — remove `posts.type`, `posts.image_url`, `posts.image_urls` (`backend/migrations/057_drop_legacy_post_columns.sql`)

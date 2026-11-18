@@ -13,10 +13,11 @@ const listCollections = async (userId) => {
       sc.updated_at,
       COUNT(sci.post_id)::int AS item_count,
       (
-        SELECT p.image_url 
+        SELECT pa.storage_key 
         FROM public.saved_collection_items sci2
-        JOIN public.posts p ON p.id = sci2.post_id
-        WHERE sci2.collection_id = sc.id AND p.image_url IS NOT NULL
+        JOIN public.post_attachments pa ON pa.post_id = sci2.post_id
+        WHERE sci2.collection_id = sc.id AND pa.mime_type LIKE 'image/%'
+        ORDER BY pa.sort_order ASC
         LIMIT 1
       ) AS cover_image
     FROM public.saved_collections sc

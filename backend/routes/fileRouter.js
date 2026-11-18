@@ -58,7 +58,11 @@ async function verifyFileOwnership(category, filename, user) {
   }
 
   const postRes = await db.query(
-    `SELECT author_id FROM public.posts WHERE image_url ILIKE $1 OR $2 = ANY(image_urls) LIMIT 1`,
+    `SELECT p.author_id
+     FROM public.post_attachments pa
+     JOIN public.posts p ON p.id = pa.post_id
+     WHERE pa.storage_key ILIKE $1 OR pa.storage_key = $2
+     LIMIT 1`,
     [likePattern, filename]
   );
   if (postRes.rows.length && String(postRes.rows[0].author_id) === String(user.id)) {

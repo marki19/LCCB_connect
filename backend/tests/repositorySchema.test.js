@@ -27,3 +27,11 @@ test("visible_post_attachments function exists and is callable", async () => {
   const res = await db.query(`SELECT routine_name FROM information_schema.routines WHERE routine_name = 'visible_post_attachments'`);
   assert.equal(res.rows.length, 1);
 });
+
+test("legacy post columns type, image_url, image_urls are dropped", async () => {
+  const cols = await db.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'posts' AND column_name IN ('type', 'image_url', 'image_urls')`
+  );
+  assert.equal(cols.rows.length, 0, `Expected legacy columns to be dropped, found: ${cols.rows.map(r => r.column_name).join(', ')}`);
+});

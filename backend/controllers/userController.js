@@ -418,34 +418,25 @@ const getUserPhotos = async (req, res, next) => {
 
     const limit = clampLimit(req.query.limit, 30);
     const sql = `
-      SELECT vp.id, vp.image_url, vp.image_urls, vp.created_at
+      SELECT pa.id AS attachment_id, pa.post_id, pa.storage_key, pa.sort_order, vp.created_at
       FROM visible_posts($1::text) vp
+      JOIN public.post_attachments pa ON pa.post_id = vp.id
       WHERE vp.author_id = $2
         AND vp.deleted_at IS NULL
-        AND (vp.image_url IS NOT NULL OR (vp.image_urls IS NOT NULL AND cardinality(vp.image_urls) > 0))
-      ORDER BY vp.created_at DESC
+        AND pa.mime_type LIKE 'image/%'
+      ORDER BY vp.created_at DESC, pa.sort_order ASC
       LIMIT $3;
     `;
     const result = await db.query(sql, [viewerId, targetId, limit]);
 
-    // Flatten into individual photo objects so multi-image posts display properly in photo grids
-    const photos = [];
-    for (const post of result.rows) {
-      const urls = Array.isArray(post.image_urls) && post.image_urls.length > 0
-        ? post.image_urls
-        : (post.image_url ? [post.image_url] : []);
-      for (let i = 0; i < urls.length; i++) {
-        photos.push({
-          id: `${post.id}-img-${i}`,
-          post_id: post.id,
-          image_url: urls[i],
-          image_urls: [urls[i]],
-          created_at: post.created_at,
-        });
-        if (photos.length >= limit) break;
-      }
-      if (photos.length >= limit) break;
-    }
+    // Format individual photo objects for photo grids
+    const photos = result.rows.map((row, idx) => ({
+      id: `${row.post_id}-img-${row.sort_order ?? idx}`,
+      post_id: row.post_id,
+      image_url: row.storage_key,
+      image_urls: [row.storage_key],
+      created_at: row.created_at,
+    }));
 
     res.json(photos);
   } catch (error) {

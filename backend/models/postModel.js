@@ -38,15 +38,24 @@ function withDerivedImages(row) {
     (a) => a.mime_type && a.mime_type.startsWith("image/")
   );
   const derivedImageUrls = imageAttachments.map((a) => a.storage_key);
-
-  const storedUrls = Array.isArray(row.image_urls)
-    ? row.image_urls
-    : (row.image_url ? [row.image_url] : []);
-  const imageUrls = derivedImageUrls.length > 0 ? derivedImageUrls : storedUrls;
+  const imageUrls = derivedImageUrls;
   const imageUrl = imageUrls[0] || null;
+
+  const derivedType =
+    row.repository_type ||
+    (row.kind === "repository"
+      ? "project"
+      : row.kind === "announcement"
+      ? "announcement"
+      : imageUrls.length > 0
+      ? "image"
+      : row.preview_metadata
+      ? "website"
+      : "text");
 
   return {
     ...row,
+    type: row.type || derivedType,
     attachments,
     image_urls: imageUrls,
     image_url: imageUrl,
@@ -177,7 +186,6 @@ const getAllPosts = async ({
       p.id,
       p.author_id,
       p.content,
-      p.type,
       p.kind,
       p.repository_type,
       p.repository_category,
@@ -186,8 +194,6 @@ const getAllPosts = async ({
       p.technologies,
       p.github_url,
       p.pinned,
-      p.image_url,
-      p.image_urls,
       ${POST_ATTACHMENTS_SQL},
       ${POST_MENTIONS_SQL},
       p.preview_metadata,
@@ -245,7 +251,6 @@ const getPostById = async (id, options = {}) => {
       p.id,
       p.author_id,
       p.content,
-      p.type,
       p.kind,
       p.repository_type,
       p.repository_category,
@@ -254,8 +259,6 @@ const getPostById = async (id, options = {}) => {
       p.technologies,
       p.github_url,
       p.pinned,
-      p.image_url,
-      p.image_urls,
       ${POST_ATTACHMENTS_SQL},
       ${POST_MENTIONS_SQL},
       p.preview_metadata,
@@ -309,7 +312,6 @@ const buildPostSelect = (paramsLength, viewerId) => {
       p.id,
       p.author_id,
       p.content,
-      p.type,
       p.kind,
       p.repository_type,
       p.repository_category,
@@ -318,8 +320,6 @@ const buildPostSelect = (paramsLength, viewerId) => {
       p.technologies,
       p.github_url,
       p.pinned,
-      p.image_url,
-      p.image_urls,
       ${POST_ATTACHMENTS_SQL},
       ${POST_MENTIONS_SQL},
       p.preview_metadata,
@@ -365,7 +365,6 @@ const buildRepostSelect = (paramsLength, viewerId) => {
       p.id,
       p.author_id,
       p.content,
-      p.type,
       p.kind,
       p.repository_type,
       p.repository_category,
@@ -374,8 +373,6 @@ const buildRepostSelect = (paramsLength, viewerId) => {
       p.technologies,
       p.github_url,
       p.pinned,
-      p.image_url,
-      p.image_urls,
       ${POST_ATTACHMENTS_SQL},
       ${POST_MENTIONS_SQL},
       p.preview_metadata,
@@ -713,14 +710,13 @@ const createPost = async (postData) => {
     const author_course_id = profileResult.rows[0]?.course_id || null;
 
     const sql = `
-      INSERT INTO posts (author_id, content, type, kind, repository_type, repository_category, live_url, title, technologies, github_url, image_url, image_urls, preview_metadata, moderation_status, moderation_reason, visibility, allow_reposts, author_department_id, author_course_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      INSERT INTO posts (author_id, content, kind, repository_type, repository_category, live_url, title, technologies, github_url, preview_metadata, moderation_status, moderation_reason, visibility, allow_reposts, author_department_id, author_course_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *;
     `;
     const values = [
       author_id,
       content,
-      type || (kind === 'repository' ? repository_type || 'project' : 'text'),
       kind,
       repository_type,
       repository_category,
@@ -728,8 +724,6 @@ const createPost = async (postData) => {
       title || null,
       technologies || null,
       github_url || null,
-      effectiveImageUrl,
-      effectiveImageUrls,
       preview_metadata ? JSON.stringify(preview_metadata) : null,
       moderation_status,
       moderation_reason,
@@ -807,7 +801,6 @@ const createPost = async (postData) => {
 
 const POST_UPDATABLE_COLUMNS = [
   "content",
-  "type",
   "kind",
   "repository_type",
   "repository_category",
@@ -910,14 +903,6 @@ const updatePost = async (id, authorId, postData) => {
           persistedAttachments.push(attRes.rows[0]);
         }
       }
-      const imgAttachments = (candidateAttachments || []).filter(
-        (a) => a.mime_type && a.mime_type.startsWith("image/")
-      );
-      const imgKeys = imgAttachments.map((a) => a.storage_key);
-      await client.query(
-        `UPDATE posts SET image_urls = $1, image_url = $2 WHERE id = $3`,
-        [imgKeys, imgKeys[0] || null, id]
-      );
     } else {
       const existingAtt = await client.query(
         `SELECT id, storage_key, file_name, mime_type, size_bytes, sort_order
@@ -1127,7 +1112,6 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
       p.id,
       p.author_id,
       p.content,
-      p.type,
       p.kind,
       p.repository_type,
       p.repository_category,
@@ -1136,8 +1120,6 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
       p.technologies,
       p.github_url,
       p.pinned,
-      p.image_url,
-      p.image_urls,
       ${POST_ATTACHMENTS_SQL},
       ${POST_MENTIONS_SQL},
       p.visibility,
