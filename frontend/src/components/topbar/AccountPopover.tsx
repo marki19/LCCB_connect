@@ -3,7 +3,6 @@
  * Shows profile card, admin link (if admin), settings, sign out.
  */
 
-import { useState } from "react";
 import {
   View,
   Text,

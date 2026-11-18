@@ -13,9 +13,14 @@ process.env.DATABASE_URL =
 
 const testDbUrl = new URL(process.env.DATABASE_URL);
 const isLocalDb = ["localhost", "127.0.0.1", "0.0.0.0"].includes(testDbUrl.hostname);
+
+if (process.env.npm_lifecycle_event === "test:remote") {
+  process.env.ALLOW_REMOTE_TEST_DB = "true";
+}
+
 if (!isLocalDb && process.env.ALLOW_REMOTE_TEST_DB !== "true") {
   throw new Error(
-    `[env.helper] Refusing to run tests against remote database (${testDbUrl.host}). Set ALLOW_REMOTE_TEST_DB=true or provide a local DATABASE_URL.`
+    `[env.helper] Refusing to run tests against remote database (${testDbUrl.host}). Run 'npm run test:remote' or set ALLOW_REMOTE_TEST_DB=true or provide a local DATABASE_URL.`
   );
 }
 
