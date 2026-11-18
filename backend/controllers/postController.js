@@ -6,6 +6,7 @@ const notificationService = require("../services/notificationService");
 const previewService = require("../services/previewService");
 const { resolveAudience } = require("../services/visibilityService");
 const { signedStorageUrl } = require("../services/storageService");
+const mentionsService = require("../services/mentions");
 const { normalizeRole } = require("../utils/roles");
 
 const STAFF_ROLES = new Set(["faculty", "departmentadmin", "admin", "superadmin"]);
@@ -51,6 +52,9 @@ const getPosts = async (req, res, next) => {
       ...(dept.value ? { departmentId: dept.value } : {}),
       ...(course.value ? { courseId: course.value } : {}),
       ...(req.query.type ? { type: req.query.type } : {}),
+      ...(req.query.kind ? { kind: req.query.kind } : {}),
+      ...(req.query.repository_type ? { repository_type: req.query.repository_type } : {}),
+      ...(req.query.repository_category ? { repository_category: req.query.repository_category } : {}),
       visibility: req.query.visibility || null,
     });
     res.json(posts);
@@ -94,12 +98,52 @@ const createPost = async (req, res, next) => {
       return res.status(400).json({ error: resolved.error, invalid: resolved.invalid });
     }
 
-    const postPayload = resolved.body || req.body;
+    const postPayload = { ...(resolved.body || req.body) };
+
+    // Auto-enrich link preview if content contains a URL and preview was not supplied
+    if (!postPayload.github_url && !postPayload.preview_metadata && postPayload.content) {
+      const detectedUrl = previewService.extractFirstUrl(postPayload.content);
+      if (detectedUrl) {
+        try {
+          const preview = await previewService.fetchLinkPreview(detectedUrl);
+          if (preview) {
+            postPayload.github_url = preview.url || detectedUrl;
+            postPayload.preview_metadata = preview;
+          }
+        } catch {
+          // Non-blocking fallback
+        }
+      }
+    }
+
+    const mention_ids = Array.isArray(req.body.mention_ids) ? req.body.mention_ids : [];
+    const { allowed: allowedMentions, rejected: rejectedMentions } =
+      await mentionsService.resolveMentionIds(
+        req.user.id,
+        postPayload.content || "",
+        mention_ids,
+        { visibility: postPayload.visibility || "public" }
+      );
+    if (rejectedMentions.length > 0) {
+      return res.status(400).json({
+        error: "One or more mentioned users cannot be mentioned",
+        code: "mention_not_allowed",
+        rejected: rejectedMentions,
+      });
+    }
+
     const newPost = await postModel.createPost({
       ...postPayload,
-      type: postPayload.type || "post",
+      type:
+        postPayload.type ||
+        (postPayload.kind === "repository"
+          ? postPayload.repository_type || "project"
+          : postPayload.kind === "announcement"
+          ? "announcement"
+          : "text"),
       content: postPayload.content ?? null,
       author_id: req.user.id,
+      mentions: allowedMentions,
     });
     res.status(201).json(newPost);
 
@@ -136,9 +180,55 @@ const updatePost = async (req, res, next) => {
     if (resolved.error) {
       return res.status(400).json({ error: resolved.error, invalid: resolved.invalid });
     }
+    const updatePayload = { ...(resolved.body || req.body) };
+    if (updatePayload.content && !updatePayload.github_url && !updatePayload.preview_metadata) {
+      const detectedUrl = previewService.extractFirstUrl(updatePayload.content);
+      if (detectedUrl) {
+        try {
+          const preview = await previewService.fetchLinkPreview(detectedUrl);
+          if (preview) {
+            updatePayload.github_url = preview.url || detectedUrl;
+            updatePayload.preview_metadata = preview;
+          }
+        } catch {
+          // Non-blocking fallback
+        }
+      }
+    }
+
+    const mention_ids = req.body.mention_ids;
+    const tokens = mentionsService.extractTokens(updatePayload.content || "");
+    const explicitMentionIds = Array.isArray(mention_ids) ? mention_ids : [];
+
+    if (tokens.length > 0 || explicitMentionIds.length > 0) {
+      const existing = await postModel.getPostById(id, { includeHidden: true, userId: req.user.id });
+      if (!existing) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+      const targetContent = updatePayload.content !== undefined ? updatePayload.content : existing.content;
+      const targetVisibility = updatePayload.visibility !== undefined ? updatePayload.visibility : (existing.visibility || "public");
+
+      const { allowed, rejected } = await mentionsService.resolveMentionIds(
+        req.user.id,
+        targetContent || "",
+        explicitMentionIds,
+        { visibility: targetVisibility }
+      );
+      if (rejected.length > 0) {
+        return res.status(400).json({
+          error: "One or more mentioned users cannot be mentioned",
+          code: "mention_not_allowed",
+          rejected,
+        });
+      }
+      updatePayload.mentions = allowed;
+    } else if (mention_ids !== undefined) {
+      updatePayload.mentions = [];
+    }
+
     // Ownership is enforced in SQL (author_id = caller). An unauthorized caller
     // receives the same 404 as a missing post.
-    const updated = await postModel.updatePost(id, req.user.id, resolved.body);
+    const updated = await postModel.updatePost(id, req.user.id, updatePayload);
     if (!updated) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -198,7 +288,7 @@ const getComments = async (req, res, next) => {
 const addComment = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { content } = req.body;
+    const { content, mention_ids = [] } = req.body;
     const post = await postModel.getPostById(id, {
       includeHidden: false,
       userId: req.user?.id || null,
@@ -207,8 +297,23 @@ const addComment = async (req, res, next) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
+    const { allowed, rejected } = await mentionsService.resolveMentionIds(
+      req.user.id,
+      content || "",
+      Array.isArray(mention_ids) ? mention_ids : [],
+      { visibility: post.visibility || "public" }
+    );
+    if (rejected.length > 0) {
+      return res.status(400).json({
+        error: "One or more mentioned users cannot be mentioned",
+        code: "mention_not_allowed",
+        rejected,
+      });
+    }
+
     const comment = await postModel.addComment(id, req.user.id, content, {
       moderation_status: "approved",
+      mention_ids: allowed,
     });
     res.status(201).json(comment);
 
@@ -240,16 +345,46 @@ const addComment = async (req, res, next) => {
 const updateComment = async (req, res, next) => {
   try {
     const { id: postId, commentId } = req.params;
-    const { content } = req.body;
+    const { content, mention_ids } = req.body;
+
+    const tokens = mentionsService.extractTokens(content || "");
+    const explicitMentionIds = Array.isArray(mention_ids) ? mention_ids : [];
+
+    let allowedMentions = null;
+    if (tokens.length > 0 || explicitMentionIds.length > 0) {
+      const post = await postModel.getPostById(postId, {
+        includeHidden: false,
+        userId: req.user?.id || null,
+      });
+      if (!post) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
+      const { allowed, rejected } = await mentionsService.resolveMentionIds(
+        req.user.id,
+        content || "",
+        explicitMentionIds,
+        { visibility: post.visibility || "public" }
+      );
+      if (rejected.length > 0) {
+        return res.status(400).json({
+          error: "One or more mentioned users cannot be mentioned",
+          code: "mention_not_allowed",
+          rejected,
+        });
+      }
+      allowedMentions = allowed;
+    } else if (mention_ids !== undefined) {
+      allowedMentions = [];
+    }
+
     // Ownership is enforced in SQL (user_id = caller, and the comment must be
     // attached to the post in the path). An unauthorized or hidden comment
     // receives the same 404 as a missing one.
-    const updated = await postModel.updateCommentByAuthor(
-      commentId,
-      postId,
-      req.user.id,
-      content
-    );
+    const updated = allowedMentions !== null
+      ? await postModel.updateCommentByAuthor(commentId, postId, req.user.id, content, { mention_ids: allowedMentions })
+      : await postModel.updateCommentByAuthor(commentId, postId, req.user.id, content);
+
     if (!updated) {
       return res.status(404).json({ message: "Comment not found" });
     }
@@ -300,9 +435,13 @@ const deleteComment = async (req, res, next) => {
 
 const generatePreview = async (req, res, next) => {
   try {
-    const { url } = req.body;
+    let { url } = req.body;
     if (!url || typeof url !== "string") {
       return res.status(400).json({ error: "A valid URL string is required" });
+    }
+    url = url.trim();
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url)) {
+      url = `https://${url}`;
     }
     const preview = await previewService.fetchLinkPreview(url);
     res.json(preview);
@@ -334,9 +473,12 @@ const getPostFile = async (req, res, next) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
+    const imageAttachments = Array.isArray(post.attachments)
+      ? post.attachments.filter((a) => a.mime_type && a.mime_type.startsWith("image/"))
+      : [];
     const imageKeys = Array.isArray(post.image_urls) && post.image_urls.length > 0
       ? post.image_urls
-      : (post.image_url ? [post.image_url] : []);
+      : (post.image_url ? [post.image_url] : imageAttachments.map((a) => a.storage_key));
 
     if (imageKeys.length === 0) {
       return res.status(404).json({ message: "Post has no image" });

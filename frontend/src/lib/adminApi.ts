@@ -258,7 +258,7 @@ export function moderateContent(
   action: ModerationAction,
   reason: string
 ): Promise<void> {
-  const route = type === "thesis" ? "theses" : `${type}s`;
+  const route = type === "comment" ? "comments" : "posts";
   return apiJson(`/moderation/${route}/${encodeURIComponent(id)}`, {
     method: "POST",
     body: JSON.stringify({ action, reason: validateNonEmptyReason(reason, "moderateContent") }),
@@ -332,20 +332,5 @@ export function updateAnnouncement(
 export function deleteAnnouncement(id: string): Promise<void> {
   return apiJson(`/announcements/${encodeURIComponent(id)}`, {
     method: "DELETE",
-  });
-}
-
-export async function checkAdminSessionStatus(): Promise<{ isAdmin: boolean; valid: boolean; remainingMs: number }> {
-  try {
-    return await apiJson<{ isAdmin: boolean; valid: boolean; remainingMs: number }>("/auth/mfa/admin-session");
-  } catch {
-    return { isAdmin: false, valid: false, remainingMs: 0 };
-  }
-}
-
-export async function stepUpAdminMfa(code: string): Promise<{ ok: boolean; message: string }> {
-  return await apiJson<{ ok: boolean; message: string }>("/auth/mfa/step-up", {
-    method: "POST",
-    body: JSON.stringify({ code }),
   });
 }

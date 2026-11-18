@@ -61,7 +61,7 @@ describe("searchModel", () => {
     assert.equal(params[1], "react");
   });
 
-  it("searches theses strictly bounded by visible_theses", async () => {
+  it("searches theses strictly bounded by visible_posts", async () => {
     query.setImpl(async () => ({
       rows: [
         {
@@ -76,7 +76,8 @@ describe("searchModel", () => {
     assert.equal(results.length, 1);
 
     const [sql, params] = query.calls[0];
-    assert.match(sql, /FROM visible_theses\(\$1::text\) t/i);
+    assert.match(sql, /FROM visible_posts\(\$1::text\) p/i);
+    assert.match(sql, /repository_type = 'thesis'/i);
     assert.equal(params[0], VIEWER_ID);
     assert.equal(params[1], "agentic");
   });

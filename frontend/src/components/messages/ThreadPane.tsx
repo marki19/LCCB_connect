@@ -8,8 +8,9 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   ArrowLeft,
   Send,
@@ -28,6 +29,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { usePresence } from "../../contexts/PresenceContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import Modal from "../ui/Modal";
+import NoteBubble from "../profile/NoteBubble";
 import { useConversationRealtime, type PendingMessage } from "../../hooks/useConversationRealtime";
 import {
   acceptConversation,
@@ -76,6 +78,7 @@ function Ticks({ message }: { message: Message }) {
 }
 
 export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) {
+  const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user?.id ?? null;
   const { modeOf } = usePresence();
@@ -293,6 +296,8 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
       setConversation({ ...conversation, status: "active" });
     } catch {
       // Leave the banner so the user can retry.
+    } finally {
+      setAccepting(false);
     }
   };
 
@@ -411,36 +416,208 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
         {onBack ? (
           <IconButton icon={ArrowLeft} label="Back to inbox" onPress={onBack} />
         ) : null}
-        <Avatar
-          name={peerName}
-          avatarUrl={peer?.avatar_url}
-          size={40}
-          showPresence
-          mode={peerMode}
-        />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
-            numberOfLines={1}
-            style={{ ...TYPE.title, color: colors.ink, fontWeight: "700" }}
-          >
-            {peerName}
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={{
-              ...TYPE.caption,
-              color: peerTyping ? colors.brand : colors.inkFaint,
-              fontWeight: peerTyping ? "600" : "400",
-            }}
-          >
-            {subtitle}
-          </Text>
+        <Pressable
+          onPress={() => {
+            if (peer?.id) {
+              router.push(`/profile/${peer.id}`);
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${peerName}'s profile`}
+          style={({ pressed, hovered }: any) => [
+            {
+              flexDirection: "row",
+              alignItems: "center",
+              gap: SPACE.x3,
+              flex: 1,
+              minWidth: 0,
+              cursor: (peer?.id ? "pointer" : "auto") as any,
+              opacity: pressed ? 0.8 : hovered ? 0.92 : 1,
+            },
+          ]}
+        >
+          <View style={{ position: "relative", alignItems: "center" }}>
+            {peer?.note ? (
+              <View style={{ position: "absolute", top: -20, zIndex: 10 }}>
+                <NoteBubble note={peer.note} variant="compact" />
+              </View>
+            ) : null}
+            <Avatar
+              name={peerName}
+              avatarUrl={peer?.avatar_url}
+              size={40}
+              showPresence
+              mode={peerMode}
+            />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              style={{ ...TYPE.title, color: colors.ink, fontWeight: "700" }}
+            >
+              {peerName}
+            </Text>
+            {peer?.note && !peerTyping ? (
+              <Text
+                numberOfLines={1}
+                style={{
+                  ...TYPE.caption,
+                  color: colors.brand,
+                  fontWeight: "600",
+                }}
+              >
+                💭 "{peer.note}"
+              </Text>
+            ) : (
+              <Text
+                numberOfLines={1}
+                style={{
+                  ...TYPE.caption,
+                  color: peerTyping ? colors.brand : colors.inkFaint,
+                  fontWeight: peerTyping ? "600" : "400",
+                }}
+              >
+                {subtitle}
+              </Text>
+            )}
+          </View>
+        </Pressable>
+        <View style={{ position: "relative", zIndex: 100 }}>
+          <IconButton
+            icon={MoreVertical}
+            label="Conversation safety options"
+            onPress={() => setSafetyOpen((v) => !v)}
+          />
+
+          {safetyOpen && (
+            <>
+              {/* Outside-click trap */}
+              <Pressable
+                onPress={() => setSafetyOpen(false)}
+                style={[
+                  StyleSheet.absoluteFill,
+                  Platform.OS === "web"
+                    ? ({ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 } as any)
+                    : { zIndex: 1000 },
+                ]}
+                accessibilityLabel="Close options"
+              />
+
+              {/* Popover anchored right under the three-dots */}
+              <View
+                style={{
+                  position: "absolute",
+                  top: 42,
+                  right: 0,
+                  width: 220,
+                  backgroundColor: colors.surface,
+                  borderRadius: RADIUS.lg,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  paddingVertical: SPACE.x1,
+                  zIndex: 1001,
+                  shadowColor: colors.shadow,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 12,
+                  elevation: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    ...TYPE.micro,
+                    color: colors.inkFaint,
+                    paddingHorizontal: SPACE.x3,
+                    paddingTop: SPACE.x2,
+                    paddingBottom: SPACE.x1,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Safety
+                </Text>
+
+                <Pressable
+                  onPress={() => openReport(latestReportable)}
+                  disabled={!latestReportable}
+                  accessibilityRole="button"
+                  accessibilityLabel="Report message"
+                  style={({ pressed, hovered }: any) => [
+                    {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: SPACE.x3,
+                      paddingHorizontal: SPACE.x3,
+                      paddingVertical: 10,
+                      backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                      opacity: latestReportable ? 1 : 0.5,
+                      cursor: (latestReportable ? "pointer" : "default") as any,
+                    },
+                  ]}
+                >
+                  <Flag size={16} color={colors.accentText} />
+                  <Text style={{ ...TYPE.bodyStrong, fontSize: 13.5, color: colors.ink }}>
+                    Report message
+                  </Text>
+                </Pressable>
+
+                {blocked ? (
+                  <Pressable
+                    onPress={() => void handleUnblock()}
+                    disabled={actionBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Unblock ${peerName}`}
+                    style={({ pressed, hovered }: any) => [
+                      {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: SPACE.x3,
+                        paddingHorizontal: SPACE.x3,
+                        paddingVertical: 10,
+                        backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                        cursor: "pointer" as any,
+                      },
+                    ]}
+                  >
+                    <ShieldCheck size={16} color={colors.jadeText} />
+                    <Text style={{ ...TYPE.bodyStrong, fontSize: 13.5, color: colors.ink }}>
+                      Unblock {peerName}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={confirmBlock}
+                    disabled={actionBusy || !peer}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Block ${peerName}`}
+                    style={({ pressed, hovered }: any) => [
+                      {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: SPACE.x3,
+                        paddingHorizontal: SPACE.x3,
+                        paddingVertical: 10,
+                        backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                        cursor: "pointer" as any,
+                      },
+                    ]}
+                  >
+                    <Ban size={16} color={colors.destructive} />
+                    <Text
+                      style={{
+                        ...TYPE.bodyStrong,
+                        fontSize: 13.5,
+                        color: colors.destructiveText,
+                      }}
+                    >
+                      Block {peerName}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </>
+          )}
         </View>
-        <IconButton
-          icon={MoreVertical}
-          label="Conversation safety options"
-          onPress={() => setSafetyOpen(true)}
-        />
       </View>
 
       {/* Blocked banner */}
@@ -652,109 +829,6 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
         </View>
       </KeyboardAvoidingView>
 
-      {/* Safety actions (report / block) */}
-      <Modal
-        visible={safetyOpen}
-        onClose={() => setSafetyOpen(false)}
-        maxWidth={480}
-        accessibilityLabel="Safety actions"
-        sheetOnMobile
-      >
-        <View style={{ paddingVertical: SPACE.x2 }}>
-          <Text
-            style={{
-              ...TYPE.micro,
-              color: colors.inkFaint,
-              paddingHorizontal: SPACE.x5,
-              paddingTop: SPACE.x3,
-              paddingBottom: SPACE.x2,
-            }}
-          >
-            Safety
-          </Text>
-          <Pressable
-            onPress={() => openReport(latestReportable)}
-            disabled={!latestReportable}
-            accessibilityRole="button"
-            accessibilityLabel="Report message"
-            onFocus={() => {}}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              gap: SPACE.x3,
-              paddingHorizontal: SPACE.x5,
-              minHeight: 48,
-              backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-              opacity: latestReportable ? 1 : 0.5,
-            })}
-          >
-            <Flag size={18} color={colors.accentText} />
-            <Text style={{ ...TYPE.bodyStrong, fontWeight: "600", color: colors.ink }}>
-              Report message
-            </Text>
-          </Pressable>
-          {blocked ? (
-            <Pressable
-              onPress={() => void handleUnblock()}
-              disabled={actionBusy}
-              accessibilityRole="button"
-              accessibilityLabel={`Unblock ${peerName}`}
-              onFocus={() => {}}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: SPACE.x3,
-                paddingHorizontal: SPACE.x5,
-                minHeight: 48,
-                backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-              })}
-            >
-              <ShieldCheck size={18} color={colors.jadeText} />
-              <Text style={{ ...TYPE.bodyStrong, fontWeight: "600", color: colors.ink }}>
-                Unblock {peerName}
-              </Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={confirmBlock}
-              disabled={actionBusy || !peer}
-              accessibilityRole="button"
-              accessibilityLabel={`Block ${peerName}`}
-              onFocus={() => {}}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: SPACE.x3,
-                paddingHorizontal: SPACE.x5,
-                minHeight: 48,
-                backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-              })}
-            >
-              <Ban size={18} color={colors.destructive} />
-              <Text style={{ ...TYPE.bodyStrong, fontWeight: "600", color: colors.destructiveText }}>
-                Block {peerName}
-              </Text>
-            </Pressable>
-          )}
-          <View style={{ height: 1, backgroundColor: colors.divider, marginTop: SPACE.x2 }} />
-          <Pressable
-            onPress={() => setSafetyOpen(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-            onFocus={() => {}}
-            style={({ pressed }) => ({
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 48,
-              backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-            })}
-          >
-            <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.inkSoft }}>
-              Cancel
-            </Text>
-          </Pressable>
-        </View>
-      </Modal>
 
       {/* Report reason */}
       <Modal

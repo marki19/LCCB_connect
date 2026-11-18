@@ -114,12 +114,33 @@ describe("POST /api/auth/google", () => {
     assert.equal(res.body.user.role, "user");
   });
 
-  it("rejects non-@lccbonline.edu.ph email domains with 403", async () => {
+  it("allows non-@lccbonline.edu.ph email domains (e.g. gmail.com) as role: user", async () => {
     mockAdminClient.auth.getUser = async () => ({
       data: {
         user: {
           id: "google-uid-3",
           email: "outsider@gmail.com",
+          user_metadata: { name: "External User" },
+        },
+      },
+      error: null,
+    });
+
+    const res = await request(app)
+      .post("/api/auth/google")
+      .send({ access_token: "some-token" });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.user.email, "outsider@gmail.com");
+    assert.equal(res.body.user.role, "user");
+  });
+
+  it("rejects Google accounts without an email with 400", async () => {
+    mockAdminClient.auth.getUser = async () => ({
+      data: {
+        user: {
+          id: "google-uid-no-email",
+          email: null,
           user_metadata: {},
         },
       },
@@ -130,7 +151,7 @@ describe("POST /api/auth/google", () => {
       .post("/api/auth/google")
       .send({ access_token: "some-token" });
 
-    assert.equal(res.status, 403);
-    assert.equal(res.body.code, "domain_not_allowed");
+    assert.equal(res.status, 400);
+    assert.equal(res.body.code, "missing_email");
   });
 });

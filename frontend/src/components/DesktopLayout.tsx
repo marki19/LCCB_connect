@@ -167,7 +167,7 @@ export default function DesktopLayout({
       <DesktopTopBar unreadCount={unreadCount} />
 
       {/* LEFT SIDEBAR - Facebook Style Shortcuts Rail */}
-      {showLeftSidebar && !isMessages && (
+      {showLeftSidebar && (
         <View style={{ marginTop: TOP_BAR_HEIGHT }}>
           {leftSidebar ? leftSidebar : <DesktopLeftRail />}
         </View>
@@ -198,7 +198,7 @@ export default function DesktopLayout({
       </View>
 
       {/* RIGHT SIDEBAR - Contacts Rail on Wide Desktop */}
-      {width >= 1200 && !isGuest && !isMessages && (
+      {width >= 1200 && !isGuest && (
         <View style={{ marginTop: TOP_BAR_HEIGHT }}>
           <DesktopContactsRail peers={activePeers} />
         </View>

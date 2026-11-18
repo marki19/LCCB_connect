@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   year_level TEXT,
   role TEXT DEFAULT 'user' CHECK (
     role IN (
-      'user', 'student', 'faculty', 'departmentAdmin', 'department_admin',
+      'guest', 'user', 'student', 'faculty', 'departmentAdmin', 'department_admin',
       'admin', 'superadmin', 'superAdmin'
     )
   ),
@@ -94,6 +94,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   course_id UUID REFERENCES public.courses(id) ON DELETE SET NULL,
   message_policy TEXT NOT NULL DEFAULT 'department'
     CHECK (message_policy IN ('everyone', 'department', 'selected', 'nobody')),
+  contact_scope TEXT NOT NULL DEFAULT 'organization'
+    CHECK (contact_scope IN ('public', 'organization', 'private')),
   profile_completed BOOLEAN NOT NULL DEFAULT FALSE,
   profile_banner_dismissed BOOLEAN NOT NULL DEFAULT FALSE,
   last_seen_at TIMESTAMPTZ,
@@ -108,9 +110,13 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   bounced_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT profiles_suspension_dates_check CHECK (suspended_until IS NULL OR suspended_at IS NOT NULL)
+  CONSTRAINT profiles_suspension_dates_check CHECK (suspended_until IS NULL OR suspended_at IS NOT NULL),
+  CONSTRAINT chk_profiles_username_format CHECK (username IS NULL OR username ~ '^[a-z0-9._]{3,30}$')
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_username_lower
+  ON public.profiles (lower(username))
+  WHERE username IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_student_id
   ON public.profiles (upper(student_id))
   WHERE student_id IS NOT NULL;

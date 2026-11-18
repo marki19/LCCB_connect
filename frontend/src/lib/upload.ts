@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { apiFetchMultipart } from './api';
+import { fileKeyFromUrl } from './files';
 
 /**
  * Per-bucket upload policy. Anything not listed here (or not matching the
@@ -16,9 +17,12 @@ const BUCKET_MIME_TYPES: Record<string, string[]> = {
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/msword',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-powerpoint',
   ],
   videos: ['video/mp4', 'video/webm'],
   snaps: ['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'],
+  covers: ['image/png', 'image/jpeg', 'image/webp'],
 };
 
 /**
@@ -29,13 +33,46 @@ const BUCKET_MIME_TYPES: Record<string, string[]> = {
 export const MAX_UPLOAD_BYTES = {
   /** Profile pictures. */
   avatar: 2 * 1024 * 1024, // 2 MB
+  /** Profile cover banners. */
+  cover: 5 * 1024 * 1024, // 5 MB
   /** Post images. */
   image: 5 * 1024 * 1024, // 5 MB
   /** Thesis manuscripts (free-plan ceiling). */
   pdf: 50 * 1024 * 1024, // 50 MB
+  /** Repository / project documents (.pdf, .docx, .doc, .pptx, .ppt) */
+  document: 25 * 1024 * 1024, // 25 MB
   /** Quick Snap media (image/video). */
   snap: 25 * 1024 * 1024, // 25 MB
 } as const;
+
+export function extensionForMime(mime: string): string {
+  const m = (mime || '').toLowerCase().trim();
+  switch (m) {
+    case 'image/png':
+      return '.png';
+    case 'image/webp':
+      return '.webp';
+    case 'image/jpeg':
+    case 'image/jpg':
+      return '.jpg';
+    case 'application/pdf':
+      return '.pdf';
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+      return '.docx';
+    case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+      return '.pptx';
+    case 'application/msword':
+      return '.doc';
+    case 'application/vnd.ms-powerpoint':
+      return '.ppt';
+    case 'video/mp4':
+      return '.mp4';
+    case 'video/webm':
+      return '.webm';
+    default:
+      return '.jpg';
+  }
+}
 
 function isAllowedMime(bucketName: string, contentType: string): boolean {
   const allowed = BUCKET_MIME_TYPES[bucketName];
@@ -125,10 +162,39 @@ export async function pickImage(options: { allowsEditing?: boolean } = {}): Prom
   });
   if (!result.canceled && result.assets && result.assets.length > 0) {
     const asset = result.assets[0];
+    const mime = asset.mimeType || 'image/jpeg';
+    const ext = mime === 'image/png' ? '.png' : mime === 'image/webp' ? '.webp' : '.jpg';
     return {
       uri: asset.uri,
-      type: 'image/jpeg',
-      name: asset.fileName || `image-${Date.now()}.jpg`,
+      type: mime,
+      name: asset.fileName || `image-${Date.now()}${ext}`,
+      width: asset.width,
+      height: asset.height,
+    };
+  }
+  return null;
+}
+
+/**
+ * Prompts the user to pick an image for a profile cover banner (16:9 aspect crop).
+ */
+export async function pickCoverImage(): Promise<PickedImage | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [16, 9],
+    quality: 0.85,
+  });
+  if (!result.canceled && result.assets && result.assets.length > 0) {
+    const asset = result.assets[0];
+    const uri = asset.uri;
+    const mime = asset.mimeType || 'image/jpeg';
+    const ext = mime === 'image/png' ? '.png' : mime === 'image/webp' ? '.webp' : '.jpg';
+    const fileName = asset.fileName || uri.split('/').pop() || `cover-${Date.now()}${ext}`;
+    return {
+      uri,
+      type: mime,
+      name: fileName,
       width: asset.width,
       height: asset.height,
     };
@@ -147,12 +213,49 @@ export async function pickMultipleImages(options: { selectionLimit?: number } = 
     quality: 0.8,
   });
   if (!result.canceled && result.assets && result.assets.length > 0) {
-    return result.assets.map((asset, index) => ({
+    return result.assets.map((asset, index) => {
+      const mime = asset.mimeType || 'image/jpeg';
+      const ext = mime === 'image/png' ? '.png' : mime === 'image/webp' ? '.webp' : '.jpg';
+      return {
+        uri: asset.uri,
+        type: mime,
+        name: asset.fileName || `image-${Date.now()}-${index}${ext}`,
+        width: asset.width,
+        height: asset.height,
+      };
+    });
+  }
+  return [];
+}
+
+export interface PickedDocument {
+  uri: string;
+  type: string;
+  name: string;
+  size?: number;
+}
+
+/**
+ * Prompts the user to pick one or more documents (PDF, DOCX, DOC, PPTX, PPT).
+ */
+export async function pickDocuments(): Promise<PickedDocument[]> {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/msword',
+      'application/vnd.ms-powerpoint',
+    ],
+    multiple: true,
+    copyToCacheDirectory: true,
+  });
+  if (!result.canceled && result.assets && result.assets.length > 0) {
+    return result.assets.map((asset) => ({
       uri: asset.uri,
-      type: 'image/jpeg',
-      name: asset.fileName || `image-${Date.now()}-${index}.jpg`,
-      width: asset.width,
-      height: asset.height,
+      type: asset.mimeType || 'application/octet-stream',
+      name: asset.name,
+      size: asset.size,
     }));
   }
   return [];
@@ -223,26 +326,66 @@ export async function uploadToStorage(
   maxBytes: number = MAX_UPLOAD_BYTES.image,
   sizeBytes: number | null = null
 ): Promise<{ key: string } | null> {
-  const category = bucket === 'assets' ? 'posts' : bucket;
-  const error = validateUpload(category, contentType, sizeBytes ?? 0, maxBytes);
-  if (error) {
-    console.error("[upload] validation failed:", error);
-    return null;
+  if (!uri || typeof uri !== 'string') return null;
+
+  // If already an existing canonical storage key or storage URL, don't re-upload
+  const existingKey = fileKeyFromUrl(uri);
+  if (existingKey) {
+    return { key: existingKey };
   }
+
+  const category = bucket === 'assets' ? 'posts' : bucket;
 
   try {
     const formData = new FormData();
-    const fileName = path ? path.split('/').pop() || 'upload.jpg' : `upload-${Date.now()}.jpg`;
 
     if (Platform.OS === 'web') {
       const res = await fetch(uri);
       const blob = await res.blob();
+      const detectedMime = blob.type || contentType;
+
+      const error = validateUpload(category, detectedMime, blob.size || sizeBytes || 0, maxBytes);
+      if (error) {
+        console.error("[upload] validation failed:", error);
+        return null;
+      }
+
+      const ext = extensionForMime(detectedMime);
+
+      let fileName = path ? path.split('/').pop() || `upload${ext}` : `upload-${Date.now()}${ext}`;
+      if (!fileName.includes('.')) fileName = `${fileName}${ext}`;
+      else if (fileName.endsWith('.jpg') && ext !== '.jpg') fileName = fileName.replace(/\.jpg$/, ext);
+
       formData.append('file', blob, fileName);
     } else {
+      const uriLower = uri.split('?')[0].toLowerCase();
+      let detectedType = contentType;
+      if (uriLower.endsWith('.png')) detectedType = 'image/png';
+      else if (uriLower.endsWith('.webp')) detectedType = 'image/webp';
+      else if (uriLower.endsWith('.pdf')) detectedType = 'application/pdf';
+      else if (uriLower.endsWith('.docx')) detectedType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      else if (uriLower.endsWith('.pptx')) detectedType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      else if (uriLower.endsWith('.doc')) detectedType = 'application/msword';
+      else if (uriLower.endsWith('.ppt')) detectedType = 'application/vnd.ms-powerpoint';
+      else if (uriLower.endsWith('.mp4')) detectedType = 'video/mp4';
+      else if (uriLower.endsWith('.webm')) detectedType = 'video/webm';
+
+      const ext = extensionForMime(detectedType);
+
+      const error = validateUpload(category, detectedType, sizeBytes ?? 0, maxBytes);
+      if (error) {
+        console.error("[upload] validation failed:", error);
+        return null;
+      }
+
+      let fileName = path ? path.split('/').pop() || `upload${ext}` : `upload-${Date.now()}${ext}`;
+      if (!fileName.includes('.')) fileName = `${fileName}${ext}`;
+      else if (fileName.endsWith('.jpg') && ext !== '.jpg') fileName = fileName.replace(/\.jpg$/, ext);
+
       formData.append('file', {
         uri,
         name: fileName,
-        type: contentType,
+        type: detectedType,
       } as any);
     }
 

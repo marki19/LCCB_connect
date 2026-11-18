@@ -8,8 +8,10 @@ const assert = require("node:assert/strict");
 
 const {
   createPostSchema,
-  createThesisSchema,
+  attachmentSchema,
   createProfileSchema,
+  updateProfileSchema,
+  markReadSchema,
 } = require("../validation");
 
 describe("post image keys", () => {
@@ -48,35 +50,53 @@ describe("post image keys", () => {
     });
     assert.equal(parsed.success, false);
   });
+
+  it("accepts link preview metadata with siteName and site_name", () => {
+    const parsed = createPostSchema.safeParse({
+      content: "Check this website",
+      type: "website",
+      preview_metadata: {
+        title: "LCCB Connect",
+        description: "Official student hub",
+        image: "https://example.com/thumb.jpg",
+        siteName: "LCCB Connect App",
+        url: "https://example.com",
+      },
+    });
+    assert.equal(parsed.success, true);
+  });
+
+  it("accepts markReadSchema without upto_seq defaulting to 0", () => {
+    const parsed = markReadSchema.safeParse({});
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.data.upto_seq, 0);
+  });
 });
 
-describe("thesis pdf keys", () => {
+describe("attachment document keys", () => {
   it("accepts a storage object key", () => {
-    const parsed = createThesisSchema.safeParse({
-      title: "t",
-      abstract: "a",
-      category: "c",
-      pdf_url: "1/2.pdf",
+    const parsed = attachmentSchema.safeParse({
+      storage_key: "theses/1/2.pdf",
+      file_name: "manuscript.pdf",
+      mime_type: "application/pdf",
     });
     assert.equal(parsed.success, true);
   });
 
   it("rejects an external pdf URL", () => {
-    const parsed = createThesisSchema.safeParse({
-      title: "t",
-      abstract: "a",
-      category: "c",
-      pdf_url: "https://w3.org/dummy.pdf",
+    const parsed = attachmentSchema.safeParse({
+      storage_key: "https://w3.org/dummy.pdf",
+      file_name: "dummy.pdf",
+      mime_type: "application/pdf",
     });
     assert.equal(parsed.success, false);
   });
 
   it("rejects a nested path with traversal", () => {
-    const parsed = createThesisSchema.safeParse({
-      title: "t",
-      abstract: "a",
-      category: "c",
-      pdf_url: "1/../2.pdf",
+    const parsed = attachmentSchema.safeParse({
+      storage_key: "theses/1/../2.pdf",
+      file_name: "bad.pdf",
+      mime_type: "application/pdf",
     });
     assert.equal(parsed.success, false);
   });
@@ -100,18 +120,54 @@ describe("avatar keys", () => {
   });
 });
 
+describe("profile contact and personal details schema", () => {
+  it("accepts contact_email, facebook_url, instagram_url, twitter_url, relationship_status, and gender", () => {
+    const parsed = updateProfileSchema.safeParse({
+      contact_email: "test@example.com",
+      facebook_url: "https://facebook.com/test",
+      instagram_url: "@test_ig",
+      twitter_url: "https://x.com/test_x",
+      relationship_status: "Single",
+      gender: "Male",
+    });
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.data.contact_email, "test@example.com");
+    assert.equal(parsed.data.facebook_url, "https://facebook.com/test");
+    assert.equal(parsed.data.instagram_url, "@test_ig");
+    assert.equal(parsed.data.twitter_url, "https://x.com/test_x");
+    assert.equal(parsed.data.relationship_status, "Single");
+    assert.equal(parsed.data.gender, "Male");
+  });
+
+  it("accepts null or empty strings to clear fields", () => {
+    const parsed = updateProfileSchema.safeParse({
+      contact_email: null,
+      facebook_url: null,
+      instagram_url: null,
+      twitter_url: null,
+      relationship_status: null,
+      gender: null,
+    });
+    assert.equal(parsed.success, true);
+  });
+
+  it("rejects unknown properties due to strict schema", () => {
+    const parsed = updateProfileSchema.safeParse({
+      unknown_field: "foo",
+    });
+    assert.equal(parsed.success, false);
+  });
+});
+
 // The visibility rule itself lives in Postgres (visible_posts/visible_theses).
 // These cover the request contract: only the four levels are accepted, and
 // `custom` must name at least one friend.
 describe("visibility contract", () => {
   const post = (extra) => createPostSchema.safeParse({ content: "x", ...extra });
-  const thesis = (extra) =>
-    createThesisSchema.safeParse({ title: "t", abstract: "a", category: "c", pdf_url: "1/2.pdf", ...extra });
 
   it("accepts each of the five levels", () => {
     for (const visibility of ["public", "department", "friends", "private"]) {
       assert.equal(post({ visibility }).success, true, visibility);
-      assert.equal(thesis({ visibility }).success, true, visibility);
     }
     assert.equal(
       post({ visibility: "custom", audience: ["11111111-1111-4111-8111-111111111111"] }).success,
@@ -127,18 +183,15 @@ describe("visibility contract", () => {
 
   it("rejects an unknown level", () => {
     assert.equal(post({ visibility: "squad" }).success, false);
-    assert.equal(thesis({ visibility: "squad" }).success, false);
   });
 
   it("rejects custom without an audience", () => {
     assert.equal(post({ visibility: "custom" }).success, false);
     assert.equal(post({ visibility: "custom", audience: [] }).success, false);
-    assert.equal(thesis({ visibility: "custom", audience: [] }).success, false);
   });
 
   it("rejects a non-uuid audience member", () => {
     assert.equal(post({ visibility: "custom", audience: ["not-a-uuid"] }).success, false);
-    assert.equal(thesis({ visibility: "custom", audience: ["not-a-uuid"] }).success, false);
   });
 });
 
@@ -198,5 +251,26 @@ describe("validate middleware admin leniency", () => {
       .send({ content: "hello", composerMode: "expanded" });
 
     assert.equal(res.status, 400);
+  });
+});
+
+describe("repository and attachment validation", () => {
+  it("repository_type is required exactly when kind is repository", () => {
+    assert.equal(createPostSchema.safeParse({ kind: "repository", content: "x" }).success, false);
+    assert.equal(createPostSchema.safeParse({ kind: "repository", repository_type: "project", content: "x" }).success, true);
+    assert.equal(createPostSchema.safeParse({ kind: "discussion", repository_type: "project", content: "x" }).success, false);
+  });
+
+  it("a thesis needs at least one document attachment", () => {
+    assert.equal(createPostSchema.safeParse({
+      kind: "repository", repository_type: "thesis", title: "T", content: "c", attachments: []
+    }).success, false);
+  });
+
+  it("an attachment key must match its mime family", () => {
+    assert.equal(createPostSchema.safeParse({
+      kind: "repository", repository_type: "project", content: "c",
+      attachments: [{ storage_key: "avatars/abc.png", file_name: "a.png", mime_type: "image/png", size_bytes: 1 }]
+    }).success, false);
   });
 });

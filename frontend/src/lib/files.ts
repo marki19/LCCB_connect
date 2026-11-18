@@ -39,20 +39,24 @@ export function resolveFileUrls(
     .filter((url): url is string => Boolean(url));
 }
 
+const STORAGE_CATEGORIES = "avatars|posts|covers|theses|documents|videos|snaps|assets";
+const STORAGE_KEY_RE = new RegExp(`^(${STORAGE_CATEGORIES})\\/[A-Za-z0-9._-]+$`, "i");
+const API_FILE_RE = new RegExp(`\\/api\\/files\\/((${STORAGE_CATEGORIES})\\/[A-Za-z0-9._-]+)(?:\\?.*)?$`, "i");
+
 /**
- * Extracts a content-addressed storage key from a `/api/files/:category/:filename` URL.
- * e.g. 'https://.../api/files/posts/abc.jpg' -> 'posts/abc.jpg'
- * e.g. '/api/files/avatars/xyz.jpg' -> 'avatars/xyz.jpg'
- * Returns undefined for non-storage URLs (Google avatars, link previews, data URIs).
+ * Extracts a content-addressed storage key from a `/api/files/:category/:filename` URL or raw key.
+ * e.g. 'https://.../api/files/posts/9f83ab24e10c71a39bd5.jpg' -> 'posts/9f83ab24e10c71a39bd5.jpg'
+ * e.g. 'avatars/9f83ab24e10c71a39bd5.jpg' -> 'avatars/9f83ab24e10c71a39bd5.jpg'
+ * Returns undefined for non-storage URLs (Google avatars, link previews, local relative/picker paths).
  */
 export function fileKeyFromUrl(uri: string | null | undefined): string | undefined {
   if (!uri || typeof uri !== "string") return undefined;
-  const match = uri.match(/\/api\/files\/([a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+)(?:\?.*)?$/);
+  const match = uri.match(API_FILE_RE);
   if (match) {
     return match[1];
   }
-  // If the uri is already a raw storage key like "posts/abc.jpg" or "avatars/xyz.jpg":
-  if (/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(uri)) {
+  // If the uri is already a canonical storage key:
+  if (STORAGE_KEY_RE.test(uri)) {
     return uri;
   }
   return undefined;

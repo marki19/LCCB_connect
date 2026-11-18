@@ -69,7 +69,11 @@ function isPrivateIp(ip) {
 }
 
 async function resolveSafeTarget(targetUrl) {
-  const parsed = new URL(targetUrl);
+  let urlStr = (targetUrl || "").trim();
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(urlStr)) {
+    urlStr = `https://${urlStr}`;
+  }
+  const parsed = new URL(urlStr);
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error("Only http and https protocols are supported");
   }
@@ -127,26 +131,45 @@ function extractMeta(html, targetUrl) {
   let title =
     getTag(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
     getTag(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i) ||
+    getTag(/<meta[^>]+name=["']twitter:title["'][^>]+content=["']([^"']+)["']/i) ||
+    getTag(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:title["']/i) ||
     getTag(/<title[^>]*>([^<]+)<\/title>/i);
 
   let description =
     getTag(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
     getTag(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i) ||
+    getTag(/<meta[^>]+name=["']twitter:description["'][^>]+content=["']([^"']+)["']/i) ||
+    getTag(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:description["']/i) ||
     getTag(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i) ||
     getTag(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
 
   let image =
     getTag(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
-    getTag(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+    getTag(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i) ||
+    getTag(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ||
+    getTag(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i) ||
+    getTag(/<link[^>]+rel=["'](?:apple-touch-icon|icon|shortcut icon)["'][^>]+href=["']([^"']+)["']/i) ||
+    getTag(/<link[^>]+href=["']([^"']+)["'][^>]+rel=["'](?:apple-touch-icon|icon|shortcut icon)["']/i);
 
   let siteName =
     getTag(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i) ||
-    getTag(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:site_name["']/i);
+    getTag(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:site_name["']/i) ||
+    getTag(/<meta[^>]+name=["']application-name["'][^>]+content=["']([^"']+)["']/i);
 
   // Normalize relative image URLs
   if (image && !image.startsWith("http://") && !image.startsWith("https://")) {
     try {
       image = new URL(image, targetUrl).href;
+    } catch {
+      image = null;
+    }
+  }
+
+  // Fallback to favicon if no image or icon was found
+  if (!image) {
+    try {
+      const parsed = new URL(targetUrl);
+      image = `${parsed.protocol}//${parsed.host}/favicon.ico`;
     } catch {
       image = null;
     }
@@ -252,7 +275,36 @@ async function fetchLinkPreview(rawUrl, redirectCount = 0) {
   });
 }
 
+/**
+ * Extracts the first valid URL from raw text (e.g. pasted into a post body).
+ */
+function extractFirstUrl(text) {
+  if (!text || typeof text !== "string") return null;
+
+  const tokens = text.split(/\s+/);
+  for (const rawToken of tokens) {
+    const token = rawToken.replace(/^[<(\[{'"]+/, "").replace(/[>,:;"')\]}.]+$/, "");
+    if (!token || token.includes("@")) continue;
+
+    if (/^https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/.*)?$/i.test(token)) {
+      return token;
+    }
+    if (
+      /^[a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/.*)?$/i.test(token) ||
+      /^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\/.*)?$/i.test(token)
+    ) {
+      if (!token.includes("/") && /\.(jpg|jpeg|png|gif|webp|svg|pdf|docx?|txt)$/i.test(token)) {
+        continue;
+      }
+      return token;
+    }
+  }
+
+  return null;
+}
+
 module.exports = {
   fetchLinkPreview,
   validateUrlSafety,
+  extractFirstUrl,
 };

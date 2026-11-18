@@ -1,5 +1,6 @@
 const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
+const { withDerivedImages, POST_ATTACHMENTS_SQL } = require("./postModel");
 
 /**
  * Saved Post Data Model
@@ -85,12 +86,14 @@ const listSavedPosts = async (userId, { limit = DEFAULT_LIMIT, cursor = null } =
       p.id,
       p.author_id,
       p.content,
-      p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
-      p.image_url,
-      p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
       p.preview_metadata,
       p.moderation_status,
       p.moderation_reason,
@@ -130,7 +133,7 @@ const listSavedPosts = async (userId, { limit = DEFAULT_LIMIT, cursor = null } =
   `;
 
   const result = await db.query(sql, params);
-  const rows = result.rows;
+  const rows = result.rows.map(withDerivedImages);
   const nextCursor = rows.length === limit ? rows[rows.length - 1].saved_at : null;
 
   return {

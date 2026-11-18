@@ -33,18 +33,35 @@ import {
   Users,
   UserCheck,
   Building2,
+  FileText,
 } from "lucide-react-native";
 import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { useToast } from "../src/contexts/ToastContext";
-import { uploadToStorage, pickImage, pickMultipleImages } from "../src/lib/upload";
+import {
+  uploadToStorage,
+  pickImage,
+  pickMultipleImages,
+  pickDocuments,
+  MAX_UPLOAD_BYTES,
+} from "../src/lib/upload";
 import { apiFetch, updatePost } from "../src/lib/api";
-import { fetchLinkPreview, LinkPreviewData } from "../src/lib/linkPreview";
+import { resolveFileUrl } from "../src/lib/files";
+import {
+  fetchLinkPreview,
+  LinkPreviewData,
+  extractFirstUrl,
+  normalizeWebsiteUrl,
+} from "../src/lib/linkPreview";
 import { safeBack } from "../src/lib/navigation";
 import VisibilityPicker from "../src/components/VisibilityPicker";
 import Avatar from "../src/components/Avatar";
-import type { ContentVisibility } from "../src/types";
+import RepositoryFields from "../src/components/composer/RepositoryFields";
+import AttachmentList, { ComposerAttachmentItem } from "../src/components/composer/AttachmentList";
+import MentionInput from "../src/components/mentions/MentionInput";
+import type { MentionToken } from "../src/lib/mentions";
+import type { ContentVisibility, PostKind, RepositoryType } from "../src/types";
 import { focusRing, RADIUS, SPACE, TYPE } from "../src/lib/tokens";
 import { badgeTone, type BadgeTone } from "../src/components/admin/StatusBadge";
 import Button, { IconButton } from "../src/components/ui/Button";
@@ -67,25 +84,68 @@ export default function CreatePostModal() {
   const {
     postId,
     type,
+    kind: paramKind,
     editTitle,
     editContent,
     editType,
+    editKind,
+    editRepositoryType,
+    editRepositoryCategory,
+    editLiveUrl,
     editTech,
     editUrl,
     editVisibility,
+    editImages,
+    editAttachments,
+    editMentions,
   } = useLocalSearchParams<{
     postId?: string;
     type?: string;
+    kind?: string;
     editTitle?: string;
     editContent?: string;
     editType?: string;
+    editKind?: string;
+    editRepositoryType?: string;
+    editRepositoryCategory?: string;
+    editLiveUrl?: string;
     editTech?: string;
     editUrl?: string;
     editVisibility?: string;
+    editImages?: string;
+    editAttachments?: string;
+    editMentions?: string;
   }>();
 
   const isEditing = !!postId;
   const initialType = ((editType || type) as PostType) || "text";
+
+  const isRepositoryParam =
+    editKind === "repository" ||
+    paramKind === "repository" ||
+    editType === "project" ||
+    editType === "capstone" ||
+    editType === "thesis" ||
+    type === "project" ||
+    type === "capstone" ||
+    type === "thesis";
+
+  const [postKind, setPostKind] = useState<PostKind>(
+    isRepositoryParam ? "repository" : "discussion"
+  );
+
+  const initialRepoType = (
+    editRepositoryType ||
+    (["project", "capstone", "thesis"].includes(editType || "") ? editType : null) ||
+    (["project", "capstone", "thesis"].includes(type || "") ? type : null) ||
+    "project"
+  ) as RepositoryType;
+
+  const [repositoryType, setRepositoryType] = useState<RepositoryType>(initialRepoType);
+  const [repositoryCategory, setRepositoryCategory] = useState<string>(
+    editRepositoryCategory || "Capstone"
+  );
+  const [liveUrl, setLiveUrl] = useState<string>(editLiveUrl || "");
 
   const [visibility, setVisibility] = useState<ContentVisibility>(
     (editVisibility as ContentVisibility) || "public"
@@ -100,11 +160,51 @@ export default function CreatePostModal() {
   const [technologies, setTechnologies] = useState(isEditing ? editTech ?? "" : "");
   const [githubUrl, setGithubUrl] = useState(isEditing ? editUrl ?? "" : "");
   const [allowReposts, setAllowReposts] = useState(true);
-  const [imageUris, setImageUris] = useState<string[]>([]);
+  const [imageUris, setImageUris] = useState<string[]>(() => {
+    if (editImages) {
+      try {
+        const parsed = JSON.parse(editImages);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((item): item is string => typeof item === "string" && Boolean(item));
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [docList, setDocList] = useState<ComposerAttachmentItem[]>(() => {
+    if (editAttachments) {
+      try {
+        const parsed = JSON.parse(editAttachments);
+        if (Array.isArray(parsed)) {
+          return parsed.map((att: any) => ({
+            id: att.id,
+            uri: att.url || att.storage_key,
+            name: att.file_name,
+            mime: att.mime_type,
+            size: att.size_bytes,
+            category: "documents" as const,
+            key: att.storage_key,
+          }));
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [mentions, setMentions] = useState<MentionToken[]>(() => {
+    if (editMentions) {
+      try {
+        const parsed = JSON.parse(editMentions);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return [];
+  });
   const [isPublishing, setIsPublishing] = useState(false);
   const [urlFocused, setUrlFocused] = useState(false);
 
   const [previewData, setPreviewData] = useState<LinkPreviewData | null>(null);
+  const [previewDismissed, setPreviewDismissed] = useState(false);
+  const [lastDetectedUrl, setLastDetectedUrl] = useState<string | null>(null);
   const [fetchingPreview, setFetchingPreview] = useState(false);
   const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
 
@@ -121,13 +221,18 @@ export default function CreatePostModal() {
   }, []);
 
   const loadPreview = async (urlToFetch: string) => {
-    if (!urlToFetch || !urlToFetch.startsWith("http")) return;
+    const clean = (urlToFetch || "").trim();
+    if (!clean) return;
+    const normalized = normalizeWebsiteUrl(clean);
+    if (!normalized || !normalized.includes(".")) return;
     try {
       setFetchingPreview(true);
-      const data = await fetchLinkPreview(urlToFetch);
-      setPreviewData(data);
-      if (data?.title && !title) {
-        setTitle(data.title);
+      const data = await fetchLinkPreview(normalized);
+      if (data) {
+        setPreviewData(data);
+        if (data.title && !title) {
+          setTitle(data.title);
+        }
       }
     } catch {
       // Non-blocking
@@ -135,6 +240,45 @@ export default function CreatePostModal() {
       setFetchingPreview(false);
     }
   };
+
+  const handleContentChange = (text: string) => {
+    setContent(text);
+    if (!githubUrl.trim()) {
+      const detected = extractFirstUrl(text);
+      if (detected) {
+        if (detected !== lastDetectedUrl) {
+          setLastDetectedUrl(detected);
+          setPreviewDismissed(false);
+          loadPreview(detected);
+        }
+      } else if (lastDetectedUrl) {
+        setLastDetectedUrl(null);
+        setPreviewData(null);
+      }
+    }
+  };
+
+  const handleGithubUrlChange = (val: string) => {
+    setGithubUrl(val);
+    const clean = val.trim();
+    if (clean.includes(".") && clean.length >= 4) {
+      setPreviewDismissed(false);
+      loadPreview(clean);
+    } else if (!clean && !extractFirstUrl(content)) {
+      setPreviewData(null);
+    }
+  };
+
+  // Auto-detect link on mount if editing or initial content exists
+  useEffect(() => {
+    if (content && !previewData && !githubUrl) {
+      const detected = extractFirstUrl(content);
+      if (detected) {
+        setLastDetectedUrl(detected);
+        loadPreview(detected);
+      }
+    }
+  }, []);
 
   const handlePickImage = async () => {
     if (imageUris.length >= 4) {
@@ -153,17 +297,40 @@ export default function CreatePostModal() {
     setImageUris((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handlePickDocument = async () => {
+    if (docList.length >= 10) {
+      Alert.alert("Limit Reached", "You can attach a maximum of 10 documents per post.");
+      return;
+    }
+    const results = await pickDocuments();
+    if (results && results.length > 0) {
+      const remaining = 10 - docList.length;
+      const nextDocs: ComposerAttachmentItem[] = [
+        ...docList,
+        ...results.slice(0, remaining).map((doc) => ({
+          uri: doc.uri,
+          name: doc.name,
+          mime: doc.type,
+          size: doc.size,
+          category: "documents" as const,
+        })),
+      ];
+      setDocList(nextDocs);
+    }
+  };
+
+  const handleRemoveDocument = (index: number) => {
+    setDocList((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const trimmedContent = content.trim();
   const trimmedTitle = title.trim();
+  const detectedUrlInContent = extractFirstUrl(trimmedContent);
 
   const isPostValid = Boolean(
-    (postType === "text" && trimmedContent.length > 0) ||
-      (postType === "image" && imageUris.length > 0) ||
-      (postType === "project" && (trimmedTitle.length > 0 || trimmedContent.length > 0)) ||
-      (postType === "capstone" && (trimmedTitle.length > 0 || trimmedContent.length > 0)) ||
-      (postType === "website" && (githubUrl.trim().length > 0 || previewData || trimmedContent.length > 0)) ||
-      trimmedContent.length > 0 ||
-      imageUris.length > 0
+    postKind === "repository"
+      ? trimmedTitle.length > 0 && (repositoryType !== "thesis" || docList.length > 0)
+      : (trimmedContent.length > 0 || imageUris.length > 0 || docList.length > 0 || previewData)
   );
 
   const handlePublish = async () => {
@@ -195,43 +362,132 @@ export default function CreatePostModal() {
       return;
     }
 
+    if (postKind === "repository" && repositoryType === "thesis" && docList.length === 0) {
+      Alert.alert("Document Required", "A thesis submission requires at least one document (PDF, Word, or presentation).");
+      return;
+    }
+    if (postKind === "repository" && !trimmedTitle) {
+      Alert.alert("Title Required", "Please provide a title for your repository.");
+      return;
+    }
+
     try {
       setIsPublishing(true);
 
       let finalImageKeys: string[] = [];
       if (imageUris.length > 0) {
         const uploadResults = await Promise.all(
-          imageUris.map((uri) => uploadToStorage(uri))
+          imageUris.map((uri) => uploadToStorage(uri, "posts"))
         );
         finalImageKeys = uploadResults.map((r) => r?.key).filter(Boolean) as string[];
+        if (finalImageKeys.length < imageUris.length) {
+          Alert.alert(
+            "Upload Incomplete",
+            "One or more images could not be uploaded. Please verify the image file format and try again."
+          );
+          setIsPublishing(false);
+          return;
+        }
       }
       const finalImageKey = finalImageKeys.length > 0 ? finalImageKeys[0] : null;
 
-      let finalPreviewMetadata = previewData;
-      if (postType === "website" && githubUrl && !finalPreviewMetadata) {
+      const uploadedDocs: Array<{
+        key: string;
+        name: string;
+        mime: string;
+        size?: number | null;
+      }> = [];
+      for (const doc of docList) {
+        if (doc.key) {
+          uploadedDocs.push({
+            key: doc.key,
+            name: doc.name,
+            mime: doc.mime,
+            size: doc.size,
+          });
+        } else {
+          const res = await uploadToStorage(
+            doc.uri,
+            "documents",
+            doc.name,
+            doc.mime,
+            MAX_UPLOAD_BYTES.document,
+            doc.size
+          );
+          if (!res?.key) {
+            Alert.alert("Upload Incomplete", `Could not upload document "${doc.name}".`);
+            setIsPublishing(false);
+            return;
+          }
+          uploadedDocs.push({
+            key: res.key,
+            name: doc.name,
+            mime: doc.mime,
+            size: doc.size,
+          });
+        }
+      }
+
+      const attachmentsPayload = [
+        ...finalImageKeys.map((key, i) => ({
+          storage_key: key,
+          file_name: `image-${i + 1}.${key.split('.').pop() || 'jpg'}`,
+          mime_type: key.endsWith('.png') ? 'image/png' : key.endsWith('.webp') ? 'image/webp' : 'image/jpeg',
+          sort_order: i,
+        })),
+        ...uploadedDocs.map((doc, i) => ({
+          storage_key: doc.key,
+          file_name: doc.name,
+          mime_type: doc.mime,
+          size_bytes: doc.size ?? null,
+          sort_order: finalImageKeys.length + i,
+        })),
+      ];
+
+      const detectedInContent = extractFirstUrl(trimmedContent);
+      const rawUrl = githubUrl.trim() || (!previewDismissed ? detectedInContent : null);
+      const normalizedUrl = rawUrl ? normalizeWebsiteUrl(rawUrl) : null;
+      let finalPreviewMetadata = previewDismissed ? null : previewData;
+      if (normalizedUrl && !finalPreviewMetadata && !previewDismissed) {
         try {
-          finalPreviewMetadata = await fetchLinkPreview(githubUrl);
+          finalPreviewMetadata = await fetchLinkPreview(normalizedUrl);
         } catch {
           // Non-blocking
         }
       }
+      const effectivePostType =
+        postKind === "repository"
+          ? (repositoryType === "thesis" ? "thesis" : repositoryType === "capstone" ? "capstone" : "project")
+          : (postType === "text" && (finalPreviewMetadata || normalizedUrl) ? "website" : postType);
 
       const techArray = technologies ? technologies.split(",").map((t) => t.trim()).filter(Boolean) : null;
       const visibilityPayload = visibilityTouched
         ? { visibility, ...(visibility === "custom" ? { audience } : {}) }
         : {};
 
+      const mentionIds = mentions.map((m) => m.user_id || m.id).filter(Boolean) as string[];
+
       if (isEditing && postId) {
         // Edit mode — PUT /posts/:id
         await updatePost(postId, {
+          kind: postKind,
+          repository_type: postKind === "repository" ? repositoryType : null,
+          repository_category:
+            postKind === "repository" && (repositoryType === "capstone" || repositoryType === "thesis")
+              ? repositoryCategory
+              : null,
+          live_url: postKind === "repository" && repositoryType === "project" ? (liveUrl.trim() || null) : null,
+          attachments: attachmentsPayload,
+          mention_ids: mentionIds,
           content: trimmedContent || undefined,
-          type: postType,
+          type: effectivePostType,
           title: trimmedTitle || finalPreviewMetadata?.title || null,
           technologies: techArray,
-          github_url: githubUrl.trim() || null,
+          github_url: postKind === "repository" && githubUrl.trim() ? githubUrl.trim() : normalizedUrl,
           preview_metadata: finalPreviewMetadata || null,
           allow_reposts: allowReposts,
-          ...(finalImageKeys.length > 0 ? { image_url: finalImageKey, image_urls: finalImageKeys } : {}),
+          image_url: finalImageKey,
+          image_urls: finalImageKeys,
           ...visibilityPayload,
         });
       } else {
@@ -239,11 +495,20 @@ export default function CreatePostModal() {
         const res = await apiFetch(`/posts`, {
           method: "POST",
           body: JSON.stringify({
+            kind: postKind,
+            repository_type: postKind === "repository" ? repositoryType : null,
+            repository_category:
+              postKind === "repository" && (repositoryType === "capstone" || repositoryType === "thesis")
+                ? repositoryCategory
+                : null,
+            live_url: postKind === "repository" && repositoryType === "project" ? (liveUrl.trim() || null) : null,
+            attachments: attachmentsPayload,
+            mention_ids: mentionIds,
             content: trimmedContent || null,
-            type: postType,
+            type: effectivePostType,
             title: trimmedTitle || finalPreviewMetadata?.title || null,
             technologies: techArray,
-            github_url: githubUrl.trim() || null,
+            github_url: postKind === "repository" && githubUrl.trim() ? githubUrl.trim() : normalizedUrl,
             image_url: finalImageKey,
             image_urls: finalImageKeys,
             preview_metadata: finalPreviewMetadata || null,
@@ -255,20 +520,19 @@ export default function CreatePostModal() {
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          if (errData.code === "PROFILE_INCOMPLETE" || errData.code === "VERIFICATION_REQUIRED") {
+          const errMsg = errData.message || errData.error || "Failed to create post";
+          if (errData.code === "PROFILE_INCOMPLETE" || errData.code === "VERIFICATION_REQUIRED" || errData.code === "not_verified") {
             if (Platform.OS === "web") {
               const proceed = typeof window !== "undefined" && window.confirm
                 ? window.confirm(
-                    (errData.message || "Complete your profile before creating posts.") +
-                      "\n\nGo to profile setup now?"
+                    errMsg + "\n\nGo to profile setup now?"
                   )
                 : false;
               if (proceed) router.push("/onboarding");
             } else {
               Alert.alert(
                 "Complete Your Profile",
-                errData.message ||
-                  "Complete your profile (full name, student ID, department, and course) before creating posts.",
+                errMsg,
                 [
                   { text: "Cancel", style: "cancel" },
                   {
@@ -280,7 +544,7 @@ export default function CreatePostModal() {
             }
             return;
           }
-          throw new Error(errData.message || "Failed to create post");
+          throw new Error(errMsg);
         }
       }
 
@@ -303,15 +567,62 @@ export default function CreatePostModal() {
 
   // ── COMPOSER BODY (Shared between desktop and mobile modal) ────────────────
   const renderComposerContent = () => (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, position: "relative" }}>
+      {/* Invisible backdrop when visibility picker is open to close on tap outside */}
+      {showVisibilityPicker && (
+        <Pressable
+          onPress={() => setShowVisibilityPicker(false)}
+          style={[StyleSheet.absoluteFill, { zIndex: 90 }]}
+        />
+      )}
+
+      {/* Two-door switch: Discussion | Repository */}
+      <View style={{ flexDirection: "row", paddingHorizontal: 20, paddingTop: 10, paddingBottom: 6, gap: 10 }}>
+        <TouchableOpacity
+          onPress={() => setPostKind("discussion")}
+          style={{
+            flex: 1,
+            paddingVertical: 9,
+            borderRadius: 10,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            backgroundColor: postKind === "discussion" ? colors.actionSurface : colors.surfaceSunken,
+            borderColor: postKind === "discussion" ? colors.action : colors.border,
+          }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "700", color: postKind === "discussion" ? colors.action : colors.textSecondary }}>
+            Discussion
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setPostKind("repository")}
+          style={{
+            flex: 1,
+            paddingVertical: 9,
+            borderRadius: 10,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            backgroundColor: postKind === "repository" ? colors.actionSurface : colors.surfaceSunken,
+            borderColor: postKind === "repository" ? colors.action : colors.border,
+          }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "700", color: postKind === "repository" ? colors.action : colors.textSecondary }}>
+            Repository
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* User Row (Facebook style) */}
-      <View style={styles.modalUserRow}>
+      <View style={[styles.modalUserRow, { position: "relative", zIndex: 100 }]}>
         <Avatar
           name={profile?.full_name ?? profile?.username}
           avatarUrl={profile?.avatar_url}
           size={44}
         />
-        <View style={{ marginLeft: 12, flex: 1 }}>
+        <View style={{ marginLeft: 12, flex: 1, position: "relative" }}>
           <Text
             style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}
             numberOfLines={1}
@@ -326,7 +637,7 @@ export default function CreatePostModal() {
               styles.modalAudiencePill,
               {
                 backgroundColor: colors.surfaceSunken,
-                borderColor: colors.border,
+                borderColor: showVisibilityPicker ? colors.action : colors.border,
               },
             ]}
             accessibilityRole="button"
@@ -356,22 +667,52 @@ export default function CreatePostModal() {
             </Text>
             <ChevronDown size={13} color={colors.textSecondary} />
           </TouchableOpacity>
+
+          {/* Small Floating Dropdown Popover */}
+          {showVisibilityPicker && (
+            <Animated.View
+              entering={FadeIn.duration(150)}
+              exiting={FadeOut.duration(100)}
+              style={{
+                position: "absolute",
+                top: 48,
+                left: 0,
+                width: 200,
+                zIndex: 1000,
+                backgroundColor: isDark ? colors.surfaceSunken : "#FFFFFF",
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: 4,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.25,
+                shadowRadius: 10,
+                elevation: 10,
+              }}
+            >
+              <VisibilityPicker
+                visibility={visibility}
+                audience={audience}
+                compact
+                onChange={(v, a) => {
+                  setVisibility(v);
+                  setAudience(a);
+                  setVisibilityTouched(true);
+                }}
+                onClose={() => setShowVisibilityPicker(false)}
+              />
+            </Animated.View>
+          )}
         </View>
 
-        {postType !== "text" && (
+        {postKind === "repository" && (
           <View
             style={{
               paddingHorizontal: 10,
               paddingVertical: 4,
               borderRadius: 8,
-              backgroundColor:
-                postType === "project"
-                  ? "rgba(99, 102, 241, 0.15)"
-                  : postType === "capstone"
-                  ? "rgba(245, 158, 11, 0.15)"
-                  : postType === "website"
-                  ? "rgba(2, 132, 199, 0.15)"
-                  : "rgba(139, 92, 246, 0.15)",
+              backgroundColor: "rgba(99, 102, 241, 0.15)",
             }}
           >
             <Text
@@ -380,17 +721,10 @@ export default function CreatePostModal() {
                 fontWeight: "700",
                 textTransform: "uppercase",
                 letterSpacing: 0.5,
-                color:
-                  postType === "project"
-                    ? "#6366F1"
-                    : postType === "capstone"
-                    ? "#F59E0B"
-                    : postType === "website"
-                    ? "#0284C7"
-                    : "#8B5CF6",
+                color: "#6366F1",
               }}
             >
-              {postType}
+              {repositoryType}
             </Text>
           </View>
         )}
@@ -401,329 +735,37 @@ export default function CreatePostModal() {
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Visibility Picker Dropdown */}
-        {showVisibilityPicker && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(150)}
-            layout={Layout.springify()}
-            style={{
-              padding: 14,
-              borderRadius: 12,
-              backgroundColor: colors.surfaceSunken,
-              marginBottom: 14,
-              borderWidth: 1,
-              borderColor: colors.border,
+        {/* Repository Fields */}
+        {postKind === "repository" && (
+          <RepositoryFields
+            repositoryType={repositoryType}
+            values={{
+              title,
+              technologies,
+              githubUrl,
+              liveUrl,
+              category: repositoryCategory,
             }}
-          >
-            <VisibilityPicker
-              visibility={visibility}
-              audience={audience}
-              onChange={(v, a) => {
-                setVisibility(v);
-                setAudience(a);
-                setVisibilityTouched(true);
-              }}
-            />
-            <TouchableOpacity
-              onPress={() => setShowVisibilityPicker(false)}
-              style={{
-                alignSelf: "flex-end",
-                paddingVertical: 4,
-                paddingHorizontal: 12,
-                borderRadius: 6,
-                backgroundColor: colors.actionSurface,
-              }}
-            >
-              <Text style={{ fontSize: 12, fontWeight: "700", color: colors.action }}>Done</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
-
-        {/* Project Showcase Extra Fields */}
-        {postType === "project" && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            style={{
-              padding: 14,
-              borderRadius: 12,
-              backgroundColor: colors.surfaceSunken,
-              marginBottom: 14,
-              borderWidth: 1,
-              borderColor: "#6366F1",
+            onChange={(fields) => {
+              if (fields.title !== undefined) setTitle(fields.title);
+              if (fields.technologies !== undefined) setTechnologies(fields.technologies);
+              if (fields.githubUrl !== undefined) setGithubUrl(fields.githubUrl);
+              if (fields.liveUrl !== undefined) setLiveUrl(fields.liveUrl);
+              if (fields.category !== undefined) setRepositoryCategory(fields.category);
             }}
-          >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <FolderOpen size={16} color="#6366F1" style={{ marginRight: 6 }} />
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#6366F1" }}>
-                  Showcase Project
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setPostType("text")}>
-                <X size={16} color={colors.textTertiary} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              placeholder="Project Name / Title"
-              placeholderTextColor={colors.textTertiary}
-              value={title}
-              onChangeText={setTitle}
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: colors.textPrimary,
-                backgroundColor: colors.surface,
-                padding: 10,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: colors.border,
-                marginBottom: 8,
-                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
-              }}
-            />
-            <TextInput
-              placeholder="Tech Stack (e.g. React Native, Node.js, PostgreSQL)"
-              placeholderTextColor={colors.textTertiary}
-              value={technologies}
-              onChangeText={setTechnologies}
-              style={{
-                fontSize: 13,
-                color: colors.textPrimary,
-                backgroundColor: colors.surface,
-                padding: 10,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: colors.border,
-                marginBottom: 8,
-                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
-              }}
-            />
-            <TextInput
-              placeholder="GitHub / Repo URL (https://github.com/...)"
-              placeholderTextColor={colors.textTertiary}
-              value={githubUrl}
-              onChangeText={setGithubUrl}
-              autoCapitalize="none"
-              keyboardType="url"
-              style={{
-                fontSize: 13,
-                color: colors.textPrimary,
-                backgroundColor: colors.surface,
-                padding: 10,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: colors.border,
-                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
-              }}
-            />
-          </Animated.View>
+            onTypeChange={(t) => setRepositoryType(t)}
+          />
         )}
-
-        {/* Capstone Extra Fields */}
-        {postType === "capstone" && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            style={{
-              padding: 14,
-              borderRadius: 12,
-              backgroundColor: colors.surfaceSunken,
-              marginBottom: 14,
-              borderWidth: 1,
-              borderColor: "#F59E0B",
-            }}
-          >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <GraduationCap size={16} color="#F59E0B" style={{ marginRight: 6 }} />
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#F59E0B" }}>
-                  Publish Capstone
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setPostType("text")}>
-                <X size={16} color={colors.textTertiary} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              placeholder="Capstone Title"
-              placeholderTextColor={colors.textTertiary}
-              value={title}
-              onChangeText={setTitle}
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: colors.textPrimary,
-                backgroundColor: colors.surface,
-                padding: 10,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: colors.border,
-                marginBottom: 8,
-                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
-              }}
-            />
-            <TextInput
-              placeholder="Technologies & Keywords (e.g. AI, Mobile, Cloud)"
-              placeholderTextColor={colors.textTertiary}
-              value={technologies}
-              onChangeText={setTechnologies}
-              style={{
-                fontSize: 13,
-                color: colors.textPrimary,
-                backgroundColor: colors.surface,
-                padding: 10,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: colors.border,
-                ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
-              }}
-            />
-          </Animated.View>
-        )}
-
-        {/* Website / Live Web App Fields */}
-        {postType === "website" && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            style={{
-              padding: 14,
-              borderRadius: 12,
-              backgroundColor: colors.surfaceSunken,
-              marginBottom: 14,
-              borderWidth: 1,
-              borderColor: "#0284C7",
-            }}
-          >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Globe size={16} color="#0284C7" style={{ marginRight: 6 }} />
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#0284C7" }}>
-                  Live Web App
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => setPostType("text")}>
-                <X size={16} color={colors.textTertiary} />
-              </TouchableOpacity>
-            </View>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <TextInput
-                placeholder="https://your-project.vercel.app"
-                placeholderTextColor={colors.textTertiary}
-                value={githubUrl}
-                onChangeText={(val) => {
-                  setGithubUrl(val);
-                  if (val.startsWith("http")) loadPreview(val);
-                }}
-                autoCapitalize="none"
-                keyboardType="url"
-                style={{
-                  flex: 1,
-                  fontSize: 13,
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surface,
-                  padding: 10,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
-                }}
-              />
-              <TouchableOpacity
-                onPress={() => loadPreview(githubUrl)}
-                disabled={fetchingPreview}
-                style={{
-                  backgroundColor: colors.action,
-                  paddingHorizontal: 12,
-                  justifyContent: "center",
-                  borderRadius: 8,
-                }}
-              >
-                {fetchingPreview ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <RefreshCw size={15} color="#FFFFFF" />
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {previewData && (
-              <View
-                style={{
-                  marginTop: 10,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  overflow: "hidden",
-                  backgroundColor: colors.surface,
-                }}
-              >
-                {previewData.image && (
-                  <AppImage source={{ uri: previewData.image }} style={{ width: "100%", height: 120 }} contentFit="cover" />
-                )}
-                <View style={{ padding: 10 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }} numberOfLines={1}>
-                    {previewData.title || title || "Preview"}
-                  </Text>
-                  {previewData.description && (
-                    <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }} numberOfLines={2}>
-                      {previewData.description}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            )}
-          </Animated.View>
-        )}
-
-        {/* Profile Incomplete Banner */}
-        {(profile?.role === "student" || profile?.role === "user") && !profile?.profile_completed && profile?.verification_status !== "verified" && (
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              backgroundColor: colors.surfaceSunken,
-              borderRadius: 10,
-              padding: 10,
-              marginVertical: 10,
-              borderWidth: 1,
-              borderColor: colors.action,
-            }}
-          >
-            <View style={{ flex: 1, paddingRight: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}>
-                Profile Incomplete
-              </Text>
-              <Text style={{ fontSize: 11.5, color: colors.textSecondary, marginTop: 2 }}>
-                Complete your student ID, department, and course to publish posts.
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => router.push("/onboarding")}
-              style={{
-                backgroundColor: colors.action,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 6,
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Complete profile"
-            >
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#FFFFFF" }}>
-                Complete
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* Main Textarea */}
-        <TextInput
-          placeholder={`What's on your mind, ${firstName}?`}
+        <MentionInput
+          placeholder={postKind === "discussion" ? `What's on your mind, ${firstName}?` : "Write a caption…"}
           placeholderTextColor={colors.textTertiary}
           multiline
           autoFocus={!isEditing}
           value={content}
-          onChangeText={setContent}
+          onChangeText={handleContentChange}
+          onMentionsChange={setMentions}
+          knownMentions={mentions}
           style={{
             minHeight: 120,
             fontSize: content.length > 80 ? 16 : 18,
@@ -734,6 +776,93 @@ export default function CreatePostModal() {
             ...(Platform.OS === "web" ? ({ outlineStyle: "none", borderWidth: 0 } as any) : {}),
           }}
         />
+
+        {/* Document Attachments */}
+        <AttachmentList attachments={docList} onRemove={handleRemoveDocument} />
+
+        {/* Rich Link Preview Card (Facebook-style inline preview) */}
+        {previewData && !previewDismissed && (
+          <View
+            style={{
+              marginVertical: 10,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              overflow: "hidden",
+              backgroundColor: colors.surfaceSunken,
+              position: "relative",
+            }}
+          >
+            {/* Dismiss preview button */}
+            <TouchableOpacity
+              onPress={() => {
+                setPreviewDismissed(true);
+                setPreviewData(null);
+              }}
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                zIndex: 10,
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: "rgba(0, 0, 0, 0.65)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Remove link preview"
+            >
+              <X size={16} color="#FFFFFF" strokeWidth={2.5} />
+            </TouchableOpacity>
+
+            {previewData.image ? (
+              <AppImage
+                source={{ uri: previewData.image }}
+                style={{ width: "100%", height: 160 }}
+                contentFit="cover"
+              />
+            ) : (
+              <View
+                style={{
+                  height: 70,
+                  backgroundColor: colors.surface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  gap: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                  paddingHorizontal: 12,
+                }}
+              >
+                <Globe size={22} color="#0284C7" />
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }} numberOfLines={1}>
+                  {previewData.siteName || previewData.url}
+                </Text>
+              </View>
+            )}
+            <View style={{ padding: 12 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                <Globe size={13} color={colors.action} />
+                <Text numberOfLines={1} style={{ fontSize: 11.5, color: colors.action, fontWeight: "700", marginLeft: 6, flex: 1 }}>
+                  {previewData.siteName || previewData.url}
+                </Text>
+              </View>
+              {previewData.title ? (
+                <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: "700", color: colors.textPrimary, marginBottom: 2 }}>
+                  {previewData.title}
+                </Text>
+              ) : null}
+              {previewData.description ? (
+                <Text numberOfLines={2} style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }}>
+                  {previewData.description}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        )}
 
         {/* Attached Images Preview Grid */}
         {imageUris.length > 0 && (
@@ -764,7 +893,7 @@ export default function CreatePostModal() {
                     }}
                   >
                     <Image
-                      source={{ uri }}
+                      source={{ uri: resolveFileUrl(uri) || uri }}
                       style={{ width: "100%", height: "100%" }}
                       resizeMode="cover"
                     />
@@ -877,34 +1006,14 @@ export default function CreatePostModal() {
               <ImageIcon size={22} color="#10B981" />
             </TouchableOpacity>
 
-            {/* Showcase Project */}
+            {/* Document */}
             <TouchableOpacity
-              onPress={() => setPostType((p) => (p === "project" ? "text" : "project"))}
+              onPress={handlePickDocument}
               style={{ padding: 6, borderRadius: 20 }}
               accessibilityRole="button"
-              accessibilityLabel="Showcase Project"
+              accessibilityLabel="Add Document"
             >
-              <FolderOpen size={22} color="#6366F1" />
-            </TouchableOpacity>
-
-            {/* Publish Capstone */}
-            <TouchableOpacity
-              onPress={() => setPostType((p) => (p === "capstone" ? "text" : "capstone"))}
-              style={{ padding: 6, borderRadius: 20 }}
-              accessibilityRole="button"
-              accessibilityLabel="Publish Capstone"
-            >
-              <GraduationCap size={22} color="#F59E0B" />
-            </TouchableOpacity>
-
-            {/* Live Web Link */}
-            <TouchableOpacity
-              onPress={() => setPostType((p) => (p === "website" ? "text" : "website"))}
-              style={{ padding: 6, borderRadius: 20 }}
-              accessibilityRole="button"
-              accessibilityLabel="Add Web Link"
-            >
-              <Globe size={22} color="#0284C7" />
+              <FileText size={22} color="#0284C7" />
             </TouchableOpacity>
           </View>
         </View>

@@ -1,0 +1,30 @@
+# Todo: Visitor (Guest) Accounts (Workstream A)
+
+- [ ] **Phase A1: Database Constraint & Role Definitions**
+  - [ ] Create migration `backend/migrations/053_guest_role.sql`
+  - [ ] Add `'guest'` to `ROLES` and `ALL_ROLES` in `backend/utils/roles.js`
+  - [ ] Update `backend/init-schema.sql` with `'guest'` in `profiles.role`
+  - [ ] Run migration `npm --prefix backend run db:migrate`
+- [ ] **Phase A2: Visitor Signup Endpoints**
+  - [ ] Add visitor schemas in `backend/validation/index.js`
+  - [ ] Implement visitor signup controllers in `backend/controllers/authController.js`
+  - [ ] Mount visitor auth routes in `backend/routes/authRouter.js`
+- [ ] **Phase A3: Read-Only Guard & Protected Mounts**
+  - [ ] Add `blockGuestWrites` middleware in `backend/middleware/auth.js`
+  - [ ] Refactor `backend/app.js` with `mountProtected`
+- [ ] **Phase A4: Thesis PDF Gating (D1)**
+  - [ ] Update `backend/controllers/thesisController.js` and `publicController.js` to strip `pdf_url` for guests
+  - [ ] Update frontend thesis display cards for gated preview
+- [ ] **Phase A5: Contact Privacy Scope (D2)**
+  - [ ] Wire `contact_scope` in `backend/models/userModel.js:getPublicProfile` and `updateUser`
+  - [ ] Update `backend/validation/index.js` with `contact_scope`
+  - [ ] Add contact visibility toggle in frontend profile edit
+- [ ] **Phase A6: Frontend Routing & Audience Clarity**
+  - [ ] Update `frontend/src/app/onboarding.tsx` to bypass verification for guests
+  - [ ] Update `frontend/src/app/register.tsx` and `login.tsx` for visitor access
+- [ ] **Phase A7: Verification & Testing**
+  - [ ] Write integration tests in `backend/tests/guest-accounts.test.js`
+  - [ ] Run backend tests (`npm --prefix backend test`)
+  - [ ] Run typecheck (`tsc --noEmit`)
+  - [ ] Run frontend tests (`npm --prefix frontend test -- --run`)
+  - [ ] Run frontend build (`npm --prefix frontend run build`)

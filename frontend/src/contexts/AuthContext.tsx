@@ -33,11 +33,19 @@ type Profile = {
   department_name?: string | null;
   course_name?: string | null;
   message_policy?: string | null;
+  contact_email?: string | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
+  twitter_url?: string | null;
+  relationship_status?: string | null;
+  gender?: string | null;
   // Presence (Messaging_plan.md §8). `presence_mode` is the persisted default;
   // the live value is owned by PresenceContext.
   presence_mode?: string | null;
   last_seen_at?: string | null;
   last_seen_visible?: boolean | null;
+  note?: string | null;
+  note_updated_at?: string | null;
   // Account sanctions (superadmin console). The API treats an expired
   // `suspended_until` as active, so the screen must check the date.
   suspended_at?: string | null;

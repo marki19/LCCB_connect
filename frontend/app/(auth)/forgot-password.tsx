@@ -22,16 +22,16 @@ export default function ForgotPasswordScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const isValidEmailDomain = email.trim().toLowerCase().endsWith("@lccbonline.edu.ph");
-  const showEmailFormatError = email.length > 0 && !isValidEmailDomain;
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const showEmailFormatError = email.length > 0 && !isValidEmail;
 
   async function requestResetCode() {
     if (!email.trim()) {
       setError("Email is required");
       return;
     }
-    if (!isValidEmailDomain) {
-      setError("Must be an @lccbonline.edu.ph address");
+    if (!isValidEmail) {
+      setError("Must be a valid email address");
       return;
     }
 
@@ -97,13 +97,13 @@ export default function ForgotPasswordScreen() {
           setEmail(v);
           if (v) setError("");
         }}
-        placeholder="student@lccbonline.edu.ph"
+        placeholder="name@example.com"
         keyboardType="email-address"
         autoComplete="email"
         returnKeyType="done"
         onSubmitEditing={() => void requestResetCode()}
         leadingIcon={({ size, color }) => <Mail size={size} color={color} strokeWidth={2.1} />}
-        error={showEmailFormatError ? "Must use an @lccbonline.edu.ph address" : ""}
+        error={showEmailFormatError ? "Must be a valid email address" : ""}
       />
 
       <Button

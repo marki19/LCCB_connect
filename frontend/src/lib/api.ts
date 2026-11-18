@@ -1,7 +1,8 @@
 import { create, isAxiosError } from "axios";
 import { getSession, isExpired, clearSession } from "./session";
-import { refreshSession } from "./auth";
-import type { ContentVisibility } from "../types";
+import { refreshSession } from "./sessionRefresh";
+import { ApiError } from "./errors";
+import type { ContentVisibility, PostKind, RepositoryType, PostAttachment } from "../types";
 import { fileUrl, resolveFileUrl, resolveFileUrls } from "./files";
 
 const API_URL = (
@@ -84,11 +85,6 @@ client.interceptors.response.use(
       !originalRequest._retry &&
       !isAuthPath
     ) {
-      if (error.response?.data?.code === "session_expired") {
-        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-          window.dispatchEvent(new CustomEvent("admin_session_expired"));
-        }
-      }
       originalRequest._retry = true;
       try {
         const newAccessToken = await refreshSession();
@@ -204,21 +200,7 @@ export async function apiJson<T = any>(
  * rejection (4xx — e.g. a blocked send) from a transient one (network / 5xx)
  * and avoid retrying something that will never succeed.
  */
-export class ApiError extends Error {
-  status: number;
-  code?: string;
-  /** Raw response body, when the server sent JSON. Carries validation
-   *  `fields[]` that `validate()` in the backend produces — without this the
-   *  client would have to guess field names from the message string. */
-  body?: any;
-  constructor(message: string, status: number, code?: string, body?: any) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.code = code;
-    this.body = body;
-  }
-}
+export { ApiError } from "./errors";
 
 export async function updatePost(
   id: string | number,
@@ -228,7 +210,14 @@ export async function updatePost(
     technologies?: string[] | null;
     github_url?: string | null;
     image_url?: string | null;
+    image_urls?: string[] | null;
     type?: string;
+    kind?: PostKind;
+    repository_type?: RepositoryType | null;
+    repository_category?: string | null;
+    live_url?: string | null;
+    attachments?: PostAttachment[];
+    mention_ids?: string[];
     preview_metadata?: any;
     visibility?: ContentVisibility;
     audience?: string[];
@@ -248,11 +237,12 @@ export async function deletePost(id: string | number): Promise<void> {
 export async function updateComment(
   postId: string | number,
   commentId: string | number,
-  content: string
+  content: string,
+  mention_ids?: string[]
 ): Promise<void> {
   return apiJson(`/posts/${postId}/comments/${commentId}`, {
     method: "PUT",
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, ...(mention_ids ? { mention_ids } : {}) }),
   });
 }
 
@@ -274,14 +264,17 @@ export async function updateThesis(
     audience?: string[];
   }
 ): Promise<void> {
-  return apiJson(`/theses/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
+  return updatePost(id, {
+    title: data.title,
+    content: data.abstract,
+    repository_category: data.category,
+    visibility: data.visibility,
+    audience: data.audience,
   });
 }
 
 export async function deleteThesis(id: string | number): Promise<void> {
-  return apiJson(`/theses/${id}`, { method: "DELETE" });
+  return deletePost(id);
 }
 
 export async function deleteAvatar(): Promise<{ message: string; avatar_url: null }> {
@@ -292,13 +285,9 @@ export async function deleteAvatar(): Promise<{ message: string; avatar_url: nul
 
 /**
  * Fetches a short-lived signed URL for a thesis' manuscript.
- *
- * Manuscripts live in a private bucket (migration 015), so the client never
- * receives a usable URL directly — it asks the backend, which checks
- * visibility first, and gets back a URL that expires after 5 minutes.
  */
 export async function getThesisFileUrl(id: string | number): Promise<string> {
-  const data = await apiJson<{ url?: string }>(`/theses/${id}/file`);
+  const data = await apiJson<{ url?: string; urls?: string[] }>(`/posts/${id}/file`);
   if (!data?.url) {
     throw new ApiError("Could not generate file URL", 404);
   }
@@ -501,6 +490,17 @@ export function adaptPost(row: any): any {
     edited_at: row.edited_at || null,
     deleted_at: row.deleted_at || null,
     kind: row.kind || "post",
+    post_kind: row.post_kind,
+    repository_type: row.repository_type || null,
+    repository_category: row.repository_category || null,
+    live_url: row.live_url || null,
+    attachments: Array.isArray(row.attachments)
+      ? row.attachments.map((att: any) => ({
+          ...att,
+          url: resolveFileUrl(att.url || att.storage_key),
+        }))
+      : [],
+    mentions: Array.isArray(row.mentions) ? row.mentions : [],
     repost: row.repost
       ? {
           caption: row.repost.caption,
@@ -521,8 +521,12 @@ export function adaptPost(row: any): any {
 export interface UserProfileData {
   id: string;
   username: string;
+  email?: string | null;
   full_name: string;
   avatar_url?: string | null;
+  cover_url?: string | null;
+  note?: string | null;
+  note_updated_at?: string | null;
   bio?: string | null;
   year_level?: string | null;
   role: string;
@@ -531,6 +535,12 @@ export interface UserProfileData {
   course_id?: string | null;
   department_name?: string | null;
   course_name?: string | null;
+  contact_email?: string | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
+  twitter_url?: string | null;
+  relationship_status?: string | null;
+  gender?: string | null;
   created_at: string;
   verified_status?: string | null;
   friendship: "friend" | "pending_out" | "pending_in" | "none";
@@ -544,6 +554,47 @@ export interface UserProfileData {
 
 export async function getUserProfile(userId: string): Promise<UserProfileData> {
   return apiJson<UserProfileData>(`/users/${userId}/profile`);
+}
+
+export interface UserPhoto {
+  id: string;
+  image_url: string | null;
+  image_urls: string[] | null;
+  created_at: string;
+}
+
+export async function updateCover(coverUrl: string): Promise<{ message: string; cover_url: string }> {
+  return apiJson<{ message: string; cover_url: string }>('/users/me/cover', {
+    method: 'PUT',
+    body: JSON.stringify({ cover_url: coverUrl }),
+  });
+}
+
+export async function removeCover(): Promise<{ message: string; cover_url: null }> {
+  return apiJson<{ message: string; cover_url: null }>('/users/me/cover', {
+    method: 'DELETE',
+  });
+}
+
+export async function updateNote(note: string | null): Promise<UserProfileData> {
+  return apiJson<UserProfileData>('/users/me/note', {
+    method: 'PUT',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function deleteNote(): Promise<{ message: string; note: null }> {
+  return apiJson<{ message: string; note: null }>('/users/me/note', {
+    method: 'DELETE',
+  });
+}
+
+export async function getUserFriends(userId: string, limit: number = 50): Promise<any[]> {
+  return apiJson<any[]>(`/users/${userId}/friends?limit=${limit}`);
+}
+
+export async function getUserPhotos(userId: string, limit: number = 30): Promise<UserPhoto[]> {
+  return apiJson<UserPhoto[]>(`/users/${userId}/photos?limit=${limit}`);
 }
 
 // ============================================================================

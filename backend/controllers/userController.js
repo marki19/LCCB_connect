@@ -1,8 +1,11 @@
 const db = require("../db");
 const objectStorage = require("../services/objectStorage");
+const filePolicy = require("../services/filePolicy");
 const userModel = require("../models/userModel");
+const friendModel = require("../models/friendModel");
 const departmentModel = require("../models/departmentModel");
 const accountService = require("../services/accountService");
+const mentionsService = require("../services/mentions");
 const { AdminAuthUnavailableError } = require("../services/supabaseAdmin");
 const { clampLimit } = require("../models/pagination");
 const { sanitizeProfile } = require("../utils/profile");
@@ -208,15 +211,17 @@ const updateUser = async (req, res, next) => {
       });
     }
 
-    // Identity lock: verified students cannot change name, student_id,
+    // Identity lock: verified students cannot change student_id,
     // department_id, or course_id. Admins can always change these.
+    // Permanent identity: full_name and username are not in the SQL SET clause
+    // in userModel.updateUser, so renames are a silent no-op without failing clients.
     const target =
       authz.target ||
       (authz.isSelf ? req.profile : null) ||
       (await userModel.getUserById(id));
 
     if (!isAdmin(req) && target?.verification_status === "verified") {
-      const lockedFields = ["full_name", "student_id", "department_id", "course_id"];
+      const lockedFields = ["student_id", "department_id", "course_id"];
       for (const field of lockedFields) {
         if (payload[field] !== undefined) {
           return res.status(403).json({
@@ -334,14 +339,161 @@ const removeAvatar = async (req, res, next) => {
   }
 };
 
+const updateCover = async (req, res, next) => {
+  try {
+    const { cover_url } = req.body;
+    if (!cover_url) {
+      return res.status(400).json({ error: "cover_url is required" });
+    }
+    const parsed = filePolicy.parseKey(cover_url);
+    if (!parsed || parsed.category !== "covers") {
+      return res.status(400).json({ error: "cover_url must be a valid key in the 'covers' category" });
+    }
+
+    const { rows } = await db.query(
+      "SELECT cover_url FROM public.profiles WHERE id = $1",
+      [req.user.id]
+    );
+    const oldCover = rows[0]?.cover_url;
+
+    const updated = await userModel.updateCover(req.user.id, cover_url);
+
+    if (oldCover && oldCover !== cover_url && !oldCover.startsWith("http")) {
+      objectStorage.deleteObject(oldCover).catch(() => {});
+    }
+
+    res.json({ message: "Cover photo updated successfully", cover_url: updated.cover_url });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const removeCover = async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      "SELECT cover_url FROM public.profiles WHERE id = $1",
+      [req.user.id]
+    );
+    const oldCover = rows[0]?.cover_url;
+
+    await userModel.removeCover(req.user.id);
+
+    if (oldCover && !oldCover.startsWith("http")) {
+      objectStorage.deleteObject(oldCover).catch(() => {});
+    }
+
+    res.json({ message: "Cover photo removed successfully", cover_url: null });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getUserFriends = async (req, res, next) => {
+  try {
+    const targetId = req.params.id;
+    const viewerId = req.user.id;
+
+    const profile = await userModel.getPublicProfile(targetId, viewerId);
+    if (!profile) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const limit = clampLimit(req.query.limit, 50);
+    const friends = await friendModel.listFriends(targetId, { limit });
+    res.json(friends);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getUserPhotos = async (req, res, next) => {
+  try {
+    const targetId = req.params.id;
+    const viewerId = req.user.id;
+
+    const profile = await userModel.getPublicProfile(targetId, viewerId);
+    if (!profile) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const limit = clampLimit(req.query.limit, 30);
+    const sql = `
+      SELECT pa.id AS attachment_id, pa.post_id, pa.storage_key, pa.sort_order, vp.created_at
+      FROM visible_posts($1::text) vp
+      JOIN public.post_attachments pa ON pa.post_id = vp.id
+      WHERE vp.author_id = $2
+        AND vp.deleted_at IS NULL
+        AND pa.mime_type LIKE 'image/%'
+      ORDER BY vp.created_at DESC, pa.sort_order ASC
+      LIMIT $3;
+    `;
+    const result = await db.query(sql, [viewerId, targetId, limit]);
+
+    // Format individual photo objects for photo grids
+    const photos = result.rows.map((row, idx) => ({
+      id: `${row.post_id}-img-${row.sort_order ?? idx}`,
+      post_id: row.post_id,
+      image_url: row.storage_key,
+      image_urls: [row.storage_key],
+      created_at: row.created_at,
+    }));
+
+    res.json(photos);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateNote = async (req, res, next) => {
+  try {
+    const updated = await userModel.setNote(req.user.id, req.body.note);
+    if (!updated) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json(sanitizeProfile(updated));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const clearNote = async (req, res, next) => {
+  try {
+    const updated = await userModel.setNote(req.user.id, null);
+    if (!updated) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json({ message: "Note cleared successfully", note: null });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getMentionableUsers = async (req, res, next) => {
+  try {
+    const q = req.query.q || "";
+    const limit = req.query.limit || 8;
+    const users = await mentionsService.getMentionableUsers(req.user.id, q, limit);
+    res.json({ users });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getUsers,
   getUser,
   getPublicProfile,
   getDirectory,
+  getMentionableUsers,
   createUser,
   updateUser,
   disableUser,
   validateCatalogReferences,
   removeAvatar,
+  updateCover,
+  removeCover,
+  getUserFriends,
+  getUserPhotos,
+  updateNote,
+  clearNote,
 };

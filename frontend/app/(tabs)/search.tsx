@@ -115,15 +115,25 @@ export default function SearchScreen() {
         // When query is empty:
         // If in "theses" tab, fetch recent repository items for browsing
         if (activeTab === "theses") {
-          const params = ["limit=50"];
+          const params = ["limit=50", "kind=repository", "repository_type=thesis"];
           if (activeCategory !== "All") {
-            params.push(`category=${encodeURIComponent(activeCategory)}`);
+            params.push(`repository_category=${encodeURIComponent(activeCategory)}`);
           }
-          const res = await apiFetch(`/theses?${params.join("&")}`);
+          const res = await apiFetch(`/posts?${params.join("&")}`);
           if (currentReq !== requestId.current) return;
           if (res.ok) {
             const data = await res.json();
-            setTheses(Array.isArray(data) ? data : []);
+            const raw = Array.isArray(data) ? data : data.posts || [];
+            setTheses(
+              raw.map((p: any) => ({
+                ...p,
+                abstract: p.abstract || p.content,
+                category: p.category || p.repository_category,
+                pdf_url:
+                  p.attachments?.find((a: any) => a.mime_type === "application/pdf")?.storage_key ||
+                  p.pdf_url,
+              }))
+            );
           }
           setPeople([]);
           setPosts([]);
@@ -450,7 +460,7 @@ export default function SearchScreen() {
         </View>
         <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No results found</Text>
         <Text style={[styles.emptySubtitle, { color: colors.textTertiary }]}>
-          We couldn't find matches for "{debouncedQuery}". Try another keyword or check spelling.
+          {"We couldn't find matches for \"" + debouncedQuery + "\". Try another keyword or check spelling."}
         </Text>
       </View>
     );

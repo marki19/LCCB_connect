@@ -11,7 +11,7 @@ async function runAudit() {
     const nullCheckSql = `
       SELECT 'posts.author_id' AS column_name, COUNT(*) AS null_count FROM public.posts WHERE author_id IS NULL
       UNION ALL
-      SELECT 'theses.uploader_id', COUNT(*) FROM public.theses WHERE uploader_id IS NULL
+      SELECT 'post_attachments.post_id', COUNT(*) FROM public.post_attachments WHERE post_id IS NULL
       UNION ALL
       SELECT 'likes.post_id', COUNT(*) FROM public.likes WHERE post_id IS NULL
       UNION ALL
@@ -73,8 +73,8 @@ async function runAudit() {
       SELECT table_name, column_name, is_nullable
       FROM information_schema.columns
       WHERE table_schema = 'public'
-        AND table_name IN ('posts', 'theses', 'likes', 'comments')
-        AND column_name IN ('author_id', 'uploader_id', 'post_id', 'user_id')
+        AND table_name IN ('posts', 'post_attachments', 'likes', 'comments')
+        AND column_name IN ('author_id', 'post_id', 'user_id')
       ORDER BY 1, 2;
     `;
     const nullabilityRes = await db.query(nullabilitySql);

@@ -10,7 +10,6 @@ const request = require("supertest");
 const { stub } = require("./stub.helper");
 const auth = require("../middleware/auth");
 const postModel = require("../models/postModel");
-const thesisModel = require("../models/thesisModel");
 const userModel = require("../models/userModel");
 
 // `requireAuth` calls `supabase.auth.getUser(token)` at request time.
@@ -26,7 +25,6 @@ const getClaims = stub(auth.supabase.auth, "getClaims", async () => ({
 // Route handlers must not touch a database.
 stub(postModel, "visiblePostsFor", async () => ({ posts: [] }));
 stub(postModel, "getAllPosts", async () => []);
-stub(thesisModel, "getAllTheses", async () => []);
 stub(userModel, "getAllUsers", async () => []);
 // Every authenticated mount now loads the profile so suspended accounts are
 // blocked. Auth tests only exercise the middleware, so return a minimal row.
@@ -161,7 +159,6 @@ describe("requireAuth", () => {
       ["post", "/api/posts"],
       ["put", "/api/posts/p1"],
       ["delete", "/api/posts/p1"],
-      ["post", "/api/theses"],
       ["post", "/api/users"],
       ["get", "/api/moderation"],
       // Messaging / social graph mounts (Phase 2) — the same real requireAuth.
@@ -181,7 +178,7 @@ describe("requireAuth", () => {
 
   it("keeps the authenticated API closed and serves reads from /api/public", async () => {
     // The /api/* collections require a bearer token...
-    for (const path of ["/api/posts", "/api/theses", "/api/users"]) {
+    for (const path of ["/api/posts", "/api/users", "/api/search"]) {
       const res = await request(app).get(path);
       assert.equal(res.status, 401, `GET ${path} should require auth`);
     }

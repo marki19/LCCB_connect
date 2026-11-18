@@ -1,0 +1,21 @@
+# Todo: Fix Security Defects (R1, R2, R3) & Working Tree Checkpoint
+
+- [x] **Phase 0: Checkpoint commit**
+  - [x] Stage all modified/untracked files from recent profile, notes, and messenger work
+  - [x] Create commit with clear message referencing Phase completion
+  - [x] Measure baseline verification (691 backend / 0 tsc / 41 vitest / clean build)
+- [x] **Phase 1: Fix R2 & R3 in `verifySignup`**
+  - [x] Update `backend/controllers/authController.js` to strictly handle `supabase.auth.admin.createUser` errors
+  - [x] Return 409 on email conflicts and 502 on upstream auth failures
+  - [x] Eliminate random UUID fallback and orphan profile creation
+  - [x] Add backend unit tests covering duplicate email signup and auth failure handling
+- [x] **Phase 2: Fix R1 in `login`**
+  - [x] Update `backend/controllers/authController.js` to identify Google-only accounts
+  - [x] Prevent failed-login increment and account lockout on Google-only users attempting password form
+  - [x] Return actionable guidance code `use_google_signin`
+  - [x] Add backend unit tests covering Google-only account login handling
+- [x] **Phase 3: Verification & Review**
+  - [x] Run backend tests (`npm --prefix backend test`) -> 698/698 passed
+  - [x] Run TypeScript typecheck (`tsc --noEmit`) -> 0 errors
+  - [x] Run Vitest (`npm --prefix frontend test -- --run`) -> 41/41 passed
+  - [x] Run web build (`npm --prefix frontend run build`) -> Clean build

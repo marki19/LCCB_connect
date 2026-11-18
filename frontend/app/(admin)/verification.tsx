@@ -41,8 +41,8 @@ interface VerificationRequest {
   user_id: string;
   username: string;
   email: string;
+  role?: string;
   full_name: string;
-  role: string;
   student_id: string;
   department_id: string;
   department_name: string;

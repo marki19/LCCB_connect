@@ -43,11 +43,13 @@ export function AppVideo({
 
   useEffect(() => {
     if (!player) return;
+    // eslint-disable-next-line react-hooks/immutability
     player.loop = loop;
   }, [player, loop]);
 
   useEffect(() => {
     if (!player) return;
+    // eslint-disable-next-line react-hooks/immutability
     player.muted = muted;
   }, [player, muted]);
 
@@ -63,6 +65,7 @@ export function AppVideo({
   useEffect(() => {
     if (!player) return;
     if (onProgress) {
+      // eslint-disable-next-line react-hooks/immutability
       player.timeUpdateEventInterval = 0.1;
     }
     const endSub = player.addListener("playToEnd", () => {

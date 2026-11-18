@@ -14,7 +14,8 @@ const posts = [
     author_id: "u1",
     title: "LCC-Connect - Academic Portfolio Network",
     content: "A full platform for LCCB students to showcase projects, theses, and capstones. Features project feed, messaging, and academic repository.",
-    type: "capstone",
+    kind: "repository",
+    repository_type: "capstone",
     technologies: ["web", "react", "expo", "fullstack"],
     github_url: "https://github.com/lccb/lccb-connect"
   },
@@ -22,7 +23,8 @@ const posts = [
     author_id: "u2",
     title: "Barangay Poblacion Digital Portal",
     content: "A full web portal for Barangay Poblacion allowing residents to request certificates and documents online. Built with Next.js and Tailwind CSS.",
-    type: "project",
+    kind: "repository",
+    repository_type: "project",
     technologies: ["nextjs", "tailwind", "web"],
     github_url: "https://github.com/barangay/portal"
   },
@@ -30,7 +32,8 @@ const posts = [
     author_id: "u4",
     title: "Cardly - Campus Events Mobile App",
     content: "A mobile-first app for browsing, RSVPing, and getting reminders for LCCB campus events. Features a live campus map and digital card invitations.",
-    type: "project",
+    kind: "repository",
+    repository_type: "project",
     technologies: ["expo", "react-native", "maps"],
     github_url: "https://github.com/carlo/cardly"
   },
@@ -38,7 +41,7 @@ const posts = [
     author_id: "u5",
     title: "Personal UI/UX Portfolio 2026",
     content: "My personal design portfolio showcasing UI/UX mobile wireframes, branding kits, and front-end design experiments created in Figma.",
-    type: "image",
+    kind: "discussion",
     technologies: ["portfolio", "ux", "figma"],
     github_url: "https://trisha-portfolio.com"
   }
@@ -85,12 +88,12 @@ async function seed() {
       // Idempotent: skip posts that already exist for this author (matched on
       // title), so re-running the seed never creates duplicates.
       await db.query(`
-        INSERT INTO posts (author_id, title, content, type, technologies, github_url)
-        SELECT $1::text, $2::text, $3::text, $4::text, $5::text[], $6::text
+        INSERT INTO posts (author_id, title, content, kind, repository_type, technologies, github_url)
+        SELECT $1::text, $2::text, $3::text, $4::text, $5::text, $6::text[], $7::text
         WHERE NOT EXISTS (
           SELECT 1 FROM posts WHERE author_id = $1 AND title = $2
         );
-      `, [p.author_id, p.title, p.content, p.type, p.technologies, p.github_url]);
+      `, [p.author_id, p.title, p.content, p.kind, p.repository_type || null, p.technologies, p.github_url]);
     }
     console.log("Seeded real student projects & posts.");
 
@@ -98,12 +101,12 @@ async function seed() {
       // Idempotent: skip theses that already exist for this uploader (matched on
       // title), so re-running the seed never creates duplicates.
       await db.query(`
-        INSERT INTO theses (uploader_id, title, abstract, department, category, pdf_url)
-        SELECT $1::text, $2::text, $3::text, $4::text, $5::text, $6::text
+        INSERT INTO posts (author_id, title, content, kind, repository_type, repository_category)
+        SELECT $1::text, $2::text, $3::text, 'repository', 'thesis', $4::text
         WHERE NOT EXISTS (
-          SELECT 1 FROM theses WHERE uploader_id = $1 AND title = $2
+          SELECT 1 FROM posts WHERE author_id = $1 AND title = $2
         );
-      `, [t.uploader_id, t.title, t.abstract, t.department, t.category, t.pdf_url]);
+      `, [t.uploader_id, t.title, t.abstract, t.category]);
     }
     console.log("Seeded real academic theses & capstones.");
 
