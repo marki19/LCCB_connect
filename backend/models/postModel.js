@@ -460,7 +460,7 @@ const visiblePostsFor = async ({
     conditions.push(`(p.author_course_id = $${params.length}::uuid OR pr.course_id = $${params.length}::uuid)`);
   }
 
-  if (type) {
+  if (type && POST_TYPE_FILTERS.includes(type)) {
     if (['project', 'capstone', 'thesis', 'dissertation'].includes(type)) {
       const repType = type === 'dissertation' ? 'thesis' : type;
       params.push(repType);

@@ -72,7 +72,7 @@ async function applyModerationMigration() {
     CREATE INDEX IF NOT EXISTS idx_notifications_dept ON public.notifications(department);
 
     -- 7. Row Level Security for notifications (deny-by-default).
-    --    Do NOT add a `USING (true)` policy here: it would expose every user's
+    --    Do NOT add a 'USING (true)' policy here: it would expose every user's
     --    notifications to the public anon key. Access goes through the Express
     --    API, which connects as the table owner and bypasses RLS. The DROP below
     --    also removes the blanket policy earlier versions of this script created.

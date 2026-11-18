@@ -258,7 +258,7 @@ export function moderateContent(
   action: ModerationAction,
   reason: string
 ): Promise<void> {
-  const route = type === "thesis" ? "theses" : `${type}s`;
+  const route = type === "comment" ? "comments" : "posts";
   return apiJson(`/moderation/${route}/${encodeURIComponent(id)}`, {
     method: "POST",
     body: JSON.stringify({ action, reason: validateNonEmptyReason(reason, "moderateContent") }),

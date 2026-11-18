@@ -1,7 +1,7 @@
+require("./env.helper");
+
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const db = require("../db");
 const mentions = require("../services/mentions");
 const postController = require("../controllers/postController");
