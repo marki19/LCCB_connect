@@ -28,9 +28,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { isAdminRole, isDepartmentAdminRole } from "../../lib/roles";
 import { setAdminAppPreview } from "../../lib/panelMode";
 import { listFriendRequests } from "../../lib/messages";
-import { checkAdminSessionStatus } from "../../lib/adminApi";
 import Avatar from "../Avatar";
-import AdminMfaPromptModal from "../admin/AdminMfaPromptModal";
 import { useSettingsSidebar } from "../../contexts/SettingsSidebarContext";
 
 interface DesktopLeftRailProps {
@@ -46,7 +44,6 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
 
   const [friendRequestCount, setFriendRequestCount] = useState(0);
   const [showMoreShortcuts, setShowMoreShortcuts] = useState(false);
-  const [mfaModalVisible, setMfaModalVisible] = useState(false);
 
   const adminUser = isAdminRole(profile?.role);
   const departmentAdmin = isDepartmentAdminRole(profile?.role);
@@ -238,17 +235,8 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={adminUser ? "Admin Console" : "Moderation Console"}
-              onPress={async () => {
+              onPress={() => {
                 if (adminUser) {
-                  try {
-                    const status = await checkAdminSessionStatus();
-                    if (status.isAdmin && !status.valid) {
-                      setMfaModalVisible(true);
-                      return;
-                    }
-                  } catch {
-                    // Non-blocking fallback
-                  }
                   setAdminAppPreview(false);
                   router.push("/(admin)");
                 } else {
@@ -376,16 +364,6 @@ export default function DesktopLeftRail({ unreadCount = 0 }: DesktopLeftRailProp
           </Text>
         </View>
       </ScrollView>
-
-      <AdminMfaPromptModal
-        visible={mfaModalVisible}
-        onClose={() => setMfaModalVisible(false)}
-        onSuccess={() => {
-          setMfaModalVisible(false);
-          setAdminAppPreview(false);
-          router.push("/(admin)");
-        }}
-      />
     </View>
   );
 }

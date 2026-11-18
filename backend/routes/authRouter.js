@@ -9,8 +9,6 @@ const {
   mfaEnroll,
   mfaEnrollVerify,
   mfaChallenge,
-  mfaStepUp,
-  checkAdminSession,
   mfaUnenroll,
   mfaList,
   logout,
@@ -174,18 +172,6 @@ router.post("/mfa/unenroll", mfaUnenroll);
  */
 router.get("/mfa/list", mfaList);
 router.get("/mfa/factors", mfaList);
-
-/**
- * POST /api/auth/mfa/step-up
- * Elevates or renews an active admin session with a 6-digit TOTP code.
- */
-router.post("/mfa/step-up", mfaStepUp);
-
-/**
- * GET /api/auth/mfa/admin-session
- * Checks whether the current admin's 24h console session is valid.
- */
-router.get("/mfa/admin-session", checkAdminSession);
 
 /**
  * POST /api/auth/refresh

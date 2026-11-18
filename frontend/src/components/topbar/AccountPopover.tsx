@@ -18,8 +18,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSettingsSidebar } from "../../contexts/SettingsSidebarContext";
 import { isAdminRole, isDepartmentAdminRole } from "../../lib/roles";
 import { setAdminAppPreview } from "../../lib/panelMode";
-import { checkAdminSessionStatus } from "../../lib/adminApi";
-import AdminMfaPromptModal from "../admin/AdminMfaPromptModal";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
 import { TOP_BAR_HEIGHT } from "./constants";
@@ -36,7 +34,6 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
 
   const isAdmin = isAdminRole(profile?.role);
   const isDeptAdmin = isDepartmentAdminRole(profile?.role);
-  const [mfaModalVisible, setMfaModalVisible] = useState(false);
 
   const navigate = (href: string) => {
     onClose();
@@ -112,22 +109,12 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
           icon={<Shield size={16} color={colors.brand} strokeWidth={2} />}
           label={isAdmin ? "Admin Console" : "Moderation Console"}
           colors={colors}
-          onPress={async () => {
+          onPress={() => {
+            onClose();
             if (isAdmin) {
-              try {
-                const status = await checkAdminSessionStatus();
-                if (status.isAdmin && !status.valid) {
-                  setMfaModalVisible(true);
-                  return;
-                }
-              } catch {
-                // Non-blocking fallback
-              }
-              onClose();
               setAdminAppPreview(false);
               router.push("/(admin)");
             } else {
-              onClose();
               router.push("/(moderation)" as any);
             }
           }}
@@ -155,20 +142,6 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
         labelColor={colors.destructive}
         colors={colors}
         onPress={handleSignOut}
-      />
-
-      <AdminMfaPromptModal
-        visible={mfaModalVisible}
-        onClose={() => {
-          setMfaModalVisible(false);
-          onClose();
-        }}
-        onSuccess={() => {
-          setMfaModalVisible(false);
-          onClose();
-          setAdminAppPreview(false);
-          router.push("/(admin)");
-        }}
       />
     </View>
   );

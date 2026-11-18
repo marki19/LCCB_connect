@@ -243,14 +243,13 @@ app.use(
 
 // Superadmin console API. Keep this mount before the catalog router so its
 // specific paths win; unmatched paths fall through.
-// Admin routes require role check + session age check (24h admin / 7d user).
+// Console is gated to active admin and superadmin accounts.
 // MFA is enforced at login gateway, so logged-in admins can browse uninterrupted.
 const adminMiddleware = [
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
   auth.requireRole("admin", "superadmin"),
-  auth.checkSessionAge,
 ];
 
 app.use("/api/admin", ...adminMiddleware, adminRouter);

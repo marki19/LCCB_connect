@@ -334,18 +334,3 @@ export function deleteAnnouncement(id: string): Promise<void> {
     method: "DELETE",
   });
 }
-
-export async function checkAdminSessionStatus(): Promise<{ isAdmin: boolean; valid: boolean; remainingMs: number }> {
-  try {
-    return await apiJson<{ isAdmin: boolean; valid: boolean; remainingMs: number }>("/auth/mfa/admin-session");
-  } catch {
-    return { isAdmin: false, valid: false, remainingMs: 0 };
-  }
-}
-
-export async function stepUpAdminMfa(code: string): Promise<{ ok: boolean; message: string }> {
-  return await apiJson<{ ok: boolean; message: string }>("/auth/mfa/step-up", {
-    method: "POST",
-    body: JSON.stringify({ code }),
-  });
-}

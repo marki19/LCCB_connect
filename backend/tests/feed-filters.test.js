@@ -17,8 +17,6 @@ stub(auth, "requireAuth", (req, res, next) => {
   return next();
 });
 stub(auth, "requireActiveAccount", (req, res, next) => next());
-stub(auth, "checkSessionAge", (req, res, next) => next());
-stub(auth, "requireAal2", (req, res, next) => next());
 stub(auth, "loadProfile", (req, res, next) => {
   req.profile = { id: VIEWER_ID, profile_completed: true, role: "student" };
   return next();

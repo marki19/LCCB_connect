@@ -1035,22 +1035,16 @@ export default function AdminOverviewScreen() {
         ) : (
           <View style={{ ...consoleCard(colors) }}>
             <EmptyState
-              icon={error.toLowerCase().includes("session") ? ShieldAlert : WifiOff}
-              tone={error.toLowerCase().includes("session") ? "warning" : "danger"}
-              title={error.toLowerCase().includes("session") ? "Admin session expired" : "Signal lost"}
+              icon={WifiOff}
+              tone="danger"
+              title="Signal lost"
               body={
                 error ||
                 "The overview could not reach the campus API. Check the connection and try again."
               }
-              actionLabel={error.toLowerCase().includes("session") ? "Re-authenticate with MFA" : "Try again"}
+              actionLabel="Try again"
               onAction={() => {
-                if (error.toLowerCase().includes("session")) {
-                  if (typeof window !== "undefined") {
-                    window.dispatchEvent(new CustomEvent("admin_session_expired"));
-                  }
-                } else {
-                  void load();
-                }
+                void load();
               }}
             />
           </View>

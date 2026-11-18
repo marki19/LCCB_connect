@@ -85,11 +85,6 @@ client.interceptors.response.use(
       !originalRequest._retry &&
       !isAuthPath
     ) {
-      if (error.response?.data?.code === "session_expired") {
-        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-          window.dispatchEvent(new CustomEvent("admin_session_expired"));
-        }
-      }
       originalRequest._retry = true;
       try {
         const newAccessToken = await refreshSession();

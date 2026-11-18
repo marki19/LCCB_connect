@@ -460,7 +460,6 @@ async function mfaChallenge(req, res, next) {
       aal: "aal2",
       mfaChallenged: true,
     });
-    mfaService.clearSessionAgeCache(userId);
 
     // Record audit event
     await mfaService.recordMfaChallenge({ userId, req, success: true });
@@ -796,7 +795,6 @@ async function mfaEnrollVerify(req, res, next) {
       aal: "aal2",
       mfaChallenged: true,
     });
-    mfaService.clearSessionAgeCache(userId);
 
     // Audit
     await mfaService.recordMfaEnroll({ userId, req, factorId: factor.id });
@@ -909,160 +907,6 @@ async function mfaList(req, res, next) {
 }
 
 /**
- * POST /api/auth/mfa/step-up
- * Elevates or renews an active session with TOTP code.
- * Requires authenticated user (admin/superadmin).
- */
-async function mfaStepUp(req, res, next) {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const role = normalizeRole(req.profile?.role);
-    if (role !== "admin" && role !== "superadmin") {
-      return res.status(403).json({ error: "Step-up authentication is reserved for administrators" });
-    }
-
-    const { code } = req.body || {};
-    const cleanCode = typeof code === "string" ? code.trim() : "";
-    if (!/^\d{6}$/.test(cleanCode)) {
-      return res.status(400).json({ error: "A valid 6-digit authentication code is required" });
-    }
-
-    const factors = await mfaService.listFactors(userId);
-    const verifiedFactor = factors.find(
-      (f) => f.type === "totp" && f.status === "verified"
-    );
-    if (!verifiedFactor) {
-      return res.status(400).json({ error: "No verified authenticator app found for this account" });
-    }
-
-    let decryptedSecret;
-    try {
-      const encryptedSecret = JSON.parse(verifiedFactor.secret);
-      decryptedSecret = mfaService.decryptTotpSecret(encryptedSecret);
-    } catch (e) {
-      console.error(`[mfa][${req.id?.slice(0, 8) ?? "no-req"}] Failed to decrypt TOTP secret for step-up:`, e.message);
-      return res.status(500).json({ error: "Factor configuration error" });
-    }
-
-    const { valid, currentStep, isReplay } = mfaService.verifyTotpTimingSafe(
-      decryptedSecret,
-      cleanCode,
-      verifiedFactor.last_used_step
-    );
-
-    if (!valid || isReplay) {
-      await mfaService.recordMfaChallenge({ userId, req, success: false });
-      return res.status(401).json({ error: "Invalid or expired code. Please try again." });
-    }
-
-    // Update the factor's last_used_step
-    try {
-      await db.query(`UPDATE public.mfa_factors SET last_used_step = $1 WHERE id = $2`, [
-        currentStep,
-        verifiedFactor.id,
-      ]);
-    } catch {
-      const supabase = getSupabaseAdmin();
-      await supabase
-        .from("mfa_factors")
-        .update({ last_used_step: currentStep })
-        .eq("id", verifiedFactor.id);
-    }
-
-    // Record session event with AAL2 elevation
-    await mfaService.recordSessionEvent({
-      userId,
-      eventType: "mfa_challenge",
-      aal: "aal2",
-      ipAddress: req.ip,
-      userAgent: req.headers["user-agent"],
-    });
-
-    // Clear session age cache so subsequent /api/admin/* requests succeed
-    mfaService.clearSessionAgeCache(userId);
-
-    // Audit log
-    await mfaService.recordMfaChallenge({ userId, req, success: true });
-
-    return res.json({ ok: true, message: "Admin session renewed successfully", aal: "aal2" });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * GET /api/auth/mfa/admin-session
- * Checks whether the administrator's 24-hour console session is currently valid.
- */
-async function checkAdminSession(req, res, next) {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const role = normalizeRole(req.profile?.role);
-    const isAdmin = role === "admin" || role === "superadmin";
-
-    if (!isAdmin) {
-      return res.json({ isAdmin: false, valid: false, remainingMs: 0 });
-    }
-
-    let events = null;
-    try {
-      const resDb = await db.query(
-        `SELECT created_at, event_type, aal
-         FROM public.session_events
-         WHERE user_id = $1 AND event_type IN ('login', 'mfa_challenge', 'logout', 'force_signout')
-         ORDER BY created_at DESC
-         LIMIT 1`,
-        [userId]
-      );
-      events = resDb.rows;
-    } catch {
-      const supabase = getSupabaseAdmin();
-      const { data } = await supabase
-        .from("session_events")
-        .select("created_at, event_type, aal")
-        .eq("user_id", userId)
-        .in("event_type", ["login", "mfa_challenge", "logout", "force_signout"])
-        .order("created_at", { ascending: false })
-        .limit(1);
-      events = data;
-    }
-
-    const now = Date.now();
-    let valid = false;
-    let remainingMs = 0;
-
-    if (events && events.length > 0) {
-      const latest = events[0];
-      if (latest.event_type !== "logout" && latest.event_type !== "force_signout") {
-        const loginTime = new Date(latest.created_at).getTime();
-        const ageMs = now - loginTime;
-        const maxAgeMs = 24 * 60 * 60 * 1000; // 24 hours
-        if (ageMs <= maxAgeMs) {
-          valid = true;
-          remainingMs = Math.max(0, maxAgeMs - ageMs);
-        }
-      }
-    }
-
-    return res.json({
-      isAdmin: true,
-      valid,
-      remainingMs,
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
  * POST /api/auth/logout
  * Records logout event and returns success.
  * Requires authenticated user.
@@ -1073,9 +917,6 @@ async function logout(req, res, next) {
     if (userId) {
       // Record logout
       await mfaService.recordLogout({ userId, req }).catch(() => {});
-
-      // Clear session age cache
-      mfaService.clearSessionAgeCache(userId);
 
       // Revoke all native refresh tokens for this user
       await nativeAuth.revokeAllUserRefreshTokens(userId).catch(() => {});
@@ -1428,8 +1269,6 @@ module.exports = {
   mfaEnroll,
   mfaEnrollVerify,
   mfaChallenge,
-  mfaStepUp,
-  checkAdminSession,
   mfaUnenroll,
   mfaList,
   // Session endpoints
