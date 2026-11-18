@@ -25,6 +25,7 @@ import {
   LogOut,
   ChevronRight,
   Users,
+  MessageSquare,
   Sun,
   Moon,
   Bookmark,
@@ -291,14 +292,11 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
 
           <SectionLabel label="Messages" />
           <MenuItem
-<<<<<<< HEAD
-=======
             icon={<MessageSquare size={20} color={colors.brand} />}
             label="Messages"
             onPress={() => go("/(tabs)/messages")}
           />
           <MenuItem
->>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
             icon={<Users size={20} color={colors.brand} />}
             label="Friends & requests"
             onPress={() => go("/friends")}

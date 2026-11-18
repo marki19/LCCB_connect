@@ -1,10 +1,5 @@
-<<<<<<< HEAD
 import { useCallback, useEffect, useState } from "react";
-import { ScrollView, View, Text, SafeAreaView } from "react-native";
-=======
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ScrollView, View, Text, SafeAreaView, Platform, Pressable } from "react-native";
->>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
+import { ScrollView, View, Text, SafeAreaView, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { ChevronRight } from "lucide-react-native";
 import { useAuth } from "../src/contexts/AuthContext";
@@ -16,13 +11,8 @@ import Button from "../src/components/ui/Button";
 import Card from "../src/components/ui/Card";
 import Modal from "../src/components/ui/Modal";
 import Reveal from "../src/components/ui/Reveal";
-<<<<<<< HEAD
 import VerificationForm from "../src/components/verification/VerificationForm";
-=======
-import VerificationForm, { DEFAULT_ACADEMIC_LEVELS } from "../src/components/verification/VerificationForm";
-import { fetchDepartments, fetchCourses } from "../src/lib/catalog";
 import type { SelectableRole, VerificationRole } from "../src/lib/verification";
->>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
 
 type VerificationStatus = "unverified" | "pending" | "approved" | "declined";
 

@@ -1035,15 +1035,9 @@ export default function AdminOverviewScreen() {
         ) : (
           <View style={{ ...consoleCard(colors) }}>
             <EmptyState
-<<<<<<< HEAD
-              icon={WifiOff}
-              tone="danger"
-              title="Could not load the overview"
-=======
               icon={error.toLowerCase().includes("session") ? ShieldAlert : WifiOff}
               tone={error.toLowerCase().includes("session") ? "warning" : "danger"}
               title={error.toLowerCase().includes("session") ? "Admin session expired" : "Signal lost"}
->>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
               body={
                 error ||
                 "The overview could not reach the campus API. Check the connection and try again."

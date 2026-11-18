@@ -1,15 +1,3 @@
-<<<<<<< HEAD
-import { useEffect, useState, type ReactNode } from "react";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
-=======
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
@@ -19,7 +7,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
->>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
 import { RefreshCw } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { focusRing, RADIUS, SPACE } from "../../lib/tokens";
@@ -102,13 +89,8 @@ function RefreshButton({
         focusRing(colors, focused),
       ]}
     >
-<<<<<<< HEAD
-      <Animated.View style={spin}>
-        <RefreshCw size={14} color={colors.inkSoft} />
-=======
       <Animated.View style={{ transform: [{ rotate: spinInterpolation }] }}>
         <RefreshCw size={15} color={colors.inkSoft} />
->>>>>>> e5a090929f91e061b17d26cf3e753a1e44069021
       </Animated.View>
       <Text style={{ ...CONSOLE_TEXT.strong, fontSize: 13, color: colors.inkSoft }}>
         {label}
