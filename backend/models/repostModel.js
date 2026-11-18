@@ -1,4 +1,5 @@
 const db = require("../db");
+const { withDerivedImages, POST_ATTACHMENTS_SQL } = require("./postModel");
 
 // =============================================================================
 // REPOST MODEL
@@ -27,7 +28,9 @@ const createRepost = async (originalPostId, reposterId, caption = null) => {
   return db.withTransaction(async (client) => {
     // ---- 1. Fetch original post with visibility check for reposter ----
     const originalResult = await client.query(
-      `SELECT * FROM visible_posts($1::text) WHERE id = $2 AND deleted_at IS NULL`,
+      `SELECT p.*,
+        ${POST_ATTACHMENTS_SQL}
+       FROM visible_posts($1::text) p WHERE p.id = $2 AND p.deleted_at IS NULL`,
       [reposterId, originalPostId]
     );
     
@@ -37,7 +40,7 @@ const createRepost = async (originalPostId, reposterId, caption = null) => {
       throw error;
     }
     
-    const original = originalResult.rows[0];
+    const original = withDerivedImages(originalResult.rows[0]);
     
     // ---- 2. Check allow_reposts ----
     if (original.allow_reposts !== true) {
@@ -106,27 +109,8 @@ const createRepost = async (originalPostId, reposterId, caption = null) => {
     return {
       ...repost,
       original_post: {
-        id: original.id,
-        author_id: original.author_id,
-        content: original.content,
-        type: original.type,
-        title: original.title,
-        technologies: original.technologies,
-        github_url: original.github_url,
-        image_url: original.image_url,
-        image_urls: original.image_urls || (original.image_url ? [original.image_url] : []),
-        preview_metadata: original.preview_metadata,
-        visibility: original.visibility,
-        allow_reposts: original.allow_reposts,
-        author_department_id: original.author_department_id,
-        author_course_id: original.author_course_id,
-        repost_count: original.repost_count + 1, // incremented
-        deleted_at: original.deleted_at,
-        edited_at: original.edited_at,
-        moderation_status: original.moderation_status,
-        moderation_reason: original.moderation_reason,
-        created_at: original.created_at,
-        author: original.author,
+        ...original,
+        repost_count: (original.repost_count || 0) + 1,
       }
     };
   });
@@ -180,47 +164,75 @@ const undoRepost = async (originalPostId, reposterId) => {
  */
 const getRepostsForPost = async (originalPostId, viewerId = null) => {
   const result = await db.query(
-    `SELECT * FROM visible_reposts_for_post($1::uuid, $2::text)`,
+    `SELECT r.id AS repost_id,
+       r.reposter_id,
+       r.original_post_id,
+       r.caption AS repost_caption,
+       r.visibility AS repost_visibility,
+       r.created_at AS repost_created_at,
+       r.deleted_at AS repost_deleted_at,
+       p.id,
+       p.author_id,
+       p.content,
+       p.kind,
+       p.repository_type,
+       p.repository_category,
+       p.live_url,
+       p.title,
+       p.technologies,
+       p.github_url,
+       p.pinned,
+       ${POST_ATTACHMENTS_SQL},
+       p.preview_metadata,
+       p.visibility,
+       p.allow_reposts,
+       p.author_department_id,
+       p.author_course_id,
+       p.repost_count,
+       p.deleted_at,
+       p.edited_at,
+       p.moderation_status,
+       p.moderation_reason,
+       p.created_at,
+       COALESCE((SELECT COUNT(*)::int FROM likes l WHERE l.post_id = p.id), 0) AS likes,
+       COALESCE((SELECT COUNT(*)::int FROM comments c WHERE c.post_id = p.id AND c.moderation_status != 'hidden'), 0) AS comments,
+       json_build_object(
+         'id', pr.id,
+         'username', pr.username,
+         'full_name', pr.full_name,
+         'avatar_url', pr.avatar_url,
+         'course', pr.course,
+         'year_level', pr.year_level,
+         'department_id', pr.department_id,
+         'department_name', d.name
+       ) AS author
+     FROM visible_reposts_for_post($1::uuid, $2::text) r
+     JOIN posts p ON p.id = r.original_post_id
+     LEFT JOIN profiles pr ON pr.id = p.author_id
+     LEFT JOIN departments d ON d.id = pr.department_id`,
     [originalPostId, viewerId]
   );
   
-  return result.rows.map(row => ({
-    kind: 'repost',
-    repost: {
-      id: row.id,
-      reposter_id: row.reposter_id,
-      original_post_id: row.original_post_id,
-      caption: row.caption,
-      visibility: row.visibility,
-      created_at: row.created_at,
-      deleted_at: row.deleted_at,
-    },
-    // Original post data
-    id: row.id,
-    author_id: row.author_id,
-    content: row.content,
-    type: row.type,
-    title: row.title,
-    technologies: row.technologies,
-    github_url: row.github_url,
-    image_url: row.image_url,
-    image_urls: row.image_urls || (row.image_url ? [row.image_url] : []),
-    preview_metadata: row.preview_metadata,
-    visibility: row.visibility,
-    allow_reposts: row.allow_reposts,
-    author_department_id: row.author_department_id,
-    author_course_id: row.author_course_id,
-    repost_count: row.repost_count,
-    deleted_at: row.deleted_at,
-    edited_at: row.edited_at,
-    moderation_status: row.moderation_status,
-    moderation_reason: row.moderation_reason,
-    created_at: row.created_at,
-    likes: row.likes,
-    comments: row.comments,
-    author: row.author,
-    is_liked: row.is_liked,
-  }));
+  return result.rows.map(row => {
+    const derived = withDerivedImages({
+      ...row,
+      kind: row.kind || 'discussion',
+    });
+    return {
+      ...derived,
+      kind: 'repost',
+      post_kind: derived.kind || 'discussion',
+      repost: {
+        id: row.repost_id,
+        reposter_id: row.reposter_id,
+        original_post_id: row.original_post_id,
+        caption: row.repost_caption,
+        visibility: row.repost_visibility,
+        created_at: row.repost_created_at,
+        deleted_at: row.repost_deleted_at,
+      },
+    };
+  });
 };
 
 /**

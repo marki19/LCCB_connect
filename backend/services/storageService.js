@@ -181,11 +181,14 @@ function expand(value) {
         if (typeof key !== "string" || isAbsoluteUrl(key)) {
           return { ...att, url: att.url || key };
         }
-        const category = key.split("/")[0];
+        const cleanKey = key.replace(/^\/+/, "").replace(/^uploads\//, "");
+        const rawCategory = cleanKey.split("/")[0];
+        const category = isCategory(rawCategory) ? rawCategory : "posts";
         const bucket = category === "posts" ? "assets" : category;
+        const normalizedKey = objectKey(bucket, cleanKey);
         const url = isPublicCategory(category)
-          ? `/api/files/${objectKey(bucket, key)}`
-          : signKey(bucket, key);
+          ? `/api/files/${normalizedKey}`
+          : signKey(bucket, normalizedKey);
         return {
           ...att,
           url,

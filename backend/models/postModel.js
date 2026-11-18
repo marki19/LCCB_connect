@@ -300,7 +300,7 @@ const getPostById = async (id, options = {}) => {
 // =============================================================================
 
 const POST_TYPE_FILTERS = [
-  'text', 'image', 'website', 'project', 'capstone', 'dissertation', 'discussion'
+  'text', 'image', 'website', 'project', 'capstone', 'dissertation', 'thesis', 'discussion', 'announcement'
 ];
 
 const buildPostSelect = (paramsLength, viewerId) => {
@@ -460,9 +460,27 @@ const visiblePostsFor = async ({
     conditions.push(`(p.author_course_id = $${params.length}::uuid OR pr.course_id = $${params.length}::uuid)`);
   }
 
-  if (type && POST_TYPE_FILTERS.includes(type)) {
-    params.push(type);
-    conditions.push(`p.type = $${params.length}`);
+  if (type) {
+    if (['project', 'capstone', 'thesis', 'dissertation'].includes(type)) {
+      const repType = type === 'dissertation' ? 'thesis' : type;
+      params.push(repType);
+      conditions.push(`p.kind = 'repository' AND p.repository_type = $${params.length}`);
+    } else if (type === 'discussion') {
+      conditions.push(`p.kind = 'discussion'`);
+    } else if (type === 'announcement') {
+      conditions.push(`p.kind = 'announcement'`);
+    } else if (type === 'website') {
+      conditions.push(`p.preview_metadata IS NOT NULL`);
+    } else if (type === 'image') {
+      conditions.push(`EXISTS (
+        SELECT 1 FROM post_attachments pa 
+        WHERE pa.post_id = p.id AND pa.mime_type LIKE 'image/%'
+      )`);
+    } else if (type === 'text') {
+      conditions.push(`p.kind = 'discussion' AND p.preview_metadata IS NULL AND NOT EXISTS (
+        SELECT 1 FROM post_attachments pa WHERE pa.post_id = p.id
+      )`);
+    }
   }
 
   if (kind && ['discussion', 'repository', 'announcement'].includes(kind)) {
@@ -582,51 +600,29 @@ const visiblePostsFor = async ({
     const repostQueryParams = viewerId ? [...repostParams, viewerId] : repostParams;
     const repostsResult = await db.query(repostsSql, repostQueryParams);
 
-    reposts = repostsResult.rows.map(row => ({
-      kind: 'repost',
-      post_kind: row.kind || 'discussion',
-      repository_type: row.repository_type,
-      repository_category: row.repository_category,
-      live_url: row.live_url,
-      attachments: row.attachments || [],
-      repost: {
-        id: row.repost_id,
-        reposter_id: row.reposter_id,
-        original_post_id: row.original_post_id,
-        caption: row.repost_caption,
-        visibility: row.repost_visibility,
-        created_at: row.repost_created_at,
-        deleted_at: row.repost_deleted_at,
-      },
-      // Original post data (same structure as posts)
-      id: row.id,
-      author_id: row.author_id,
-      content: row.content,
-      type: row.type,
-      title: row.title,
-      technologies: row.technologies,
-      github_url: row.github_url,
-      image_url: row.image_url,
-      image_urls: row.image_urls || (row.image_url ? [row.image_url] : []),
-      preview_metadata: row.preview_metadata,
-      visibility: row.visibility,
-      allow_reposts: row.allow_reposts,
-      author_department_id: row.author_department_id,
-      author_course_id: row.author_course_id,
-      repost_count: row.repost_count,
-      deleted_at: row.deleted_at,
-      edited_at: row.edited_at,
-      moderation_status: row.moderation_status,
-      moderation_reason: row.moderation_reason,
-      created_at: row.created_at,
-      likes: row.likes,
-      comments: row.comments,
-      author: row.author,
-      is_liked: row.is_liked,
-    }));
+    reposts = repostsResult.rows.map(row => {
+      const derived = withDerivedImages({
+        ...row,
+        kind: row.kind || 'discussion',
+      });
+      return {
+        ...derived,
+        kind: 'repost',
+        post_kind: derived.kind || 'discussion',
+        repost: {
+          id: row.repost_id,
+          reposter_id: row.reposter_id,
+          original_post_id: row.original_post_id,
+          caption: row.repost_caption,
+          visibility: row.repost_visibility,
+          created_at: row.repost_created_at,
+          deleted_at: row.repost_deleted_at,
+        },
+      };
+    });
   }
 
-  const posts = postsResult.rows.map(row => ({
+  const posts = postsResult.rows.map(row => withDerivedImages({
     ...row,
     kind: row.kind || 'discussion',
   }));

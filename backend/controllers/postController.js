@@ -473,9 +473,12 @@ const getPostFile = async (req, res, next) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
+    const imageAttachments = Array.isArray(post.attachments)
+      ? post.attachments.filter((a) => a.mime_type && a.mime_type.startsWith("image/"))
+      : [];
     const imageKeys = Array.isArray(post.image_urls) && post.image_urls.length > 0
       ? post.image_urls
-      : (post.image_url ? [post.image_url] : []);
+      : (post.image_url ? [post.image_url] : imageAttachments.map((a) => a.storage_key));
 
     if (imageKeys.length === 0) {
       return res.status(404).json({ message: "Post has no image" });

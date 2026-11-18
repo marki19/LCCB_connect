@@ -18,6 +18,7 @@ const { SUSPENDED_SQL, ROLE_NORMALIZED_SQL } = require("./sqlFragments");
 const ANNOUNCEMENT_COLUMNS = `
   p.id,
   p.author_id,
+  p.kind,
   p.title,
   p.content,
   p.visibility,
@@ -88,7 +89,7 @@ async function create({ authorId, title, body, audience, pinned = false, expires
     const post = (
       await client.query(
         `INSERT INTO public.posts (
-           author_id, content, type, title, visibility,
+           author_id, content, kind, title, visibility,
            author_department_id, author_course_id,
            audience_role, audience_department_id, audience_course_id,
            audience_year_level, pinned, expires_at,
@@ -224,7 +225,7 @@ async function getById(id) {
   const result = await db.query(
     `SELECT ${ANNOUNCEMENT_COLUMNS}
        FROM public.posts p
-      WHERE p.id = $1::uuid AND p.type = 'announcement';`,
+      WHERE p.id = $1::uuid AND p.kind = 'announcement';`,
     [id]
   );
   return result.rows[0] || null;
@@ -254,7 +255,7 @@ async function list({ viewerId, isCampusAdmin, departmentId, limit = 25, cursor 
             ) AS recipients
        FROM public.posts p
        LEFT JOIN public.profiles pr ON pr.id = p.author_id
-      WHERE p.type = 'announcement'
+      WHERE p.kind = 'announcement'
         AND p.deleted_at IS NULL
         AND (
           $2::boolean

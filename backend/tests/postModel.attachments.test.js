@@ -17,6 +17,7 @@ after(async () => {
   if (createdPostIds.length > 0) {
     await db.query("DELETE FROM posts WHERE id = ANY($1::uuid[])", [createdPostIds]);
   }
+  await db.pool.end();
 });
 
 test("createPost inserts attachments in sort order", async () => {
@@ -59,6 +60,12 @@ test("a post returns its attachments and derived image fields", async () => {
   assert.deepEqual(fetched.attachments.map(a => a.storage_key), ["posts/a.png", "documents/b.pdf"]);
   assert.deepEqual(fetched.image_urls, ["posts/a.png"]);
   assert.equal(fetched.image_url, "posts/a.png");
+
+  const inFeed = await postModel.visiblePostsFor({ viewerId: userId, postId: post.id });
+  assert.equal(inFeed.posts.length, 1);
+  assert.equal(inFeed.posts[0].type, "project");
+  assert.deepEqual(inFeed.posts[0].image_urls, ["posts/a.png"]);
+  assert.equal(inFeed.posts[0].image_url, "posts/a.png");
 });
 
 test("updatePost replaces the attachment set", async () => {

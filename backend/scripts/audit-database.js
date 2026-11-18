@@ -73,8 +73,8 @@ async function runAudit() {
       SELECT table_name, column_name, is_nullable
       FROM information_schema.columns
       WHERE table_schema = 'public'
-        AND table_name IN ('posts', 'theses', 'likes', 'comments')
-        AND column_name IN ('author_id', 'uploader_id', 'post_id', 'user_id')
+        AND table_name IN ('posts', 'post_attachments', 'likes', 'comments')
+        AND column_name IN ('author_id', 'post_id', 'user_id')
       ORDER BY 1, 2;
     `;
     const nullabilityRes = await db.query(nullabilitySql);

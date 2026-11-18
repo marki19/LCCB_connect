@@ -61,7 +61,13 @@ async function applyModerationMigration() {
     -- 6. Indexes for moderation and notifications
     CREATE INDEX IF NOT EXISTS idx_posts_moderation ON public.posts(moderation_status);
     CREATE INDEX IF NOT EXISTS idx_comments_moderation ON public.comments(moderation_status);
-    CREATE INDEX IF NOT EXISTS idx_theses_moderation ON public.theses(moderation_status);
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'theses') THEN
+        CREATE INDEX IF NOT EXISTS idx_theses_moderation ON public.theses(moderation_status);
+      END IF;
+    END
+    $$;
     CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON public.notifications(user_id, is_read);
     CREATE INDEX IF NOT EXISTS idx_notifications_dept ON public.notifications(department);
 
