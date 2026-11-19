@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, Pressable, type StyleProp, type ViewStyle } from "react-native";
 import { useRouter } from "expo-router";
-import { FolderGit2, GraduationCap, Image as ImageIcon, MessageSquare } from "lucide-react-native";
+import { BookOpen, FolderGit2, GraduationCap, MessageSquare } from "lucide-react-native";
 import Avatar from "./Avatar";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
@@ -92,7 +92,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
         }}
       >
         <Pressable
-          onPress={() => router.push({ pathname: "/create", params: { editType: "project" } })}
+          onPress={() => router.push({ pathname: "/create", params: { type: "project" } })}
           accessibilityRole="button"
           accessibilityLabel="Share Project"
           style={({ pressed, hovered }: any) => ({
@@ -113,7 +113,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
         </Pressable>
 
         <Pressable
-          onPress={() => router.push({ pathname: "/create", params: { editType: "capstone" } })}
+          onPress={() => router.push({ pathname: "/create", params: { type: "capstone" } })}
           accessibilityRole="button"
           accessibilityLabel="Share Capstone"
           style={({ pressed, hovered }: any) => ({
@@ -134,9 +134,9 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
         </Pressable>
 
         <Pressable
-          onPress={() => router.push({ pathname: "/create", params: { editType: "image" } })}
+          onPress={() => router.push({ pathname: "/create", params: { type: "thesis" } })}
           accessibilityRole="button"
-          accessibilityLabel="Share Photo"
+          accessibilityLabel="Submit Thesis"
           style={({ pressed, hovered }: any) => ({
             flex: 1,
             flexDirection: "row",
@@ -150,12 +150,12 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
             transform: [{ scale: pressed ? 0.95 : 1 }],
           })}
         >
-          <ImageIcon size={18} color="#8B5CF6" strokeWidth={2} />
-          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.inkSoft }}>Photo</Text>
+          <BookOpen size={18} color="#8B5CF6" strokeWidth={2} />
+          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.inkSoft }}>Thesis</Text>
         </Pressable>
 
         <Pressable
-          onPress={() => router.push({ pathname: "/create", params: { editType: "text" } })}
+          onPress={() => router.push({ pathname: "/create", params: { type: "text" } })}
           accessibilityRole="button"
           accessibilityLabel="Start Discussion"
           style={({ pressed, hovered }: any) => ({

@@ -72,6 +72,26 @@ import TextField from "../src/components/ui/TextField";
 
 type PostType = "text" | "image" | "project" | "capstone" | "website";
 
+/**
+ * Values a quick action may pass as `?type=`. Each one already decides whether
+ * the new post is a discussion or a repository entry, so the composer must not
+ * offer the other door. Anything else (or no `type` at all) leaves the mode
+ * open.
+ */
+const CREATE_INTENTS = [
+  "project",
+  "capstone",
+  "thesis",
+  "image",
+  "text",
+  "website",
+  "discussion",
+] as const;
+
+function isCreateIntent(value?: string): boolean {
+  return !!value && (CREATE_INTENTS as readonly string[]).includes(value);
+}
+
 export default function CreatePostModal() {
   const { profile } = useAuth();
   const { colors, isDark } = useTheme();
@@ -133,6 +153,14 @@ export default function CreatePostModal() {
   const [postKind, setPostKind] = useState<PostKind>(
     isRepositoryParam ? "repository" : "discussion"
   );
+
+  // A quick action has already picked the door: Project / Capstone / Thesis
+  // create a repository post, Discuss / Photo / Discussion create a discussion
+  // post. When one is set there is no mode to choose, so the Discussion |
+  // Repository switch is not rendered. Reads `type` only — `editType` means
+  // "editing an existing post" and must keep the switch so an edit can change
+  // the post's kind.
+  const modeIsLocked = paramKind === "repository" || isCreateIntent(type);
 
   const initialRepoType = (
     editRepositoryType ||
@@ -576,44 +604,47 @@ export default function CreatePostModal() {
         />
       )}
 
-      {/* Two-door switch: Discussion | Repository */}
-      <View style={{ flexDirection: "row", paddingHorizontal: 20, paddingTop: 10, paddingBottom: 6, gap: 10 }}>
-        <TouchableOpacity
-          onPress={() => setPostKind("discussion")}
-          style={{
-            flex: 1,
-            paddingVertical: 9,
-            borderRadius: 10,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            backgroundColor: postKind === "discussion" ? colors.actionSurface : colors.surfaceSunken,
-            borderColor: postKind === "discussion" ? colors.action : colors.border,
-          }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "700", color: postKind === "discussion" ? colors.action : colors.textSecondary }}>
-            Discussion
-          </Text>
-        </TouchableOpacity>
+      {/* Two-door switch: Discussion | Repository. Hidden when the composer was
+          opened by a quick action that already chose the door. */}
+      {!modeIsLocked && (
+        <View style={{ flexDirection: "row", paddingHorizontal: 20, paddingTop: 10, paddingBottom: 6, gap: 10 }}>
+          <TouchableOpacity
+            onPress={() => setPostKind("discussion")}
+            style={{
+              flex: 1,
+              paddingVertical: 9,
+              borderRadius: 10,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              backgroundColor: postKind === "discussion" ? colors.actionSurface : colors.surfaceSunken,
+              borderColor: postKind === "discussion" ? colors.action : colors.border,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "700", color: postKind === "discussion" ? colors.action : colors.textSecondary }}>
+              Discussion
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setPostKind("repository")}
-          style={{
-            flex: 1,
-            paddingVertical: 9,
-            borderRadius: 10,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            backgroundColor: postKind === "repository" ? colors.actionSurface : colors.surfaceSunken,
-            borderColor: postKind === "repository" ? colors.action : colors.border,
-          }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "700", color: postKind === "repository" ? colors.action : colors.textSecondary }}>
-            Repository
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            onPress={() => setPostKind("repository")}
+            style={{
+              flex: 1,
+              paddingVertical: 9,
+              borderRadius: 10,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              backgroundColor: postKind === "repository" ? colors.actionSurface : colors.surfaceSunken,
+              borderColor: postKind === "repository" ? colors.action : colors.border,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "700", color: postKind === "repository" ? colors.action : colors.textSecondary }}>
+              Repository
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* User Row (Facebook style) */}
       <View style={[styles.modalUserRow, { position: "relative", zIndex: 100 }]}>

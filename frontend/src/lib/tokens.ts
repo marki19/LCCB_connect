@@ -470,17 +470,14 @@ export const RADIUS = {
   pill: 9999,
 } as const;
 
-/** System sans for UI, Georgia/serif for editorial display, mono for labels. */
+/**
+ * One system-sans stack for all UI text, and one mono stack for labels and
+ * codes. Keeping a single UI family is what makes every screen share the same
+ * voice — never add a second display family per screen.
+ */
 export const sansFamily = Platform.select({
-  web: "'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif",
+  web: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
   default: undefined,
-});
-
-export const serifFamily = Platform.select({
-  web: "Georgia, 'Palatino Linotype', 'Book Antiqua', 'Times New Roman', serif",
-  ios: "Georgia",
-  android: "serif",
-  default: "Georgia",
 });
 
 export const monoFamily = Platform.select({
@@ -499,27 +496,27 @@ export const TYPE: Record<string, TextStyle> = {
     fontWeight: "700",
     textTransform: "uppercase",
   },
-  caption: { fontSize: 12, lineHeight: 16 },
-  body: { fontSize: 14, lineHeight: 21 },
-  bodyStrong: { fontSize: 14, lineHeight: 20, fontWeight: "600" },
-  title: { fontSize: 16, lineHeight: 22, fontWeight: "700", letterSpacing: -0.2 },
-  h2: { fontSize: 20, lineHeight: 26, fontWeight: "700", letterSpacing: -0.4 },
+  caption: { fontFamily: sansFamily, fontSize: 12, lineHeight: 16 },
+  body: { fontFamily: sansFamily, fontSize: 14, lineHeight: 21 },
+  bodyStrong: { fontFamily: sansFamily, fontSize: 14, lineHeight: 20, fontWeight: "600" },
+  title: { fontFamily: sansFamily, fontSize: 16, lineHeight: 22, fontWeight: "700", letterSpacing: -0.2 },
+  h2: { fontFamily: sansFamily, fontSize: 20, lineHeight: 26, fontWeight: "700", letterSpacing: -0.4 },
   h1: {
-    fontFamily: serifFamily,
+    fontFamily: sansFamily,
     fontSize: 32,
     lineHeight: 38,
     letterSpacing: -0.8,
     fontWeight: "600",
   },
   display: {
-    fontFamily: serifFamily,
+    fontFamily: sansFamily,
     fontSize: 46,
     lineHeight: 50,
     letterSpacing: -1.6,
     fontWeight: "600",
   },
   kpi: {
-    fontFamily: serifFamily,
+    fontFamily: sansFamily,
     fontSize: 40,
     lineHeight: 44,
     letterSpacing: -1.2,
