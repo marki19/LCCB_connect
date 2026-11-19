@@ -30,6 +30,7 @@ const blockRouter = require("./routes/blockRouter");
 const searchRouter = require("./routes/searchRouter");
 const notificationRouter = require("./routes/notificationRouter");
 const announcementRouter = require("./routes/announcementRouter");
+const snapRouter = require("./routes/snapRouter");
 
 // The Express app is built here and exported WITHOUT listening, so tests can
 // drive it via supertest. `index.js` owns dotenv + boot-time env validation and
@@ -241,6 +242,8 @@ app.use(
   auth.requireActiveAccount,
   socialRouter
 );
+
+app.use("/api/snaps", snapRouter);
 
 // Superadmin console API. Keep this mount before the catalog router so its
 // specific paths win; unmatched paths fall through.

@@ -543,6 +543,21 @@ const deleteDeviceTokenSchema = z
   .object({ token: z.string().trim().min(1).max(500) })
   .strict();
 
+const snapReactionSchema = z
+  .object({
+    reaction: z.string().trim().min(1).max(30).optional().default("heart"),
+  })
+  .strict();
+
+const createSnapSchema = z
+  .object({
+    media_key: z.string().trim().min(1).max(500),
+    media_type: z.enum(["image", "video"]),
+    caption: z.string().trim().max(300).nullable().optional(),
+    visibility: z.enum(["public", "friends", "department", "private"]).optional().default("public"),
+  })
+  .strict();
+
 const friendRequestSchema = z.object({ addressee_id: requiredUuid() }).strict();
 
 // ---- admin console (SPEC-superadmin-console.md) ----------------------------
@@ -735,4 +750,6 @@ const validate = (schema) => (req, res, next) => {
     verifyPasswordResetSchema,
       brevoWebhookSchema,
     mfaChallengeSchema,
+    createSnapSchema,
+    snapReactionSchema,
   };

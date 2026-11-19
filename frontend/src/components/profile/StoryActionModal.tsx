@@ -5,6 +5,7 @@ import Modal from "../ui/Modal";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { captureSnap, pickSnap, uploadToStorage, MAX_UPLOAD_BYTES } from "../../lib/upload";
+import { createSnap } from "../../lib/snaps";
 import { RADIUS, SPACE } from "../../lib/tokens";
 
 interface StoryActionModalProps {
@@ -52,7 +53,13 @@ export default function StoryActionModal({
         media.type,
         MAX_UPLOAD_BYTES.snap
       );
-      if (uploaded) {
+      if (uploaded?.key) {
+        const mediaType = media.type.startsWith("video/") ? "video" : "image";
+        await createSnap({
+          media_key: uploaded.key,
+          media_type: mediaType,
+          visibility: "public",
+        });
         showToast({ message: "Story added successfully!", tone: "success" });
         onStoryCreated?.();
         onClose();
