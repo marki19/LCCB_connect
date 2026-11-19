@@ -893,8 +893,8 @@ export default function InboxPane({
       />
 
       {/* Note Editor Modal */}
-      <Modal visible={noteModalOpen} onClose={handleCloseNoteModal}>
-        <View style={[styles.noteModalCard, { backgroundColor: colors.surface }]}>
+      <Modal visible={noteModalOpen} onClose={handleCloseNoteModal} maxWidth={420} sheetOnMobile={false}>
+        <View style={styles.noteModalCard}>
           <View style={styles.noteModalHeader}>
             <Text style={[styles.noteModalTitle, { color: colors.ink }]}>
               {userNote ? "Edit Note" : "Share a Thought"}
@@ -1200,8 +1200,6 @@ const styles = StyleSheet.create({
   },
   noteModalCard: {
     padding: SPACE.x5,
-    borderRadius: RADIUS.xl,
-    maxWidth: 420,
     width: "100%",
   },
   noteModalHeader: {
@@ -1230,12 +1228,12 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     borderWidth: 1,
     paddingHorizontal: SPACE.x3,
-    paddingVertical: SPACE.x3,
+    paddingVertical: SPACE.x2,
     marginBottom: SPACE.x4,
   },
   textInput: {
     fontSize: 15,
-    minHeight: 44,
+    minHeight: 38,
   },
   charCount: {
     fontSize: 11,

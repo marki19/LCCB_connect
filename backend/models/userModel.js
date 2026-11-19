@@ -728,8 +728,8 @@ const setNote = async (id, note) => {
   const text = note ? note.trim() : null;
   const sql = `
     UPDATE public.profiles
-    SET note = $1,
-        note_updated_at = CASE WHEN $1 IS NULL THEN NULL ELSE NOW() END,
+    SET note = $1::varchar,
+        note_updated_at = CASE WHEN $1::varchar IS NULL THEN NULL ELSE NOW() END,
         updated_at = NOW()
     WHERE id = $2
     RETURNING ${PROFILE_RETURNING};

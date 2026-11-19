@@ -63,8 +63,9 @@ const parseLimit = (raw, fallback) => {
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
-const API_RATE_LIMIT = parseLimit(process.env.RATE_LIMIT_MAX, 120);
-const WRITE_RATE_LIMIT = parseLimit(process.env.RATE_LIMIT_WRITE_MAX, 30);
+const isDev = process.env.NODE_ENV !== "production";
+const API_RATE_LIMIT = parseLimit(process.env.RATE_LIMIT_MAX, isDev ? 1200 : 120);
+const WRITE_RATE_LIMIT = parseLimit(process.env.RATE_LIMIT_WRITE_MAX, isDev ? 300 : 30);
 
 const RATE_LIMIT_MESSAGE = { error: "Too many requests, please try again later." };
 const apiLimiter = rateLimit({

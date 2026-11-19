@@ -67,8 +67,8 @@ export default function StoryActionModal({
   };
 
   return (
-    <Modal visible={visible} onClose={busy ? () => {} : onClose}>
-      <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <Modal visible={visible} onClose={busy ? () => {} : onClose} maxWidth={420} sheetOnMobile={false}>
+      <View style={styles.container}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.ink }]}>Add to story</Text>
           <Pressable
@@ -157,10 +157,7 @@ export default function StoryActionModal({
 const styles = StyleSheet.create({
   container: {
     padding: SPACE.x5,
-    borderRadius: RADIUS.xl,
     width: "100%",
-    maxWidth: 420,
-    alignSelf: "center",
   },
   header: {
     flexDirection: "row",

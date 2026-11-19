@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  Image,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
@@ -23,6 +24,7 @@ import {
   Ban,
   ShieldCheck,
   X,
+  Image as ImageIcon,
 } from "lucide-react-native";
 import Avatar, { PRESENCE_LABELS } from "../Avatar";
 import { useAuth } from "../../contexts/AuthContext";
@@ -30,6 +32,14 @@ import { usePresence } from "../../contexts/PresenceContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import Modal from "../ui/Modal";
 import NoteBubble from "../profile/NoteBubble";
+import ChatImageBubble from "../chat/ChatImageBubble";
+import ChatImageLightbox from "../chat/ChatImageLightbox";
+import { pickImage } from "../../lib/upload";
+import {
+  formatMediaMessage,
+  parseMessageContent,
+  uploadChatImage,
+} from "../../lib/chatMedia";
 import { useConversationRealtime, type PendingMessage } from "../../hooks/useConversationRealtime";
 import {
   acceptConversation,
@@ -109,8 +119,23 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
   const [confirmBlockOpen, setConfirmBlockOpen] = useState(false);
   const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
+  const [attachedImage, setAttachedImage] = useState<{ uri: string } | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [lightboxData, setLightboxData] = useState<{ url: string; caption?: string } | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handlePickImage = async () => {
+    if (!canReply || uploadingImage || sending) return;
+    try {
+      const res = await pickImage({ allowsEditing: false });
+      if (res && res.uri) {
+        setAttachedImage({ uri: res.uri });
+      }
+    } catch (err) {
+      console.error("Failed to pick image in ThreadPane:", err);
+    }
+  };
 
   // Resolve the thread + peer (works for deep links, not just inbox taps).
   useEffect(() => {
@@ -187,12 +212,43 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
 
   const handleSend = async () => {
     const text = draft.trim();
-    if (!text || sending || !canReply) return;
-    setDraft("");
-    notifyTyping(false);
+    if ((!text && !attachedImage) || sending || uploadingImage || !canReply) return;
     setSending(true);
+    notifyTyping(false);
+
+    let payloadBody = text;
+    if (attachedImage) {
+      setUploadingImage(true);
+      try {
+        const key = await uploadChatImage(attachedImage.uri);
+        if (!key) {
+          setNotice({
+            title: "Upload failed",
+            message: "Could not upload image. Please try again.",
+          });
+          setUploadingImage(false);
+          setSending(false);
+          return;
+        }
+        payloadBody = formatMediaMessage(key, text);
+      } catch (err) {
+        setNotice({
+          title: "Upload failed",
+          message: err instanceof Error ? err.message : "Could not upload image.",
+        });
+        setUploadingImage(false);
+        setSending(false);
+        return;
+      } finally {
+        setUploadingImage(false);
+      }
+    }
+
+    setDraft("");
+    setAttachedImage(null);
+
     try {
-      await send(text);
+      await send(payloadBody);
     } catch (err) {
       // A 4xx (blocked / validation) is permanent — surface it. A network/5xx
       // failure was queued in the outbox and shows as a pending bubble instead.
@@ -303,8 +359,58 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
 
   const renderBubble = (message: Message) => {
     const mine = message.sender_id === userId;
+    const parsed = parseMessageContent(message.body);
+
+    if (parsed.isMedia && parsed.mediaUrl) {
+      return (
+        <Pressable
+          key={message.id}
+          onLongPress={() => openReport(message)}
+          delayLongPress={350}
+          accessibilityRole="button"
+          accessibilityLabel={`${mine ? "You" : peerName} sent a photo`}
+          style={{
+            flexDirection: "row",
+            justifyContent: mine ? "flex-end" : "flex-start",
+            marginBottom: SPACE.x2,
+            paddingHorizontal: SPACE.x3,
+          }}
+        >
+          <ChatImageBubble
+            mediaUrl={parsed.mediaUrl}
+            caption={parsed.text}
+            isMine={mine}
+            maxWidth={280}
+            onPressImage={(url, cap) => setLightboxData({ url, caption: cap })}
+            statusFooter={
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  marginTop: 3,
+                  gap: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 10,
+                    color: mine ? colors.textOnActionMuted : colors.textTertiary,
+                  }}
+                >
+                  {formatClock(message.created_at)}
+                </Text>
+                {mine && <Ticks message={message} />}
+              </View>
+            }
+          />
+        </Pressable>
+      );
+    }
+
     return (
       <Pressable
+        key={message.id}
         onLongPress={() => openReport(message)}
         delayLongPress={350}
         accessibilityRole="text"
@@ -362,41 +468,81 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
     );
   };
 
-  const renderPending = (item: PendingMessage) => (
-    <View
-      style={{
-        flexDirection: "row",
-        justifyContent: "flex-end",
-        marginBottom: SPACE.x2,
-        paddingHorizontal: SPACE.x3,
-      }}
-    >
-      <View
-        style={{
-          maxWidth: "78%",
-          backgroundColor: colors.primarySurfaceAlt,
-          borderRadius: RADIUS.lg,
-          borderBottomRightRadius: 4,
-          paddingHorizontal: SPACE.x3,
-          paddingVertical: SPACE.x2,
-        }}
-      >
-        <Text style={{ fontSize: 15, lineHeight: 20, color: colors.brand }}>{item.body}</Text>
+  const renderPending = (item: PendingMessage) => {
+    const parsedPending = parseMessageContent(item.body);
+    if (parsedPending.isMedia && parsedPending.mediaUrl) {
+      return (
         <View
+          key={item.clientMsgId}
           style={{
             flexDirection: "row",
-            alignItems: "center",
             justifyContent: "flex-end",
-            marginTop: 3,
-            gap: 4,
+            marginBottom: SPACE.x2,
+            paddingHorizontal: SPACE.x3,
           }}
         >
-          <Clock size={11} color={colors.brand} />
-          <Text style={{ fontSize: 10, color: colors.brand }}>Sending…</Text>
+          <ChatImageBubble
+            mediaUrl={parsedPending.mediaUrl}
+            caption={parsedPending.text}
+            isMine={true}
+            sending={true}
+            maxWidth={280}
+            statusFooter={
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  marginTop: 3,
+                  gap: 4,
+                }}
+              >
+                <Clock size={11} color={colors.brand} />
+                <Text style={{ fontSize: 10, color: colors.brand }}>Sending…</Text>
+              </View>
+            }
+          />
+        </View>
+      );
+    }
+
+    return (
+      <View
+        key={item.clientMsgId}
+        style={{
+          flexDirection: "row",
+          justifyContent: "flex-end",
+          marginBottom: SPACE.x2,
+          paddingHorizontal: SPACE.x3,
+        }}
+      >
+        <View
+          style={{
+            maxWidth: "78%",
+            backgroundColor: colors.primarySurfaceAlt,
+            borderRadius: RADIUS.lg,
+            borderBottomRightRadius: 4,
+            paddingHorizontal: SPACE.x3,
+            paddingVertical: SPACE.x2,
+          }}
+        >
+          <Text style={{ fontSize: 15, lineHeight: 20, color: colors.brand }}>{item.body}</Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              marginTop: 3,
+              gap: 4,
+            }}
+          >
+            <Clock size={11} color={colors.brand} />
+            <Text style={{ fontSize: 10, color: colors.brand }}>Sending…</Text>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
@@ -751,6 +897,47 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
           />
         )}
 
+        {/* Image Attachment Preview */}
+        {attachedImage && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: SPACE.x3,
+              paddingTop: SPACE.x2,
+              paddingBottom: SPACE.x1,
+              backgroundColor: colors.panel,
+              borderTopWidth: 1,
+              borderTopColor: colors.line,
+            }}
+          >
+            <View style={{ position: "relative" }}>
+              <Image
+                source={{ uri: attachedImage.uri }}
+                style={{ width: 56, height: 56, borderRadius: RADIUS.md }}
+              />
+              <Pressable
+                onPress={() => setAttachedImage(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Remove photo"
+                style={{
+                  position: "absolute",
+                  top: -6,
+                  right: -6,
+                  backgroundColor: colors.surfaceOverlay,
+                  borderRadius: 10,
+                  width: 20,
+                  height: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={12} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         {/* Composer */}
         <View
           style={{
@@ -760,17 +947,41 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
             paddingHorizontal: SPACE.x3,
             paddingVertical: SPACE.x3,
             backgroundColor: colors.panel,
-            borderTopWidth: 1,
+            borderTopWidth: attachedImage ? 0 : 1,
             borderTopColor: colors.line,
           }}
         >
+          {canReply && (
+            <Pressable
+              onPress={handlePickImage}
+              disabled={uploadingImage || sending}
+              accessibilityRole="button"
+              accessibilityLabel="Attach photo"
+              style={({ pressed, hovered }: any) => [
+                {
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: hovered ? colors.surfaceSunken : "transparent",
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <ImageIcon size={20} color={colors.inkSoft} />
+            </Pressable>
+          )}
+
           <TextInput
             value={draft}
             onChangeText={handleDraftChange}
             editable={canReply}
             placeholder={
               canReply
-                ? "Message…"
+                ? attachedImage
+                  ? "Add a caption…"
+                  : "Message…"
                 : blocked
                 ? "You blocked this user"
                 : "Accept the request to reply"
@@ -801,28 +1012,28 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
           />
           <Pressable
             onPress={() => void handleSend()}
-            disabled={!draft.trim() || !canReply || sending}
+            disabled={(!draft.trim() && !attachedImage) || !canReply || sending || uploadingImage}
             accessibilityRole="button"
             accessibilityLabel="Send message"
-            accessibilityState={{ disabled: !draft.trim() || !canReply || sending }}
+            accessibilityState={{ disabled: (!draft.trim() && !attachedImage) || !canReply || sending || uploadingImage }}
             onFocus={() => {}}
             style={({ pressed }) => ({
               width: 44,
               height: 44,
               borderRadius: 22,
               backgroundColor:
-                draft.trim() && canReply ? colors.brandSolid : colors.surfaceSunken,
+                (draft.trim() || attachedImage) && canReply ? colors.brandSolid : colors.surfaceSunken,
               alignItems: "center",
               justifyContent: "center",
               opacity: pressed ? 0.8 : 1,
             })}
           >
-            {sending ? (
+            {sending || uploadingImage ? (
               <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.textOnBrandSolid} />
             ) : (
               <Send
                 size={18}
-                color={draft.trim() && canReply ? colors.textOnBrandSolid : colors.inkFaint}
+                color={(draft.trim() || attachedImage) && canReply ? colors.textOnBrandSolid : colors.inkFaint}
               />
             )}
           </Pressable>
@@ -1008,6 +1219,13 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
           </View>
         </View>
       </Modal>
+
+      <ChatImageLightbox
+        visible={Boolean(lightboxData?.url)}
+        imageUrl={lightboxData?.url || null}
+        caption={lightboxData?.caption}
+        onClose={() => setLightboxData(null)}
+      />
     </View>
   );
 }

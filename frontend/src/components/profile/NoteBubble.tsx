@@ -152,8 +152,8 @@ export default function NoteBubble({
 
       {/* Note Editor Modal */}
       {isSelf && (
-        <Modal visible={modalOpen} onClose={handleCloseModal}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
+        <Modal visible={modalOpen} onClose={handleCloseModal} maxWidth={420} sheetOnMobile={false}>
+          <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.ink }]}>
                 {hasNote ? "Edit Note" : "Share a Thought"}
@@ -312,10 +312,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     padding: SPACE.x5,
-    borderRadius: RADIUS.xl,
     width: "100%",
-    maxWidth: 420,
-    alignSelf: "center",
   },
   modalHeader: {
     flexDirection: "row",
@@ -342,12 +339,13 @@ const styles = StyleSheet.create({
   inputContainer: {
     borderWidth: 1,
     borderRadius: RADIUS.lg,
-    padding: SPACE.x3,
+    paddingHorizontal: SPACE.x3,
+    paddingVertical: SPACE.x2,
     marginBottom: SPACE.x4,
   },
   textInput: {
     fontSize: 15,
-    minHeight: 48,
+    minHeight: 38,
   },
   charCount: {
     fontSize: 11,
