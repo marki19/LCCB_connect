@@ -39,6 +39,7 @@ import { RADIUS, SPACE, TYPE, elevation } from "../../lib/tokens";
 import { getSearchSuggestions, apiJson } from "../../lib/api";
 import { onMessage, onConversation, onNotification } from "../../lib/realtime";
 import Avatar from "../Avatar";
+import HoverLabel from "../ui/HoverLabel";
 import MenuPopover from "./MenuPopover";
 import ChatsPopover from "./ChatsPopover";
 import NotificationsPopover from "./NotificationsPopover";
@@ -50,7 +51,7 @@ export type PopoverType = "menu" | "chats" | "notifications" | "account" | null;
 const CATEGORY_TABS = [
   { id: "all", label: "All Posts", Icon: Home },
   { id: "websites", label: "Websites", Icon: Globe },
-  { id: "theses", label: "Theses", Icon: BookOpen },
+  { id: "theses", label: "Thesis", Icon: BookOpen },
   { id: "projects", label: "Projects", Icon: FolderGit2 },
   { id: "discussions", label: "Discussions", Icon: MessageSquare },
 ] as const;
@@ -70,6 +71,7 @@ export default function DesktopTopBar({
   const router = useRouter();
   const segments = useSegments();
   const [activePopover, setActivePopover] = useState<PopoverType>(null);
+  const [accountHovered, setAccountHovered] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -379,43 +381,16 @@ export default function DesktopTopBar({
 
         {/* ── CENTER: Category filter tabs ── */}
         <View style={styles.center}>
-          {CATEGORY_TABS.map(({ id, label, Icon }) => {
-            const isActive = activeCategory === id;
-            return (
-              <Pressable
-                key={id}
-                onPress={() => setCategory(id as FeedCategory)}
-                accessibilityRole="tab"
-                accessibilityLabel={label}
-                accessibilityState={{ selected: isActive }}
-                {...(Platform.OS === "web" ? ({ title: label } as any) : {})}
-                style={({ pressed, hovered }: any) => [
-                  styles.navTab,
-                  {
-                    cursor: "pointer",
-                    backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
-                    transform: [{ scale: pressed ? 0.96 : 1 }],
-                  },
-                ]}
-              >
-                <View style={styles.navTabContent}>
-                  <Icon
-                    size={22}
-                    color={isActive ? colors.brand : colors.inkSoft}
-                    strokeWidth={isActive ? 2.5 : 2}
-                  />
-                </View>
-                {isActive && (
-                  <View
-                    style={[
-                      styles.navActiveBar,
-                      { backgroundColor: colors.brand },
-                    ]}
-                  />
-                )}
-              </Pressable>
-            );
-          })}
+          {CATEGORY_TABS.map(({ id, label, Icon }) => (
+            <NavTab
+              key={id}
+              label={label}
+              Icon={Icon}
+              active={activeCategory === id}
+              onPress={() => setCategory(id as FeedCategory)}
+              colors={colors}
+            />
+          ))}
         </View>
 
         {/* ── RIGHT: Action buttons ── */}
@@ -425,6 +400,7 @@ export default function DesktopTopBar({
             onPress={() => toggle("menu")}
             active={activePopover === "menu"}
             accessibilityLabel="Open menu"
+            label="Menu"
             colors={colors}
           >
             <LayoutGrid size={18} color={colors.ink} strokeWidth={2} />
@@ -435,6 +411,7 @@ export default function DesktopTopBar({
             onPress={() => toggle("chats")}
             active={activePopover === "chats"}
             accessibilityLabel="Open chats"
+            label="Chats"
             colors={colors}
             badge={liveUnreadCount}
           >
@@ -446,6 +423,7 @@ export default function DesktopTopBar({
             onPress={() => toggle("notifications")}
             active={activePopover === "notifications"}
             accessibilityLabel="Open notifications"
+            label="Notifications"
             colors={colors}
             badge={liveNotificationCount}
           >
@@ -455,14 +433,16 @@ export default function DesktopTopBar({
           {/* Account */}
           <Pressable
             onPress={() => toggle("account")}
+            onHoverIn={() => setAccountHovered(true)}
+            onHoverOut={() => setAccountHovered(false)}
             accessibilityRole="button"
             accessibilityLabel="Open account menu"
-            style={({ pressed, hovered }: any) => [
+            style={({ pressed }: any) => [
               styles.avatarBtn,
               {
                 cursor: "pointer",
                 backgroundColor:
-                  activePopover === "account" || pressed || hovered
+                  activePopover === "account" || pressed || accountHovered
                     ? colors.hoverOverlay
                     : colors.panelInset,
                 borderColor:
@@ -479,6 +459,7 @@ export default function DesktopTopBar({
               size={30}
             />
             <ChevronDown size={12} color={colors.inkFaint} strokeWidth={2.5} />
+            <HoverLabel label="Account" visible={accountHovered} top={TOP_BAR_HEIGHT - 4} />
           </Pressable>
         </View>
       </View>
@@ -508,7 +489,10 @@ export default function DesktopTopBar({
 interface TopBarButtonProps {
   onPress: () => void;
   active: boolean;
+  /** Spoken name for assistive tech, e.g. "Open notifications". */
   accessibilityLabel: string;
+  /** Short name shown in the hover chip, e.g. "Notifications". */
+  label: string;
   badge?: number;
   colors: any;
   children: React.ReactNode;
@@ -518,6 +502,7 @@ function TopBarButton({
   onPress,
   active,
   accessibilityLabel,
+  label,
   badge,
   colors,
   children,
@@ -551,6 +536,64 @@ function TopBarButton({
           </Text>
         </View>
       )}
+      <HoverLabel label={label} visible={hovered} top={TOP_BAR_HEIGHT - 4} />
+    </Pressable>
+  );
+}
+
+// ── NavTab ───────────────────────────────────────────────────────────────────
+
+interface NavTabProps {
+  label: string;
+  active: boolean;
+  Icon: any;
+  onPress: () => void;
+  colors: any;
+}
+
+/**
+ * One icon-only category tab.
+ *
+ * A glyph alone ("a folder? a bookmark?") is ambiguous, so hovering the tab
+ * reveals its name. The label is an absolutely positioned overlay: it never
+ * shifts the icons, changes the bar's height, or pushes the neighbouring tabs
+ * around.
+ *
+ * Hover only — deliberately not focus. Clicking a tab focuses it, which would
+ * keep the label pinned after the pointer had moved away. Screen readers still
+ * get the name from `accessibilityLabel`.
+ */
+function NavTab({ label, active, Icon, onPress, colors }: NavTabProps) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      accessibilityRole="tab"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      style={({ pressed }: any) => [
+        styles.navTab,
+        {
+          cursor: "pointer",
+          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+          transform: [{ scale: pressed ? 0.96 : 1 }],
+        },
+      ]}
+    >
+      <View style={styles.navTabContent}>
+        <Icon
+          size={22}
+          color={active ? colors.brand : colors.inkSoft}
+          strokeWidth={active ? 2.5 : 2}
+        />
+      </View>
+
+      {active && <View style={[styles.navActiveBar, { backgroundColor: colors.brand }]} />}
+
+      <HoverLabel label={label} visible={hovered} top={TOP_BAR_HEIGHT} />
     </Pressable>
   );
 }

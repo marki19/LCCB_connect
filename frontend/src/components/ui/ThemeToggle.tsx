@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Monitor, Moon, Sun } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
+import { colorSchemeLabel, nextColorScheme } from "../../lib/theme";
 import { focusRing, RADIUS, SPACE } from "../../lib/tokens";
 
 type ThemeToggleProps = {
@@ -18,9 +19,8 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
 
-  const label = preference === "system" ? "System" : preference === "light" ? "Light" : "Dark";
-  const next = preference === "light" ? "dark" : preference === "dark" ? "system" : "light";
-  const nextLabel = next.charAt(0).toUpperCase() + next.slice(1);
+  const label = colorSchemeLabel(preference);
+  const nextLabel = colorSchemeLabel(nextColorScheme(preference));
   const Icon = preference === "system" ? Monitor : preference === "light" ? Sun : Moon;
 
   return (

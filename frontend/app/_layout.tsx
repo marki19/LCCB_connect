@@ -184,7 +184,6 @@ function RouteGuard() {
         <Stack.Screen name="post/[id]" />
         <Stack.Screen name="messages/index" />
         <Stack.Screen name="messages/[id]" />
-        <Stack.Screen name="friends" />
         <Stack.Screen name="find-friends" />
         <Stack.Screen name="saved" />
         <Stack.Screen name="settings" options={{ presentation: "modal" }} />

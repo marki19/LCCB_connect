@@ -7,7 +7,6 @@ import {
   Platform,
   ScrollView,
   TouchableWithoutFeedback,
-  Switch,
   useWindowDimensions,
   Linking,
   Alert,
@@ -26,15 +25,13 @@ import {
   ChevronRight,
   Users,
   MessageCircle,
-  Sun,
-  Moon,
   Bookmark,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useSettingsSidebar } from "../contexts/SettingsSidebarContext";
-import { elevation, focusRing, RADIUS, SPACE, TYPE } from "../lib/tokens";
+import { elevation, focusRing, SPACE, TYPE } from "../lib/tokens";
 import SecuritySettingsModal from "./settings/SecuritySettingsModal";
 import Avatar from "./Avatar";
 
@@ -129,7 +126,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors } = useTheme();
   const { profile, isGuest, signOut } = useAuth();
 
   const sidebarWidth =
@@ -209,9 +206,11 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
           ...elevation("lg", colors),
         }}
       >
-        {/* Brand header */}
+        {/* Profile header */}
         <View
           style={{
+            position: "relative",
+            overflow: "hidden",
             paddingTop: insets.top + SPACE.x3,
             paddingHorizontal: SPACE.x4,
             paddingBottom: SPACE.x5,
@@ -220,24 +219,67 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
             borderBottomColor: colors.heroLine,
           }}
         >
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close menu"
-            style={({ pressed }) => ({
-              alignSelf: "flex-end",
-              width: 36,
-              height: 36,
-              borderRadius: RADIUS.md,
+          {/* Soft brand blooms — mirrors the profile hero band so the drawer
+              reads as part of the same family rather than a flat blue bar. */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              width: 220,
+              height: 220,
+              borderRadius: 110,
+              backgroundColor: colors.heroGlow,
+              opacity: 0.22,
+              top: -120,
+              right: -70,
+            }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              width: 150,
+              height: 150,
+              borderRadius: 75,
+              backgroundColor: colors.accentBright,
+              opacity: 0.12,
+              bottom: -100,
+              left: -40,
+            }}
+          />
+
+          {/* Context row: names the drawer, keeps the close button in reach */}
+          <View
+            style={{
+              flexDirection: "row",
               alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: colors.heroLine,
+              justifyContent: "space-between",
               marginBottom: SPACE.x4,
-              opacity: pressed ? 0.75 : 1,
-            })}
+            }}
           >
-            <X size={20} color={colors.heroText} />
-          </Pressable>
+            <Text style={{ ...TYPE.micro, color: colors.heroTextMuted }}>
+              Settings &amp; privacy
+            </Text>
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close settings"
+              style={({ pressed }) => ({
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: colors.heroLine,
+                borderWidth: 1,
+                borderColor: colors.heroLine,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <X size={18} color={colors.heroText} />
+            </Pressable>
+          </View>
+
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="View your profile"
@@ -255,11 +297,24 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
               opacity: pressed ? 0.8 : 1,
             })}
           >
-            <Avatar
-              name={displayName}
-              avatarUrl={profile?.avatar_url}
-              size={54}
-            />
+            <View
+              style={{
+                width: 62,
+                height: 62,
+                borderRadius: 31,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: colors.heroLine,
+                borderWidth: 1,
+                borderColor: colors.heroLine,
+              }}
+            >
+              <Avatar
+                name={displayName}
+                avatarUrl={profile?.avatar_url}
+                size={54}
+              />
+            </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 numberOfLines={1}
@@ -274,6 +329,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
                 {profile?.department_name || "No department"} · {profile?.year_level || "—"}
               </Text>
             </View>
+            <ChevronRight size={18} color={colors.heroTextMuted} />
           </Pressable>
         </View>
 
@@ -325,34 +381,6 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
 
           {/* App Preferences */}
           <SectionLabel label="Preferences" />
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingVertical: SPACE.x2,
-              paddingHorizontal: SPACE.x4,
-              minHeight: 46,
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3 }}>
-              {isDark ? (
-                <Moon size={20} color={colors.brand} />
-              ) : (
-                <Sun size={20} color={colors.brand} />
-              )}
-              <Text style={{ ...TYPE.bodyStrong, fontWeight: "500", color: colors.ink }}>
-                Dark mode
-              </Text>
-            </View>
-            <Switch
-              value={isDark}
-              onValueChange={() => void toggleTheme()}
-              accessibilityLabel="Dark mode"
-              trackColor={{ false: colors.borderStrong, true: colors.brand }}
-              thumbColor={colors.textOnBrandSolid}
-            />
-          </View>
           <MenuItem
             icon={<Palette size={20} color={colors.brand} />}
             label="Appearance"

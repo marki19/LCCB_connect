@@ -56,6 +56,20 @@ export default function TabsLayout() {
         <Tabs.Screen name="notifications" />
         <Tabs.Screen name="profile" options={{ href: null }} />
         <Tabs.Screen name="discussions" options={{ href: null }} />
+        {/*
+          Friends renders inside the shell (rail + top bar stay mounted), like
+          Notifications, but is reached from the rail, the menu and
+          notifications — never from the tab bar.
+
+          It must stay a *declared, non-hidden* screen. `href: null` compiles to
+          `options.hidden`, and expo-router's tab navigator redirects away from
+          any hidden route that becomes focused — which dropped the user on the
+          first tab (Projects) instead. Tab-bar visibility is owned by
+          `TAB_ITEMS` below: the mobile bar renders only those entries and
+          desktop renders no bar at all, so this screen stays invisible either
+          way while remaining navigable.
+        */}
+        <Tabs.Screen name="friends" />
       </Tabs>
     </DesktopLayout>
   );

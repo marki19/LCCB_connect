@@ -2,8 +2,15 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LIGHT_TOKENS, DARK_TOKENS, ThemeTokens } from "../lib/tokens";
+import {
+  DEFAULT_COLOR_SCHEME,
+  isColorSchemePreference,
+  nextColorScheme,
+  resolveColorScheme,
+  type ColorSchemePreference,
+} from "../lib/theme";
 
-export type ColorSchemePreference = "system" | "light" | "dark";
+export type { ColorSchemePreference } from "../lib/theme";
 
 interface ThemeContextValue {
   preference: ColorSchemePreference;
@@ -18,8 +25,15 @@ interface ThemeContextValue {
 
 const STORAGE_KEY = "theme_preference";
 
+/**
+ * Persisted-preference schema version. Bumped when the shipped default changes
+ * so a choice saved by an older build cannot pin the app to the old default.
+ */
+const STORAGE_VERSION_KEY = "theme_preference_version";
+const STORAGE_VERSION = "2";
+
 const ThemeContext = createContext<ThemeContextValue>({
-  preference: "system",
+  preference: DEFAULT_COLOR_SCHEME,
   resolved: "light",
   isDark: false,
   colors: LIGHT_TOKENS,
@@ -30,18 +44,33 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme(); // 'light' | 'dark' | null | undefined
-  const [preference, setPreference] = useState<ColorSchemePreference>("system");
+  const [preference, setPreference] = useState<ColorSchemePreference>(DEFAULT_COLOR_SCHEME);
 
+  // Restore the user's explicit choice. Builds older than v2 defaulted to a
+  // forced appearance, so their saved value is discarded once and the app
+  // adopts the current default (system).
   useEffect(() => {
     let mounted = true;
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((saved) => {
-        if (!mounted || !saved) return;
-        if (saved === "light" || saved === "dark" || saved === "system") {
+
+    (async () => {
+      try {
+        const version = await AsyncStorage.getItem(STORAGE_VERSION_KEY);
+
+        if (version !== STORAGE_VERSION) {
+          await AsyncStorage.multiRemove([STORAGE_KEY, STORAGE_VERSION_KEY]);
+          await AsyncStorage.setItem(STORAGE_VERSION_KEY, STORAGE_VERSION);
+          if (mounted) setPreference(DEFAULT_COLOR_SCHEME);
+          return;
+        }
+
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (mounted && isColorSchemePreference(saved)) {
           setPreference(saved);
         }
-      })
-      .catch(() => {});
+      } catch {
+        // Storage unavailable: stay on the default.
+      }
+    })();
 
     return () => {
       mounted = false;
@@ -52,32 +81,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setPreference(newPref);
     try {
       await AsyncStorage.setItem(STORAGE_KEY, newPref);
+      await AsyncStorage.setItem(STORAGE_VERSION_KEY, STORAGE_VERSION);
     } catch {}
   }, []);
 
-  const resolved: "light" | "dark" =
-    preference === "system"
-      ? systemScheme === "dark"
-        ? "dark"
-        : "light"
-      : preference;
-
+  const resolved = resolveColorScheme(preference, systemScheme);
   const isDark = resolved === "dark";
   const colors = isDark ? DARK_TOKENS : LIGHT_TOKENS;
 
   const toggleTheme = useCallback(async () => {
-    const next = isDark ? "light" : "dark";
-    await setColorScheme(next);
+    await setColorScheme(isDark ? "light" : "dark");
   }, [isDark, setColorScheme]);
 
   /** Cycle: light → dark → system → light … */
   const cycleTheme = useCallback(async () => {
-    const cycle: Record<ColorSchemePreference, ColorSchemePreference> = {
-      light: "dark",
-      dark: "system",
-      system: "light",
-    };
-    await setColorScheme(cycle[preference]);
+    await setColorScheme(nextColorScheme(preference));
   }, [preference, setColorScheme]);
 
   return (

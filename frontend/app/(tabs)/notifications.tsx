@@ -231,7 +231,7 @@ export default function NotificationsScreen() {
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Inbox</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x2 }}>
-              <Text style={{ ...TYPE.h1, color: colors.ink }}>Notifications</Text>
+              <Text style={{ ...TYPE.h2, color: colors.ink }}>Notifications</Text>
               {unreadCount > 0 ? (
                 <StatusBadge label={`${unreadCount} new`} tone="brand" />
               ) : null}

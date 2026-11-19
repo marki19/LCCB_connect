@@ -52,7 +52,9 @@ export default function DesktopLeftRail() {
   const activeSegment = seg[1] || seg[0] || "index";
 
   const isProfileActive = activeSegment === "profile" || (seg[0] === "profile" && seg[1] === profile?.id);
+  const isFriendsActive = activeSegment === "friends";
   const isSearchActive = activeSegment === "search";
+  const isCapstonesActive = activeSegment === "capstones";
   const isNotificationsActive = activeSegment === "notifications";
 
   const itemRowStyle = (active: boolean = false) => ({ pressed, hovered }: any): any => [
@@ -121,8 +123,8 @@ export default function DesktopLeftRail() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Friends"
-              onPress={() => router.push("/friends")}
-              style={itemRowStyle()}
+              onPress={() => router.push("/(tabs)/friends")}
+              style={itemRowStyle(isFriendsActive)}
             >
               <View style={[styles.iconCircle, { backgroundColor: "#1877F2" }]}>
                 <Users size={20} color="#FFFFFF" />
@@ -155,12 +157,16 @@ export default function DesktopLeftRail() {
             </Text>
           </Pressable>
 
-          {/* Capstones */}
+          {/* Capstones — the dedicated academic repository view. This must point
+              at the Capstones screen itself; the old destination was
+              `/(tabs)/search?type=capstone`, which only seeds that screen's
+              initial tab in a useState initializer, so pressing it while
+              Repositories was already mounted changed nothing on screen. */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Capstones"
-            onPress={() => router.push({ pathname: "/(tabs)/search", params: { type: "capstone" } })}
-            style={itemRowStyle()}
+            onPress={() => router.push("/(tabs)/capstones")}
+            style={itemRowStyle(isCapstonesActive)}
           >
             <View style={[styles.iconCircle, { backgroundColor: "#F59E0B" }]}>
               <GraduationCap size={20} color="#FFFFFF" />
