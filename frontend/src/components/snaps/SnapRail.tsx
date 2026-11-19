@@ -46,22 +46,32 @@ export default function SnapRail({
         contentContainerStyle={styles.scrollContent}
       >
         {/* Create / Self Story Card */}
-        <Pressable
-          onPress={selfGroup && selfGroup.snaps.length > 0 ? () => onOpenGroup(selfGroup) : onAddStory}
-          accessibilityRole="button"
-          accessibilityLabel={selfGroup ? "View your story" : "Create story"}
-          style={({ pressed, hovered }: any) => [
-            styles.card,
-            {
-              backgroundColor: colors.surfaceSunken,
-              borderColor: colors.border,
-              transform: [{ scale: pressed ? 0.98 : hovered ? 1.02 : 1 }],
-            },
-          ]}
-        >
-          {selfGroup && selfGroup.snaps.length > 0 ? (
-            // Self with active snaps
-            <>
+        {selfGroup && selfGroup.snaps.length > 0 ? (
+          // Self with active snaps
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.surfaceSunken,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Pressable
+              onPress={() => onOpenGroup(selfGroup)}
+              accessibilityRole="button"
+              accessibilityLabel="View your story"
+              style={({ pressed, hovered }: any) => [
+                {
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  opacity: pressed ? 0.9 : hovered ? 0.96 : 1,
+                },
+              ]}
+            >
               <AppImage
                 source={resolveFileUrl(selfGroup.snaps[selfGroup.snaps.length - 1]?.media_key)}
                 style={styles.cardBg}
@@ -75,23 +85,42 @@ export default function SnapRail({
                   size={36}
                 />
               </View>
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onAddStory();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Add to your story"
-                style={[styles.addFloatingBtn, { backgroundColor: colors.brandSolid }]}
-              >
-                <Plus size={16} color="#FFFFFF" strokeWidth={3} />
-              </Pressable>
               <Text style={styles.cardAuthorName} numberOfLines={1}>
                 Your story
               </Text>
-            </>
-          ) : (
-            // Self without active snaps (Create story card)
+            </Pressable>
+
+            {/* Sibling add button, not nested inside another button */}
+            <Pressable
+              onPress={onAddStory}
+              accessibilityRole="button"
+              accessibilityLabel="Add to your story"
+              style={({ pressed, hovered }: any) => [
+                styles.addFloatingBtn,
+                {
+                  backgroundColor: colors.brandSolid,
+                  opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
+                },
+              ]}
+            >
+              <Plus size={16} color="#FFFFFF" strokeWidth={3} />
+            </Pressable>
+          </View>
+        ) : (
+          // Self without active snaps (Create story card)
+          <Pressable
+            onPress={onAddStory}
+            accessibilityRole="button"
+            accessibilityLabel="Create story"
+            style={({ pressed, hovered }: any) => [
+              styles.card,
+              {
+                backgroundColor: colors.surfaceSunken,
+                borderColor: colors.border,
+                transform: [{ scale: pressed ? 0.98 : hovered ? 1.02 : 1 }],
+              },
+            ]}
+          >
             <View style={styles.createStoryWrap}>
               <View style={styles.createStoryTop}>
                 <Avatar
@@ -109,8 +138,8 @@ export default function SnapRail({
                 </Text>
               </View>
             </View>
-          )}
-        </Pressable>
+          </Pressable>
+        )}
 
         {/* Peer Story Cards */}
         {loading && peerGroups.length === 0 ? (
