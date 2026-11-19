@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -48,13 +48,19 @@ export default function NoteBubble({
     setModalOpen(true);
   };
 
+  const handleCloseModal = useCallback(() => {
+    if (!saving) setModalOpen(false);
+  }, [saving]);
+
   const handleSaveNote = async () => {
     const clean = noteInput.trim();
+    if (!clean && !hasNote) return;
     setSaving(true);
     try {
       if (clean.length === 0) {
         await deleteNote();
         onNoteUpdated?.(null);
+        setNoteInput("");
         showToast({ message: "Note removed", tone: "info" });
       } else {
         await updateNote(clean);
@@ -74,6 +80,7 @@ export default function NoteBubble({
     try {
       await deleteNote();
       onNoteUpdated?.(null);
+      setNoteInput("");
       showToast({ message: "Note deleted", tone: "info" });
       setModalOpen(false);
     } catch (err: any) {
@@ -145,14 +152,14 @@ export default function NoteBubble({
 
       {/* Note Editor Modal */}
       {isSelf && (
-        <Modal visible={modalOpen} onClose={() => !saving && setModalOpen(false)}>
+        <Modal visible={modalOpen} onClose={handleCloseModal}>
           <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.ink }]}>
                 {hasNote ? "Edit Note" : "Share a Thought"}
               </Text>
               <Pressable
-                onPress={() => setModalOpen(false)}
+                onPress={handleCloseModal}
                 disabled={saving}
                 style={({ pressed, hovered }: any) => [
                   styles.closeBtn,
@@ -178,6 +185,8 @@ export default function NoteBubble({
                 placeholderTextColor={colors.inkFaint}
                 maxLength={60}
                 autoFocus
+                returnKeyType="send"
+                onSubmitEditing={handleSaveNote}
                 style={[
                   styles.textInput,
                   {
@@ -217,14 +226,15 @@ export default function NoteBubble({
               <Button
                 label="Cancel"
                 variant="ghost"
-                onPress={() => setModalOpen(false)}
+                onPress={handleCloseModal}
                 disabled={saving}
               />
               <Button
                 label={saving ? "Saving..." : "Share"}
                 variant="primary"
+                loading={saving}
                 onPress={handleSaveNote}
-                disabled={saving}
+                disabled={saving || (!hasNote && noteInput.trim().length === 0)}
               />
             </View>
           </View>

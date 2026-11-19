@@ -101,13 +101,19 @@ export default function InboxPane({
     setNoteDraft(profile?.note ?? "");
   }, [profile?.note]);
 
+  const handleCloseNoteModal = useCallback(() => {
+    if (!savingNote) setNoteModalOpen(false);
+  }, [savingNote]);
+
   const handleSaveNote = async () => {
     const clean = noteDraft.trim();
+    if (!clean && !userNote) return;
     setSavingNote(true);
     try {
       if (clean.length === 0) {
         await deleteNote();
         setUserNote(null);
+        setNoteDraft("");
         showToast({ message: "Note removed", tone: "info" });
       } else {
         await updateNote(clean);
@@ -887,14 +893,14 @@ export default function InboxPane({
       />
 
       {/* Note Editor Modal */}
-      <Modal visible={noteModalOpen} onClose={() => !savingNote && setNoteModalOpen(false)}>
+      <Modal visible={noteModalOpen} onClose={handleCloseNoteModal}>
         <View style={[styles.noteModalCard, { backgroundColor: colors.surface }]}>
           <View style={styles.noteModalHeader}>
             <Text style={[styles.noteModalTitle, { color: colors.ink }]}>
               {userNote ? "Edit Note" : "Share a Thought"}
             </Text>
             <Pressable
-              onPress={() => setNoteModalOpen(false)}
+              onPress={handleCloseNoteModal}
               disabled={savingNote}
               style={({ pressed, hovered }: any) => [
                 styles.closeBtn,
@@ -920,6 +926,8 @@ export default function InboxPane({
               placeholderTextColor={colors.inkFaint}
               maxLength={60}
               autoFocus
+              returnKeyType="send"
+              onSubmitEditing={handleSaveNote}
               style={[
                 styles.textInput,
                 {
@@ -959,14 +967,15 @@ export default function InboxPane({
             <Button
               label="Cancel"
               variant="ghost"
-              onPress={() => setNoteModalOpen(false)}
+              onPress={handleCloseNoteModal}
               disabled={savingNote}
             />
             <Button
               label={savingNote ? "Saving..." : "Share"}
               variant="primary"
+              loading={savingNote}
               onPress={handleSaveNote}
-              disabled={savingNote}
+              disabled={savingNote || (!userNote && noteDraft.trim().length === 0)}
             />
           </View>
         </View>
