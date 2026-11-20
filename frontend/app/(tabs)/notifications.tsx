@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Bell,
   Megaphone,
+  AtSign,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/contexts/ThemeContext";
@@ -139,6 +140,8 @@ export default function NotificationsScreen() {
     // Navigate to target if applicable
     if (item.type === "friend_request" || item.type === "friend_accepted") {
       router.push("/friends" as any);
+    } else if (item.type === "mention" && (item.target_id || item.entity_id)) {
+      router.push(`/post/${item.target_id || item.entity_id}` as any);
     } else if (item.entity_type === "post" && item.entity_id) {
       router.push(`/post/${item.entity_id}` as any);
     } else if (item.type === "flagged_post" || item.type === "flagged_comment") {
@@ -181,6 +184,8 @@ export default function NotificationsScreen() {
         return { Icon: BookOpen, tone: "accent" };
       case "announcement":
         return { Icon: Megaphone, tone: "brand" };
+      case "mention":
+        return { Icon: AtSign, tone: "brand" };
       case "new_post":
       default:
         return { Icon: FileText, tone: "brand" };
@@ -226,7 +231,7 @@ export default function NotificationsScreen() {
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Inbox</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x2 }}>
-              <Text style={{ ...TYPE.h1, color: colors.ink }}>Notifications</Text>
+              <Text style={{ ...TYPE.h2, color: colors.ink }}>Notifications</Text>
               {unreadCount > 0 ? (
                 <StatusBadge label={`${unreadCount} new`} tone="brand" />
               ) : null}

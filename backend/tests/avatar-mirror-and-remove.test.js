@@ -186,13 +186,14 @@ describe("googleAvatar service", () => {
     db.query = async (sql, params) => {
       querySql = sql;
       queryParams = params;
-      return { rows: [{ id: "u1", avatar_url: params[2], avatar_source: "upload" }] };
+      const avatarIdx = params.indexOf("avatars/custom-upload.jpg");
+      return { rows: [{ id: "u1", avatar_url: params[avatarIdx], avatar_source: "upload" }] };
     };
 
     try {
       const user = await userModel.updateUser("u1", { avatar_url: "avatars/custom-upload.jpg" });
-      assert.ok(querySql.includes("avatar_source = CASE WHEN $3 IS NOT NULL THEN 'upload'"));
-      assert.equal(queryParams[2], "avatars/custom-upload.jpg");
+      const avatarParamIdx = queryParams.indexOf("avatars/custom-upload.jpg") + 1;
+      assert.ok(querySql.includes(`avatar_source = CASE WHEN $${avatarParamIdx} IS NOT NULL THEN 'upload'`));
       assert.equal(user.avatar_source, "upload");
     } finally {
       db.query = originalQuery;

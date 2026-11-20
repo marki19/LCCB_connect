@@ -9,7 +9,8 @@ import {
 } from "react-native";
 import { RefreshCw } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
-import { focusRing, RADIUS, SPACE, TYPE } from "../../lib/tokens";
+import { focusRing, RADIUS, SPACE } from "../../lib/tokens";
+import { CONSOLE_TEXT } from "./consoleTheme";
 
 type PageHeaderProps = {
   eyebrow?: string;
@@ -65,7 +66,7 @@ function RefreshButton({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={refreshing ? `${label} — loading` : label}
+      accessibilityLabel={refreshing ? `${label}, loading` : label}
       accessibilityState={{ busy: refreshing }}
       onPress={onRefresh}
       onHoverIn={() => setHovered(true)}
@@ -74,7 +75,7 @@ function RefreshButton({
       onBlur={() => setFocused(false)}
       style={[
         {
-          minHeight: 40,
+          minHeight: 38,
           flexDirection: "row",
           alignItems: "center",
           gap: SPACE.x2,
@@ -91,13 +92,17 @@ function RefreshButton({
       <Animated.View style={{ transform: [{ rotate: spinInterpolation }] }}>
         <RefreshCw size={15} color={colors.inkSoft} />
       </Animated.View>
-      <Text style={{ ...TYPE.bodyStrong, color: colors.inkSoft }}>{label}</Text>
+      <Text style={{ ...CONSOLE_TEXT.strong, fontSize: 13, color: colors.inkSoft }}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
-// no local state helper needed
-
+/**
+ * Console page header: one title, one short description, and the page actions
+ * on the same line so every screen opens the same way.
+ */
 export default function PageHeader({
   eyebrow,
   title,
@@ -115,7 +120,14 @@ export default function PageHeader({
   return (
     <View style={{ marginBottom: compact ? SPACE.x6 : SPACE.x8 }}>
       {eyebrow ? (
-        <Text style={{ ...TYPE.micro, color: colors.inkFaint, marginBottom: SPACE.x3 }}>
+        <Text
+          style={{
+            ...CONSOLE_TEXT.eyebrow,
+            fontSize: 10.5,
+            color: colors.inkFaint,
+            marginBottom: SPACE.x2,
+          }}
+        >
           {eyebrow}
         </Text>
       ) : null}
@@ -124,18 +136,18 @@ export default function PageHeader({
         style={{
           flexDirection: "row",
           flexWrap: "wrap",
-          alignItems: "flex-end",
+          alignItems: "flex-start",
           justifyContent: "space-between",
           gap: SPACE.x4,
         }}
       >
-        <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 240, maxWidth: 780 }}>
+        <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 260, maxWidth: 720 }}>
           <Text
             accessibilityRole="header"
             style={{
-              ...TYPE.h1,
-              fontSize: compact ? 28 : TYPE.h1.fontSize,
-              lineHeight: compact ? 34 : TYPE.h1.lineHeight,
+              ...CONSOLE_TEXT.pageTitle,
+              fontSize: compact ? 25 : CONSOLE_TEXT.pageTitle.fontSize,
+              lineHeight: compact ? 32 : CONSOLE_TEXT.pageTitle.lineHeight,
               color: colors.ink,
             }}
           >
@@ -144,10 +156,10 @@ export default function PageHeader({
           {description ? (
             <Text
               style={{
-                ...TYPE.body,
+                ...CONSOLE_TEXT.body,
                 color: colors.inkSoft,
                 marginTop: SPACE.x2,
-                maxWidth: 660,
+                maxWidth: 620,
               }}
             >
               {description}
@@ -155,7 +167,15 @@ export default function PageHeader({
           ) : null}
         </View>
 
-        <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x2, flexWrap: "wrap" }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: SPACE.x2,
+            flexWrap: "wrap",
+            paddingTop: compact ? 0 : 4,
+          }}
+        >
           {actions}
           {onRefresh ? (
             <RefreshButton onRefresh={onRefresh} refreshing={refreshing} label={refreshLabel} />
@@ -163,16 +183,17 @@ export default function PageHeader({
         </View>
       </View>
 
-      <View
-        style={{
-          marginTop: SPACE.x5,
-          height: 1,
-          backgroundColor: colors.line,
-        }}
-      />
+      <View style={{ marginTop: SPACE.x5, height: 1, backgroundColor: colors.line }} />
 
       {meta ? (
-        <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: SPACE.x3 }}>
+        <Text
+          style={{
+            ...CONSOLE_TEXT.caption,
+            fontSize: 12,
+            color: colors.inkFaint,
+            marginTop: SPACE.x3,
+          }}
+        >
           {meta}
         </Text>
       ) : null}

@@ -15,6 +15,7 @@ const { normalizeRole } = require("../utils/roles");
 const passwordResetModel = require("../models/passwordResetModel");
 const { sanitizeProfile } = require("../utils/profile");
 const { mirrorGoogleAvatar } = require("../services/googleAvatar");
+const identityService = require("../services/identity");
 
 const GENERIC_LOGIN_ERROR = "Invalid email, student ID, or password";
 const GENERIC_CODE_ERROR = "That code is incorrect or has expired. Request a new one.";
@@ -208,23 +209,50 @@ async function login(req, res, next) {
 
     if (error) {
       const existing = profile || (await userModel.getUserByEmailForLockout(email));
-      if (existing && !/not confirmed|not_confirmed/i.test(error.message)) {
-        const attempts = await userModel.incrementFailedLogins(existing.id);
-        const interval = lockoutIntervalFor(attempts);
-        if (interval) {
-          await userModel.lockAccount(existing.id, interval);
-          await record({
-            actor: { id: existing.id, role: existing.role },
-            action: ACTIONS.LOGIN_FAILED_LOCKOUT,
-            targetType: "user",
-            targetId: existing.id,
-            metadata: {
-              ip: req.ip,
-              identifier_type: identifierType,
-              attempts,
-              lock_interval: interval,
-            },
+      if (existing) {
+        // Protect Google-only accounts: never lock them out for nonexistent passwords (R1)
+        let isGoogleOnly = false;
+        try {
+          if (supabase && typeof supabase.auth?.admin?.getUserById === "function") {
+            const { data: supaUserData } = await supabase.auth.admin.getUserById(existing.id);
+            const identities = supaUserData?.user?.identities || [];
+            const hasEmail = identities.some((i) => i.provider === "email");
+            const hasGoogle =
+              identities.some((i) => i.provider === "google") ||
+              supaUserData?.user?.app_metadata?.provider === "google";
+            if (hasGoogle && !hasEmail && !existing.password_hash) {
+              isGoogleOnly = true;
+            }
+          }
+        } catch {
+          // Non-blocking
+        }
+
+        if (isGoogleOnly) {
+          return res.status(400).json({
+            error: "This account uses Google Sign-In. Please sign in with Google.",
+            code: "use_google_signin",
           });
+        }
+
+        if (!/not confirmed|not_confirmed/i.test(error.message)) {
+          const attempts = await userModel.incrementFailedLogins(existing.id);
+          const interval = lockoutIntervalFor(attempts);
+          if (interval) {
+            await userModel.lockAccount(existing.id, interval);
+            await record({
+              actor: { id: existing.id, role: existing.role },
+              action: ACTIONS.LOGIN_FAILED_LOCKOUT,
+              targetType: "user",
+              targetId: existing.id,
+              metadata: {
+                ip: req.ip,
+                identifier_type: identifierType,
+                attempts,
+                lock_interval: interval,
+              },
+            });
+          }
         }
       }
       if (/not confirmed|not_confirmed/i.test(error.message)) {
@@ -432,7 +460,6 @@ async function mfaChallenge(req, res, next) {
       aal: "aal2",
       mfaChallenged: true,
     });
-    mfaService.clearSessionAgeCache(userId);
 
     // Record audit event
     await mfaService.recordMfaChallenge({ userId, req, success: true });
@@ -500,45 +527,71 @@ async function verifySignup(req, res, next) {
       return invalidCode();
     }
 
-    const newUserId = crypto.randomUUID();
-    let userId = newUserId;
+    // Ensure Supabase Admin client is available
+    const supabase = adminClientOr503(res);
+    if (!supabase) return;
+
+    // Check if email already registered in profiles
+    const existingProfile = await userModel.findProfileIdByEmail(normalizedEmail);
+    if (existingProfile) {
+      await userModel.deletePendingSignup(normalizedEmail);
+      return res.status(409).json({
+        error: "An account with this email already exists",
+        code: "email_already_registered",
+      });
+    }
+
+    const { data: supaUser, error: supaErr } = await supabase.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: pending.full_name,
+      },
+    });
+
+    if (supaErr || !supaUser?.user?.id) {
+      const errMsg = supaErr?.message?.toLowerCase() || "";
+      if (errMsg.includes("already registered") || errMsg.includes("already exists") || supaErr?.status === 422) {
+        await userModel.deletePendingSignup(normalizedEmail);
+        return res.status(409).json({
+          error: "An account with this email already exists",
+          code: "email_already_registered",
+        });
+      }
+      console.error(`[auth] Supabase admin.createUser failed for ${normalizedEmail}:`, supaErr);
+      return res.status(502).json({
+        error: "Failed to create authentication credentials. Please try again.",
+        code: "auth_provider_error",
+      });
+    }
+
+    const userId = supaUser.user.id;
     let session = null;
 
-    // Optional non-blocking sync with Supabase if configured (for hybrid cloud / test harness)
     try {
-      const supabase = getSupabaseAdmin();
-      if (supabase && typeof supabase.auth?.admin?.createUser === "function") {
-        const { data: supaUser } = await supabase.auth.admin.createUser({
-          email: normalizedEmail,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            full_name: pending.full_name,
-          },
-        });
-        if (supaUser?.user?.id) {
-          userId = supaUser.user.id;
-        }
-
-        const { data: sessionData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
-        });
-        if (sessionData?.session) {
-          session = sessionData.session;
-        } else if (signInError) {
-          console.warn(`[auth] Supabase sign-in mirror failed for ${normalizedEmail}: ${signInError.message}`);
-        }
+      const { data: sessionData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+      if (sessionData?.session) {
+        session = sessionData.session;
+      } else if (signInError) {
+        console.warn(`[auth] Supabase sign-in mirror failed for ${normalizedEmail}: ${signInError.message}`);
       }
     } catch (syncErr) {
-      console.warn(`[auth] Supabase signup mirror failed for ${normalizedEmail}: ${syncErr?.message || syncErr}`);
+      console.warn(`[auth] Supabase sign-in error for ${normalizedEmail}: ${syncErr?.message || syncErr}`);
     }
+
+    // Derive unique username from full name
+    const username = await identityService.deriveUsername(pending.full_name, userId);
 
     // Create profile with password_hash directly in PostgreSQL
     const createdProfile = await userModel.createUser({
       id: userId,
       email: normalizedEmail,
       full_name: pending.full_name,
+      username,
       role: "user",
       password_hash: pending.password_hash,
       verification_status: "unverified",
@@ -742,7 +795,6 @@ async function mfaEnrollVerify(req, res, next) {
       aal: "aal2",
       mfaChallenged: true,
     });
-    mfaService.clearSessionAgeCache(userId);
 
     // Audit
     await mfaService.recordMfaEnroll({ userId, req, factorId: factor.id });
@@ -855,160 +907,6 @@ async function mfaList(req, res, next) {
 }
 
 /**
- * POST /api/auth/mfa/step-up
- * Elevates or renews an active session with TOTP code.
- * Requires authenticated user (admin/superadmin).
- */
-async function mfaStepUp(req, res, next) {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const role = normalizeRole(req.profile?.role);
-    if (role !== "admin" && role !== "superadmin") {
-      return res.status(403).json({ error: "Step-up authentication is reserved for administrators" });
-    }
-
-    const { code } = req.body || {};
-    const cleanCode = typeof code === "string" ? code.trim() : "";
-    if (!/^\d{6}$/.test(cleanCode)) {
-      return res.status(400).json({ error: "A valid 6-digit authentication code is required" });
-    }
-
-    const factors = await mfaService.listFactors(userId);
-    const verifiedFactor = factors.find(
-      (f) => f.type === "totp" && f.status === "verified"
-    );
-    if (!verifiedFactor) {
-      return res.status(400).json({ error: "No verified authenticator app found for this account" });
-    }
-
-    let decryptedSecret;
-    try {
-      const encryptedSecret = JSON.parse(verifiedFactor.secret);
-      decryptedSecret = mfaService.decryptTotpSecret(encryptedSecret);
-    } catch (e) {
-      console.error(`[mfa][${req.id?.slice(0, 8) ?? "no-req"}] Failed to decrypt TOTP secret for step-up:`, e.message);
-      return res.status(500).json({ error: "Factor configuration error" });
-    }
-
-    const { valid, currentStep, isReplay } = mfaService.verifyTotpTimingSafe(
-      decryptedSecret,
-      cleanCode,
-      verifiedFactor.last_used_step
-    );
-
-    if (!valid || isReplay) {
-      await mfaService.recordMfaChallenge({ userId, req, success: false });
-      return res.status(401).json({ error: "Invalid or expired code. Please try again." });
-    }
-
-    // Update the factor's last_used_step
-    try {
-      await db.query(`UPDATE public.mfa_factors SET last_used_step = $1 WHERE id = $2`, [
-        currentStep,
-        verifiedFactor.id,
-      ]);
-    } catch {
-      const supabase = getSupabaseAdmin();
-      await supabase
-        .from("mfa_factors")
-        .update({ last_used_step: currentStep })
-        .eq("id", verifiedFactor.id);
-    }
-
-    // Record session event with AAL2 elevation
-    await mfaService.recordSessionEvent({
-      userId,
-      eventType: "mfa_challenge",
-      aal: "aal2",
-      ipAddress: req.ip,
-      userAgent: req.headers["user-agent"],
-    });
-
-    // Clear session age cache so subsequent /api/admin/* requests succeed
-    mfaService.clearSessionAgeCache(userId);
-
-    // Audit log
-    await mfaService.recordMfaChallenge({ userId, req, success: true });
-
-    return res.json({ ok: true, message: "Admin session renewed successfully", aal: "aal2" });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * GET /api/auth/mfa/admin-session
- * Checks whether the administrator's 24-hour console session is currently valid.
- */
-async function checkAdminSession(req, res, next) {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const role = normalizeRole(req.profile?.role);
-    const isAdmin = role === "admin" || role === "superadmin";
-
-    if (!isAdmin) {
-      return res.json({ isAdmin: false, valid: false, remainingMs: 0 });
-    }
-
-    let events = null;
-    try {
-      const resDb = await db.query(
-        `SELECT created_at, event_type, aal
-         FROM public.session_events
-         WHERE user_id = $1 AND event_type IN ('login', 'mfa_challenge', 'logout', 'force_signout')
-         ORDER BY created_at DESC
-         LIMIT 1`,
-        [userId]
-      );
-      events = resDb.rows;
-    } catch {
-      const supabase = getSupabaseAdmin();
-      const { data } = await supabase
-        .from("session_events")
-        .select("created_at, event_type, aal")
-        .eq("user_id", userId)
-        .in("event_type", ["login", "mfa_challenge", "logout", "force_signout"])
-        .order("created_at", { ascending: false })
-        .limit(1);
-      events = data;
-    }
-
-    const now = Date.now();
-    let valid = false;
-    let remainingMs = 0;
-
-    if (events && events.length > 0) {
-      const latest = events[0];
-      if (latest.event_type !== "logout" && latest.event_type !== "force_signout") {
-        const loginTime = new Date(latest.created_at).getTime();
-        const ageMs = now - loginTime;
-        const maxAgeMs = 24 * 60 * 60 * 1000; // 24 hours
-        if (ageMs <= maxAgeMs) {
-          valid = true;
-          remainingMs = Math.max(0, maxAgeMs - ageMs);
-        }
-      }
-    }
-
-    return res.json({
-      isAdmin: true,
-      valid,
-      remainingMs,
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
  * POST /api/auth/logout
  * Records logout event and returns success.
  * Requires authenticated user.
@@ -1019,9 +917,6 @@ async function logout(req, res, next) {
     if (userId) {
       // Record logout
       await mfaService.recordLogout({ userId, req }).catch(() => {});
-
-      // Clear session age cache
-      mfaService.clearSessionAgeCache(userId);
 
       // Revoke all native refresh tokens for this user
       await nativeAuth.revokeAllUserRefreshTokens(userId).catch(() => {});
@@ -1083,13 +978,11 @@ async function googleAuth(req, res, next) {
     }
     const email = user.email?.toLowerCase();
 
-    // Enforce LCCB email domain for signups (Phase 1 domain trigger)
-    if (!email || !email.endsWith("@lccbonline.edu.ph")) {
-      // Clean up the rejected user so it does not persist in auth
+    if (!email) {
       await supabase.auth.admin.deleteUser(user.id).catch(() => {});
-      return res.status(403).json({
-        error: "Only @lccbonline.edu.ph accounts are allowed. Please sign in with your school Google account.",
-        code: "domain_not_allowed",
+      return res.status(400).json({
+        error: "Google account does not have an email address.",
+        code: "missing_email",
       });
     }
 
@@ -1099,11 +992,14 @@ async function googleAuth(req, res, next) {
 
     if (!profile) {
       // Create profile for new Google user with Google avatar as default
-      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || null;
+      const emailLocalPart = email.split("@")[0] || null;
+      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || emailLocalPart;
+      const username = await identityService.deriveUsername(fullName, user.id);
       await userModel.createUser({
         id: user.id,
         email: user.email,
         full_name: fullName,
+        username,
         avatar_url: googleAvatar,
         role: "user",
         verification_status: "unverified",
@@ -1373,8 +1269,6 @@ module.exports = {
   mfaEnroll,
   mfaEnrollVerify,
   mfaChallenge,
-  mfaStepUp,
-  checkAdminSession,
   mfaUnenroll,
   mfaList,
   // Session endpoints

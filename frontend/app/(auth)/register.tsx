@@ -32,8 +32,8 @@ export default function RegisterScreen() {
   const [confirmError, setConfirmError] = useState("");
   const [generalError, setGeneralError] = useState("");
 
-  const isValidEmailDomain = email.trim().toLowerCase().endsWith("@lccbonline.edu.ph");
-  const showEmailFormatError = email.length > 0 && !isValidEmailDomain;
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const showEmailFormatError = email.length > 0 && !isValidEmail;
   const signUpDisabled = loading || showEmailFormatError || !!emailError;
 
   function handleEmailChange(value: string) {
@@ -63,8 +63,8 @@ export default function RegisterScreen() {
     if (!email.trim()) {
       setEmailError("Email is required");
       hasError = true;
-    } else if (!isValidEmailDomain) {
-      setEmailError("Must be an @lccbonline.edu.ph address");
+    } else if (!isValidEmail) {
+      setEmailError("Must be a valid email address");
       hasError = true;
     }
 
@@ -164,16 +164,16 @@ export default function RegisterScreen() {
       {generalError ? <Alert tone="error" message={generalError} /> : null}
 
       <TextField
-        label="Institutional email"
+        label="Email address"
         value={email}
         onChangeText={handleEmailChange}
-        placeholder="student@lccbonline.edu.ph"
+        placeholder="name@example.com"
         keyboardType="email-address"
         autoComplete="email"
         nextRef={fullNameRef}
         returnKeyType="next"
         leadingIcon={({ size, color }) => <Mail size={size} color={color} strokeWidth={2.1} />}
-        error={emailError || (showEmailFormatError ? "Must use an @lccbonline.edu.ph address" : "")}
+        error={emailError || (showEmailFormatError ? "Must be a valid email address" : "")}
       />
 
       <TextField

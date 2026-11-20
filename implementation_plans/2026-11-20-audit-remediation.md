@@ -1,0 +1,83 @@
+# Audit remediation — 2026-11-20
+
+Source: the security/connectivity audit delivered 2026-11-20. Security findings
+(guest writes, public snap bytes, RLS, write visibility, `media_key`) shipped in
+`f41f056`. This plan tracks everything else.
+
+## Out of scope (cannot be done from this repo)
+
+| Item | Why |
+|---|---|
+| Make `marki19/LCCB_connect` private | `gh` CLI is not installed; repo settings need GitHub access. |
+| Rotate the Supabase anon key exposed in `a420ad8` | Needs the Supabase dashboard. |
+| Move web session tokens out of `localStorage` | Architectural: needs an httpOnly refresh cookie, CSRF defence, and a CORS-credentials change. Not a bolt-on; needs its own plan and rollout. |
+
+## Slices
+
+### A. Snap viewer: video, progress, correctness
+- [x] A1 Render video snaps with `AppVideo` (`autoPlay`, `paused`, `nativeControls={false}`)
+- [x] A2 Drive the progress bar from video time, keep the 5 s timer for images
+- [x] A3 Fix `handleNext` used before declaration; complete effect deps
+- [x] A4 Rename "story" copy in the viewer
+
+### B. Snap composer: audience
+- [x] B1 Audience control (Public / Friends / Department) in the create sheet
+- [x] B2 Pass the choice to `createSnap` instead of hardcoded `"public"`
+- [x] B3 Rename the component and its copy to Quick Snap
+
+### C. Snap comments and replies
+- [x] C1 Migration `061_snap_comments.sql` (table + RLS + index)
+- [x] C2 `snapCommentModel` with visibility-gated reads
+- [x] C3 Read/write routes under `/api/snaps/:id/comments`, `requireVerified` on writes
+- [x] C4 Validation schemas
+- [x] C5 Comment sheet in the viewer
+- [x] C6 Tests
+
+### D. Snap expiry purge
+- [x] D1 `snapModel.listExpiredSnaps` / `countExpiredSnaps` / `purgeSnapRows`
+- [x] D2 `scripts/cleanup-expired-snaps.js` - delete the R2 object first, then the row
+- [x] D3 Cover the sequence with a test where the store is stubbed
+
+Objects are deleted before their row so a storage failure leaves the row for the
+next run. The row is already past `expires_at`, so no reader can see it in the
+meantime; the reverse order would drop the key and orphan the object forever.
+
+### E. Naming sweep
+- [x] E1 Rail, feed screen, profile screen, inbox — "story" → "snap"
+
+### F. Reports loop
+
+Design: `POST /api/reports` writes `reports` rows (`status='pending'`) but nothing
+consumed them. The queue now serves them:
+
+- `reportModel.listOpenReports({ departmentId })` — pending rows with the
+  reporter, the target's excerpt/author, and `post_id` (comments) resolved in
+  SQL via LEFT JOINs on posts/comments/messages/profiles. Department scoping
+  resolves the target author's department with a COALESCE across those joins;
+  fail-closed — an unresolvable target (deleted content, no department) matches
+  no department filter, so only campus admins see it.
+- `getModerationQueue` returns them as `contentReports`, added to `totalFlagged`.
+- Resolve mirrors `moderateMessageReport`: `POST /api/moderation/reports/:id`
+  takes `action: 'reviewed' | 'dismissed'`, a reason, the same department scope
+  check on the target author's department, and an audit record. The
+  `reports.status` values `pending|reviewed|dismissed|actioned` stay as they
+  are; the queue never sets `actioned` — hiding/deleting the underlying content
+  is the moderator's separate decision through the existing content actions.
+- Frontend: queue items carry `reportSource: 'message' | 'content'` so the
+  resolve dialog calls the right endpoint.
+- `GET|PUT /api/reports` removed (no frontend caller; the queue is a superset —
+  department-scoped, with target context the raw list never had).
+
+- [x] F1 Surface open `reports` in the moderation queue
+- [x] F2 Resolve action wired from the queue
+- [x] F3 Remove now-redundant `GET|PUT /api/reports` if the queue covers them
+
+### G. Cleanup
+- [ ] G1 Remove `ALTER TABLE public.theses` blocks from the two legacy scripts
+- [ ] G2 Bring lint back under the 63-error baseline
+- [ ] G3 Full gate run
+
+## Gates per slice
+
+`npm run test:remote` (backend), `npx tsc -p tsconfig.json --noEmit`,
+`npx vitest run`, `npx expo lint` (must stay ≤ 63 errors), `npx expo export --platform web`.

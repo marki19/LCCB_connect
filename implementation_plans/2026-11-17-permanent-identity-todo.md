@@ -1,0 +1,22 @@
+# Todo: Permanent Identity & Username Integrity (Workstream B)
+
+- [x] **Phase 1: Identity Service (`backend/services/identity.js`)**
+  - [x] Implement `deriveBaseUsername(fullName, id)` with standard formatting and fallback
+  - [x] Implement `deriveUsername(fullName, id, dbClient)` with collision handling (`_2`, `_3`, etc.)
+  - [x] Write unit tests in `backend/tests/identity.test.js`
+- [x] **Phase 2: Lock Identity & Model Wiring**
+  - [x] Remove `full_name` and `username` from SQL `UPDATE` in `backend/models/userModel.js:updateUser`
+  - [x] Update `backend/models/userModel.js:createUser` to derive username when missing and preserve identity on conflict
+  - [x] Update `backend/controllers/authController.js:googleAuth` to fall back to email local-part when name is missing
+  - [x] Update `backend/controllers/authController.js:verifySignup` to supply derived username
+  - [x] Update `backend/controllers/userController.js:updateUser` to treat `full_name` and `username` as silent no-ops
+  - [x] Add tests verifying `PUT /api/users/:id` leaves `full_name` and `username` unchanged and returns 200
+- [x] **Phase 3: Database Migration `052_identity_backfill.sql`**
+  - [x] Write migration `backend/migrations/052_identity_backfill.sql`
+  - [x] Run migration with `npm --prefix backend run db:migrate`
+  - [x] Verify 0 null usernames in database
+- [x] **Phase 4: Full Suite Verification**
+  - [x] Run backend tests (`npm --prefix backend test`) -> 707/707 pass
+  - [x] Run typecheck (`tsc --noEmit`) -> 0 errors
+  - [x] Run frontend tests (`npm --prefix frontend test -- --run`) -> 41/41 pass
+  - [x] Run frontend build (`npm --prefix frontend run build`) -> Clean build

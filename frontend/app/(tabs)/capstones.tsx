@@ -56,6 +56,8 @@ export default function CapstonesScreen() {
       setLoading(true);
       const params = new URLSearchParams();
       params.set("limit", "30");
+      params.set("kind", "repository");
+      params.set("repository_type", "thesis");
       if (searchQuery.trim()) {
         params.set("q", searchQuery.trim());
       }
@@ -63,13 +65,23 @@ export default function CapstonesScreen() {
         params.set("department_id", selectedDeptId);
       }
       if (selectedCategory !== "All") {
-        params.set("category", selectedCategory);
+        params.set("repository_category", selectedCategory);
       }
 
-      const res = await apiFetch(`/theses?${params.toString()}`);
+      const res = await apiFetch(`/posts?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setTheses(Array.isArray(data) ? data : data.theses || []);
+        const rawList = Array.isArray(data) ? data : data.posts || [];
+        setTheses(
+          rawList.map((p: any) => ({
+            ...p,
+            abstract: p.abstract || p.content,
+            category: p.category || p.repository_category,
+            pdf_url:
+              p.attachments?.find((a: any) => a.mime_type === "application/pdf")?.storage_key ||
+              p.pdf_url,
+          }))
+        );
       }
     } catch (err: any) {
       console.error("Failed to load capstones:", err);
@@ -92,12 +104,16 @@ export default function CapstonesScreen() {
   };
 
   const handleOpenPdf = async (item: any) => {
-    if (!item.pdf_url) {
+    const pdfAttachment = item.attachments?.find(
+      (a: any) => a.mime_type === "application/pdf" || a.storage_key?.endsWith(".pdf")
+    );
+    const directUrl = pdfAttachment?.url;
+    if (!directUrl && !item.pdf_url && !pdfAttachment?.storage_key) {
       Alert.alert("Manuscript unavailable", "This capstone does not have an attached PDF.");
       return;
     }
     try {
-      const url = await getThesisFileUrl(item.id);
+      const url = directUrl || (await getThesisFileUrl(item.id));
       await Linking.openURL(url);
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to open manuscript URL");

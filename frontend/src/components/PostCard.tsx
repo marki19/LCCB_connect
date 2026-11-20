@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { View, Text, TouchableOpacity, Pressable, Linking, Alert, Animated, Platform } from "react-native";
+import { View, Text, TouchableOpacity, Pressable, Linking, Alert, Animated, Platform, type StyleProp, type ViewStyle } from "react-native";
 import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical, Building2, Megaphone } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
@@ -19,8 +19,23 @@ import Modal from "./ui/Modal";
 import Avatar from "./Avatar";
 import { resolveFileUrl, resolveFileUrls } from "../lib/files";
 import { AppImage } from "./AppImage";
+import AttachmentStrip from "./AttachmentStrip";
+import RichText from "./mentions/RichText";
 
-function getTypeConfig(type: string, colors: ThemeTokens): { label: string; bg: string; text: string } {
+function getTypeConfig(post: Post, colors: ThemeTokens): { label: string; bg: string; text: string } {
+  if (post.kind === "repository" && post.repository_type) {
+    if (post.repository_type === "capstone") {
+      return { label: "Capstone", bg: colors.badgeCapstoneBg, text: colors.badgeCapstoneText };
+    }
+    if (post.repository_type === "thesis") {
+      return { label: "Thesis", bg: colors.badgeThesisBg, text: colors.badgeThesisText };
+    }
+    return { label: "Project", bg: colors.badgeProjectBg, text: colors.badgeProjectText };
+  }
+  if (post.kind === "announcement") {
+    return { label: "Announcement", bg: colors.badgeAnnouncementBg, text: colors.badgeAnnouncementText };
+  }
+  const type = post.type || "text";
   const configs: Record<string, { label: string; bg: string; text: string }> = {
     website:  { label: "Website",  bg: colors.badgeWebsiteBg,  text: colors.badgeWebsiteText },
     thesis:   { label: "Thesis",   bg: colors.badgeThesisBg,   text: colors.badgeThesisText },
@@ -82,7 +97,15 @@ function VisibilityBadge({ visibility }: { visibility: string }) {
   );
 }
 
-export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: (id: string | number) => void }) {
+export default function PostCard({
+  post,
+  onDeleted,
+  style,
+}: {
+  post: Post;
+  onDeleted?: (id: string | number) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
   const router = useRouter();
   const { showToast } = useToast();
   const [liked, setLiked] = useState(post.isLiked);
@@ -116,14 +139,18 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
   const isOwner = !!profile?.id && profile.id === post.author.id;
 
   const handleEdit = () => {
-    if (post.type === "thesis") {
-      // Theses are edited in the deposit screen (backend: PUT /theses/:id).
+    if (post.type === "thesis" && post.kind !== "repository") {
+      // Legacy theses are edited in the deposit screen (backend: PUT /theses/:id).
       router.push({
         pathname: "/upload-thesis",
         params: { thesisId: String(post.id) },
       });
       return;
     }
+    const postImages = post.image_urls && post.image_urls.length > 0
+      ? post.image_urls
+      : (post.imageUrl ? [post.imageUrl] : []);
+
     router.push({
       pathname: "/create",
       params: {
@@ -131,9 +158,16 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
         editTitle: post.title ?? "",
         editContent: post.description ?? "",
         editType: post.type ?? "text",
+        editKind: post.kind ?? (post.repository_type ? "repository" : "discussion"),
+        editRepositoryType: post.repository_type ?? "",
+        editRepositoryCategory: post.repository_category ?? "",
+        editLiveUrl: post.live_url ?? "",
         editTech: (post.tags ?? []).join(", "),
         editUrl: post.previewUrl ?? "",
         editVisibility: post.visibility ?? "public",
+        editImages: JSON.stringify(postImages),
+        editAttachments: JSON.stringify(post.attachments ?? []),
+        editMentions: JSON.stringify(post.mentions ?? []),
       },
     });
   };
@@ -228,7 +262,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
     }
   };
 
-  const typeConfig = getTypeConfig(post.type, colors);
+  const typeConfig = getTypeConfig(post, colors);
 
   // For text/image/discussion types, content is the primary body (not title/description)
   const isTextBased = post.type === "text" || post.type === "image" || post.type === "discussion";
@@ -268,6 +302,7 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           ...elevation("sm", colors),
         },
         Platform.OS === "web" ? ({ cursor: "pointer" } as any) : undefined,
+        style,
       ]}
     >
       {/* Author row */}
@@ -323,7 +358,12 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary, marginBottom: 5 }}>{primaryTitle}</Text>
         ) : null}
         {primaryText ? (
-          <Text numberOfLines={isTextBased ? 0 : 2} style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>{primaryText}</Text>
+          <RichText
+            text={primaryText}
+            mentions={post.mentions}
+            numberOfLines={isTextBased ? 0 : 2}
+            style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}
+          />
         ) : null}
       </View>
 
@@ -369,7 +409,42 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
               style={{ width: "100%", height: 160, backgroundColor: colors.surfaceSunken }}
               contentFit="cover"
             />
-          ) : null}
+          ) : (
+            <View
+              style={{
+                width: "100%",
+                height: 80,
+                backgroundColor: colors.surface,
+                justifyContent: "center",
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+                paddingHorizontal: 16,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    backgroundColor: "rgba(2, 132, 199, 0.15)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Globe size={22} color="#0284C7" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}>
+                    {post.preview_metadata.title || post.preview_metadata.siteName || "Live Web Application"}
+                  </Text>
+                  <Text numberOfLines={1} style={{ fontSize: 11.5, color: colors.action, fontWeight: "600", marginTop: 2 }}>
+                    {post.preview_metadata.url}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
           <View style={{ padding: 12 }}>
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
               <ExternalLink size={13} color={colors.action} />
@@ -402,6 +477,9 @@ export default function PostCard({ post, onDeleted }: { post: Post; onDeleted?: 
           <Text numberOfLines={1} style={{ fontSize: 12, color: colors.action, fontWeight: "600", marginLeft: 6, flex: 1 }}>{post.previewUrl}</Text>
         </TouchableOpacity>
       ) : null}
+
+      {/* Document Attachments */}
+      <AttachmentStrip attachments={post.attachments} />
 
       {/* Divider */}
       <View style={{ height: 1, backgroundColor: colors.divider }} />

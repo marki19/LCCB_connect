@@ -88,13 +88,13 @@ export default function LoginScreen() {
 
   const trimmedIdentifier = email.trim();
   const identifierIsEmail = trimmedIdentifier.includes("@");
-  const isValidEmailDomain =
-    identifierIsEmail && trimmedIdentifier.toLowerCase().endsWith("@lccbonline.edu.ph");
+  const isValidEmail =
+    identifierIsEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedIdentifier);
   const isValidStudentId = !identifierIsEmail && /^\d{4}-\d{4,}$/.test(trimmedIdentifier);
   const isValidUsername =
     !identifierIsEmail && !isValidStudentId && /^[a-zA-Z0-9_]{3,30}$/.test(trimmedIdentifier);
   const showEmailFormatError =
-    trimmedIdentifier.length > 0 && !isValidEmailDomain && !isValidStudentId && !isValidUsername;
+    trimmedIdentifier.length > 0 && !isValidEmail && !isValidStudentId && !isValidUsername;
 
   // Handle returning from web OAuth redirect
   useEffect(() => {
@@ -138,7 +138,7 @@ export default function LoginScreen() {
           await supabase.auth.signOut().catch(() => {});
           if (active) {
             setIsOAuthReturning(false);
-            setGeneralError("Only @lccbonline.edu.ph accounts are allowed. Please sign in with your school Google account.");
+            setGeneralError("Google sign-in was cancelled or failed. Please try again.");
           }
           return;
         }
@@ -228,7 +228,7 @@ export default function LoginScreen() {
           await supabase.auth.signOut().catch(() => {});
           if (active) {
             setIsOAuthReturning(false);
-            setGeneralError("Only @lccbonline.edu.ph accounts are allowed. Please sign in with your school Google account.");
+            setGeneralError("Google sign-in was cancelled or failed. Please try again.");
           }
         }
       } catch (err: any) {
@@ -236,7 +236,7 @@ export default function LoginScreen() {
         await supabase.auth.signOut().catch(() => {});
         if (active) {
           setIsOAuthReturning(false);
-          setGeneralError(err?.message || "Only @lccbonline.edu.ph accounts are allowed. Please sign in with your school Google account.");
+          setGeneralError(err?.message || "Google sign-in failed. Please try again.");
         }
       } finally {
         if (active) {
@@ -270,7 +270,6 @@ export default function LoginScreen() {
             redirectTo: redirectUri,
             queryParams: {
               prompt: "select_account",
-              hd: "lccbonline.edu.ph",
             },
           },
         });
@@ -346,8 +345,8 @@ export default function LoginScreen() {
     if (!email.trim()) {
       setEmailError("Email, student ID, or username is required");
       hasError = true;
-    } else if (!isValidEmailDomain && !isValidStudentId && !isValidUsername) {
-      setEmailError("Use an @lccbonline.edu.ph address, a student ID, or a username");
+    } else if (!isValidEmail && !isValidStudentId && !isValidUsername) {
+      setEmailError("Use a valid email address, a student ID, or a username");
       hasError = true;
     }
 
@@ -519,13 +518,13 @@ export default function LoginScreen() {
             label="Email, student ID, or username"
             value={email}
             onChangeText={handleEmailChange}
-            placeholder="student@lccbonline.edu.ph"
+            placeholder="name@example.com or 2023-00123"
             keyboardType={identifierIsEmail ? "email-address" : "default"}
             autoComplete="username"
             nextRef={passwordInputRef}
             returnKeyType="next"
             leadingIcon={({ size, color }) => <AtSign size={size} color={color} strokeWidth={2.1} />}
-            error={emailError || (showEmailFormatError ? "Must be an @lccbonline.edu.ph address, a student ID, or a username" : "")}
+            error={emailError || (showEmailFormatError ? "Must be a valid email address, a student ID, or a username" : "")}
           />
 
           <TextField

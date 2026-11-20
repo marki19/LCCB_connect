@@ -37,13 +37,16 @@ describe("category model", () => {
     );
   });
 
-  test("treats theses and documents as private", () => {
+  test("treats theses, documents, and snaps as private", () => {
     assert.equal(isPublicCategory("avatars"), true);
     assert.equal(isPublicCategory("posts"), true);
     assert.equal(isPublicCategory("videos"), true);
-    assert.equal(isPublicCategory("snaps"), true);
+    assert.equal(isPublicCategory("covers"), true);
     assert.equal(isPublicCategory("theses"), false);
     assert.equal(isPublicCategory("documents"), false);
+    // Snap media expires after 24 hours and is audience-scoped, so it must
+    // never be fetchable without a session.
+    assert.equal(isPublicCategory("snaps"), false);
   });
 
   test("defines a rule set for every category", () => {
@@ -164,6 +167,30 @@ describe("resolveUpload", () => {
           originalName: "fake.jpg",
           buffer: Buffer.from("NOT_A_REAL_JPEG"),
         }),
+      /do not match the expected format/
+    );
+  });
+
+  test("auto-corrects mismatched extension when buffer matches an allowed extension", () => {
+    const resolved = resolveUpload({
+      category: "posts",
+      originalName: "upload.jpg",
+      buffer: samplePng,
+    });
+    assert.match(resolved.key, /^posts\/[0-9a-f]{32}\.png$/);
+    assert.equal(resolved.contentType, "image/png");
+  });
+
+  test("accepts pptx and ppt in documents", () => {
+    const pptx = Buffer.concat([Buffer.from([0x50,0x4b,0x03,0x04]), Buffer.alloc(64)]);
+    const ppt  = Buffer.concat([Buffer.from([0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1]), Buffer.alloc(64)]);
+    assert.match(resolveUpload({ category:"documents", originalName:"deck.pptx", buffer:pptx }).key, /\.pptx$/);
+    assert.match(resolveUpload({ category:"documents", originalName:"deck.ppt",  buffer:ppt  }).key, /\.ppt$/);
+  });
+
+  test("still rejects an executable renamed to .doc", () => {
+    assert.throws(
+      () => resolveUpload({ category:"documents", originalName:"x.doc", buffer: Buffer.from("MZ\x90\x00\x03") }),
       /do not match the expected format/
     );
   });

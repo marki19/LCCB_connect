@@ -60,6 +60,21 @@ describe("post list filters", () => {
     ]);
   });
 
+  it("filters by kind, repository_type, and repository_category", async () => {
+    await postModel.visiblePostsFor({
+      limit: 10,
+      kind: "repository",
+      repository_type: "thesis",
+      repository_category: "Computer Science",
+    });
+
+    const [sql, params] = query.calls.at(-1);
+    assert.match(sql, /p\.kind = \$1/i);
+    assert.match(sql, /p\.repository_type = \$2/i);
+    assert.match(sql, /p\.repository_category = \$3/i);
+    assert.deepEqual(params, ["repository", "thesis", "Computer Science", null, 10]);
+  });
+
   it("handles 3-part cursor with pinned status", async () => {
     await postModel.getAllPosts({
       limit: 5,

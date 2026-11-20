@@ -36,7 +36,7 @@ describe("notificationService", () => {
       assert.equal(query.calls.length, 1);
       const [sql, params] = query.calls[0];
       assert.match(sql, /INSERT INTO public\.notifications/i);
-      assert.match(sql, /SELECT unnest\(\$1::uuid\[\]\)/i);
+      assert.match(sql, /SELECT unnest\(\$1::text\[\]\)/i);
       assert.deepEqual(params[0], adminIds);
       assert.equal(params[1], "44444444-4444-4444-8444-444444444444");
       assert.equal(params[2], "post_created");
@@ -77,6 +77,36 @@ describe("notificationService", () => {
       const [sql, params] = query.calls[0];
       assert.match(sql, /department_id = \$1::uuid/i);
       assert.deepEqual(params, [null]);
+    });
+  });
+
+  describe("notifyMentionedUsers", () => {
+    it("inserts mention notifications for valid mentioned users, skipping the actor", async () => {
+      await notificationService.notifyMentionedUsers({
+        mentionedUserIds: ["u_friend1", "u_friend2", "u_author"],
+        actorId: "u_author",
+        actorUsername: "alice",
+        targetId: "55555555-5555-4555-8555-555555555555",
+      });
+
+      assert.equal(query.calls.length, 1);
+      const [sql, params] = query.calls[0];
+      assert.match(sql, /INSERT INTO public\.notifications/i);
+      assert.match(sql, /unnest\(\$1::text\[\]\)/i);
+      assert.deepEqual(params[0].sort(), ["u_friend1", "u_friend2"].sort());
+      assert.equal(params[1], "u_author");
+      assert.equal(params[2], "55555555-5555-4555-8555-555555555555");
+      assert.equal(params[3], "@alice mentioned you.");
+    });
+
+    it("does not execute query if no valid mentioned users", async () => {
+      await notificationService.notifyMentionedUsers({
+        mentionedUserIds: ["u_author"],
+        actorId: "u_author",
+        actorUsername: "alice",
+        targetId: "55555555-5555-4555-8555-555555555555",
+      });
+      assert.equal(query.calls.length, 0);
     });
   });
 });

@@ -1,14 +1,15 @@
 const db = require("../db");
 const { escapeLike } = require("../utils/queryFilters");
 const { DEFAULT_LIMIT } = require("./pagination");
+const { withDerivedImages, POST_ATTACHMENTS_SQL } = require("./postModel");
 
 /**
  * Multi-Entity Search Model
  * Uses PostgreSQL Full-Text Search (tsvector + tsquery) combined with
  * Trigram fuzzy similarity (pg_trgm) for typo tolerance and relevance ranking.
  *
- * All posts and theses reads go through visible_posts() and visible_theses()
- * so content visibility rules are strictly respected.
+ * All posts reads go through visible_posts() so content visibility rules
+ * are strictly respected.
  */
 
 /**
@@ -94,11 +95,14 @@ const searchPosts = async (query, viewerId = null, { limit = DEFAULT_LIMIT, offs
       p.id,
       p.author_id,
       p.content,
-      p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
-      p.image_url,
+      ${POST_ATTACHMENTS_SQL},
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
@@ -145,11 +149,11 @@ const searchPosts = async (query, viewerId = null, { limit = DEFAULT_LIMIT, offs
   `;
 
   const result = await db.query(sql, params);
-  return result.rows;
+  return result.rows.map(withDerivedImages);
 };
 
 /**
- * Search academic theses, capstones, and dissertations, bounded by visible_theses().
+ * Search academic theses, capstones, and dissertations, bounded by visible_posts().
  */
 const searchTheses = async (query, viewerId = null, { limit = DEFAULT_LIMIT, offset = 0 } = {}) => {
   if (!query || !query.trim()) return [];
@@ -161,14 +165,20 @@ const searchTheses = async (query, viewerId = null, { limit = DEFAULT_LIMIT, off
 
   const sql = `
     SELECT 
-      t.id,
-      t.title,
-      t.abstract,
-      t.category,
-      t.pdf_url,
-      t.visibility,
-      t.created_at,
-      t.updated_at,
+      p.id,
+      p.title,
+      p.content AS abstract,
+      p.repository_category AS category,
+      (
+        SELECT a.storage_key
+          FROM public.post_attachments a
+         WHERE a.post_id = p.id AND a.mime_type = 'application/pdf'
+         ORDER BY a.sort_order
+         LIMIT 1
+      ) AS pdf_url,
+      p.visibility,
+      p.created_at,
+      p.updated_at,
       json_build_object(
         'id', pr.id,
         'full_name', pr.full_name,
@@ -176,24 +186,27 @@ const searchTheses = async (query, viewerId = null, { limit = DEFAULT_LIMIT, off
         'avatar_url', pr.avatar_url,
         'department_name', d.name
       ) AS uploader,
-      similarity(t.title, $2) AS sim_title,
+      similarity(p.title, $2) AS sim_title,
       ts_rank_cd(
-        to_tsvector('english', COALESCE(t.title, '') || ' ' || COALESCE(t.abstract, '')),
+        to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')),
         plainto_tsquery('english', $2)
       ) AS fts_rank
-    FROM visible_theses($1::text) t
-    LEFT JOIN public.profiles pr ON pr.id = t.uploader_id
+    FROM visible_posts($1::text) p
+    LEFT JOIN public.profiles pr ON pr.id = p.author_id
     LEFT JOIN public.departments d ON d.id = pr.department_id
-    WHERE (
-      t.title ILIKE $3 ESCAPE '!'
-      OR t.abstract ILIKE $3 ESCAPE '!'
-      OR to_tsvector('english', COALESCE(t.title, '') || ' ' || COALESCE(t.abstract, '')) @@ plainto_tsquery('english', $2)
-      OR similarity(t.title, $2) > 0.15
-    )
+    WHERE p.kind = 'repository'
+      AND p.repository_type = 'thesis'
+      AND p.deleted_at IS NULL
+      AND (
+        p.title ILIKE $3 ESCAPE '!'
+        OR p.content ILIKE $3 ESCAPE '!'
+        OR to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')) @@ plainto_tsquery('english', $2)
+        OR similarity(p.title, $2) > 0.15
+      )
     ORDER BY (
-      ts_rank_cd(to_tsvector('english', COALESCE(t.title, '') || ' ' || COALESCE(t.abstract, '')), plainto_tsquery('english', $2)) * 2.5 +
-      similarity(t.title, $2) * 1.5
-    ) DESC, t.created_at DESC
+      ts_rank_cd(to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')), plainto_tsquery('english', $2)) * 2.5 +
+      similarity(p.title, $2) * 1.5
+    ) DESC, p.created_at DESC
     LIMIT $4 OFFSET $5
   `;
 

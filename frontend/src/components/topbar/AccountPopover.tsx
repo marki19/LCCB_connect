@@ -1,6 +1,8 @@
 /**
  * AccountPopover — Avatar / account menu panel.
- * Shows profile card, admin link (if admin), theme toggle, settings, sign out.
+ *
+ * Panel 0 is the menu (profile card, admin link, settings, theme, sign out).
+ * Choosing "Theme" slides panel 1 in from the right; its back arrow returns.
  */
 
 import { useState } from "react";
@@ -12,31 +14,41 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Settings, Sun, Moon, Shield, LogOut } from "lucide-react-native";
+import { ArrowLeft, ChevronRight, LogOut, Palette, Settings, Shield } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSettingsSidebar } from "../../contexts/SettingsSidebarContext";
 import { isAdminRole, isDepartmentAdminRole } from "../../lib/roles";
+import { colorSchemeLabel } from "../../lib/theme";
 import { setAdminAppPreview } from "../../lib/panelMode";
-import { checkAdminSessionStatus } from "../../lib/adminApi";
-import AdminMfaPromptModal from "../admin/AdminMfaPromptModal";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
+import ThemeOptions from "../settings/ThemeOptions";
+import SlideSwitcher from "../ui/SlideSwitcher";
 import { TOP_BAR_HEIGHT } from "./constants";
+
+/** Outer width of the panel, including its 1px border. */
+const POPOVER_WIDTH = 280;
+const POPOVER_BORDER = 1;
+/** Width that one panel (and therefore one slide step) occupies. */
+const PANEL_WIDTH = POPOVER_WIDTH - POPOVER_BORDER * 2;
+
+type AccountPanel = "menu" | "theme";
 
 interface AccountPopoverProps {
   onClose: () => void;
 }
 
 export default function AccountPopover({ onClose }: AccountPopoverProps) {
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors, preference } = useTheme();
   const { profile, signOut } = useAuth();
   const { openSettingsSidebar } = useSettingsSidebar();
   const router = useRouter();
 
+  const [panel, setPanel] = useState<AccountPanel>("menu");
+
   const isAdmin = isAdminRole(profile?.role);
   const isDeptAdmin = isDepartmentAdminRole(profile?.role);
-  const [mfaModalVisible, setMfaModalVisible] = useState(false);
 
   const navigate = (href: string) => {
     onClose();
@@ -70,120 +82,124 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
         },
       ]}
     >
-      {/* Profile card */}
-      <Pressable
-        onPress={() => {
-          if (profile?.id) {
-            navigate(`/profile/${profile.id}`);
-          } else {
-            navigate("/(tabs)/profile");
-          }
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="View your profile"
-        style={({ pressed }) => [
-          styles.profileCard,
-          {
-            backgroundColor: pressed ? colors.hoverOverlay : colors.surfaceSunken,
-          },
-        ]}
-      >
-        <Avatar
-          name={profile?.full_name ?? profile?.username}
-          avatarUrl={profile?.avatar_url}
-          size={48}
-        />
-        <View style={styles.profileText}>
-          <Text style={[styles.profileName, { color: colors.ink }]} numberOfLines={1}>
-            {profile?.full_name ?? profile?.username ?? "You"}
-          </Text>
-          <Text style={[styles.profileDept, { color: colors.inkFaint }]} numberOfLines={1}>
-            {profile?.department_name ?? "No department"}
-          </Text>
-        </View>
-      </Pressable>
-
-      {/* Divider */}
-      <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-      {/* Admin link */}
-      {(isAdmin || isDeptAdmin) && (
-        <MenuItem
-          icon={<Shield size={16} color={colors.brand} strokeWidth={2} />}
-          label={isAdmin ? "Admin Console" : "Moderation Console"}
-          colors={colors}
-          onPress={async () => {
-            if (isAdmin) {
-              try {
-                const status = await checkAdminSessionStatus();
-                if (status.isAdmin && !status.valid) {
-                  setMfaModalVisible(true);
-                  return;
-                }
-              } catch {
-                // Non-blocking fallback
+      <SlideSwitcher index={panel === "theme" ? 1 : 0} width={PANEL_WIDTH}>
+        {/* ── Panel 0: account menu ── */}
+        <View>
+          {/* Profile card */}
+          <Pressable
+            onPress={() => {
+              if (profile?.id) {
+                navigate(`/profile/${profile.id}`);
+              } else {
+                navigate("/(tabs)/profile");
               }
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="View your profile"
+            style={({ pressed }) => [
+              styles.profileCard,
+              {
+                backgroundColor: pressed ? colors.hoverOverlay : colors.surfaceSunken,
+              },
+            ]}
+          >
+            <Avatar
+              name={profile?.full_name ?? profile?.username}
+              avatarUrl={profile?.avatar_url}
+              size={48}
+            />
+            <View style={styles.profileText}>
+              <Text style={[styles.profileName, { color: colors.ink }]} numberOfLines={1}>
+                {profile?.full_name ?? profile?.username ?? "You"}
+              </Text>
+              <Text style={[styles.profileDept, { color: colors.inkFaint }]} numberOfLines={1}>
+                {profile?.department_name ?? "No department"}
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Divider */}
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {/* Admin link */}
+          {(isAdmin || isDeptAdmin) && (
+            <MenuItem
+              icon={<Shield size={16} color={colors.brand} strokeWidth={2} />}
+              label={isAdmin ? "Admin Console" : "Moderation Console"}
+              colors={colors}
+              onPress={() => {
+                onClose();
+                if (isAdmin) {
+                  setAdminAppPreview(false);
+                  router.push("/(admin)");
+                } else {
+                  router.push("/(moderation)" as any);
+                }
+              }}
+            />
+          )}
+
+          {/* Settings */}
+          <MenuItem
+            icon={<Settings size={16} color={colors.inkSoft} strokeWidth={2} />}
+            label="Settings & Privacy"
+            colors={colors}
+            onPress={() => {
               onClose();
-              setAdminAppPreview(false);
-              router.push("/(admin)");
-            } else {
-              onClose();
-              router.push("/(moderation)" as any);
+              openSettingsSidebar();
+            }}
+          />
+
+          {/* Theme */}
+          <MenuItem
+            icon={<Palette size={16} color={colors.inkSoft} strokeWidth={2} />}
+            label="Theme"
+            colors={colors}
+            accessibilityHint="Opens appearance options"
+            trailing={
+              <>
+                <Text style={[styles.menuValue, { color: colors.inkFaint }]}>
+                  {colorSchemeLabel(preference)}
+                </Text>
+                <ChevronRight size={14} color={colors.inkFaint} strokeWidth={2} />
+              </>
             }
-          }}
-        />
-      )}
+            onPress={() => setPanel("theme")}
+          />
 
-      {/* Theme toggle */}
-      <MenuItem
-        icon={
-          isDark ? (
-            <Sun size={16} color={colors.accentText} strokeWidth={2} />
-          ) : (
-            <Moon size={16} color={colors.inkSoft} strokeWidth={2} />
-          )
-        }
-        label={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-        colors={colors}
-        onPress={() => { toggleTheme(); onClose(); }}
-      />
+          {/* Divider */}
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-      {/* Settings */}
-      <MenuItem
-        icon={<Settings size={16} color={colors.inkSoft} strokeWidth={2} />}
-        label="Settings & Privacy"
-        colors={colors}
-        onPress={() => {
-          onClose();
-          openSettingsSidebar();
-        }}
-      />
+          {/* Sign out */}
+          <MenuItem
+            icon={<LogOut size={16} color={colors.destructive} strokeWidth={2} />}
+            label="Sign out"
+            labelColor={colors.destructive}
+            colors={colors}
+            onPress={handleSignOut}
+          />
+        </View>
 
-      {/* Divider */}
-      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        {/* ── Panel 1: theme ── */}
+        <View>
+          <View style={styles.panelHeader}>
+            <Pressable
+              onPress={() => setPanel("menu")}
+              accessibilityRole="button"
+              accessibilityLabel="Back to account menu"
+              style={({ pressed }) => [
+                styles.backButton,
+                { backgroundColor: pressed ? colors.hoverOverlay : "transparent" },
+              ]}
+            >
+              <ArrowLeft size={18} color={colors.ink} strokeWidth={2.2} />
+            </Pressable>
+            <Text style={[styles.panelTitle, { color: colors.ink }]}>Theme</Text>
+          </View>
 
-      {/* Sign out */}
-      <MenuItem
-        icon={<LogOut size={16} color={colors.destructive} strokeWidth={2} />}
-        label="Sign out"
-        labelColor={colors.destructive}
-        colors={colors}
-        onPress={handleSignOut}
-      />
-
-      <AdminMfaPromptModal
-        visible={mfaModalVisible}
-        onClose={() => {
-          setMfaModalVisible(false);
-          onClose();
-        }}
-        onSuccess={() => {
-          setMfaModalVisible(false);
-          onClose();
-          setAdminAppPreview(false);
-          router.push("/(admin)");
-        }}
-      />
+          <ThemeOptions />
+        </View>
+      </SlideSwitcher>
     </View>
   );
 }
@@ -192,12 +208,17 @@ function MenuItem({
   icon,
   label,
   labelColor,
+  trailing,
+  accessibilityHint,
   colors,
   onPress,
 }: {
   icon: React.ReactNode;
   label: string;
   labelColor?: string;
+  /** Optional right-aligned content, e.g. the current theme name + chevron. */
+  trailing?: React.ReactNode;
+  accessibilityHint?: string;
   colors: any;
   onPress: () => void;
 }) {
@@ -206,6 +227,7 @@ function MenuItem({
       onPress={onPress}
       accessibilityRole="menuitem"
       accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
       style={({ pressed }) => [
         styles.menuItem,
         { backgroundColor: pressed ? colors.hoverOverlay : "transparent" },
@@ -213,6 +235,7 @@ function MenuItem({
     >
       <View style={styles.menuIcon}>{icon}</View>
       <Text
+        numberOfLines={1}
         style={[
           styles.menuLabel,
           { color: labelColor ?? colors.ink },
@@ -220,15 +243,16 @@ function MenuItem({
       >
         {label}
       </Text>
+      {trailing ? <View style={styles.menuTrailing}>{trailing}</View> : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    width: 280,
+    width: POPOVER_WIDTH,
     borderRadius: RADIUS.lg,
-    borderWidth: 1,
+    borderWidth: POPOVER_BORDER,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
     shadowRadius: 24,
@@ -281,5 +305,34 @@ const styles = StyleSheet.create({
     ...TYPE.body,
     fontSize: 14,
     fontWeight: "500",
+    flex: 1,
+  },
+  menuTrailing: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.x1,
+  },
+  menuValue: {
+    ...TYPE.caption,
+    fontSize: 12,
+  },
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.x2,
+    paddingHorizontal: SPACE.x2,
+    paddingTop: SPACE.x1,
+    paddingBottom: SPACE.x2,
+  },
+  backButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  panelTitle: {
+    ...TYPE.title,
+    fontSize: 17,
   },
 });

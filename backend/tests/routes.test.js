@@ -9,7 +9,6 @@ const request = require("supertest");
 const { stub } = require("./stub.helper");
 const auth = require("../middleware/auth");
 const postModel = require("../models/postModel");
-const thesisModel = require("../models/thesisModel");
 const userModel = require("../models/userModel");
 const notificationService = require("../services/notificationService");
 const moderationService = require("../services/moderationService");
@@ -30,7 +29,6 @@ stub(notificationService, "notifyAuthorOnAction", async () => undefined);
 stub(moderationService, "scanPost", async () => ({ flagged: false }));
 stub(moderationService, "scanComment", async () => ({ flagged: false }));
 stub(moderationService, "scanThesis", async () => ({ flagged: false }));
-stub(thesisModel, "getFlaggedTheses", async () => []);
 stub(auditService, "recordRequest", async () => undefined);
 
 // Account deletion must also remove the Supabase Auth user. Stub it so the
@@ -93,9 +91,6 @@ const m = {
   deleteComment: stub(postModel, "deleteComment"),
   updateCommentByAuthor: stub(postModel, "updateCommentByAuthor"),
   deleteCommentByAuthor: stub(postModel, "deleteCommentByAuthor"),
-  getAllTheses: stub(thesisModel, "getAllTheses"),
-  updateThesis: stub(thesisModel, "updateThesis"),
-  createThesis: stub(thesisModel, "createThesis"),
   getAllUsers: stub(userModel, "getAllUsers"),
   getUserById: stub(userModel, "getUserById"),
   createUser: stub(userModel, "createUser"),
@@ -106,8 +101,6 @@ const m = {
   getVisibleRepostsForPost: stub(repostModel, "getVisibleRepostsForPost"),
   createRepostNotification: stub(notificationModel, "createRepostNotification"),
   createReport: stub(reportModel, "createReport"),
-  listReports: stub(reportModel, "listReports"),
-  updateReportStatus: stub(reportModel, "updateReportStatus"),
   blockUser: stub(blockModel, "blockUser"),
   unblockUser: stub(blockModel, "unblockUser"),
   listBlocked: stub(blockModel, "listBlocked"),
@@ -187,11 +180,8 @@ describe("ownership is enforced in SQL (404, not 403)", () => {
       assert.deepEqual(m.softDeletePost.calls, [["abc", "u1"]]);
     });
 
-  it("404 when updating a thesis that is not owned", async () => {
-    m.updateThesis.setImpl(async () => undefined);
-
+  it("returns 404 for /api/theses routes (removed in favour of repository posts)", async () => {
     const res = await request(app).put("/api/theses/t1").set(AUTH).send({ title: "new" });
-
     assert.equal(res.status, 404);
   });
 });
@@ -365,6 +355,20 @@ describe("profile writes: self-or-admin only", () => {
   it("self-delete route removed per policy", async () => {
     const res = await request(app).delete("/api/users/u1").set(AUTH);
     assert.equal(res.status, 404);
+  });
+
+  it("silently ignores full_name and username in profile updates (permanent identity)", async () => {
+    m.updateUser.setImpl(async (id, data) => ({ id, full_name: "Original Name", username: "original.name", ...data }));
+
+    const res = await request(app)
+      .put("/api/users/u1")
+      .set(AUTH)
+      .send({ full_name: "Someone Else", username: "hacked.name", bio: "New bio" });
+
+    assert.equal(res.status, 200);
+    assert.equal(m.updateUser.calls.length, 1);
+    const passedData = m.updateUser.calls[0][1];
+    assert.equal(passedData.bio, "New bio");
   });
 });
 
@@ -596,39 +600,14 @@ describe("file uploads use storage object keys", () => {
     assert.deepEqual(m.createPost.calls.at(-1)[0].image_url, "posts/a/b.jpg");
   });
 
-  it("rejects an external URL on a thesis pdf", async () => {
-    // Manuscripts now arrive as multipart/form-data, not a JSON `pdf_url`
-    // field — the JSON body is rejected by the schema before the file is
-    // even seen.
+  it("returns 404 on POST /api/theses (removed route)", async () => {
     const res = await request(app).post("/api/theses").set(AUTH).send({
       title: "t",
       abstract: "a",
       category: "c",
-      pdf_url: "https://w3.org/dummy.pdf",
     });
 
-    assert.equal(res.status, 400);
-    assert.equal(m.createThesis.calls.length, 0);
-  });
-
-  it("accepts a bucket-relative storage key on a thesis pdf", async () => {
-    m.createThesis.setImpl(async (data) => ({ id: "t2", ...data }));
-
-    const res = await request(app)
-      .post("/api/theses")
-      .set(AUTH)
-      .field("title", "t")
-      .field("abstract", "a")
-      .field("category", "c")
-      .attach("pdf", Buffer.from("%PDF-1.4 fake manuscript"), "u1/2.pdf");
-
-    assert.equal(res.status, 201);
-    // Every category uses one key shape: `<category>/<hashed>.<ext>`. Ownership
-    // is recorded on the row, not encoded in the path, and the flat shape is
-    // what `/api/files/:category/:filename` can route.
-    const storedKey = m.createThesis.calls.at(-1)[0].pdf_url;
-    assert.match(storedKey, /^theses\/[0-9a-f]{32}\.pdf$/);
-    assert.equal(putObject.calls.at(-1)[0].contentType, "application/pdf");
+    assert.equal(res.status, 404);
   });
 
   it("returns the created image as a raw key (assets is private)", async () => {
@@ -646,19 +625,6 @@ describe("file uploads use storage object keys", () => {
     // `assets` is private (migration 015): the client must ask the backend
     // for a signed URL, so the stored key is returned as-is.
     assert.deepEqual(res.body.image_url, "posts/a/b.jpg");
-  });
-
-  it("rejects a client-supplied department on a thesis (server-derived)", async () => {
-    const res = await request(app).post("/api/theses").set(AUTH).send({
-      title: "t",
-      abstract: "a",
-      department: "somewhere else",
-      category: "c",
-      pdf_url: "u1/2.pdf",
-    });
-
-    assert.equal(res.status, 400);
-    assert.equal(m.createThesis.calls.length, 0);
   });
 });
 
@@ -713,20 +679,21 @@ describe("errors and pagination limits", () => {
       });
     });
 
-  it("applies the same clamping to theses and users", async () => {
+  it("applies the same clamping to public theses and users", async () => {
     session.role = "admin";
-    m.getAllTheses.setImpl(async () => []);
+    m.getAllPosts.setImpl(async () => []);
     m.getAllUsers.setImpl(async () => []);
 
-    await request(app).get("/api/theses?limit=9999").set(AUTH);
-    assert.deepEqual(m.getAllTheses.calls.at(-1), [
+    await request(app).get("/api/public/theses?limit=9999");
+    assert.deepEqual(m.getAllPosts.calls.at(-1), [
       {
         limit: 100,
         cursor: null,
         q: null,
-        uploaderId: null,
+        authorId: null,
+        kind: "repository",
+        repository_type: "thesis",
         categories: null,
-        viewerId: "u1",
       },
     ]);
 
@@ -785,41 +752,40 @@ describe("post list filters", () => {
 describe("thesis list filters", () => {
   const UPLOADER = "22222222-2222-4222-8222-222222222222";
 
-  it("passes search, uploader, and category filters to the model", async () => {
-    m.getAllTheses.setImpl(async () => []);
+  it("passes search, uploader, and category filters to the postModel", async () => {
+    m.getAllPosts.setImpl(async () => []);
 
     const res = await request(app)
-      .get("/api/theses")
+      .get("/api/public/theses")
       .query({
         q: "  ai  ",
         uploader_id: UPLOADER,
         category: "Graduate Dissertation",
         limit: 5,
-      })
-      .set(AUTH);
+      });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(m.getAllTheses.calls.at(-1), [
+    assert.deepEqual(m.getAllPosts.calls.at(-1), [
       {
         limit: 5,
         cursor: null,
         q: "ai",
-        uploaderId: UPLOADER,
+        authorId: UPLOADER,
+        kind: "repository",
+        repository_type: "thesis",
         categories: ["Graduate Dissertation"],
-        viewerId: "u1",
       },
     ]);
   });
 
   it("maps the undergraduate label to the legacy Capstone rows", async () => {
-    m.getAllTheses.setImpl(async () => []);
+    m.getAllPosts.setImpl(async () => []);
 
     await request(app)
-      .get("/api/theses")
-      .query({ category: "Undergraduate Capstone" })
-      .set(AUTH);
+      .get("/api/public/theses")
+      .query({ category: "Undergraduate Capstone" });
 
-    assert.deepEqual(m.getAllTheses.calls.at(-1)[0].categories, [
+    assert.deepEqual(m.getAllPosts.calls.at(-1)[0].categories, [
       "Undergraduate Capstone",
       "Capstone",
     ]);
@@ -827,12 +793,15 @@ describe("thesis list filters", () => {
 
   it("rejects a malformed uploader_id with 400", async () => {
     const res = await request(app)
-      .get("/api/theses?uploader_id=nope")
-      .set(AUTH);
+      .get("/api/public/theses?uploader_id=nope");
 
     assert.equal(res.status, 400);
     assert.deepEqual(res.body, { error: "Invalid uploader_id" });
-    assert.equal(m.getAllTheses.calls.length, 0);
+  });
+
+  it("returns 404 for removed /api/theses routes", async () => {
+    const res = await request(app).get("/api/theses").set(AUTH);
+    assert.equal(res.status, 404);
   });
 });
 
@@ -913,15 +882,9 @@ describe("reports and blocks", () => {
     assert.equal(res.status, 200);
   });
 
-  it("GET /api/reports is admin-only", async () => {
-    m.listReports.setImpl(async () => []);
-
-    const asStudent = await request(app).get("/api/reports").set(AUTH);
-    assert.equal(asStudent.status, 403);
-
-    session.role = "admin";
-    const asAdmin = await request(app).get("/api/reports").set(AUTH);
-    assert.equal(asAdmin.status, 200);
+  it("GET /api/reports no longer exists — the moderation queue serves reports", async () => {
+    const res = await request(app).get("/api/reports").set(AUTH);
+    assert.equal(res.status, 404);
   });
 });
 

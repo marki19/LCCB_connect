@@ -8,8 +8,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
+  Image,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   ArrowLeft,
   Send,
@@ -22,12 +24,22 @@ import {
   Ban,
   ShieldCheck,
   X,
+  Image as ImageIcon,
 } from "lucide-react-native";
 import Avatar, { PRESENCE_LABELS } from "../Avatar";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePresence } from "../../contexts/PresenceContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import Modal from "../ui/Modal";
+import NoteBubble from "../profile/NoteBubble";
+import ChatImageBubble from "../chat/ChatImageBubble";
+import ChatImageLightbox from "../chat/ChatImageLightbox";
+import { pickImage } from "../../lib/upload";
+import {
+  formatMediaMessage,
+  parseMessageContent,
+  uploadChatImage,
+} from "../../lib/chatMedia";
 import { useConversationRealtime, type PendingMessage } from "../../hooks/useConversationRealtime";
 import {
   acceptConversation,
@@ -76,6 +88,7 @@ function Ticks({ message }: { message: Message }) {
 }
 
 export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) {
+  const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user?.id ?? null;
   const { modeOf } = usePresence();
@@ -106,8 +119,23 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
   const [confirmBlockOpen, setConfirmBlockOpen] = useState(false);
   const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
+  const [attachedImage, setAttachedImage] = useState<{ uri: string } | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [lightboxData, setLightboxData] = useState<{ url: string; caption?: string } | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handlePickImage = async () => {
+    if (!canReply || uploadingImage || sending) return;
+    try {
+      const res = await pickImage({ allowsEditing: false });
+      if (res && res.uri) {
+        setAttachedImage({ uri: res.uri });
+      }
+    } catch (err) {
+      console.error("Failed to pick image in ThreadPane:", err);
+    }
+  };
 
   // Resolve the thread + peer (works for deep links, not just inbox taps).
   useEffect(() => {
@@ -184,12 +212,43 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
 
   const handleSend = async () => {
     const text = draft.trim();
-    if (!text || sending || !canReply) return;
-    setDraft("");
-    notifyTyping(false);
+    if ((!text && !attachedImage) || sending || uploadingImage || !canReply) return;
     setSending(true);
+    notifyTyping(false);
+
+    let payloadBody = text;
+    if (attachedImage) {
+      setUploadingImage(true);
+      try {
+        const key = await uploadChatImage(attachedImage.uri);
+        if (!key) {
+          setNotice({
+            title: "Upload failed",
+            message: "Could not upload image. Please try again.",
+          });
+          setUploadingImage(false);
+          setSending(false);
+          return;
+        }
+        payloadBody = formatMediaMessage(key, text);
+      } catch (err) {
+        setNotice({
+          title: "Upload failed",
+          message: err instanceof Error ? err.message : "Could not upload image.",
+        });
+        setUploadingImage(false);
+        setSending(false);
+        return;
+      } finally {
+        setUploadingImage(false);
+      }
+    }
+
+    setDraft("");
+    setAttachedImage(null);
+
     try {
-      await send(text);
+      await send(payloadBody);
     } catch (err) {
       // A 4xx (blocked / validation) is permanent — surface it. A network/5xx
       // failure was queued in the outbox and shows as a pending bubble instead.
@@ -293,13 +352,65 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
       setConversation({ ...conversation, status: "active" });
     } catch {
       // Leave the banner so the user can retry.
+    } finally {
+      setAccepting(false);
     }
   };
 
   const renderBubble = (message: Message) => {
     const mine = message.sender_id === userId;
+    const parsed = parseMessageContent(message.body);
+
+    if (parsed.isMedia && parsed.mediaUrl) {
+      return (
+        <Pressable
+          key={message.id}
+          onLongPress={() => openReport(message)}
+          delayLongPress={350}
+          accessibilityRole="button"
+          accessibilityLabel={`${mine ? "You" : peerName} sent a photo`}
+          style={{
+            flexDirection: "row",
+            justifyContent: mine ? "flex-end" : "flex-start",
+            marginBottom: SPACE.x2,
+            paddingHorizontal: SPACE.x3,
+          }}
+        >
+          <ChatImageBubble
+            mediaUrl={parsed.mediaUrl}
+            caption={parsed.text}
+            isMine={mine}
+            maxWidth={280}
+            onPressImage={(url, cap) => setLightboxData({ url, caption: cap })}
+            statusFooter={
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  marginTop: 3,
+                  gap: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 10,
+                    color: mine ? colors.textOnActionMuted : colors.textTertiary,
+                  }}
+                >
+                  {formatClock(message.created_at)}
+                </Text>
+                {mine && <Ticks message={message} />}
+              </View>
+            }
+          />
+        </Pressable>
+      );
+    }
+
     return (
       <Pressable
+        key={message.id}
         onLongPress={() => openReport(message)}
         delayLongPress={350}
         accessibilityRole="text"
@@ -357,41 +468,81 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
     );
   };
 
-  const renderPending = (item: PendingMessage) => (
-    <View
-      style={{
-        flexDirection: "row",
-        justifyContent: "flex-end",
-        marginBottom: SPACE.x2,
-        paddingHorizontal: SPACE.x3,
-      }}
-    >
-      <View
-        style={{
-          maxWidth: "78%",
-          backgroundColor: colors.primarySurfaceAlt,
-          borderRadius: RADIUS.lg,
-          borderBottomRightRadius: 4,
-          paddingHorizontal: SPACE.x3,
-          paddingVertical: SPACE.x2,
-        }}
-      >
-        <Text style={{ fontSize: 15, lineHeight: 20, color: colors.brand }}>{item.body}</Text>
+  const renderPending = (item: PendingMessage) => {
+    const parsedPending = parseMessageContent(item.body);
+    if (parsedPending.isMedia && parsedPending.mediaUrl) {
+      return (
         <View
+          key={item.clientMsgId}
           style={{
             flexDirection: "row",
-            alignItems: "center",
             justifyContent: "flex-end",
-            marginTop: 3,
-            gap: 4,
+            marginBottom: SPACE.x2,
+            paddingHorizontal: SPACE.x3,
           }}
         >
-          <Clock size={11} color={colors.brand} />
-          <Text style={{ fontSize: 10, color: colors.brand }}>Sending…</Text>
+          <ChatImageBubble
+            mediaUrl={parsedPending.mediaUrl}
+            caption={parsedPending.text}
+            isMine={true}
+            sending={true}
+            maxWidth={280}
+            statusFooter={
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  marginTop: 3,
+                  gap: 4,
+                }}
+              >
+                <Clock size={11} color={colors.brand} />
+                <Text style={{ fontSize: 10, color: colors.brand }}>Sending…</Text>
+              </View>
+            }
+          />
+        </View>
+      );
+    }
+
+    return (
+      <View
+        key={item.clientMsgId}
+        style={{
+          flexDirection: "row",
+          justifyContent: "flex-end",
+          marginBottom: SPACE.x2,
+          paddingHorizontal: SPACE.x3,
+        }}
+      >
+        <View
+          style={{
+            maxWidth: "78%",
+            backgroundColor: colors.primarySurfaceAlt,
+            borderRadius: RADIUS.lg,
+            borderBottomRightRadius: 4,
+            paddingHorizontal: SPACE.x3,
+            paddingVertical: SPACE.x2,
+          }}
+        >
+          <Text style={{ fontSize: 15, lineHeight: 20, color: colors.brand }}>{item.body}</Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              marginTop: 3,
+              gap: 4,
+            }}
+          >
+            <Clock size={11} color={colors.brand} />
+            <Text style={{ fontSize: 10, color: colors.brand }}>Sending…</Text>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
@@ -411,36 +562,208 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
         {onBack ? (
           <IconButton icon={ArrowLeft} label="Back to inbox" onPress={onBack} />
         ) : null}
-        <Avatar
-          name={peerName}
-          avatarUrl={peer?.avatar_url}
-          size={40}
-          showPresence
-          mode={peerMode}
-        />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
-            numberOfLines={1}
-            style={{ ...TYPE.title, color: colors.ink, fontWeight: "700" }}
-          >
-            {peerName}
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={{
-              ...TYPE.caption,
-              color: peerTyping ? colors.brand : colors.inkFaint,
-              fontWeight: peerTyping ? "600" : "400",
-            }}
-          >
-            {subtitle}
-          </Text>
+        <Pressable
+          onPress={() => {
+            if (peer?.id) {
+              router.push(`/profile/${peer.id}`);
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${peerName}'s profile`}
+          style={({ pressed, hovered }: any) => [
+            {
+              flexDirection: "row",
+              alignItems: "center",
+              gap: SPACE.x3,
+              flex: 1,
+              minWidth: 0,
+              cursor: (peer?.id ? "pointer" : "auto") as any,
+              opacity: pressed ? 0.8 : hovered ? 0.92 : 1,
+            },
+          ]}
+        >
+          <View style={{ position: "relative", alignItems: "center" }}>
+            {peer?.note ? (
+              <View style={{ position: "absolute", top: -20, zIndex: 10 }}>
+                <NoteBubble note={peer.note} variant="compact" />
+              </View>
+            ) : null}
+            <Avatar
+              name={peerName}
+              avatarUrl={peer?.avatar_url}
+              size={40}
+              showPresence
+              mode={peerMode}
+            />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              style={{ ...TYPE.title, color: colors.ink, fontWeight: "700" }}
+            >
+              {peerName}
+            </Text>
+            {peer?.note && !peerTyping ? (
+              <Text
+                numberOfLines={1}
+                style={{
+                  ...TYPE.caption,
+                  color: colors.brand,
+                  fontWeight: "600",
+                }}
+              >
+                💭 "{peer.note}"
+              </Text>
+            ) : (
+              <Text
+                numberOfLines={1}
+                style={{
+                  ...TYPE.caption,
+                  color: peerTyping ? colors.brand : colors.inkFaint,
+                  fontWeight: peerTyping ? "600" : "400",
+                }}
+              >
+                {subtitle}
+              </Text>
+            )}
+          </View>
+        </Pressable>
+        <View style={{ position: "relative", zIndex: 100 }}>
+          <IconButton
+            icon={MoreVertical}
+            label="Conversation safety options"
+            onPress={() => setSafetyOpen((v) => !v)}
+          />
+
+          {safetyOpen && (
+            <>
+              {/* Outside-click trap */}
+              <Pressable
+                onPress={() => setSafetyOpen(false)}
+                style={[
+                  StyleSheet.absoluteFill,
+                  Platform.OS === "web"
+                    ? ({ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 } as any)
+                    : { zIndex: 1000 },
+                ]}
+                accessibilityLabel="Close options"
+              />
+
+              {/* Popover anchored right under the three-dots */}
+              <View
+                style={{
+                  position: "absolute",
+                  top: 42,
+                  right: 0,
+                  width: 220,
+                  backgroundColor: colors.surface,
+                  borderRadius: RADIUS.lg,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  paddingVertical: SPACE.x1,
+                  zIndex: 1001,
+                  shadowColor: colors.shadow,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 12,
+                  elevation: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    ...TYPE.micro,
+                    color: colors.inkFaint,
+                    paddingHorizontal: SPACE.x3,
+                    paddingTop: SPACE.x2,
+                    paddingBottom: SPACE.x1,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Safety
+                </Text>
+
+                <Pressable
+                  onPress={() => openReport(latestReportable)}
+                  disabled={!latestReportable}
+                  accessibilityRole="button"
+                  accessibilityLabel="Report message"
+                  style={({ pressed, hovered }: any) => [
+                    {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: SPACE.x3,
+                      paddingHorizontal: SPACE.x3,
+                      paddingVertical: 10,
+                      backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                      opacity: latestReportable ? 1 : 0.5,
+                      cursor: (latestReportable ? "pointer" : "default") as any,
+                    },
+                  ]}
+                >
+                  <Flag size={16} color={colors.accentText} />
+                  <Text style={{ ...TYPE.bodyStrong, fontSize: 13.5, color: colors.ink }}>
+                    Report message
+                  </Text>
+                </Pressable>
+
+                {blocked ? (
+                  <Pressable
+                    onPress={() => void handleUnblock()}
+                    disabled={actionBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Unblock ${peerName}`}
+                    style={({ pressed, hovered }: any) => [
+                      {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: SPACE.x3,
+                        paddingHorizontal: SPACE.x3,
+                        paddingVertical: 10,
+                        backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                        cursor: "pointer" as any,
+                      },
+                    ]}
+                  >
+                    <ShieldCheck size={16} color={colors.jadeText} />
+                    <Text style={{ ...TYPE.bodyStrong, fontSize: 13.5, color: colors.ink }}>
+                      Unblock {peerName}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={confirmBlock}
+                    disabled={actionBusy || !peer}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Block ${peerName}`}
+                    style={({ pressed, hovered }: any) => [
+                      {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: SPACE.x3,
+                        paddingHorizontal: SPACE.x3,
+                        paddingVertical: 10,
+                        backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
+                        cursor: "pointer" as any,
+                      },
+                    ]}
+                  >
+                    <Ban size={16} color={colors.destructive} />
+                    <Text
+                      style={{
+                        ...TYPE.bodyStrong,
+                        fontSize: 13.5,
+                        color: colors.destructiveText,
+                      }}
+                    >
+                      Block {peerName}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </>
+          )}
         </View>
-        <IconButton
-          icon={MoreVertical}
-          label="Conversation safety options"
-          onPress={() => setSafetyOpen(true)}
-        />
       </View>
 
       {/* Blocked banner */}
@@ -574,6 +897,47 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
           />
         )}
 
+        {/* Image Attachment Preview */}
+        {attachedImage && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: SPACE.x3,
+              paddingTop: SPACE.x2,
+              paddingBottom: SPACE.x1,
+              backgroundColor: colors.panel,
+              borderTopWidth: 1,
+              borderTopColor: colors.line,
+            }}
+          >
+            <View style={{ position: "relative" }}>
+              <Image
+                source={{ uri: attachedImage.uri }}
+                style={{ width: 56, height: 56, borderRadius: RADIUS.md }}
+              />
+              <Pressable
+                onPress={() => setAttachedImage(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Remove photo"
+                style={{
+                  position: "absolute",
+                  top: -6,
+                  right: -6,
+                  backgroundColor: colors.surfaceOverlay,
+                  borderRadius: 10,
+                  width: 20,
+                  height: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={12} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         {/* Composer */}
         <View
           style={{
@@ -583,17 +947,41 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
             paddingHorizontal: SPACE.x3,
             paddingVertical: SPACE.x3,
             backgroundColor: colors.panel,
-            borderTopWidth: 1,
+            borderTopWidth: attachedImage ? 0 : 1,
             borderTopColor: colors.line,
           }}
         >
+          {canReply && (
+            <Pressable
+              onPress={handlePickImage}
+              disabled={uploadingImage || sending}
+              accessibilityRole="button"
+              accessibilityLabel="Attach photo"
+              style={({ pressed, hovered }: any) => [
+                {
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: hovered ? colors.surfaceSunken : "transparent",
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <ImageIcon size={20} color={colors.inkSoft} />
+            </Pressable>
+          )}
+
           <TextInput
             value={draft}
             onChangeText={handleDraftChange}
             editable={canReply}
             placeholder={
               canReply
-                ? "Message…"
+                ? attachedImage
+                  ? "Add a caption…"
+                  : "Message…"
                 : blocked
                 ? "You blocked this user"
                 : "Accept the request to reply"
@@ -624,137 +1012,34 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
           />
           <Pressable
             onPress={() => void handleSend()}
-            disabled={!draft.trim() || !canReply || sending}
+            disabled={(!draft.trim() && !attachedImage) || !canReply || sending || uploadingImage}
             accessibilityRole="button"
             accessibilityLabel="Send message"
-            accessibilityState={{ disabled: !draft.trim() || !canReply || sending }}
+            accessibilityState={{ disabled: (!draft.trim() && !attachedImage) || !canReply || sending || uploadingImage }}
             onFocus={() => {}}
             style={({ pressed }) => ({
               width: 44,
               height: 44,
               borderRadius: 22,
               backgroundColor:
-                draft.trim() && canReply ? colors.brandSolid : colors.surfaceSunken,
+                (draft.trim() || attachedImage) && canReply ? colors.brandSolid : colors.surfaceSunken,
               alignItems: "center",
               justifyContent: "center",
               opacity: pressed ? 0.8 : 1,
             })}
           >
-            {sending ? (
+            {sending || uploadingImage ? (
               <ActivityIndicator accessibilityLabel="Loading" size="small" color={colors.textOnBrandSolid} />
             ) : (
               <Send
                 size={18}
-                color={draft.trim() && canReply ? colors.textOnBrandSolid : colors.inkFaint}
+                color={(draft.trim() || attachedImage) && canReply ? colors.textOnBrandSolid : colors.inkFaint}
               />
             )}
           </Pressable>
         </View>
       </KeyboardAvoidingView>
 
-      {/* Safety actions (report / block) */}
-      <Modal
-        visible={safetyOpen}
-        onClose={() => setSafetyOpen(false)}
-        maxWidth={480}
-        accessibilityLabel="Safety actions"
-        sheetOnMobile
-      >
-        <View style={{ paddingVertical: SPACE.x2 }}>
-          <Text
-            style={{
-              ...TYPE.micro,
-              color: colors.inkFaint,
-              paddingHorizontal: SPACE.x5,
-              paddingTop: SPACE.x3,
-              paddingBottom: SPACE.x2,
-            }}
-          >
-            Safety
-          </Text>
-          <Pressable
-            onPress={() => openReport(latestReportable)}
-            disabled={!latestReportable}
-            accessibilityRole="button"
-            accessibilityLabel="Report message"
-            onFocus={() => {}}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              gap: SPACE.x3,
-              paddingHorizontal: SPACE.x5,
-              minHeight: 48,
-              backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-              opacity: latestReportable ? 1 : 0.5,
-            })}
-          >
-            <Flag size={18} color={colors.accentText} />
-            <Text style={{ ...TYPE.bodyStrong, fontWeight: "600", color: colors.ink }}>
-              Report message
-            </Text>
-          </Pressable>
-          {blocked ? (
-            <Pressable
-              onPress={() => void handleUnblock()}
-              disabled={actionBusy}
-              accessibilityRole="button"
-              accessibilityLabel={`Unblock ${peerName}`}
-              onFocus={() => {}}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: SPACE.x3,
-                paddingHorizontal: SPACE.x5,
-                minHeight: 48,
-                backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-              })}
-            >
-              <ShieldCheck size={18} color={colors.jadeText} />
-              <Text style={{ ...TYPE.bodyStrong, fontWeight: "600", color: colors.ink }}>
-                Unblock {peerName}
-              </Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={confirmBlock}
-              disabled={actionBusy || !peer}
-              accessibilityRole="button"
-              accessibilityLabel={`Block ${peerName}`}
-              onFocus={() => {}}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: SPACE.x3,
-                paddingHorizontal: SPACE.x5,
-                minHeight: 48,
-                backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-              })}
-            >
-              <Ban size={18} color={colors.destructive} />
-              <Text style={{ ...TYPE.bodyStrong, fontWeight: "600", color: colors.destructiveText }}>
-                Block {peerName}
-              </Text>
-            </Pressable>
-          )}
-          <View style={{ height: 1, backgroundColor: colors.divider, marginTop: SPACE.x2 }} />
-          <Pressable
-            onPress={() => setSafetyOpen(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-            onFocus={() => {}}
-            style={({ pressed }) => ({
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 48,
-              backgroundColor: pressed ? colors.surfaceSunken : "transparent",
-            })}
-          >
-            <Text style={{ ...TYPE.caption, fontWeight: "700", color: colors.inkSoft }}>
-              Cancel
-            </Text>
-          </Pressable>
-        </View>
-      </Modal>
 
       {/* Report reason */}
       <Modal
@@ -934,6 +1219,13 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
           </View>
         </View>
       </Modal>
+
+      <ChatImageLightbox
+        visible={Boolean(lightboxData?.url)}
+        imageUrl={lightboxData?.url || null}
+        caption={lightboxData?.caption}
+        onClose={() => setLightboxData(null)}
+      />
     </View>
   );
 }

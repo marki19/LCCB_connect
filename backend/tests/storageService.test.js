@@ -145,6 +145,17 @@ describe("withStorageUrls", () => {
     ]);
   });
 
+  it("resolves attachment storage keys by their category prefix", async () => {
+    const out = await withStorageUrls({
+      attachments: [
+        { storage_key: "posts/a.png", mime_type: "image/png" },
+        { storage_key: "documents/b.pdf", mime_type: "application/pdf" },
+      ],
+    });
+    assert.match(out.attachments[0].url, /^\/api\/files\/posts\//);
+    assert.match(out.attachments[1].url, /^https?:/);
+  });
+
   it("normalises nested authors and arrays of rows", async () => {
     const resolved = await withStorageUrls([
       { id: "p1", image_url: "a.jpg", author: { id: "u1", avatar_url: "me.png" } },
@@ -211,5 +222,28 @@ describe("__resetSigner", () => {
     // Unconfigured in tests, so the key survives rather than a URL appearing.
     assert.equal(publicStorageUrl("avatars", "abc.jpg"), "abc.jpg");
     __setSigner((key) => `https://r2.example/${key}`);
+  });
+});
+
+describe("snap media", () => {
+  it("signs media_key so snap bytes are never served from a public key", () => {
+    const resolved = withStorageUrlsSync({ id: "s1", media_key: "snaps/abc123.jpg" });
+
+    assert.equal(resolved.media_key, "https://r2.example/snaps/abc123.jpg?sig=abc");
+    assert.deepEqual(signed.map((s) => s.key), ["snaps/abc123.jpg"]);
+  });
+
+  it("leaves an already-expanded media_key alone", () => {
+    const resolved = withStorageUrlsSync({ media_key: "https://r2.example/snaps/abc123.jpg?sig=abc" });
+    assert.equal(resolved.media_key, "https://r2.example/snaps/abc123.jpg?sig=abc");
+  });
+
+  it("signs snap media nested inside a rail group", () => {
+    const rail = [
+      { author_id: "u1", snaps: [{ id: "s1", media_key: "snaps/abc123.jpg" }] },
+    ];
+    const resolved = withStorageUrlsSync(rail);
+
+    assert.match(resolved[0].snaps[0].media_key, /^https:\/\/r2\.example\/snaps\/abc123\.jpg/);
   });
 });

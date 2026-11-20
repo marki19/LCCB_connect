@@ -23,7 +23,7 @@ import Modal from "../ui/Modal";
 import Button from "../ui/Button";
 import { useTheme } from "../../contexts/ThemeContext";
 import { enrollMfa, verifyMfaEnrollment, type MfaEnrollResult } from "../../lib/auth";
-import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
+import { RADIUS, SPACE, TYPE, monoFamily } from "../../lib/tokens";
 
 interface MfaSetupModalProps {
   visible: boolean;
@@ -272,7 +272,7 @@ export default function MfaSetupModal({
                 <Text
                   selectable
                   style={{
-                    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+                    fontFamily: monoFamily,
                     fontSize: 13,
                     fontWeight: "700",
                     color: colors.ink,

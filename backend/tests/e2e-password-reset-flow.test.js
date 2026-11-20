@@ -138,13 +138,21 @@ describe("POST /api/auth/request-password-reset", () => {
     assert.deepEqual(registered.body, unregistered.body);
   });
 
-  it("rejects non-LCCB domain with 400", async () => {
+  it("rejects invalid email format with 400", async () => {
+    const res = await request(app)
+      .post("/api/auth/request-password-reset")
+      .send({ email: "not-an-email" });
+
+    assert.equal(res.status, 400);
+    assert.equal(createPasswordReset.calls.length, 0);
+  });
+
+  it("allows non-LCCB domain (e.g. gmail.com) to request password reset", async () => {
     const res = await request(app)
       .post("/api/auth/request-password-reset")
       .send({ email: NON_LCCB_EMAIL });
 
-    assert.equal(res.status, 400);
-    assert.equal(createPasswordReset.calls.length, 0);
+    assert.equal(res.status, 202);
   });
 });
 

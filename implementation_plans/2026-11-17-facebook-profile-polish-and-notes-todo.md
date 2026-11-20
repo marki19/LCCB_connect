@@ -1,0 +1,29 @@
+# Facebook Profile Polish, Cards & Notes Task List
+
+- [x] Phase 1: Post card alignment & DesktopTopBar Home icon
+  - [x] Add `style` prop to `PostCard.tsx`
+  - [x] Pass `style={{ marginHorizontal: 0 }}` in `profile/[id].tsx`
+  - [x] Replace `Sparkles` with `Home` in `DesktopTopBar.tsx`
+- [x] Phase 2: Add to Story chooser modal (Camera vs Gallery)
+  - [x] Create `StoryActionModal.tsx`
+  - [x] Wire `onAddStory` in `ProfileActions.tsx` and `profile/[id].tsx`
+- [x] Phase 3: Facebook profile cards
+  - [x] Create `ProfilePersonalDetailsCard.tsx`
+  - [x] Create `ProfileContactInfoCard.tsx`
+  - [x] Update `ProfileEducationCard.tsx` with constant LCCB school crest & info
+  - [x] Ensure `ProfileFriendsCard.tsx` & `ProfilePhotosCard.tsx` never vanish on empty
+  - [x] Mount all cards in `profile/[id].tsx`
+- [x] Phase 4: Notes feature backend
+  - [x] Create migration `050_profile_notes.sql`
+  - [x] Update `userModel.js`, `validation/index.js`, `userController.js`, `userRouter.js`
+  - [x] Add backend tests in `tests/profile-notes.test.js`
+- [x] Phase 5: Notes feature frontend
+  - [x] Create `NoteBubble.tsx` with speech bubble tail
+  - [x] Mount in `ProfileIdentity.tsx` with edit/clear modal
+  - [x] Integrate into Messenger (`ThreadPane.tsx` and `ChatsPopover.tsx`)
+- [x] Phase 6: Verification
+  - [x] Run backend tests (691/691 passing, 180 suites)
+  - [x] Run tsc --noEmit (0 errors)
+  - [x] Run vitest (41/41 passing)
+  - [x] Run lint (0 new errors, cleanly isolated)
+  - [x] Run web build (clean export dist/index.html)

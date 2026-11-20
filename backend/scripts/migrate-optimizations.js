@@ -7,26 +7,38 @@ async function applyOptimizations() {
     -- 1. Indexes on foreign keys and sort columns for fast reads
     CREATE INDEX IF NOT EXISTS idx_posts_author ON public.posts(author_id);
     CREATE INDEX IF NOT EXISTS idx_posts_created_at ON public.posts(created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_theses_uploader ON public.theses(uploader_id);
-    CREATE INDEX IF NOT EXISTS idx_theses_created_at ON public.theses(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_likes_post ON public.likes(post_id);
     CREATE INDEX IF NOT EXISTS idx_comments_post ON public.comments(post_id);
+
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'theses') THEN
+        CREATE INDEX IF NOT EXISTS idx_theses_uploader ON public.theses(uploader_id);
+        CREATE INDEX IF NOT EXISTS idx_theses_created_at ON public.theses(created_at DESC);
+        ALTER TABLE public.theses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+      END IF;
+    END
+    $$;
 
     -- 2. Add updated_at timestamps
     ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-    ALTER TABLE public.theses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
     -- 3. Constraints
     DO $$
     BEGIN
-      -- Post type constraint (text, image, project, capstone)
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'chk_posts_type'
+      -- Post type constraint (if type column still exists)
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'posts' AND column_name = 'type'
       ) THEN
-        ALTER TABLE public.posts 
-        ADD CONSTRAINT chk_posts_type 
-        CHECK (type IN ('text', 'image', 'project', 'capstone'));
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'chk_posts_type'
+        ) THEN
+          ALTER TABLE public.posts 
+          ADD CONSTRAINT chk_posts_type 
+          CHECK (type IN ('text', 'image', 'project', 'capstone'));
+        END IF;
       END IF;
 
       -- Profile username unique constraint (if not already unique)

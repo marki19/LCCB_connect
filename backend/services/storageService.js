@@ -19,12 +19,19 @@ const DEFAULT_SIGNED_URL_EXPIRES = 300;
 /**
  * Which bucket each file column points into. The bucket name selects the key
  * prefix, so legacy column names (`assets`) keep working.
+ *
+ * A private category resolves to a short-lived presigned URL; a public one
+ * resolves to a bare key the client turns into `/api/files/<key>`. `media_key`
+ * is private (snaps), so clients receive a renderable URL there.
  */
 const FILE_FIELD_BUCKETS = {
   image_url: "assets",
   pdf_url: "theses",
   avatar_url: "avatars",
   video_url: "videos",
+  cover_url: "covers",
+  media_key: "snaps",
+  attachments: "documents",
 };
 
 /** Bucket name → key prefix. `assets` is the legacy name for post images. */
@@ -35,6 +42,8 @@ const BUCKET_CATEGORY = {
   theses: "theses",
   documents: "documents",
   videos: "videos",
+  snaps: "snaps",
+  covers: "covers",
 };
 
 /**
@@ -171,6 +180,28 @@ function expand(value) {
       );
     }
 
+    if (Array.isArray(output.attachments)) {
+      output.attachments = output.attachments.map((att) => {
+        if (!att || typeof att !== "object") return att;
+        const key = att.storage_key;
+        if (typeof key !== "string" || isAbsoluteUrl(key)) {
+          return { ...att, url: att.url || key };
+        }
+        const cleanKey = key.replace(/^\/+/, "").replace(/^uploads\//, "");
+        const rawCategory = cleanKey.split("/")[0];
+        const category = isCategory(rawCategory) ? rawCategory : "posts";
+        const bucket = category === "posts" ? "assets" : category;
+        const normalizedKey = objectKey(bucket, cleanKey);
+        const url = isPublicCategory(category)
+          ? `/api/files/${normalizedKey}`
+          : signKey(bucket, normalizedKey);
+        return {
+          ...att,
+          url,
+        };
+      });
+    }
+
     if (output.author && typeof output.author === "object" && !(output.author instanceof Date)) {
       output.author = expand(output.author);
     }
@@ -181,6 +212,7 @@ function expand(value) {
         typeof nested === "object" &&
         !(nested instanceof Date) &&
         key !== "image_urls" &&
+        key !== "attachments" &&
         key !== "author"
       ) {
         output[key] = expand(nested);

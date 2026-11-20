@@ -17,7 +17,6 @@ installConsoleRedactor();
 // Route modules
 const userRouter = require("./routes/userRouter");
 const postRouter = require("./routes/postRouter");
-const thesisRouter = require("./routes/thesisRouter");
 const moderationRouter = require("./routes/moderationRouter");
 const publicRouter = require("./routes/publicRouter");
 const adminRouter = require("./routes/adminRouter");
@@ -31,6 +30,7 @@ const blockRouter = require("./routes/blockRouter");
 const searchRouter = require("./routes/searchRouter");
 const notificationRouter = require("./routes/notificationRouter");
 const announcementRouter = require("./routes/announcementRouter");
+const snapRouter = require("./routes/snapRouter");
 
 // The Express app is built here and exported WITHOUT listening, so tests can
 // drive it via supertest. `index.js` owns dotenv + boot-time env validation and
@@ -64,8 +64,9 @@ const parseLimit = (raw, fallback) => {
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
-const API_RATE_LIMIT = parseLimit(process.env.RATE_LIMIT_MAX, 120);
-const WRITE_RATE_LIMIT = parseLimit(process.env.RATE_LIMIT_WRITE_MAX, 30);
+const isDev = process.env.NODE_ENV !== "production";
+const API_RATE_LIMIT = parseLimit(process.env.RATE_LIMIT_MAX, isDev ? 1200 : 120);
+const WRITE_RATE_LIMIT = parseLimit(process.env.RATE_LIMIT_WRITE_MAX, isDev ? 300 : 30);
 
 const RATE_LIMIT_MESSAGE = { error: "Too many requests, please try again later." };
 const apiLimiter = rateLimit({
@@ -185,13 +186,7 @@ app.use(
   auth.requireActiveAccount,
   blockRouter
 );
-app.use(
-  "/api/theses",
-  auth.requireAuth,
-  auth.loadProfile,
-  auth.requireActiveAccount,
-  thesisRouter
-);
+
 app.use(
   "/api/search",
   auth.requireAuth,
@@ -248,16 +243,17 @@ app.use(
   socialRouter
 );
 
+app.use("/api/snaps", snapRouter);
+
 // Superadmin console API. Keep this mount before the catalog router so its
 // specific paths win; unmatched paths fall through.
-// Admin routes require role check + session age check (24h admin / 7d user).
+// Console is gated to active admin and superadmin accounts.
 // MFA is enforced at login gateway, so logged-in admins can browse uninterrupted.
 const adminMiddleware = [
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
   auth.requireRole("admin", "superadmin"),
-  auth.checkSessionAge,
 ];
 
 app.use("/api/admin", ...adminMiddleware, adminRouter);

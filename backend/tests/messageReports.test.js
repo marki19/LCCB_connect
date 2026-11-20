@@ -11,8 +11,8 @@ const request = require("supertest");
 const { stub } = require("./stub.helper");
 const auth = require("../middleware/auth");
 const postModel = require("../models/postModel");
-const thesisModel = require("../models/thesisModel");
 const messageModel = require("../models/messageModel");
+const reportModel = require("../models/reportModel");
 const auditService = require("../services/auditService");
 
 const REPORT = "66666666-6666-4666-8666-666666666666";
@@ -44,9 +44,7 @@ const reports = {
   listOpenMessageReports: stub(messageModel, "listOpenMessageReports"),
   getMessageReportById: stub(messageModel, "getMessageReportById"),
   resolveMessageReport: stub(messageModel, "resolveMessageReport"),
-};
-const theses = {
-  getFlaggedTheses: stub(thesisModel, "getFlaggedTheses", async () => []),
+  listContentReports: stub(reportModel, "listOpenReports"),
 };
 stub(auditService, "recordRequest", async () => undefined);
 

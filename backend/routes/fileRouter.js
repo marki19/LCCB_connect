@@ -35,9 +35,28 @@ async function verifyFileOwnership(category, filename, user) {
   // an ILIKE pattern, and an unescaped `%` or `_` would widen the match.
   const likePattern = `%${escapeLike(filename)}`;
 
+  // Snap media is audience-scoped and expires. Visibility, not upload
+  // ownership, decides who may read it, so ask the same function the rail
+  // uses. The key is matched exactly: every snap row is written with its
+  // `snaps/` prefix, so the legacy bare-filename tolerance is unnecessary.
+  if (category === "snaps") {
+    const { rows } = await db.query(
+      `SELECT 1
+         FROM public.visible_snaps($1) s
+        WHERE s.media_key = $2
+        LIMIT 1`,
+      [String(user.id), `${category}/${filename}`]
+    );
+    return rows.length > 0;
+  }
+
   if (category === "theses") {
     const { rows } = await db.query(
-      `SELECT uploader_id FROM public.theses WHERE pdf_url ILIKE $1 LIMIT 1`,
+      `SELECT p.author_id AS uploader_id
+         FROM public.post_attachments a
+         JOIN public.posts p ON p.id = a.post_id
+        WHERE a.storage_key ILIKE $1
+        LIMIT 1`,
       [likePattern]
     );
     if (!rows.length) return false;
@@ -54,7 +73,11 @@ async function verifyFileOwnership(category, filename, user) {
   }
 
   const postRes = await db.query(
-    `SELECT author_id FROM public.posts WHERE image_url ILIKE $1 OR $2 = ANY(image_urls) LIMIT 1`,
+    `SELECT p.author_id
+     FROM public.post_attachments pa
+     JOIN public.posts p ON p.id = pa.post_id
+     WHERE pa.storage_key ILIKE $1 OR pa.storage_key = $2
+     LIMIT 1`,
     [likePattern, filename]
   );
   if (postRes.rows.length && String(postRes.rows[0].author_id) === String(user.id)) {
@@ -96,8 +119,9 @@ function redirectToObject(res, key, { isPublic }) {
 /**
  * GET /api/files/:category/:filename
  *
- * avatars/posts/videos are public.
+ * avatars/posts/videos/covers are public.
  * theses/documents require auth + ownership (or admin) and return 404 otherwise.
+ * snaps require auth and are served only to a viewer who can see the snap.
  */
 router.get("/:category/:filename", (req, res, next) => {
   const category = (req.params.category || "").toLowerCase();

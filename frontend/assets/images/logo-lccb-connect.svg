@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" width="720" height="360" role="img" aria-label="LCCB Connect — Your Campus, Connected">
+  <title>LCCB Connect</title>
+
+  <defs>
+    <!-- Top panels: lightest glass -->
+    <linearGradient id="topA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#EAF1FF"/>
+      <stop offset="100%" stop-color="#A9C4F5"/>
+    </linearGradient>
+    <linearGradient id="topB" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#DCE7FF"/>
+      <stop offset="100%" stop-color="#8FB0EC"/>
+    </linearGradient>
+
+    <!-- Left panels: mid glass -->
+    <linearGradient id="leftA" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0%" stop-color="#8FB0EC"/>
+      <stop offset="100%" stop-color="#3D63B8"/>
+    </linearGradient>
+    <linearGradient id="leftB" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#6B90D8"/>
+      <stop offset="100%" stop-color="#2A4B93"/>
+    </linearGradient>
+
+    <!-- Right panels: deepest glass -->
+    <linearGradient id="rightA" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4C74C8"/>
+      <stop offset="100%" stop-color="#14306E"/>
+    </linearGradient>
+    <linearGradient id="rightB" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3A5FAB"/>
+      <stop offset="100%" stop-color="#0B2354"/>
+    </linearGradient>
+
+    <!-- Centre node -->
+    <linearGradient id="node" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#F4F8FF"/>
+      <stop offset="100%" stop-color="#9DBDF2"/>
+    </linearGradient>
+
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ============================= MARK ============================= -->
+  <g transform="translate(0,-6)">
+    <!-- top face -->
+    <polygon points="361.0,61.7 408.2,89 361.0,116.3" fill="url(#topA)"/>
+    <polygon points="359.0,61.7 359.0,116.3 311.8,89" fill="url(#topB)"/>
+
+    <!-- left face -->
+    <polygon points="310.8,90.7 358.0,118 310.8,145.3" fill="url(#leftA)"/>
+    <polygon points="359.0,119.7 359.0,174.3 311.8,147" fill="url(#leftB)"/>
+
+    <!-- right face -->
+    <polygon points="362.0,118 409.2,90.7 409.2,145.3" fill="url(#rightA)"/>
+    <polygon points="361.0,119.7 408.2,147 361.0,174.3" fill="url(#rightB)"/>
+
+    <!-- connectors from the node into the panels -->
+    <g stroke="#0E3C9C" stroke-width="3.2" stroke-linecap="round" opacity="0.42">
+      <line x1="349" y1="110" x2="325" y2="97"/>
+      <line x1="371" y1="110" x2="395" y2="97"/>
+      <line x1="360" y1="129" x2="360" y2="152"/>
+    </g>
+
+    <!-- centre node -->
+    <g filter="url(#softGlow)">
+      <polygon points="360,104 374,118 360,132 346,118" fill="url(#node)"/>
+    </g>
+  </g>
+
+  <!-- ============================ WORDMARK ============================ -->
+  <text x="360" y="250" text-anchor="middle" fill="#0B1B33"
+        font-family="'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif"
+        font-size="66" font-weight="800" letter-spacing="-2.5">LCCB<tspan font-weight="500" letter-spacing="-1">.Connect</tspan></text>
+
+  <!-- ============================= TAGLINE ============================ -->
+  <text x="360" y="298" text-anchor="middle" fill="#1B3A6B"
+        font-family="'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif"
+        font-size="17" font-weight="700" letter-spacing="5.5">SHARE. CONNECT. SHOWCASE.</text>
+</svg>

@@ -23,7 +23,9 @@ describe("files utility", () => {
     expect(fileKeyFromUrl("https://domain.com/api/files/posts/123.jpg?t=456")).toBe("posts/123.jpg");
     expect(fileKeyFromUrl("posts/raw-key.jpg")).toBe("posts/raw-key.jpg");
 
-    // External and third-party URLs should NOT have a storage cache key
+    // External, local, and arbitrary relative paths should NOT have a storage cache key
+    expect(fileKeyFromUrl("ImagePicker/abc.jpg")).toBeUndefined();
+    expect(fileKeyFromUrl("DCIM/camera.png")).toBeUndefined();
     expect(fileKeyFromUrl("https://lh3.googleusercontent.com/a/ACg8oc12345")).toBeUndefined();
     expect(fileKeyFromUrl("https://images.unsplash.com/photo-1234")).toBeUndefined();
     expect(fileKeyFromUrl("data:image/png;base64,abc")).toBeUndefined();

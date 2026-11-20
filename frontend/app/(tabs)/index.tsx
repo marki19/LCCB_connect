@@ -23,10 +23,15 @@ import {
   X,
 } from "lucide-react-native";
 import HomeHeader from "../../src/components/HomeHeader";
+import PostComposer from "../../src/components/PostComposer";
 import PostCard from "../../src/components/PostCard";
 import RepostCard from "../../src/components/RepostCard";
 import SettingsSidebar from "../../src/components/SettingsSidebar";
 import Avatar from "../../src/components/Avatar";
+import SnapRail from "../../src/components/snaps/SnapRail";
+import SnapViewer from "../../src/components/snaps/SnapViewer";
+import QuickSnapComposer from "../../src/components/snaps/QuickSnapComposer";
+import { getSnapRail, type SnapGroup } from "../../src/lib/snaps";
 import { usePrefetchImages } from "../../src/hooks/usePrefetchImages";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
@@ -47,6 +52,7 @@ import IdentityBanner from "../../src/components/IdentityBanner";
 import SuggestionCarousel from "../../src/components/SuggestionCarousel";
 import { resolveFileUrl, resolveFileUrls } from "../../src/lib/files";
 import { useFeedFilter, type FeedCategory } from "../../src/contexts/FeedFilterContext";
+import { matchesFeedFilter } from "../../src/lib/feedFilters";
 
 type FilterValue = FeedCategory;
 
@@ -112,6 +118,24 @@ export default function HomeScreen() {
   const { activeCategory: filter, setCategory: setFilter } = useFeedFilter();
   const loadedRef = useRef(false);
 
+  const [snapGroups, setSnapGroups] = useState<SnapGroup[]>([]);
+  const [snapsLoading, setSnapsLoading] = useState(false);
+  const [snapComposerOpen, setSnapComposerOpen] = useState(false);
+  const [activeSnapGroup, setActiveSnapGroup] = useState<SnapGroup | null>(null);
+
+  const fetchSnapRail = useCallback(async () => {
+    if (isGuest || !profile?.id) return;
+    try {
+      setSnapsLoading(true);
+      const groups = await getSnapRail();
+      setSnapGroups(groups);
+    } catch (err) {
+      console.error("Failed to load snap rail:", err);
+    } finally {
+      setSnapsLoading(false);
+    }
+  }, [isGuest, profile?.id]);
+
   const handlePostDeleted = useCallback((id: string | number) => {
     setPosts((prev) => prev.filter((p) => String(p.id) !== String(id)));
   }, []);
@@ -162,9 +186,7 @@ export default function HomeScreen() {
       if (!loadedRef.current) setLoading(true);
       setError("");
       let postItems: any[] = [];
-      let thesisItems: any[] = [];
       let postFailed = false;
-      let thesisFailed = false;
 
       try {
         const res = await apiFetch("/posts");
@@ -241,57 +263,14 @@ export default function HomeScreen() {
         console.error("Failed to load posts from SQL backend:", err);
       }
 
-    try {
-      const res = await apiFetch("/theses");
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : (Array.isArray(data?.theses) ? data.theses : []);
-        thesisItems = list.map((t: any) => {
-          const uploaderName = t.uploader?.full_name || t.author?.full_name || "Academic Author";
-          return {
-            id: t.id,
-            author: {
-              id: t.uploader_id,
-              name: uploaderName,
-              initials: getInitials(uploaderName),
-              course: t.uploader?.department_name || t.department || "—",
-              yearLevel: t.category || "Thesis",
-            },
-            title: t.title,
-            description: t.abstract,
-            type: "thesis",
-            tags: [t.uploader?.department_name || t.department, t.category].filter(Boolean),
-            previewUrl: t.pdf_url,
-            imageUrl: undefined,
-            likes: 0,
-            comments: 0,
-            createdAt: new Date(t.created_at).toLocaleDateString(),
-            rawDate: new Date(t.created_at).getTime(),
-            isLiked: false,
-          };
-        });
-      } else {
-        thesisFailed = true;
-      }
-    } catch (err) {
-      thesisFailed = true;
-      console.error("Failed to load theses from SQL backend:", err);
-    }
-
-    if (postFailed && thesisFailed) {
+    if (postFailed) {
       setError("We couldn't reach the campus feed. Check your connection and try again.");
     }
 
-    let unified = [...postItems, ...thesisItems].sort((a, b) => b.rawDate - a.rawDate);
+    let unified = postItems.sort((a, b) => b.rawDate - a.rawDate);
 
-    if (filter === "theses") {
-      unified = unified.filter((item) => item.type === "thesis");
-    } else if (filter === "websites") {
-      unified = unified.filter((item) => item.type === "website");
-    } else if (filter === "projects") {
-      unified = unified.filter((item) => item.type === "project" || item.type === "capstone");
-    } else if (filter === "discussions") {
-      unified = unified.filter((item) => item.type === "text" || item.type === "image" || item.type === "discussion");
+    if (filter && filter !== "all") {
+      unified = unified.filter((item) => matchesFeedFilter(item, filter));
     }
 
     setPosts(unified);
@@ -304,7 +283,8 @@ export default function HomeScreen() {
       void fetchUnifiedFeed();
       void fetchActivePeers();
       void fetchUnreadCount();
-    }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount])
+      void fetchSnapRail();
+    }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount, fetchSnapRail])
   );
 
   useEffect(() => {
@@ -314,9 +294,9 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchUnifiedFeed(), fetchActivePeers(), fetchUnreadCount()]);
+    await Promise.all([fetchUnifiedFeed(), fetchActivePeers(), fetchUnreadCount(), fetchSnapRail()]);
     setRefreshing(false);
-  }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount]);
+  }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount, fetchSnapRail]);
 
   const emptyCopy = FILTER_COPY[filter];
 
@@ -427,6 +407,17 @@ export default function HomeScreen() {
               <View>
                 <IdentityBanner />
 
+                {!isGuest && (
+                  <View style={{ marginHorizontal: SPACE.x4, marginBottom: SPACE.x3 }}>
+                    <SnapRail
+                      groups={snapGroups}
+                      loading={snapsLoading}
+                      onAddSnap={() => setSnapComposerOpen(true)}
+                      onOpenGroup={(group) => setActiveSnapGroup(group)}
+                    />
+                  </View>
+                )}
+
                 {error ? (
                   <View
                     style={{
@@ -471,164 +462,10 @@ export default function HomeScreen() {
                   </View>
                 ) : null}
 
-                {!isGuest && (
-                  <View
-                    style={{
-                      marginHorizontal: SPACE.x4,
-                      marginBottom: SPACE.x3,
-                      padding: SPACE.x3,
-                      backgroundColor: colors.panel,
-                      borderRadius: RADIUS.xl,
-                      borderWidth: 1,
-                      borderColor: colors.line,
-                      ...elevation("sm", colors),
-                    }}
-                  >
-                    {/* Top row: Avatar + Pill Input */}
-                    <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      <Avatar
-                        name={activeName}
-                        avatarUrl={profile?.avatar_url}
-                        size={40}
-                      />
-                      <Pressable
-                        onPress={() => goCreate()}
-                        accessibilityRole="button"
-                        accessibilityLabel="What's on your mind?"
-                        style={({ pressed, hovered }: any) => ({
-                          flex: 1,
-                          minHeight: 40,
-                          backgroundColor: hovered || pressed ? colors.hoverOverlay : colors.surfaceSunken,
-                          borderRadius: RADIUS.pill,
-                          borderWidth: 1,
-                          borderColor: colors.line,
-                          justifyContent: "center",
-                          paddingHorizontal: SPACE.x4,
-                          marginLeft: SPACE.x3,
-                          cursor: "pointer",
-                          opacity: pressed ? 0.85 : 1,
-                          transform: [{ scale: pressed ? 0.98 : 1 }],
-                        })}
-                      >
-                        <Text style={{ color: colors.inkFaint, fontSize: 13 }} numberOfLines={1}>
-                          {`What's on your mind, ${activeName.split(" ")[0]}?`}
-                        </Text>
-                      </Pressable>
-                    </View>
-
-                    {/* Divider line */}
-                    <View
-                      style={{
-                        height: 1,
-                        backgroundColor: colors.line,
-                        marginTop: SPACE.x3,
-                        marginBottom: SPACE.x2,
-                      }}
-                    />
-
-                    {/* Action buttons row */}
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        paddingHorizontal: SPACE.x1,
-                      }}
-                    >
-                      <Pressable
-                        onPress={() => router.push({ pathname: "/create", params: { editType: "project" } })}
-                        accessibilityRole="button"
-                        accessibilityLabel="Share Project"
-                        style={({ pressed, hovered }: any) => ({
-                          flex: 1,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 6,
-                          paddingVertical: 8,
-                          borderRadius: RADIUS.md,
-                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
-                          cursor: "pointer",
-                          transform: [{ scale: pressed ? 0.95 : 1 }],
-                        })}
-                      >
-                        <FolderGit2 size={18} color="#10B981" strokeWidth={2} />
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: colors.inkSoft }}>
-                          Project
-                        </Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => router.push({ pathname: "/create", params: { editType: "capstone" } })}
-                        accessibilityRole="button"
-                        accessibilityLabel="Share Capstone"
-                        style={({ pressed, hovered }: any) => ({
-                          flex: 1,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 6,
-                          paddingVertical: 8,
-                          borderRadius: RADIUS.md,
-                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
-                          cursor: "pointer",
-                          transform: [{ scale: pressed ? 0.95 : 1 }],
-                        })}
-                      >
-                        <GraduationCap size={18} color="#F59E0B" strokeWidth={2} />
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: colors.inkSoft }}>
-                          Capstone
-                        </Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => router.push({ pathname: "/create", params: { editType: "image" } })}
-                        accessibilityRole="button"
-                        accessibilityLabel="Share Photo"
-                        style={({ pressed, hovered }: any) => ({
-                          flex: 1,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 6,
-                          paddingVertical: 8,
-                          borderRadius: RADIUS.md,
-                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
-                          cursor: "pointer",
-                          transform: [{ scale: pressed ? 0.95 : 1 }],
-                        })}
-                      >
-                        <ImageIcon size={18} color="#8B5CF6" strokeWidth={2} />
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: colors.inkSoft }}>
-                          Photo
-                        </Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => router.push({ pathname: "/create", params: { editType: "text" } })}
-                        accessibilityRole="button"
-                        accessibilityLabel="Start Discussion"
-                        style={({ pressed, hovered }: any) => ({
-                          flex: 1,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 6,
-                          paddingVertical: 8,
-                          borderRadius: RADIUS.md,
-                          backgroundColor: pressed || hovered ? colors.hoverOverlay : "transparent",
-                          cursor: "pointer",
-                          transform: [{ scale: pressed ? 0.95 : 1 }],
-                        })}
-                      >
-                        <MessageSquare size={18} color="#3B82F6" strokeWidth={2} />
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: colors.inkSoft }}>
-                          Discuss
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                )}
+                <PostComposer
+                  style={{ marginHorizontal: SPACE.x4, marginBottom: SPACE.x3 }}
+                  onPressPrompt={() => goCreate()}
+                />
               </View>
             }
             ListEmptyComponent={
@@ -703,6 +540,37 @@ export default function HomeScreen() {
       </View>
 
       <SettingsSidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      <QuickSnapComposer
+        visible={snapComposerOpen}
+        onClose={() => setSnapComposerOpen(false)}
+        onCreated={() => void fetchSnapRail()}
+      />
+
+      <SnapViewer
+        // Remount per group so playback and counters start at the first snap.
+        key={activeSnapGroup?.author_id ?? "no-snap-group"}
+        visible={Boolean(activeSnapGroup)}
+        group={activeSnapGroup}
+        onClose={() => setActiveSnapGroup(null)}
+        onSnapDeleted={() => void fetchSnapRail()}
+        onNextGroup={() => {
+          if (!activeSnapGroup) return;
+          const idx = snapGroups.findIndex((g) => g.author_id === activeSnapGroup.author_id);
+          if (idx >= 0 && idx < snapGroups.length - 1) {
+            setActiveSnapGroup(snapGroups[idx + 1]);
+          } else {
+            setActiveSnapGroup(null);
+          }
+        }}
+        onPrevGroup={() => {
+          if (!activeSnapGroup) return;
+          const idx = snapGroups.findIndex((g) => g.author_id === activeSnapGroup.author_id);
+          if (idx > 0) {
+            setActiveSnapGroup(snapGroups[idx - 1]);
+          }
+        }}
+      />
     </View>
   );
 }

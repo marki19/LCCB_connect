@@ -6,7 +6,23 @@ process.env.NODE_ENV = "test";
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || "https://test-project.supabase.co";
 process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "test-anon-key";
 process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "test-service-role-key";
-process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://postgres:postgrespassword@127.0.0.1:5432/lcc_connect_test";
+process.env.DATABASE_URL =
+  process.env.TEST_DATABASE_URL ||
+  process.env.DATABASE_URL ||
+  "postgresql://postgres:postgrespassword@127.0.0.1:5432/lcc_connect_test";
+
+const testDbUrl = new URL(process.env.DATABASE_URL);
+const isLocalDb = ["localhost", "127.0.0.1", "0.0.0.0"].includes(testDbUrl.hostname);
+
+if (process.env.npm_lifecycle_event === "test:remote") {
+  process.env.ALLOW_REMOTE_TEST_DB = "true";
+}
+
+if (!isLocalDb && process.env.ALLOW_REMOTE_TEST_DB !== "true") {
+  throw new Error(
+    `[env.helper] Refusing to run tests against remote database (${testDbUrl.host}). Run 'npm run test:remote' or set ALLOW_REMOTE_TEST_DB=true or provide a local DATABASE_URL.`
+  );
+}
 
 // Signup codes are stored as HMAC(email:code, OTP_PEPPER). The suite needs a
 // fixed pepper so fixtures can compute the hash the endpoint will compare.

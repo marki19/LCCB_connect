@@ -95,7 +95,7 @@ function Radio({ active }: { active: boolean }) {
 export default function MessagingSettings() {
   const router = useRouter();
   const { mode, setMode } = usePresence();
-  const { colors, preference, setColorScheme, isDark, toggleTheme } = useTheme();
+  const { colors, preference, setColorScheme } = useTheme();
 
   const [policy, setPolicy] = useState<MessagePolicy>("department");
   const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
@@ -217,54 +217,6 @@ export default function MessagingSettings() {
             {/* Appearance */}
             <SectionLabel>Appearance</SectionLabel>
             <Card padding={0}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: SPACE.x3,
-                  padding: SPACE.x4,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x3, flex: 1 }}>
-                  <View
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: RADIUS.md,
-                      backgroundColor: colors.brandWash,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {isDark ? (
-                      <Moon size={16} color={colors.brand} />
-                    ) : (
-                      <Sun size={16} color={colors.brand} />
-                    )}
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ ...TYPE.bodyStrong, fontWeight: "600", color: colors.ink }}>
-                      Dark mode
-                    </Text>
-                    <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: 1 }}>
-                      {preference === "system"
-                        ? "Follows device theme"
-                        : isDark
-                        ? "Always dark"
-                        : "Always light"}
-                    </Text>
-                  </View>
-                </View>
-                <Switch
-                  value={isDark}
-                  onValueChange={() => void toggleTheme()}
-                  accessibilityLabel="Dark mode"
-                  trackColor={{ true: colors.brand, false: colors.borderStrong }}
-                  thumbColor={colors.textOnBrandSolid}
-                />
-              </View>
-
               {(
                 [
                   { value: "system", label: "System default", hint: "Follow device theme", Icon: Smartphone },

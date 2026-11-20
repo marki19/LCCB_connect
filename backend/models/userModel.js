@@ -2,6 +2,7 @@ const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
 const { escapeLike } = require("../utils/queryFilters");
 const { normalizeRole } = require("../utils/roles");
+const identityService = require("../services/identity");
 
 // RAW SQL QUERIES ONLY (NO ORM METHODS)
 
@@ -10,6 +11,9 @@ const PROFILE_COLUMNS = [
   "username",
   "full_name",
   "avatar_url",
+  "cover_url",
+  "note",
+  "note_updated_at",
   "bio",
   "course",
   "year_level",
@@ -23,6 +27,12 @@ const PROFILE_COLUMNS = [
   "department_id",
   "course_id",
   "message_policy",
+  "contact_email",
+  "facebook_url",
+  "instagram_url",
+  "twitter_url",
+  "relationship_status",
+  "gender",
   "profile_completed",
   "profile_banner_dismissed",
   "last_seen_at",
@@ -208,6 +218,15 @@ const getPublicProfile = async (targetId, viewerId = null) => {
       p.username,
       p.full_name,
       p.avatar_url,
+      p.cover_url,
+      p.note,
+      p.note_updated_at,
+      p.contact_email,
+      p.facebook_url,
+      p.instagram_url,
+      p.twitter_url,
+      p.relationship_status,
+      p.gender,
       p.bio,
       p.year_level,
       p.role,
@@ -236,8 +255,8 @@ const getPublicProfile = async (targetId, viewerId = null) => {
         WHERE vp.author_id = p.id AND vp.deleted_at IS NULL
       ) AS posts_count,
       (
-        SELECT COUNT(*)::int FROM visible_theses($2::text) vt
-        WHERE vt.uploader_id = p.id
+        SELECT COUNT(*)::int FROM visible_posts($2::text) vp
+        WHERE vp.author_id = p.id AND vp.deleted_at IS NULL AND vp.kind = 'repository' AND vp.repository_type = 'thesis'
       ) AS theses_count,
       (
         SELECT COUNT(*)::int FROM public.friendships f
@@ -268,6 +287,15 @@ const getPublicProfile = async (targetId, viewerId = null) => {
     username: row.username,
     full_name: row.full_name,
     avatar_url: row.avatar_url,
+    cover_url: row.cover_url,
+    note: row.note,
+    note_updated_at: row.note_updated_at,
+    contact_email: row.contact_email,
+    facebook_url: row.facebook_url,
+    instagram_url: row.instagram_url,
+    twitter_url: row.twitter_url,
+    relationship_status: row.relationship_status,
+    gender: row.gender,
     bio: row.bio,
     year_level: row.year_level,
     role: row.role,
@@ -294,12 +322,22 @@ const createUser = async (userData) => {
     id, username, full_name, avatar_url, bio, course, year_level, role,
     department_id, course_id, email, student_id, verification_status, password_hash,
   } = userData;
+
+  let effectiveUsername = username;
+  if (!effectiveUsername) {
+    try {
+      effectiveUsername = await identityService.deriveUsername(full_name, id);
+    } catch {
+      effectiveUsername = identityService.deriveBaseUsername(full_name, id);
+    }
+  }
+
   const sql = `
     INSERT INTO profiles (id, username, full_name, avatar_url, bio, course, year_level, role, department_id, course_id, email, student_id, verification_status, password_hash)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     ON CONFLICT (id) DO UPDATE SET
-      full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
-      username = COALESCE(EXCLUDED.username, profiles.username),
+      full_name = COALESCE(profiles.full_name, EXCLUDED.full_name),
+      username = COALESCE(profiles.username, EXCLUDED.username),
       password_hash = COALESCE(EXCLUDED.password_hash, profiles.password_hash),
       -- Department/course are CLAIM-ONCE: fill them only while still unset, so a
       -- repeat POST can never move a user into a different department.
@@ -313,7 +351,7 @@ const createUser = async (userData) => {
     RETURNING ${PROFILE_RETURNING};
   `;
   const values = [
-    id, username, full_name, avatar_url, bio, course, year_level, role || 'student',
+    id, effectiveUsername, full_name, avatar_url, bio, course, year_level, role || 'student',
     department_id || null, course_id || null, email || null, student_id || null, verification_status || 'unverified',
     password_hash || null,
   ];
@@ -322,32 +360,38 @@ const createUser = async (userData) => {
 };
 
 const updateUser = async (id, userData) => {
+  const hasProp = (prop) => Object.prototype.hasOwnProperty.call(userData, prop);
   const {
-    username, full_name, avatar_url, bio, course, year_level, role, skills,
+    avatar_url, bio, course, year_level, role, skills,
     department_id, course_id, message_policy, student_id, verification_status,
+    contact_email, facebook_url, instagram_url, twitter_url,
+    relationship_status, gender,
   } = userData;
+  // Permanent identity: full_name and username are not updatable via updateUser.
   const sql = `
     UPDATE profiles
-    SET username = COALESCE($1, username),
-        full_name = COALESCE($2, full_name),
-        avatar_url = COALESCE($3, avatar_url),
-        avatar_source = CASE WHEN $3 IS NOT NULL THEN 'upload' ELSE avatar_source END,
-        bio = COALESCE($4, bio),
-        course = COALESCE($5, course),
-        year_level = COALESCE($6, year_level),
-        role = COALESCE($7, role),
-        skills = COALESCE($8, skills),
-        department_id = COALESCE($9, department_id),
-        course_id = COALESCE($10, course_id),
-        message_policy = COALESCE($11, message_policy),
-        student_id = COALESCE($12, student_id),
-        verification_status = COALESCE($13, verification_status)
-    WHERE id = $14
+    SET avatar_url = COALESCE($1, avatar_url),
+        avatar_source = CASE WHEN $1 IS NOT NULL THEN 'upload' ELSE avatar_source END,
+        bio = COALESCE($2, bio),
+        course = COALESCE($3, course),
+        year_level = COALESCE($4, year_level),
+        role = COALESCE($5, role),
+        skills = COALESCE($6, skills),
+        department_id = COALESCE($7, department_id),
+        course_id = COALESCE($8, course_id),
+        message_policy = COALESCE($9, message_policy),
+        student_id = COALESCE($10, student_id),
+        verification_status = COALESCE($11, verification_status),
+        contact_email = CASE WHEN $13::boolean THEN $14 ELSE contact_email END,
+        facebook_url = CASE WHEN $15::boolean THEN $16 ELSE facebook_url END,
+        instagram_url = CASE WHEN $17::boolean THEN $18 ELSE instagram_url END,
+        twitter_url = CASE WHEN $19::boolean THEN $20 ELSE twitter_url END,
+        relationship_status = CASE WHEN $21::boolean THEN $22 ELSE relationship_status END,
+        gender = CASE WHEN $23::boolean THEN $24 ELSE gender END
+    WHERE id = $12
     RETURNING ${PROFILE_RETURNING};
   `;
   const values = [
-    username || null,
-    full_name || null,
     avatar_url || null,
     bio || null,
     course || null,
@@ -360,6 +404,18 @@ const updateUser = async (id, userData) => {
     student_id || null,
     verification_status || null,
     id,
+    hasProp("contact_email"),
+    contact_email ? String(contact_email).trim() : null,
+    hasProp("facebook_url"),
+    facebook_url ? String(facebook_url).trim() : null,
+    hasProp("instagram_url"),
+    instagram_url ? String(instagram_url).trim() : null,
+    hasProp("twitter_url"),
+    twitter_url ? String(twitter_url).trim() : null,
+    hasProp("relationship_status"),
+    relationship_status ? String(relationship_status).trim() : null,
+    hasProp("gender"),
+    gender ? String(gender).trim() : null,
   ];
   const result = await db.query(sql, values);
   return result.rows[0];
@@ -644,6 +700,54 @@ const updatePasswordHash = async (userId, passwordHash) => {
   return (result.rowCount ?? 0) > 0;
 };
 
+const updateCover = async (id, coverUrl) => {
+  const sql = `
+    UPDATE public.profiles
+    SET cover_url = $1,
+        updated_at = NOW()
+    WHERE id = $2
+    RETURNING ${PROFILE_RETURNING};
+  `;
+  const result = await db.query(sql, [coverUrl, id]);
+  return result.rows[0];
+};
+
+const removeCover = async (id) => {
+  const sql = `
+    UPDATE public.profiles
+    SET cover_url = NULL,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING ${PROFILE_RETURNING};
+  `;
+  const result = await db.query(sql, [id]);
+  return result.rows[0];
+};
+
+const setNote = async (id, note) => {
+  const text = note ? note.trim() : null;
+  const sql = text
+    ? `
+    UPDATE public.profiles
+    SET note = $1,
+        note_updated_at = NOW(),
+        updated_at = NOW()
+    WHERE id = $2
+    RETURNING ${PROFILE_RETURNING};
+  `
+    : `
+    UPDATE public.profiles
+    SET note = NULL,
+        note_updated_at = NULL,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING ${PROFILE_RETURNING};
+  `;
+  const params = text ? [text, id] : [id];
+  const result = await db.query(sql, params);
+  return result.rows[0];
+};
+
 module.exports = {
   PROFILE_COLUMNS,
   getAllUsers,
@@ -652,6 +756,9 @@ module.exports = {
   getDirectory,
   createUser,
   updateUser,
+  updateCover,
+  removeCover,
+  setNote,
   deleteUser,
   getLoginEmailByStudentId,
   getLoginEmailByUsername,

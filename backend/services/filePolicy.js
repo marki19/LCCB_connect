@@ -10,14 +10,19 @@
 const crypto = require("crypto");
 const path = require("path");
 
-const CATEGORIES = ["avatars", "posts", "theses", "documents", "videos", "snaps"];
+const CATEGORIES = ["avatars", "posts", "theses", "documents", "videos", "snaps", "covers"];
 
 /**
  * Categories whose contents are safe for anonymous visitors: profile pictures,
- * post images, video attachments, and 24-hour snaps. Everything else is gated
- * behind an ownership check.
+ * post images, video attachments, and cover photos.
+ *
+ * Snap media is deliberately absent. A snap expires after 24 hours and is
+ * audience-scoped (public / friends / department / private), so serving its
+ * bytes from an unauthenticated, permanently cached URL would break both
+ * promises. Snaps are resolved through the visibility-checked file route
+ * instead.
  */
-const PUBLIC_CATEGORIES = ["avatars", "posts", "videos", "snaps"];
+const PUBLIC_CATEGORIES = ["avatars", "posts", "videos", "covers"];
 
 const PRIVATE_CATEGORIES = CATEGORIES.filter((c) => !PUBLIC_CATEGORIES.includes(c));
 
@@ -30,6 +35,8 @@ const EXTENSION_MIME = {
   ".pdf": "application/pdf",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".doc": "application/msword",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".ppt": "application/vnd.ms-powerpoint",
   ".mp4": "video/mp4",
   ".webm": "video/webm",
 };
@@ -52,11 +59,13 @@ const CATEGORY_RULES = {
   },
   documents: {
     maxBytes: 25 * 1024 * 1024, // 25 MB
-    allowedExtensions: [".pdf", ".docx", ".doc"],
+    allowedExtensions: [".pdf", ".docx", ".doc", ".pptx", ".ppt"],
     allowedMimes: [
       "application/pdf",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "application/msword",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.ms-powerpoint",
     ],
   },
   videos: {
@@ -74,6 +83,11 @@ const CATEGORY_RULES = {
       "video/mp4",
       "video/webm",
     ],
+  },
+  covers: {
+    maxBytes: 5 * 1024 * 1024, // 5 MB
+    allowedExtensions: [".jpg", ".jpeg", ".png", ".webp"],
+    allowedMimes: ["image/jpeg", "image/png", "image/webp"],
   },
 };
 
@@ -126,12 +140,28 @@ function verifyMagicBytes(buffer, extension) {
     case ".pdf":
       return buffer.subarray(0, 5).toString("ascii") === "%PDF-";
     case ".docx":
+    case ".pptx":
       // Office Open XML is a zip container starting with PK\x03\x04
       return (
         buffer[0] === 0x50 &&
         buffer[1] === 0x4b &&
         buffer[2] === 0x03 &&
         buffer[3] === 0x04
+      );
+    case ".doc":
+    case ".ppt":
+      // Legacy Microsoft Compound File Binary Format (OLE CFBF)
+      // D0 CF 11 E0 A1 B1 1A E1
+      return (
+        buffer.length >= 8 &&
+        buffer[0] === 0xd0 &&
+        buffer[1] === 0xcf &&
+        buffer[2] === 0x11 &&
+        buffer[3] === 0xe0 &&
+        buffer[4] === 0xa1 &&
+        buffer[5] === 0xb1 &&
+        buffer[6] === 0x1a &&
+        buffer[7] === 0xe1
       );
     case ".mp4":
       return (
@@ -157,7 +187,7 @@ function normalizeExtension(originalName) {
 }
 
 /** Collision-resistant filename that leaks nothing about the original. */
-function generateHashedFilename(originalName, buffer) {
+function generateHashedFilename(originalName, buffer, explicitExtension) {
   const hash = crypto
     .createHash("sha256")
     .update(buffer || "")
@@ -166,7 +196,8 @@ function generateHashedFilename(originalName, buffer) {
     .digest("hex")
     .slice(0, 32);
 
-  return `${hash}${normalizeExtension(originalName)}`;
+  const ext = explicitExtension || normalizeExtension(originalName);
+  return `${hash}${ext}`;
 }
 
 /**
@@ -196,21 +227,29 @@ function resolveUpload({ category, originalName, buffer }) {
     );
   }
 
-  const extension = normalizeExtension(originalName);
+  let extension = normalizeExtension(originalName);
 
-  if (!rules.allowedExtensions.includes(extension)) {
-    throw new UploadRejectedError(
-      `Extension "${extension || "(none)"}" is not allowed in category "${category}"`
+  if (!rules.allowedExtensions.includes(extension) || !verifyMagicBytes(buffer, extension)) {
+    // If extension is missing, disallowed, or magic bytes didn't match the claimed extension,
+    // check if the buffer is genuinely one of the allowed extensions for this category.
+    const matchedExtension = rules.allowedExtensions.find((ext) =>
+      verifyMagicBytes(buffer, ext)
     );
+    if (matchedExtension) {
+      extension = matchedExtension;
+    } else {
+      if (!rules.allowedExtensions.includes(extension)) {
+        throw new UploadRejectedError(
+          `Extension "${extension || "(none)"}" is not allowed in category "${category}"`
+        );
+      }
+      throw new UploadRejectedError(
+        `File contents do not match the expected format for ${extension}`
+      );
+    }
   }
 
-  if (!verifyMagicBytes(buffer, extension)) {
-    throw new UploadRejectedError(
-      `File contents do not match the expected format for ${extension}`
-    );
-  }
-
-  const filename = generateHashedFilename(originalName, buffer);
+  const filename = generateHashedFilename(originalName, buffer, extension);
 
   return {
     key: `${category}/${filename}`,

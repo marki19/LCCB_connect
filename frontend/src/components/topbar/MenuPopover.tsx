@@ -44,7 +44,7 @@ type CreateItem = {
 const SOCIAL_ITEMS: SocialItem[] = [
   { icon: Home,          label: "Campus Feed",        desc: "See recent posts from campus", href: "/(tabs)/" },
   { icon: BookOpen,      label: "Repository",         desc: "Browse thesis submissions",    href: "/(tabs)/search" },
-  { icon: GraduationCap, label: "Capstones",          desc: "Explore capstone projects",    href: "/(tabs)/search?tab=theses&type=capstone" },
+  { icon: GraduationCap, label: "Capstones",          desc: "Explore capstone projects",    href: "/(tabs)/capstones" },
   { icon: MessageCircle, label: "Messages",           desc: "Chat with classmates",         href: "/(tabs)/messages" },
   { icon: Users,         label: "Friends & Network",  desc: "Connect with peers",           href: "/friends" },
   { icon: Bookmark,      label: "Saved Posts",        desc: "View bookmarked content",      href: "/saved" },

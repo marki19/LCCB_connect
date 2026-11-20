@@ -1,6 +1,67 @@
 const db = require("../db");
 const { DEFAULT_LIMIT } = require("./pagination");
 const { escapeLike } = require("../utils/queryFilters");
+const mentionsService = require("../services/mentions");
+const notificationService = require("../services/notificationService");
+
+const POST_ATTACHMENTS_SQL = `
+  COALESCE((
+    SELECT json_agg(json_build_object(
+      'id', a.id,
+      'storage_key', a.storage_key,
+      'file_name', a.file_name,
+      'mime_type', a.mime_type,
+      'size_bytes', a.size_bytes,
+      'sort_order', a.sort_order
+    ) ORDER BY a.sort_order)
+    FROM public.post_attachments a WHERE a.post_id = p.id
+  ), '[]'::json) AS attachments
+`;
+
+const POST_MENTIONS_SQL = `
+  COALESCE((
+    SELECT json_agg(json_build_object(
+      'user_id', m.mentioned_user_id,
+      'username', pr_m.username,
+      'full_name', pr_m.full_name
+    ) ORDER BY pr_m.full_name)
+    FROM public.post_mentions m
+    JOIN public.profiles pr_m ON pr_m.id = m.mentioned_user_id
+    WHERE m.post_id = p.id AND m.comment_id IS NULL
+  ), '[]'::json) AS mentions
+`;
+
+function withDerivedImages(row) {
+  if (!row) return row;
+  const attachments = Array.isArray(row.attachments) ? row.attachments : [];
+  const imageAttachments = attachments.filter(
+    (a) => a.mime_type && a.mime_type.startsWith("image/")
+  );
+  const derivedImageUrls = imageAttachments.map((a) => a.storage_key);
+  const imageUrls = derivedImageUrls;
+  const imageUrl = imageUrls[0] || null;
+
+  const derivedType =
+    row.repository_type ||
+    (row.kind === "repository"
+      ? "project"
+      : row.kind === "announcement"
+      ? "announcement"
+      : imageUrls.length > 0
+      ? "image"
+      : row.preview_metadata
+      ? "website"
+      : "text");
+
+  return {
+    ...row,
+    type: row.type || derivedType,
+    attachments,
+    image_urls: imageUrls,
+    image_url: imageUrl,
+    mentions: Array.isArray(row.mentions) ? row.mentions : [],
+  };
+}
 
 // RAW SQL QUERIES FOR POSTS (WITH JOIN FOR AUTHOR INFO)
 
@@ -21,6 +82,10 @@ const getAllPosts = async ({
   departmentId = null,
   courseId = null,
   userId = null,
+  kind = null,
+  repository_type = null,
+  repository_category = null,
+  categories = null,
 } = {}) => {
   const params = [];
   const conditions = [];
@@ -46,6 +111,24 @@ const getAllPosts = async ({
   if (courseId) {
     params.push(courseId);
     conditions.push(`(p.author_course_id = $${params.length}::uuid OR pr.course_id = $${params.length}::uuid)`);
+  }
+
+  if (kind && ['discussion', 'repository', 'announcement'].includes(kind)) {
+    params.push(kind);
+    conditions.push(`p.kind = $${params.length}`);
+  }
+
+  if (repository_type && ['project', 'capstone', 'thesis'].includes(repository_type)) {
+    params.push(repository_type);
+    conditions.push(`p.repository_type = $${params.length}`);
+  }
+
+  if (repository_category) {
+    params.push(repository_category);
+    conditions.push(`p.repository_category = $${params.length}`);
+  } else if (Array.isArray(categories) && categories.length > 0) {
+    params.push(categories);
+    conditions.push(`p.repository_category = ANY($${params.length}::text[])`);
   }
 
   if (cursor) {
@@ -103,13 +186,16 @@ const getAllPosts = async ({
       p.id,
       p.author_id,
       p.content,
-      p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
       p.pinned,
-      p.image_url,
-      p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
+      ${POST_MENTIONS_SQL},
       p.preview_metadata,
       p.visibility,
       p.moderation_status,
@@ -138,12 +224,14 @@ const getAllPosts = async ({
   
   const queryParams = userId ? [...params, userId] : params;
   const result = await db.query(sql, queryParams);
-  return result.rows;
+  return result.rows.map(withDerivedImages);
 };
 
 // `viewerId` gates which posts exist at all; `includeHidden` is the moderation
 // escape hatch that reads the base table instead.
-const getPostById = async (id, { includeHidden = false, userId = null } = {}) => {
+const getPostById = async (id, options = {}) => {
+  const opts = typeof options === "string" ? { userId: options } : (options || {});
+  const { includeHidden = false, userId = null } = opts;
   const params = [id];
 
   let fromClause = "FROM posts p";
@@ -163,13 +251,16 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
       p.id,
       p.author_id,
       p.content,
-      p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
       p.pinned,
-      p.image_url,
-      p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
+      ${POST_MENTIONS_SQL},
       p.preview_metadata,
       p.visibility,
       p.moderation_status,
@@ -194,7 +285,7 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
     WHERE p.id = $1;
   `;
   const result = await db.query(sql, userId ? [...params, userId] : params);
-  return result.rows[0];
+  return withDerivedImages(result.rows[0]);
 };
 
 
@@ -209,7 +300,7 @@ const getPostById = async (id, { includeHidden = false, userId = null } = {}) =>
 // =============================================================================
 
 const POST_TYPE_FILTERS = [
-  'text', 'image', 'website', 'project', 'capstone', 'dissertation', 'discussion'
+  'text', 'image', 'website', 'project', 'capstone', 'dissertation', 'thesis', 'discussion', 'announcement'
 ];
 
 const buildPostSelect = (paramsLength, viewerId) => {
@@ -221,13 +312,16 @@ const buildPostSelect = (paramsLength, viewerId) => {
       p.id,
       p.author_id,
       p.content,
-      p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
       p.pinned,
-      p.image_url,
-      p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
+      ${POST_MENTIONS_SQL},
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
@@ -271,13 +365,16 @@ const buildRepostSelect = (paramsLength, viewerId) => {
       p.id,
       p.author_id,
       p.content,
-      p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
       p.pinned,
-      p.image_url,
-      p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
+      ${POST_MENTIONS_SQL},
       p.preview_metadata,
       p.visibility,
       p.allow_reposts,
@@ -329,6 +426,9 @@ const visiblePostsFor = async ({
   departmentId = null,
   courseId = null,
   type = null,
+  kind = null,
+  repository_type = null,
+  repository_category = null,
   visibility = null,
   postId = null,
   includeReposts = true,
@@ -361,9 +461,42 @@ const visiblePostsFor = async ({
   }
 
   if (type && POST_TYPE_FILTERS.includes(type)) {
-      params.push(type);
-      conditions.push(`p.type = $${params.length}`);
+    if (['project', 'capstone', 'thesis', 'dissertation'].includes(type)) {
+      const repType = type === 'dissertation' ? 'thesis' : type;
+      params.push(repType);
+      conditions.push(`p.kind = 'repository' AND p.repository_type = $${params.length}`);
+    } else if (type === 'discussion') {
+      conditions.push(`p.kind = 'discussion'`);
+    } else if (type === 'announcement') {
+      conditions.push(`p.kind = 'announcement'`);
+    } else if (type === 'website') {
+      conditions.push(`p.preview_metadata IS NOT NULL`);
+    } else if (type === 'image') {
+      conditions.push(`EXISTS (
+        SELECT 1 FROM post_attachments pa 
+        WHERE pa.post_id = p.id AND pa.mime_type LIKE 'image/%'
+      )`);
+    } else if (type === 'text') {
+      conditions.push(`p.kind = 'discussion' AND p.preview_metadata IS NULL AND NOT EXISTS (
+        SELECT 1 FROM post_attachments pa WHERE pa.post_id = p.id
+      )`);
     }
+  }
+
+  if (kind && ['discussion', 'repository', 'announcement'].includes(kind)) {
+    params.push(kind);
+    conditions.push(`p.kind = $${params.length}`);
+  }
+
+  if (repository_type && ['project', 'capstone', 'thesis'].includes(repository_type)) {
+    params.push(repository_type);
+    conditions.push(`p.repository_type = $${params.length}`);
+  }
+
+  if (repository_category) {
+    params.push(repository_category);
+    conditions.push(`p.repository_category = $${params.length}`);
+  }
 
     if (visibility && ['public', 'department', 'friends', 'private', 'custom'].includes(visibility)) {
       params.push(visibility);
@@ -467,48 +600,31 @@ const visiblePostsFor = async ({
     const repostQueryParams = viewerId ? [...repostParams, viewerId] : repostParams;
     const repostsResult = await db.query(repostsSql, repostQueryParams);
 
-    reposts = repostsResult.rows.map(row => ({
-      kind: 'repost',
-      repost: {
-        id: row.repost_id,
-        reposter_id: row.reposter_id,
-        original_post_id: row.original_post_id,
-        caption: row.repost_caption,
-        visibility: row.repost_visibility,
-        created_at: row.repost_created_at,
-        deleted_at: row.repost_deleted_at,
-      },
-      // Original post data (same structure as posts)
-      id: row.id,
-      author_id: row.author_id,
-      content: row.content,
-      type: row.type,
-      title: row.title,
-      technologies: row.technologies,
-      github_url: row.github_url,
-      image_url: row.image_url,
-      image_urls: row.image_urls || (row.image_url ? [row.image_url] : []),
-      preview_metadata: row.preview_metadata,
-      visibility: row.visibility,
-      allow_reposts: row.allow_reposts,
-      author_department_id: row.author_department_id,
-      author_course_id: row.author_course_id,
-      repost_count: row.repost_count,
-      deleted_at: row.deleted_at,
-      edited_at: row.edited_at,
-      moderation_status: row.moderation_status,
-      moderation_reason: row.moderation_reason,
-      created_at: row.created_at,
-      likes: row.likes,
-      comments: row.comments,
-      author: row.author,
-      is_liked: row.is_liked,
-    }));
+    reposts = repostsResult.rows.map(row => {
+      const derived = withDerivedImages({
+        ...row,
+        kind: row.kind || 'discussion',
+      });
+      return {
+        ...derived,
+        kind: 'repost',
+        post_kind: derived.kind || 'discussion',
+        repost: {
+          id: row.repost_id,
+          reposter_id: row.reposter_id,
+          original_post_id: row.original_post_id,
+          caption: row.repost_caption,
+          visibility: row.repost_visibility,
+          created_at: row.repost_created_at,
+          deleted_at: row.repost_deleted_at,
+        },
+      };
+    });
   }
 
-  const posts = postsResult.rows.map(row => ({
-    kind: 'post',
+  const posts = postsResult.rows.map(row => withDerivedImages({
     ...row,
+    kind: row.kind || 'discussion',
   }));
 
   // ---- 3. Merge and sort by created_at ---------------------------------------
@@ -552,11 +668,16 @@ const createPost = async (postData) => {
     author_id,
     content,
     type,
+    kind = 'discussion',
+    repository_type = null,
+    repository_category = null,
+    live_url = null,
     title,
     technologies,
     github_url,
     image_url,
     image_urls,
+    attachments,
     preview_metadata = null,
     moderation_status = 'approved',
     moderation_reason = null,
@@ -565,34 +686,40 @@ const createPost = async (postData) => {
     allow_reposts = true,
   } = postData;
 
-  const effectiveImageUrls = Array.isArray(image_urls)
-    ? image_urls
-    : (image_url ? [image_url] : []);
-  const effectiveImageUrl = image_url || (effectiveImageUrls.length > 0 ? effectiveImageUrls[0] : null);
+  const imageAttachments = Array.isArray(attachments)
+    ? attachments.filter((a) => a.mime_type && a.mime_type.startsWith("image/"))
+    : [];
+  const derivedImageUrls = imageAttachments.map((a) => a.storage_key);
+  const effectiveImageUrls = derivedImageUrls.length > 0
+    ? derivedImageUrls
+    : (Array.isArray(image_urls) ? image_urls : (image_url ? [image_url] : []));
+  const effectiveImageUrl = effectiveImageUrls[0] || null;
 
   return db.withTransaction(async (client) => {
     // Snapshot author's department and course at post creation time
     const profileResult = await client.query(
-      `SELECT department_id, course_id FROM profiles WHERE id = $1`,
+      `SELECT username, department_id, course_id FROM profiles WHERE id = $1`,
       [author_id]
     );
+    const author_username = profileResult.rows[0]?.username || null;
     const author_department_id = profileResult.rows[0]?.department_id || null;
     const author_course_id = profileResult.rows[0]?.course_id || null;
 
     const sql = `
-      INSERT INTO posts (author_id, content, type, title, technologies, github_url, image_url, image_urls, preview_metadata, moderation_status, moderation_reason, visibility, allow_reposts, author_department_id, author_course_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      INSERT INTO posts (author_id, content, kind, repository_type, repository_category, live_url, title, technologies, github_url, preview_metadata, moderation_status, moderation_reason, visibility, allow_reposts, author_department_id, author_course_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *;
     `;
     const values = [
       author_id,
       content,
-      type || 'text',
+      kind,
+      repository_type,
+      repository_category,
+      live_url,
       title || null,
       technologies || null,
       github_url || null,
-      effectiveImageUrl,
-      effectiveImageUrls,
       preview_metadata ? JSON.stringify(preview_metadata) : null,
       moderation_status,
       moderation_reason,
@@ -603,22 +730,80 @@ const createPost = async (postData) => {
     ];
     const result = await client.query(sql, values);
     const post = result.rows[0];
+
+    // Insert attachments transactionally
+    let persistedAttachments = [];
+    if (Array.isArray(attachments) && attachments.length > 0) {
+      for (let i = 0; i < attachments.length; i++) {
+        const att = attachments[i];
+        const attRes = await client.query(
+          `INSERT INTO public.post_attachments (post_id, storage_key, file_name, mime_type, size_bytes, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (post_id, storage_key) DO UPDATE
+           SET file_name = EXCLUDED.file_name,
+               mime_type = EXCLUDED.mime_type,
+               size_bytes = EXCLUDED.size_bytes,
+               sort_order = EXCLUDED.sort_order
+           RETURNING *;`,
+          [post.id, att.storage_key, att.file_name, att.mime_type, att.size_bytes ?? null, i]
+        );
+        persistedAttachments.push(attRes.rows[0]);
+      }
+    } else if (effectiveImageUrls.length > 0) {
+      for (let i = 0; i < effectiveImageUrls.length; i++) {
+        const key = effectiveImageUrls[i];
+        const mime = key.endsWith(".png") ? "image/png" : (key.endsWith(".webp") ? "image/webp" : "image/jpeg");
+        const attRes = await client.query(
+          `INSERT INTO public.post_attachments (post_id, storage_key, file_name, mime_type, size_bytes, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (post_id, storage_key) DO NOTHING
+           RETURNING *;`,
+          [post.id, key, key.split("/").pop() || "image.jpg", mime, null, i]
+        );
+        if (attRes.rows[0]) persistedAttachments.push(attRes.rows[0]);
+      }
+    }
+
     // A non-custom post stores no audience; a custom one must.
     if (post.visibility === 'custom') {
       await setPostAudience(client, post.id, audience);
     }
-    return post;
+
+    let persistedMentions = [];
+    if (Array.isArray(postData.mentions) && postData.mentions.length > 0) {
+      await mentionsService.replacePostMentions(post.id, null, postData.mentions, client);
+      const mRes = await client.query(
+        `SELECT m.mentioned_user_id AS user_id, pr.username, pr.full_name
+         FROM public.post_mentions m
+         JOIN public.profiles pr ON pr.id = m.mentioned_user_id
+         WHERE m.post_id = $1 AND m.comment_id IS NULL
+         ORDER BY pr.full_name`,
+        [post.id]
+      );
+      persistedMentions = mRes.rows;
+
+      await notificationService.notifyMentionedUsers({
+        mentionedUserIds: postData.mentions,
+        actorId: author_id,
+        actorUsername: author_username,
+        targetId: post.id,
+        client,
+      });
+    }
+
+    return withDerivedImages({ ...post, attachments: persistedAttachments, mentions: persistedMentions });
   });
 };
 
 const POST_UPDATABLE_COLUMNS = [
   "content",
-  "type",
+  "kind",
+  "repository_type",
+  "repository_category",
+  "live_url",
   "title",
   "technologies",
   "github_url",
-  "image_url",
-  "image_urls",
   "preview_metadata",
   "visibility",
   "allow_reposts",
@@ -629,26 +814,35 @@ const POST_UPDATABLE_COLUMNS = [
 // unrelated edit (a title change) would silently wipe the custom list.
 const updatePost = async (id, authorId, postData) => {
   const updatePayload = { ...postData };
-  if (updatePayload.image_urls !== undefined && updatePayload.image_url === undefined) {
-    updatePayload.image_url = Array.isArray(updatePayload.image_urls) && updatePayload.image_urls.length > 0
-      ? updatePayload.image_urls[0]
-      : null;
-  } else if (updatePayload.image_url !== undefined && updatePayload.image_urls === undefined) {
-    updatePayload.image_urls = updatePayload.image_url ? [updatePayload.image_url] : [];
+  const touchesAudience =
+    updatePayload.audience !== undefined || updatePayload.visibility !== undefined;
+
+  let candidateAttachments = updatePayload.attachments;
+  if (candidateAttachments === undefined && (updatePayload.image_urls !== undefined || updatePayload.image_url !== undefined)) {
+    const urls = Array.isArray(updatePayload.image_urls)
+      ? updatePayload.image_urls
+      : (updatePayload.image_url ? [updatePayload.image_url] : []);
+    candidateAttachments = urls.map((url, i) => ({
+      storage_key: url,
+      file_name: url.split("/").pop() || "image.jpg",
+      mime_type: url.endsWith(".png") ? "image/png" : (url.endsWith(".webp") ? "image/webp" : "image/jpeg"),
+      size_bytes: null,
+      sort_order: i,
+    }));
   }
+
+  const touchesAttachments = candidateAttachments !== undefined;
 
   const fields = POST_UPDATABLE_COLUMNS.filter(
     (column) => updatePayload[column] !== undefined
   );
-  const touchesAudience =
-    updatePayload.audience !== undefined || updatePayload.visibility !== undefined;
 
-  if (fields.length === 0 && !touchesAudience) {
+  if (fields.length === 0 && !touchesAudience && !touchesAttachments) {
     const current = await db.query(
-      `SELECT * FROM posts WHERE id = $1 AND author_id = $2;`,
+      `SELECT p.*, ${POST_ATTACHMENTS_SQL}, ${POST_MENTIONS_SQL} FROM posts p WHERE p.id = $1 AND p.author_id = $2;`,
       [id, authorId]
     );
-    return current.rows[0];
+    return withDerivedImages(current.rows[0]);
   }
 
   return db.withTransaction(async (client) => {
@@ -682,6 +876,38 @@ const updatePost = async (id, authorId, postData) => {
     // Return before touching the audience list.
     if (!post) return undefined;
 
+    let persistedAttachments = [];
+    if (touchesAttachments) {
+      await client.query(
+        `DELETE FROM public.post_attachments WHERE post_id = $1`,
+        [id]
+      );
+      if (Array.isArray(candidateAttachments) && candidateAttachments.length > 0) {
+        for (let i = 0; i < candidateAttachments.length; i++) {
+          const att = candidateAttachments[i];
+          const attRes = await client.query(
+            `INSERT INTO public.post_attachments (post_id, storage_key, file_name, mime_type, size_bytes, sort_order)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (post_id, storage_key) DO UPDATE
+             SET file_name = EXCLUDED.file_name,
+                 mime_type = EXCLUDED.mime_type,
+                 size_bytes = EXCLUDED.size_bytes,
+                 sort_order = EXCLUDED.sort_order
+             RETURNING *;`,
+            [id, att.storage_key, att.file_name, att.mime_type, att.size_bytes ?? null, i]
+          );
+          persistedAttachments.push(attRes.rows[0]);
+        }
+      }
+    } else {
+      const existingAtt = await client.query(
+        `SELECT id, storage_key, file_name, mime_type, size_bytes, sort_order
+         FROM public.post_attachments WHERE post_id = $1 ORDER BY sort_order`,
+        [id]
+      );
+      persistedAttachments = existingAtt.rows;
+    }
+
     if (post.visibility === 'custom') {
       if (postData.audience !== undefined) {
         await setPostAudience(client, post.id, postData.audience);
@@ -690,7 +916,31 @@ const updatePost = async (id, authorId, postData) => {
       await setPostAudience(client, post.id, []);
     }
 
-    return post;
+    let persistedMentions = [];
+    if (postData.mentions !== undefined) {
+      await mentionsService.replacePostMentions(id, null, postData.mentions, client);
+      const mRes = await client.query(
+        `SELECT m.mentioned_user_id AS user_id, pr.username, pr.full_name
+         FROM public.post_mentions m
+         JOIN public.profiles pr ON pr.id = m.mentioned_user_id
+         WHERE m.post_id = $1 AND m.comment_id IS NULL
+         ORDER BY pr.full_name`,
+        [id]
+      );
+      persistedMentions = mRes.rows;
+    } else {
+      const mRes = await client.query(
+        `SELECT m.mentioned_user_id AS user_id, pr.username, pr.full_name
+         FROM public.post_mentions m
+         JOIN public.profiles pr ON pr.id = m.mentioned_user_id
+         WHERE m.post_id = $1 AND m.comment_id IS NULL
+         ORDER BY pr.full_name`,
+        [id]
+      );
+      persistedMentions = mRes.rows;
+    }
+
+    return withDerivedImages({ ...post, attachments: persistedAttachments, mentions: persistedMentions });
   });
 };
 
@@ -738,6 +988,16 @@ const getComments = async (postId, { includeHidden = false, viewerId = null } = 
       c.moderation_status,
       c.moderation_reason,
       c.created_at,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+          'user_id', m.mentioned_user_id,
+          'username', pr_m.username,
+          'full_name', pr_m.full_name
+        ) ORDER BY pr_m.full_name)
+        FROM public.post_mentions m
+        JOIN public.profiles pr_m ON pr_m.id = m.mentioned_user_id
+        WHERE m.comment_id = c.id
+      ), '[]'::json) AS mentions,
       json_build_object(
         'id', pr.id,
         'full_name', pr.full_name,
@@ -770,6 +1030,16 @@ const getCommentById = async (id) => {
       c.moderation_status,
       c.moderation_reason,
       c.created_at,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+          'user_id', m.mentioned_user_id,
+          'username', pr_m.username,
+          'full_name', pr_m.full_name
+        ) ORDER BY pr_m.full_name)
+        FROM public.post_mentions m
+        JOIN public.profiles pr_m ON pr_m.id = m.mentioned_user_id
+        WHERE m.comment_id = c.id
+      ), '[]'::json) AS mentions,
       json_build_object(
         'id', pr.id,
         'full_name', pr.full_name,
@@ -788,14 +1058,38 @@ const getCommentById = async (id) => {
   return result.rows[0];
 };
 
-const addComment = async (postId, userId, content, { moderation_status = 'approved', moderation_reason = null } = {}) => {
+const addComment = async (postId, userId, content, { moderation_status = 'approved', moderation_reason = null, mention_ids = [] } = {}) => {
   const sql = `
     INSERT INTO comments (post_id, user_id, content, moderation_status, moderation_reason)
     VALUES ($1, $2, $3, $4, $5)
     RETURNING *;
   `;
   const result = await db.query(sql, [postId, userId, content, moderation_status, moderation_reason]);
-  return result.rows[0];
+  const comment = result.rows[0];
+
+  let persistedMentions = [];
+  if (Array.isArray(mention_ids) && mention_ids.length > 0) {
+    await mentionsService.replacePostMentions(postId, comment.id, mention_ids);
+    const mRes = await db.query(
+      `SELECT m.mentioned_user_id AS user_id, pr.username, pr.full_name
+       FROM public.post_mentions m
+       JOIN public.profiles pr ON pr.id = m.mentioned_user_id
+       WHERE m.comment_id = $1
+       ORDER BY pr.full_name`,
+      [comment.id]
+    );
+    persistedMentions = mRes.rows;
+
+    const uRes = await db.query(`SELECT username FROM profiles WHERE id = $1`, [userId]);
+    await notificationService.notifyMentionedUsers({
+      mentionedUserIds: mention_ids,
+      actorId: userId,
+      actorUsername: uRes.rows[0]?.username || null,
+      targetId: postId,
+    });
+  }
+
+  return { ...comment, mentions: persistedMentions };
 };
 
 // ---- MODERATION SPECIFIC QUERIES -------------------------------------------
@@ -814,13 +1108,16 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
       p.id,
       p.author_id,
       p.content,
-      p.type,
+      p.kind,
+      p.repository_type,
+      p.repository_category,
+      p.live_url,
       p.title,
       p.technologies,
       p.github_url,
       p.pinned,
-      p.image_url,
-      p.image_urls,
+      ${POST_ATTACHMENTS_SQL},
+      ${POST_MENTIONS_SQL},
       p.visibility,
       p.moderation_status,
       p.moderation_reason,
@@ -842,7 +1139,7 @@ const getFlaggedPosts = async ({ departmentId = null } = {}) => {
     ORDER BY p.created_at DESC;
   `;
   const result = await db.query(sql, params);
-  return result.rows;
+  return result.rows.map(withDerivedImages);
 };
 
 const getFlaggedComments = async ({ departmentId = null } = {}) => {
@@ -923,7 +1220,7 @@ const deleteComment = async (id) => {
 // be edited by its author (`moderation_status != 'hidden'`), so a hide cannot
 // be edited away.
 
-const updateCommentByAuthor = async (id, postId, userId, content) => {
+const updateCommentByAuthor = async (id, postId, userId, content, { mention_ids = null } = {}) => {
   const sql = `
     UPDATE comments
     SET content = $1, moderation_status = 'approved', moderation_reason = NULL
@@ -931,7 +1228,11 @@ const updateCommentByAuthor = async (id, postId, userId, content) => {
     RETURNING *;
   `;
   const result = await db.query(sql, [content, id, postId, userId]);
-  return result.rows[0];
+  const comment = result.rows[0];
+  if (comment && Array.isArray(mention_ids)) {
+    await mentionsService.replacePostMentions(postId, id, mention_ids);
+  }
+  return comment;
 };
 
 const deleteCommentByAuthor = async (id, postId, userId) => {
@@ -945,6 +1246,8 @@ const deleteCommentByAuthor = async (id, postId, userId) => {
 };
 
 module.exports = {
+  withDerivedImages,
+  POST_ATTACHMENTS_SQL,
   getAllPosts,
   getPostById,
   visiblePostsFor,

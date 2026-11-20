@@ -239,8 +239,8 @@ export default function AdminDepartmentsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <PageHeader
-        eyebrow="System / catalog"
-        title="Departments & Courses"
+        eyebrow="Admin console"
+        title="Departments and courses"
         description="These drive registration and who can message whom. Entries are deactivated, never deleted."
       />
 
@@ -391,7 +391,7 @@ export default function AdminDepartmentsScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
             <GraduationCap color={colors.primary} size={20} />
             <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary, marginLeft: 8 }}>
-              {selected ? `Courses — ${selected.name}` : "Courses"}
+              {selected ? `Courses in ${selected.name}` : "Courses"}
             </Text>
           </View>
 

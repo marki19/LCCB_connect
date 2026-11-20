@@ -23,8 +23,6 @@ stub(auth, "requireAuth", (req, res, next) => {
   return next();
 });
 stub(auth, "requireActiveAccount", (req, res, next) => next());
-stub(auth, "checkSessionAge", (req, res, next) => next());
-stub(auth, "requireAal2", (req, res, next) => next());
 
 const app = require("../app");
 

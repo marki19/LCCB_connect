@@ -149,8 +149,8 @@ async function getUserDossier(id, { includeAudit = false } = {}) {
     getUserById(id),
     db.query(
       `SELECT
-         (SELECT COUNT(*)::int FROM public.posts WHERE author_id = $1) AS posts,
-         (SELECT COUNT(*)::int FROM public.theses WHERE uploader_id = $1) AS theses,
+         (SELECT COUNT(*)::int FROM public.posts WHERE author_id = $1 AND (kind <> 'repository' OR repository_type <> 'thesis')) AS posts,
+         (SELECT COUNT(*)::int FROM public.posts WHERE author_id = $1 AND kind = 'repository' AND repository_type = 'thesis') AS theses,
          (SELECT COUNT(*)::int FROM public.comments WHERE user_id = $1) AS comments,
          (SELECT COUNT(*)::int FROM public.likes WHERE user_id = $1) AS likes_given,
          (SELECT COUNT(*)::int
@@ -161,14 +161,12 @@ async function getUserDossier(id, { includeAudit = false } = {}) {
     ),
     db.query(
       `SELECT * FROM (
-         SELECT 'post'::text AS type, p.id::text AS id,
+         SELECT CASE WHEN p.kind = 'repository' AND p.repository_type = 'thesis' THEN 'thesis'::text ELSE 'post'::text END AS type,
+                p.id::text AS id,
                 COALESCE(NULLIF(p.title, ''), LEFT(COALESCE(p.content, ''), 100)) AS title,
                 p.moderation_status AS status, p.created_at,
                 ('/post/' || p.id)::text AS app_path
            FROM public.posts p WHERE p.author_id = $1
-         UNION ALL
-         SELECT 'thesis', t.id::text, t.title, t.moderation_status, t.created_at, NULL::text
-           FROM public.theses t WHERE t.uploader_id = $1
        ) items
        ORDER BY created_at DESC
        LIMIT 5;`,
@@ -232,7 +230,7 @@ async function clearUserSuspension(id) {
 
 const CONTENT_CTE = `
   WITH content_items AS (
-    SELECT 'post'::text AS type, p.id, 
+    SELECT CASE WHEN p.kind = 'repository' AND p.repository_type = 'thesis' THEN 'thesis'::text ELSE 'post'::text END AS type, p.id, 
            COALESCE(NULLIF(p.title, ''), LEFT(COALESCE(p.content, ''), 120)) AS title,
            LEFT(COALESCE(p.content, ''), 240) AS excerpt,
            p.moderation_status AS status, p.moderation_reason, p.created_at,
@@ -242,15 +240,6 @@ const CONTENT_CTE = `
            ('/post/' || p.id)::text AS app_path
       FROM public.posts p
       LEFT JOIN public.profiles pr ON pr.id = p.author_id
-      LEFT JOIN public.departments d ON d.id = pr.department_id
-    UNION ALL
-    SELECT 'thesis', t.id, t.title, LEFT(t.abstract, 240),
-           t.moderation_status, t.moderation_reason, t.created_at,
-           t.uploader_id, pr.username, pr.full_name,
-           pr.department_id, d.name,
-           NULL::uuid, NULL::text
-      FROM public.theses t
-      LEFT JOIN public.profiles pr ON pr.id = t.uploader_id
       LEFT JOIN public.departments d ON d.id = pr.department_id
     UNION ALL
     SELECT 'comment', c.id, LEFT(c.content, 120), LEFT(c.content, 240),
@@ -461,22 +450,20 @@ async function getOverview() {
     ),
     db.query(
       `SELECT
-         (SELECT COUNT(*)::int FROM public.posts) AS posts,
-         (SELECT COUNT(*)::int FROM public.theses) AS theses,
+         (SELECT COUNT(*)::int FROM public.posts WHERE (kind <> 'repository' OR repository_type <> 'thesis')) AS posts,
+         (SELECT COUNT(*)::int FROM public.posts WHERE kind = 'repository' AND repository_type = 'thesis') AS theses,
          (SELECT COUNT(*)::int FROM public.comments) AS comments,
          ((SELECT COUNT(*)::int FROM public.posts WHERE moderation_status = 'hidden')
-          + (SELECT COUNT(*)::int FROM public.theses WHERE moderation_status = 'hidden')
           + (SELECT COUNT(*)::int FROM public.comments WHERE moderation_status = 'hidden')) AS hidden,
          ((SELECT COUNT(*)::int FROM public.posts WHERE moderation_status = 'flagged')
-          + (SELECT COUNT(*)::int FROM public.theses WHERE moderation_status = 'flagged')
           + (SELECT COUNT(*)::int FROM public.comments WHERE moderation_status = 'flagged')) AS flagged;`
     ),
     db.query(
       `SELECT
          (SELECT COUNT(*)::int FROM public.message_reports WHERE status = 'open') AS message_reports,
-         (SELECT COUNT(*)::int FROM public.posts WHERE moderation_status = 'flagged') AS flagged_posts,
+         (SELECT COUNT(*)::int FROM public.posts WHERE moderation_status = 'flagged' AND (kind <> 'repository' OR repository_type <> 'thesis')) AS flagged_posts,
          (SELECT COUNT(*)::int FROM public.comments WHERE moderation_status = 'flagged') AS flagged_comments,
-         (SELECT COUNT(*)::int FROM public.theses WHERE moderation_status = 'flagged') AS flagged_theses;`
+         (SELECT COUNT(*)::int FROM public.posts WHERE moderation_status = 'flagged' AND kind = 'repository' AND repository_type = 'thesis') AS flagged_theses;`
     ),
     db.query(
       `SELECT
@@ -488,7 +475,8 @@ async function getOverview() {
     ),
     db.query(
       `SELECT * FROM (
-         SELECT 'flagged_post'::text AS kind, p.id::text AS id,
+         SELECT CASE WHEN p.kind = 'repository' AND p.repository_type = 'thesis' THEN 'flagged_thesis'::text ELSE 'flagged_post'::text END AS kind,
+                p.id::text AS id,
                 COALESCE(NULLIF(p.title, ''), LEFT(COALESCE(p.content, ''), 100)) AS label,
                 pr.full_name AS author, p.created_at
            FROM public.posts p
@@ -500,12 +488,6 @@ async function getOverview() {
            FROM public.comments c
            LEFT JOIN public.profiles pr ON pr.id = c.user_id
           WHERE c.moderation_status = 'flagged'
-         UNION ALL
-         SELECT 'flagged_thesis', t.id::text, t.title,
-                pr.full_name, t.created_at
-           FROM public.theses t
-           LEFT JOIN public.profiles pr ON pr.id = t.uploader_id
-          WHERE t.moderation_status = 'flagged'
          UNION ALL
          SELECT 'message_report', r.id::text, LEFT(m.body, 100),
                 sender.full_name, r.created_at

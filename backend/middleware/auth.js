@@ -316,15 +316,6 @@ const requireDepartmentAdmin = [requireAuth, loadProfile, requireRole("departmen
 const requireFaculty = [requireAuth, loadProfile, requireRole("faculty", "departmentAdmin", "admin", "superadmin")];
 const requireStudent = [requireAuth, loadProfile, requireRole("student")];
 
-
-// MFA & Session Age middleware delegated to mfaService
-const {
-  requireAal2,
-  checkSessionAge,
-  clearSessionAgeCache,
-} = mfaService;
-
-
 module.exports = {
   requireAuth,
   optionalAuth,
@@ -360,8 +351,4 @@ module.exports = {
   requireFaculty,
   requireStudent,
   supabase,
-  // MFA & Session middleware
-  requireAal2,
-  checkSessionAge,
-  clearSessionAgeCache,
 };

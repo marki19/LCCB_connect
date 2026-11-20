@@ -29,7 +29,7 @@ const idsFor = async (viewer) => {
   const result = await client.query(
     `SELECT v.id
        FROM public.visible_posts($1::text) v
-      WHERE v.type = 'announcement'
+      WHERE v.kind = 'announcement'
         AND v.author_id = $2;`,
     [viewer, ADMIN]
   );
@@ -70,7 +70,7 @@ before(async () => {
   const insert = async (title, columns) => {
     const result = await client.query(
       `INSERT INTO public.posts (
-         author_id, content, type, title, visibility,
+         author_id, content, kind, title, visibility,
          audience_role, audience_department_id, audience_course_id,
          audience_year_level, expires_at
        )
@@ -162,8 +162,8 @@ describe("repost visibility", () => {
     // A private post by the admin, reposted publicly by the admin.
     const privatePost = (
       await client.query(
-        `INSERT INTO public.posts (author_id, content, type, visibility)
-         VALUES ($1, 'secret', 'text', 'private') RETURNING id;`,
+        `INSERT INTO public.posts (author_id, content, kind, visibility)
+         VALUES ($1, 'secret', 'discussion', 'private') RETURNING id;`,
         [ADMIN]
       )
     ).rows[0].id;

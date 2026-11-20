@@ -51,6 +51,12 @@ type Props = {
     birthdate: string;
     otp_code: string;
   }) => Promise<{ ok: boolean; error?: string; fields?: Record<string, string> }>;
+  /**
+   * Called when the user chooses to verify later. Verification is optional at
+   * signup, so the form offers a way into the app while the profile stays
+   * unverified (and posting stays locked server-side).
+   */
+  onSkip?: () => void;
 };
 
 /** Academic levels used when the server doesn't return them. */
@@ -74,6 +80,7 @@ export default function VerificationForm({
   declineNote,
   onSendOtp,
   onSubmit,
+  onSkip,
 }: Props) {
   const { colors } = useTheme();
 
@@ -648,6 +655,31 @@ export default function VerificationForm({
                     Tap Send code to receive a 6-digit code at your school email.
                   </Text>
                 )}
+
+                {canEdit && onSkip ? (
+                  <View style={{ marginTop: SPACE.x2 }}>
+                    <Button
+                      label="Skip for now"
+                      variant="ghost"
+                      fullWidth
+                      disabled={submitting}
+                      onPress={onSkip}
+                      accessibilityLabel="Skip identity verification for now"
+                    />
+                    <Text
+                      style={{
+                        ...TYPE.caption,
+                        color: colors.inkFaint,
+                        textAlign: "center",
+                        lineHeight: 18,
+                        marginTop: SPACE.x1,
+                      }}
+                    >
+                      You can verify later. Posting stays locked until a department admin confirms
+                      your identity.
+                    </Text>
+                  </View>
+                ) : null}
               </Card>
             </Reveal>
           </View>

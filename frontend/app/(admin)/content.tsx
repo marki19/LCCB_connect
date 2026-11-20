@@ -23,6 +23,7 @@ import { useRouter } from "expo-router";
 import {
   listAdminContent,
   moderateContent,
+  resolveContentReport,
   resolveMessageReport,
   type AdminContentItem,
   type ContentType,
@@ -43,6 +44,7 @@ type PendingAction = {
   report: boolean;
   id: string;
   type?: ContentType;
+  reportSource?: "message" | "content";
   action: ModerationAction | "reviewed" | "dismissed";
   title: string;
   description: string;
@@ -62,6 +64,10 @@ type QueueItem = {
   author: string;
   createdAt: string;
   postId?: string;
+  /** Which backend table a `report` item came from; picks the resolve endpoint. */
+  reportSource?: "message" | "content";
+  /** For content reports: the reported surface, shown on the card. */
+  targetType?: string;
 };
 
 const TYPE_OPTIONS = [
@@ -79,9 +85,9 @@ const STATUS_OPTIONS = [
 ];
 
 function formatDate(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "Not set";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "Not set";
   return date.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -226,7 +232,24 @@ export default function AdminContentScreen() {
           reason: report.reason,
           reporter:
             report.reporter?.full_name || report.reporter?.username || "Unknown",
+          author: report.sender?.full_name || report.sender?.username || "Unknown",
           createdAt: report.created_at,
+          reportSource: "message" as const,
+        })),
+        ...(data.contentReports || []).map((report: any) => ({
+          key: `report-${report.id}`,
+          kind: "report" as const,
+          id: report.id,
+          title: `Reported ${report.target_type || "content"}`,
+          excerpt: report.excerpt || "",
+          reason: report.reason,
+          reporter:
+            report.reporter?.full_name || report.reporter?.username || "Unknown",
+          author: report.author?.full_name || report.author?.username || "Unknown",
+          createdAt: report.created_at,
+          postId: report.post_id || undefined,
+          reportSource: "content" as const,
+          targetType: report.target_type,
         })),
       ].sort(
         (a, b) =>
@@ -325,12 +348,13 @@ export default function AdminContentScreen() {
     setPending({
       report: true,
       id: item.id,
+      reportSource: item.reportSource,
       action,
       title: action === "reviewed" ? "Mark report reviewed" : "Dismiss report",
       description:
         action === "reviewed"
-          ? "Closes the report as reviewed. The message itself is not changed."
-          : "Closes the report with no action against the message.",
+          ? "Closes the report as reviewed. The reported content itself is not changed."
+          : "Closes the report with no action against the reported content.",
       confirmLabel: action === "reviewed" ? "Mark reviewed" : "Dismiss",
       destructive: false,
     });
@@ -343,11 +367,19 @@ export default function AdminContentScreen() {
     setNotice("");
     try {
       if (pending.report) {
-        await resolveMessageReport(
-          pending.id,
-          pending.action as "reviewed" | "dismissed",
-          input.reason
-        );
+        if (pending.reportSource === "content") {
+          await resolveContentReport(
+            pending.id,
+            pending.action as "reviewed" | "dismissed",
+            input.reason
+          );
+        } else {
+          await resolveMessageReport(
+            pending.id,
+            pending.action as "reviewed" | "dismissed",
+            input.reason
+          );
+        }
         const msg = "Report resolved.";
         setNotice(msg);
         showToast({ message: msg, tone: "success" });
@@ -387,8 +419,8 @@ export default function AdminContentScreen() {
       showsVerticalScrollIndicator={false}
     >
       <PageHeader
-        eyebrow="Governance / moderation"
-        title="Reports & Content"
+        eyebrow="Admin console"
+        title="Reports and content"
         description="Work the moderation queue or audit the full content library. Every decision carries a reason."
         onRefresh={refresh}
         refreshing={queueLoading || libraryLoading}
@@ -569,7 +601,11 @@ export default function AdminContentScreen() {
                       </View>
                       <View>
                         <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}>
-                          {item.kind === "report" ? "Reported message" : item.kind}
+                          {item.kind === "report"
+                            ? item.targetType
+                              ? `Reported ${item.targetType}`
+                              : "Reported message"
+                            : item.kind}
                         </Text>
                         <Text style={{ fontSize: 11, color: colors.textTertiary }}>
                           {formatDate(item.createdAt)}
@@ -926,7 +962,7 @@ export default function AdminContentScreen() {
                         "Unknown"}
                     </Text>
                     <Text style={{ flex: 1, paddingRight: 8, fontSize: 12, color: colors.textSecondary }} numberOfLines={1}>
-                      {item.department_name || "—"}
+                      {item.department_name || "Not set"}
                     </Text>
                     <View style={{ width: 96 }}>
                       <View

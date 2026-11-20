@@ -1,6 +1,6 @@
 const postModel = require("../models/postModel");
-const thesisModel = require("../models/thesisModel");
 const messageModel = require("../models/messageModel");
+const reportModel = require("../models/reportModel");
 const notificationModel = require("../models/notificationModel");
 const notificationService = require("../services/notificationService");
 const auditService = require("../services/auditService");
@@ -75,13 +75,20 @@ const getModerationQueue = async (req, res, next) => {
       return res.status(403).json({ error: "Forbidden: insufficient moderation permissions" });
     }
 
-    const [flaggedPosts, flaggedComments, flaggedTheses, messageReports] =
+    const [allFlaggedPosts, flaggedComments, messageReports, contentReports] =
       await Promise.all([
         postModel.getFlaggedPosts({ departmentId }),
         postModel.getFlaggedComments({ departmentId }),
-        thesisModel.getFlaggedTheses({ departmentId }),
         messageModel.listOpenMessageReports({ departmentId }),
+        reportModel.listOpenReports({ departmentId }),
       ]);
+
+    const flaggedPosts = allFlaggedPosts.filter(
+      (p) => !(p.kind === "repository" && p.repository_type === "thesis")
+    );
+    const flaggedTheses = allFlaggedPosts.filter(
+      (p) => p.kind === "repository" && p.repository_type === "thesis"
+    );
 
     res.json({
       department_id: departmentId,
@@ -89,11 +96,13 @@ const getModerationQueue = async (req, res, next) => {
         flaggedPosts.length +
         flaggedComments.length +
         flaggedTheses.length +
-        messageReports.length,
+        messageReports.length +
+        contentReports.length,
       flaggedPosts,
       flaggedComments,
       flaggedTheses,
       messageReports,
+      contentReports,
     });
   } catch (err) {
     next(err);
@@ -261,12 +270,12 @@ const moderateThesis = async (req, res, next) => {
     }
 
     // Moderators must be able to see and restore a hidden thesis.
-    const thesis = await thesisModel.getThesisById(id, { includeHidden: true });
+    const thesis = await postModel.getPostById(id, { includeHidden: true });
     if (!thesis) {
       return res.status(404).json({ error: "Thesis not found" });
     }
 
-    if (!withinDepartmentScope(req, res, thesis.uploader?.department_id)) return;
+    if (!withinDepartmentScope(req, res, thesis.author?.department_id)) return;
 
     const reason = readReason(req, res);
     if (!reason) return;
@@ -278,10 +287,10 @@ const moderateThesis = async (req, res, next) => {
     }
 
     if (action === "restore") {
-      const updated = await thesisModel.updateThesisModeration(id, "approved", reason);
+      const updated = await postModel.updatePostModeration(id, "approved", reason);
       await auditService.recordRequest(req, {
         action: ACTIONS.CONTENT_RESTORE,
-        targetType: "thesis",
+        targetType: "post",
         targetId: id,
         targetLabel: contentLabel(thesis, "Thesis"),
         reason,
@@ -291,15 +300,15 @@ const moderateThesis = async (req, res, next) => {
     }
 
     if (action === "hide") {
-      const updated = await thesisModel.updateThesisModeration(id, "hidden", reason);
+      const updated = await postModel.updatePostModeration(id, "hidden", reason);
       await notificationService.notifyAuthorOnAction({
-        authorId: thesis.uploader_id,
+        authorId: thesis.author_id,
         actorId: req.user.id,
-        message: `Your thesis "${thesis.title}" was hidden by an administrator: ${reason}`,
+        message: `Your thesis "${thesis.title || thesis.content?.slice(0, 30)}" was hidden by an administrator: ${reason}`,
       });
       await auditService.recordRequest(req, {
         action: ACTIONS.CONTENT_HIDE,
-        targetType: "thesis",
+        targetType: "post",
         targetId: id,
         targetLabel: contentLabel(thesis, "Thesis"),
         reason,
@@ -308,15 +317,15 @@ const moderateThesis = async (req, res, next) => {
       return res.json({ message: "Thesis hidden", thesis: updated });
     }
 
-    await thesisModel.adminDeleteThesis(id);
+    await postModel.adminDeletePost(id);
     await notificationService.notifyAuthorOnAction({
-      authorId: thesis.uploader_id,
+      authorId: thesis.author_id,
       actorId: req.user.id,
-      message: `Your thesis "${thesis.title}" was removed by an administrator: ${reason}`,
+      message: `Your thesis "${thesis.title || thesis.content?.slice(0, 30)}" was removed by an administrator: ${reason}`,
     });
     await auditService.recordRequest(req, {
       action: ACTIONS.CONTENT_DELETE,
-      targetType: "thesis",
+      targetType: "post",
       targetId: id,
       targetLabel: contentLabel(thesis, "Thesis"),
       reason,
@@ -372,6 +381,52 @@ const moderateMessageReport = async (req, res, next) => {
   }
 };
 
+/**
+ * Resolves a user-submitted content report (`reports` table). `reviewed` =
+ * actioned/acknowledged, `dismissed` = no action. Department admins may only
+ * resolve reports whose target author is in their own department; campus
+ * admins may resolve any. Resolving the report never changes the target
+ * content — hiding or deleting it is a separate decision.
+ */
+const moderateReport = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // 'reviewed' | 'dismissed'
+
+    if (action !== "reviewed" && action !== "dismissed") {
+      return res.status(400).json({ error: "Invalid action. Must be 'reviewed' or 'dismissed'" });
+    }
+
+    const report = await reportModel.getReportForModeration(id);
+    if (!report) {
+      return res.status(404).json({ error: "Report not found" });
+    }
+
+    // Same department rule as posts/comments, scoped on the target author.
+    if (!withinDepartmentScope(req, res, report.author_department_id)) return;
+
+    const reason = readReason(req, res);
+    if (!reason) return;
+
+    const updated = await reportModel.updateReportStatus(id, action, req.user.id);
+    await auditService.recordRequest(req, {
+      action: action === "reviewed" ? ACTIONS.REPORT_REVIEW : ACTIONS.REPORT_DISMISS,
+      targetType: "report",
+      targetId: id,
+      targetLabel: `Report ${id}`,
+      reason,
+      metadata: {
+        target_type: report.target_type || null,
+        target_id: report.target_id || null,
+        report_status: action,
+      },
+    });
+    res.json({ message: `Report ${action}`, report: updated });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const getNotifications = async (req, res, next) => {
   try {
     const notifications = await notificationModel.getUserNotifications(req.user.id);
@@ -410,6 +465,7 @@ module.exports = {
   moderateComment,
   moderateThesis,
   moderateMessageReport,
+  moderateReport,
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,

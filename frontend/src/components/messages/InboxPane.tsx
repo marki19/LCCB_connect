@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   TextInput,
   StyleSheet,
-  Alert,
 } from "react-native";
 import {
   ArrowLeft,
@@ -17,13 +16,20 @@ import {
   Search,
   Plus,
   Inbox,
-  Users,
+  Clock,
+  LayoutGrid,
+  X,
+  Trash2,
 } from "lucide-react-native";
 import Avatar from "../Avatar";
 import PeerPicker from "../PeerPicker";
+import QuickSnapComposer from "../snaps/QuickSnapComposer";
+import Modal from "../ui/Modal";
+import Button, { IconButton } from "../ui/Button";
 import { usePresence } from "../../contexts/PresenceContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
+import { useToast } from "../../contexts/ToastContext";
 import { onConversation, onMessage } from "../../lib/realtime";
 import {
   acceptConversation,
@@ -32,9 +38,9 @@ import {
   listFriends,
   openConversation,
 } from "../../lib/messages";
+import { updateNote, deleteNote } from "../../lib/api";
 import type { Conversation, Friend } from "../../types";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
-import { IconButton } from "../ui/Button";
 import Card from "../ui/Card";
 import EmptyState from "../admin/EmptyState";
 
@@ -71,6 +77,7 @@ export default function InboxPane({
   const { modeOf } = usePresence();
   const { colors } = useTheme();
   const { profile } = useAuth();
+  const { showToast } = useToast();
 
   const [tabChoice, setTabChoice] = useState<"chats" | "requests" | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -81,6 +88,60 @@ export default function InboxPane({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Quick Snap & Note state
+  const [snapComposerOpen, setSnapComposerOpen] = useState(false);
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
+  const [userNote, setUserNote] = useState<string | null>(profile?.note ?? null);
+  const [noteDraft, setNoteDraft] = useState(profile?.note ?? "");
+  const [savingNote, setSavingNote] = useState(false);
+
+  useEffect(() => {
+    setUserNote(profile?.note ?? null);
+    setNoteDraft(profile?.note ?? "");
+  }, [profile?.note]);
+
+  const handleCloseNoteModal = useCallback(() => {
+    if (!savingNote) setNoteModalOpen(false);
+  }, [savingNote]);
+
+  const handleSaveNote = async () => {
+    const clean = noteDraft.trim();
+    if (!clean && !userNote) return;
+    setSavingNote(true);
+    try {
+      if (clean.length === 0) {
+        await deleteNote();
+        setUserNote(null);
+        setNoteDraft("");
+        showToast({ message: "Note removed", tone: "info" });
+      } else {
+        await updateNote(clean);
+        setUserNote(clean);
+        showToast({ message: "Note shared!", tone: "success" });
+      }
+      setNoteModalOpen(false);
+    } catch (err: any) {
+      showToast({ message: err?.message || "Failed to update note", tone: "error" });
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async () => {
+    setSavingNote(true);
+    try {
+      await deleteNote();
+      setUserNote(null);
+      setNoteDraft("");
+      showToast({ message: "Note deleted", tone: "info" });
+      setNoteModalOpen(false);
+    } catch (err: any) {
+      showToast({ message: err?.message || "Failed to delete note", tone: "error" });
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -176,97 +237,235 @@ export default function InboxPane({
 
   const pendingCount = received.length;
 
+  const query = searchQuery.trim().toLowerCase();
+
   // Filter conversations by search query
-  const filteredConversations = conversations.filter((c) => {
-    if (!searchQuery.trim()) return true;
-    const name = c.peer?.full_name || c.peer?.username || "";
-    const lastMsg = c.last_message?.body || "";
-    const q = searchQuery.toLowerCase();
-    return name.toLowerCase().includes(q) || lastMsg.toLowerCase().includes(q);
-  });
+  const filteredConversations = useMemo(() => {
+    if (!query) return conversations;
+    return conversations.filter((c) => {
+      const name = c.peer?.full_name || c.peer?.username || "";
+      const lastMsg = c.last_message?.body || "";
+      return name.toLowerCase().includes(query) || lastMsg.toLowerCase().includes(query);
+    });
+  }, [conversations, query]);
+
+  const filteredReceived = useMemo(() => {
+    if (!query) return received;
+    return received.filter((c) => {
+      const name = c.peer?.full_name || c.peer?.username || "";
+      const lastMsg = c.last_message?.body || "";
+      return name.toLowerCase().includes(query) || lastMsg.toLowerCase().includes(query);
+    });
+  }, [received, query]);
+
+  const filteredSent = useMemo(() => {
+    if (!query) return sent;
+    return sent.filter((c) => {
+      const name = c.peer?.full_name || c.peer?.username || "";
+      const lastMsg = c.last_message?.body || "";
+      return name.toLowerCase().includes(query) || lastMsg.toLowerCase().includes(query);
+    });
+  }, [sent, query]);
+
+  // Combine friends and recent conversation peers for the top active rail
+  const activeRailPeers = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+
+    friends.forEach((f) => {
+      const p = f.peer || (f as any).user || f;
+      if (p?.id && p.id !== profile?.id && !seen.has(p.id)) {
+        seen.add(p.id);
+        list.push(p);
+      }
+    });
+
+    conversations.forEach((c) => {
+      const p = c.peer;
+      if (p?.id && p.id !== profile?.id && !seen.has(p.id)) {
+        seen.add(p.id);
+        list.push(p);
+      }
+    });
+
+    return list;
+  }, [friends, conversations, profile?.id]);
+
+  type RequestRowItem = {
+    id: string;
+    kind: "received" | "sent";
+    isFirstOfKind: boolean;
+    conversation: Conversation;
+  };
+
+  const requestList = useMemo<RequestRowItem[]>(() => {
+    const list: RequestRowItem[] = [];
+    filteredReceived.forEach((conv: Conversation, index: number) => {
+      list.push({
+        id: `recv-${conv.id}`,
+        kind: "received",
+        isFirstOfKind: index === 0,
+        conversation: conv,
+      });
+    });
+    filteredSent.forEach((conv: Conversation, index: number) => {
+      list.push({
+        id: `sent-${conv.id}`,
+        kind: "sent",
+        isFirstOfKind: index === 0,
+        conversation: conv,
+      });
+    });
+    return list;
+  }, [filteredReceived, filteredSent]);
 
   const renderActiveFriends = () => (
-    <View style={styles.storiesSection}>
+    <View style={styles.snapsSection}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.storiesContainer}
+        contentContainerStyle={styles.snapsContainer}
       >
-        {/* Current user: Add story / note */}
-        <Pressable
-          style={({ pressed, hovered }: any) => [
-            styles.storyItem,
-            {
-              cursor: "pointer",
-              opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
-              transform: [{ scale: pressed ? 0.95 : 1 }],
-            },
-          ]}
-          onPress={() => Alert.alert("Stories & Notes", "24-hour stories and notes are coming soon!")}
-        >
-          {/* Note speech bubble */}
-          <View style={[styles.noteBubble, { backgroundColor: colors.surfaceSunken, borderColor: colors.border }]}>
-            <Text numberOfLines={1} style={[styles.noteText, { color: colors.inkSoft }]}>
-              Share a note...
+        {/* Current user: Quick Snap / note */}
+        <View style={styles.snapItem}>
+          {/* Note speech bubble perched above avatar */}
+          <Pressable
+            onPress={() => {
+              setNoteDraft(userNote || "");
+              setNoteModalOpen(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={userNote ? `Your note: ${userNote}` : "Share a note"}
+            style={({ pressed, hovered }: any) => [
+              styles.noteBubble,
+              {
+                backgroundColor: colors.surfaceSunken,
+                borderColor: colors.border,
+                cursor: "pointer",
+                opacity: pressed ? 0.8 : hovered ? 0.95 : 1,
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+              },
+            ]}
+          >
+            <Text numberOfLines={1} style={[styles.noteText, { color: userNote ? colors.ink : colors.inkSoft }]}>
+              {userNote || "Share a note..."}
             </Text>
-          </View>
-          <View style={styles.storyAvatarWrap}>
+            <View
+              style={[
+                styles.noteBubbleTail,
+                { borderTopColor: colors.surfaceSunken },
+              ]}
+            />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed, hovered }: any) => [
+              styles.snapAvatarWrap,
+              {
+                cursor: "pointer",
+                opacity: pressed ? 0.85 : hovered ? 0.95 : 1,
+              },
+            ]}
+            onPress={() => setSnapComposerOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Add a Quick Snap"
+          >
             <Avatar
               name={profile?.full_name || profile?.username}
               avatarUrl={profile?.avatar_url}
-              size={54}
+              size={58}
             />
-            <View style={[styles.storyPlusBadge, { backgroundColor: colors.brandSolid }]}>
-              <Plus size={13} color={colors.textOnBrandSolid} strokeWidth={3} />
+            <View style={[styles.snapPlusBadge, { backgroundColor: colors.surfaceSunken, borderColor: colors.surfacePage }]}>
+              <Plus size={12} color="#FFFFFF" strokeWidth={3} />
             </View>
-          </View>
-          <Text numberOfLines={1} style={[styles.storyName, { color: colors.inkFaint }]}>
-            Your story
-          </Text>
-        </Pressable>
+          </Pressable>
 
-        {/* Friend stories & active status */}
-        {friends.map((friend) => {
-          const peer = friend.peer || (friend as any).user || friend;
+          <Text numberOfLines={1} style={[styles.snapName, { color: colors.inkFaint }]}>
+            Your snap
+          </Text>
+        </View>
+
+        {/* Friends' snaps and active status */}
+        {activeRailPeers.map((peer) => {
           const isOnline = modeOf(peer.id) === "online";
           const firstName = (peer.full_name || peer.username || "Friend").split(" ")[0];
+          const hasNote = Boolean(peer.note && peer.note.trim().length > 0);
 
           return (
             <Pressable
               key={peer.id}
               style={({ pressed, hovered }: any) => [
-                styles.storyItem,
+                styles.snapItem,
                 {
                   cursor: "pointer",
                   opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
-                  transform: [{ scale: pressed ? 0.95 : 1 }],
+                  transform: [{ scale: pressed ? 0.96 : 1 }],
                 },
               ]}
               onPress={() => handleStartFriendChat(peer.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Chat with ${firstName}`}
             >
-              {/* Note placeholder bubble */}
-              <View style={[styles.noteBubble, { backgroundColor: colors.surfaceSunken, borderColor: colors.border }]}>
-                <Text numberOfLines={1} style={[styles.noteText, { color: colors.inkSoft }]}>
-                  {isOnline ? "Active now" : "👋"}
+              {/* Note or greeting speech bubble perched above avatar */}
+              <View
+                style={[
+                  styles.noteBubble,
+                  {
+                    backgroundColor: colors.surfaceSunken,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.noteText,
+                    { color: hasNote ? colors.ink : colors.inkSoft },
+                  ]}
+                >
+                  {hasNote ? peer.note : isOnline ? "Active" : "👋"}
                 </Text>
-              </View>
-              <View style={styles.storyAvatarWrap}>
-                <Avatar
-                  name={peer.full_name || peer.username}
-                  avatarUrl={peer.avatar_url}
-                  size={54}
-                />
                 <View
                   style={[
-                    styles.onlineDot,
-                    {
-                      backgroundColor: isOnline ? "#22C55E" : colors.inkFaint,
-                      borderColor: colors.surfacePage,
-                    },
+                    styles.noteBubbleTail,
+                    { borderTopColor: colors.surfaceSunken },
                   ]}
                 />
               </View>
-              <Text numberOfLines={1} style={[styles.storyName, { color: colors.ink }]}>
+
+              <View style={styles.snapAvatarWrap}>
+                <Avatar
+                  name={peer.full_name || peer.username}
+                  avatarUrl={peer.avatar_url}
+                  size={58}
+                />
+                {isOnline ? (
+                  <View
+                    style={[
+                      styles.onlineDot,
+                      {
+                        backgroundColor: "#22C55E",
+                        borderColor: colors.surfacePage,
+                      },
+                    ]}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.elapsedBadge,
+                      {
+                        backgroundColor: colors.surfaceSunken,
+                        borderColor: colors.surfacePage,
+                      },
+                    ]}
+                  >
+                    <Text style={{ fontSize: 9, fontWeight: "700", color: "#22C55E" }}>
+                      12m
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text numberOfLines={1} style={[styles.snapName, { color: colors.ink, fontWeight: "600" }]}>
                 {firstName}
               </Text>
             </Pressable>
@@ -281,6 +480,10 @@ export default function InboxPane({
     const active = activeId === item.id;
     const isOnline = peer ? modeOf(peer.id) === "online" : false;
     const hasUnread = item.unread > 0;
+    const isFromMe = item.last_message?.sender_id === profile?.id;
+    const snippetText = item.last_message
+      ? `${isFromMe ? "You: " : ""}${item.last_message.body}`
+      : "Started a conversation";
 
     return (
       <Pressable
@@ -352,76 +555,151 @@ export default function InboxPane({
                 },
               ]}
             >
-              {item.last_message
-                ? `${item.last_message.sender_id === peer?.id ? "" : "You: "}${item.last_message.body}`
-                : "Started a conversation"}
+              {snippetText}
             </Text>
             {hasUnread ? (
-              <View style={[styles.unreadBadge, { backgroundColor: colors.brandSolid }]}>
-                <Text style={styles.unreadBadgeText}>
-                  {item.unread > 99 ? "99+" : item.unread}
-                </Text>
-              </View>
+              <View style={[styles.unreadDotBlue, { backgroundColor: "#0084FF" }]} />
             ) : null}
           </View>
         </View>
       </Pressable>
     );
   };
-
   const renderRequest = (item: Conversation, kind: "received" | "sent") => {
     const peer = item.peer;
     const active = activeId === item.id;
+    const isOnline = peer ? modeOf(peer.id) === "online" : false;
+    const lastMsg = item.last_message?.body;
 
     return (
-      <View
+      <Pressable
         key={item.id}
-        style={[
-          styles.requestCard,
+        onPress={() => openThread(item.id)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: active }}
+        style={({ pressed, hovered }: any) => [
+          styles.chatRow,
           {
-            backgroundColor: active ? colors.brandWash : colors.surface,
-            borderColor: colors.border,
+            cursor: "pointer",
+            backgroundColor: active
+              ? colors.brandWash
+              : pressed || hovered
+              ? colors.hoverOverlay
+              : "transparent",
+            transform: [{ scale: pressed ? 0.98 : 1 }],
           },
         ]}
       >
-        <Avatar
-          name={peer?.full_name || peer?.username}
-          avatarUrl={peer?.avatar_url}
-          size={50}
-        />
-        <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-          <Text numberOfLines={1} style={{ ...TYPE.bodyStrong, color: colors.ink, fontWeight: "700" }}>
-            {peer?.full_name || peer?.username || "Peer"}
-          </Text>
-          <Text numberOfLines={1} style={{ ...TYPE.caption, color: colors.inkSoft }}>
-            {item.last_message?.body || "Wants to send you a message"}
-          </Text>
-          {kind === "received" ? (
-            <View style={{ flexDirection: "row", gap: SPACE.x2, marginTop: SPACE.x1 }}>
-              <Pressable
-                onPress={() => void handleAccept(item)}
-                style={[styles.actionBtn, { backgroundColor: colors.brandSolid }]}
-              >
-                <Text style={{ ...TYPE.micro, color: colors.textOnBrandSolid, fontWeight: "700" }}>Accept</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => openThread(item.id)}
-                style={[styles.actionBtn, { backgroundColor: colors.surfaceSunken, borderColor: colors.border, borderWidth: 1 }]}
-              >
-                <Text style={{ ...TYPE.micro, color: colors.inkSoft, fontWeight: "600" }}>View</Text>
-              </Pressable>
+        <View style={styles.avatarContainer}>
+          <Avatar
+            name={peer?.full_name || peer?.username}
+            avatarUrl={peer?.avatar_url}
+            size={54}
+          />
+          {isOnline ? (
+            <View
+              style={[
+                styles.onlineDot,
+                { backgroundColor: "#22C55E", borderColor: colors.surfacePage },
+              ]}
+            />
+          ) : null}
+        </View>
+
+        <View style={styles.chatDetails}>
+          <View style={styles.chatHeaderRow}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.chatName,
+                {
+                  color: colors.ink,
+                  fontWeight: "700",
+                },
+              ]}
+            >
+              {peer?.full_name || peer?.username || "Peer"}
+            </Text>
+            <Text style={[styles.chatTime, { color: colors.inkFaint }]}>
+              {formatWhen(item.last_message?.created_at || item.last_message_at || item.created_at)}
+            </Text>
+          </View>
+
+          <View style={styles.chatSnippetRow}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.chatSnippet,
+                {
+                  color: colors.inkSoft,
+                },
+              ]}
+            >
+              {kind === "sent"
+                ? lastMsg
+                  ? (item.last_message?.sender_id === peer?.id ? lastMsg : `You: ${lastMsg}`)
+                  : "You sent a request"
+                : lastMsg || "Wants to send you a message"}
+            </Text>
+          </View>
+
+          {kind === "sent" ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+              <Clock size={11} color={colors.inkFaint} />
+              <Text style={{ ...TYPE.micro, color: colors.inkFaint, fontWeight: "600" }}>
+                Pending request...
+              </Text>
             </View>
           ) : (
-            <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Pending request...</Text>
+            <View style={{ flexDirection: "row", gap: SPACE.x2, marginTop: 4 }}>
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  void handleAccept(item);
+                }}
+                style={({ pressed, hovered }: any) => [
+                  styles.actionBtn,
+                  {
+                    backgroundColor: colors.brandSolid,
+                    cursor: "pointer",
+                    opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
+                  },
+                ]}
+              >
+                <Text style={{ ...TYPE.micro, color: colors.textOnBrandSolid, fontWeight: "700" }}>
+                  Accept
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  openThread(item.id);
+                }}
+                style={({ pressed, hovered }: any) => [
+                  styles.actionBtn,
+                  {
+                    backgroundColor: colors.surfaceSunken,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    cursor: "pointer",
+                    opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
+                  },
+                ]}
+              >
+                <Text style={{ ...TYPE.micro, color: colors.inkSoft, fontWeight: "600" }}>
+                  View
+                </Text>
+              </Pressable>
+            </View>
           )}
         </View>
-      </View>
+      </Pressable>
     );
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
-      {/* Messenger Header */}
+      {/* Messenger Mobile / Desktop Header */}
       <View
         style={[
           styles.header,
@@ -435,29 +713,41 @@ export default function InboxPane({
           {showBack ? (
             <IconButton icon={ArrowLeft} label="Back" onPress={onBack ?? (() => {})} />
           ) : null}
-          <Text style={[styles.headerTitle, { color: colors.ink }]}>Chats</Text>
+          <Text style={[styles.headerTitle, { color: colors.ink }]}>messenger</Text>
         </View>
 
-        <IconButton
-          icon={SquarePen}
-          label="New message"
-          variant="subtle"
+        <Pressable
           onPress={() => setPickerOpen(true)}
-        />
+          accessibilityRole="button"
+          accessibilityLabel="New message"
+          style={({ pressed, hovered }: any) => [
+            styles.newChatBtn,
+            {
+              backgroundColor: colors.surfaceSunken,
+              cursor: "pointer",
+              opacity: pressed ? 0.75 : hovered ? 0.9 : 1,
+              transform: [{ scale: pressed ? 0.92 : 1 }],
+            },
+          ]}
+        >
+          <SquarePen size={19} color={colors.ink} />
+        </Pressable>
       </View>
 
-      <View style={{ flex: 1, width: "100%", ...(activeId === undefined ? { maxWidth: 760, alignSelf: "center" } : {}) }}>
-        {/* Search Bar */}
+      <View style={{ flex: 1, width: "100%" }}>
+        {/* Search Bar - Ask Meta AI or search */}
         <View style={styles.searchWrap}>
-          <View style={[styles.searchBar, { backgroundColor: colors.panelInset, borderColor: colors.line }]}>
-            <Search size={16} color={colors.inkFaint} />
+          <View style={[styles.searchBar, { backgroundColor: colors.surfaceSunken, borderColor: colors.line }]}>
+            <Search size={18} color={colors.inkFaint} />
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Search Messenger"
+              placeholder="Ask Meta AI or search"
               placeholderTextColor={colors.inkFaint}
               style={[styles.searchInput, { color: colors.ink }]}
+              accessibilityLabel="Search Messenger"
             />
+            <LayoutGrid size={18} color={colors.inkFaint} />
           </View>
         </View>
 
@@ -531,38 +821,57 @@ export default function InboxPane({
         ) : (
           <FlatList
             style={{ flex: 1 }}
-            data={tab === "chats" ? filteredConversations : received}
-            keyExtractor={(item) => item.id}
-            ListHeaderComponent={tab === "chats" && activeId === undefined ? renderActiveFriends : undefined}
+            data={tab === "chats" ? (filteredConversations as any) : (requestList as any)}
+            keyExtractor={(item: any) => item.id}
+            ListHeaderComponent={tab === "chats" ? renderActiveFriends : undefined}
             contentContainerStyle={{ paddingBottom: SPACE.x8, flexGrow: 1 }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
             }
-            renderItem={({ item }) =>
-              tab === "chats" ? renderChat(item) : renderRequest(item, "received")
-            }
-            ListFooterComponent={
-              tab === "requests" && sent.length > 0 ? (
-                <View style={{ paddingHorizontal: SPACE.x4, marginTop: SPACE.x4, gap: SPACE.x2 }}>
-                  <Text style={{ ...TYPE.micro, color: colors.inkFaint }}>Sent Requests</Text>
-                  {sent.map((item) => renderRequest(item, "sent"))}
+            renderItem={({ item }: { item: any }) => {
+              if (tab === "chats") {
+                return renderChat(item as Conversation);
+              }
+              const req = item as RequestRowItem;
+              return (
+                <View key={req.id}>
+                  {req.isFirstOfKind && (
+                    <View style={styles.sectionHeader}>
+                      <Text style={[styles.sectionHeaderText, { color: colors.inkFaint }]}>
+                        {req.kind === "received" ? "RECEIVED REQUESTS" : "SENT REQUESTS"}
+                      </Text>
+                    </View>
+                  )}
+                  {renderRequest(req.conversation, req.kind)}
                 </View>
-              ) : undefined
-            }
+              );
+            }}
             ListEmptyComponent={
               <Card style={{ margin: SPACE.x4 }}>
                 <EmptyState
                   icon={tab === "chats" ? SquarePen : Inbox}
                   tone="brand"
                   compact
-                  title={tab === "chats" ? "No conversations yet" : "No message requests"}
+                  title={
+                    tab === "chats"
+                      ? query
+                        ? "No conversations found"
+                        : "No conversations yet"
+                      : query
+                      ? "No requests found"
+                      : "No message requests"
+                  }
                   body={
                     tab === "chats"
-                      ? "Start chatting with your classmates from the new message button."
+                      ? query
+                        ? "Try searching for a different name."
+                        : "Start chatting with your classmates from the new message button."
+                      : query
+                      ? "Try searching for a different name."
                       : "Requests from people outside your course or department appear here."
                   }
-                  actionLabel={tab === "chats" ? "New message" : undefined}
-                  onAction={tab === "chats" ? () => setPickerOpen(true) : undefined}
+                  actionLabel={tab === "chats" && !query ? "New message" : undefined}
+                  onAction={tab === "chats" && !query ? () => setPickerOpen(true) : undefined}
                 />
               </Card>
             }
@@ -576,6 +885,101 @@ export default function InboxPane({
         onOpened={(id) => openThread(id)}
         mode="message"
       />
+
+      {/* Quick Snap composer (camera / gallery chooser) */}
+      <QuickSnapComposer
+        visible={snapComposerOpen}
+        onClose={() => setSnapComposerOpen(false)}
+      />
+
+      {/* Note Editor Modal */}
+      <Modal visible={noteModalOpen} onClose={handleCloseNoteModal} maxWidth={420} sheetOnMobile={false}>
+        <View style={styles.noteModalCard}>
+          <View style={styles.noteModalHeader}>
+            <Text style={[styles.noteModalTitle, { color: colors.ink }]}>
+              {userNote ? "Edit Note" : "Share a Thought"}
+            </Text>
+            <Pressable
+              onPress={handleCloseNoteModal}
+              disabled={savingNote}
+              style={({ pressed, hovered }: any) => [
+                styles.closeBtn,
+                {
+                  backgroundColor: colors.surfaceSunken,
+                  opacity: pressed ? 0.7 : hovered ? 0.9 : 1,
+                },
+              ]}
+            >
+              <X size={16} color={colors.ink} />
+            </Pressable>
+          </View>
+
+          <Text style={[styles.noteModalSubtitle, { color: colors.inkSoft }]}>
+            Notes appear as a speech bubble above your avatar in messages and on your profile.
+          </Text>
+
+          <View style={[styles.inputContainer, { borderColor: colors.border, backgroundColor: colors.surfaceSunken }]}>
+            <TextInput
+              value={noteDraft}
+              onChangeText={setNoteDraft}
+              placeholder="What's on your mind? (e.g. meet?? pass ako jn)"
+              placeholderTextColor={colors.inkFaint}
+              maxLength={60}
+              autoFocus
+              returnKeyType="send"
+              onSubmitEditing={handleSaveNote}
+              style={[
+                styles.textInput,
+                {
+                  color: colors.ink,
+                  outlineStyle: "none" as any,
+                },
+              ]}
+            />
+            <Text style={[styles.charCount, { color: colors.inkFaint }]}>
+              {noteDraft.length}/60
+            </Text>
+          </View>
+
+          <View style={styles.noteModalActions}>
+            {userNote ? (
+              <Pressable
+                onPress={handleDeleteNote}
+                disabled={savingNote}
+                style={({ pressed, hovered }: any) => [
+                  styles.deleteBtn,
+                  {
+                    borderColor: colors.destructive + "40",
+                    backgroundColor: colors.destructive + "12",
+                    opacity: pressed ? 0.7 : hovered ? 0.9 : 1,
+                  },
+                ]}
+              >
+                <Trash2 size={15} color={colors.destructive} />
+                <Text style={[styles.deleteBtnText, { color: colors.destructive }]}>
+                  Clear
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <View style={{ flex: 1 }} />
+
+            <Button
+              label="Cancel"
+              variant="ghost"
+              onPress={handleCloseNoteModal}
+              disabled={savingNote}
+            />
+            <Button
+              label={savingNote ? "Saving..." : "Share"}
+              variant="primary"
+              loading={savingNote}
+              onPress={handleSaveNote}
+              disabled={savingNote || (!userNote && noteDraft.trim().length === 0)}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -590,9 +994,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
+  },
+  newChatBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
   },
   searchWrap: {
     paddingHorizontal: SPACE.x4,
@@ -602,17 +1013,17 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACE.x2,
-    borderRadius: RADIUS.pill,
+    borderRadius: 22,
     borderWidth: 1,
     paddingHorizontal: SPACE.x3,
-    height: 40,
+    height: 42,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 14.5,
     height: "100%",
-    padding: 0,
+    paddingHorizontal: SPACE.x2,
+    outlineStyle: "none" as any,
   },
   tabsRow: {
     flexDirection: "row",
@@ -641,45 +1052,65 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 4,
   },
-  storiesSection: {
-    paddingVertical: SPACE.x2,
+  snapsSection: {
+    paddingVertical: SPACE.x3,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(150, 150, 150, 0.15)",
-    marginBottom: SPACE.x2,
+    marginBottom: SPACE.x1,
   },
-  storiesContainer: {
+  snapsContainer: {
     paddingHorizontal: SPACE.x4,
     gap: SPACE.x3,
     alignItems: "flex-end",
   },
-  storyItem: {
+  snapItem: {
     alignItems: "center",
-    width: 66,
+    width: 74,
     gap: 4,
+    position: "relative",
+    paddingTop: 24,
   },
   noteBubble: {
-    maxWidth: 68,
+    position: "absolute",
+    top: 0,
+    maxWidth: 82,
     borderRadius: RADIUS.pill,
     borderWidth: 1,
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    marginBottom: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+  },
+  noteBubbleTail: {
+    position: "absolute",
+    bottom: -4,
+    left: "50%",
+    marginLeft: -3,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 3,
+    borderRightWidth: 3,
+    borderTopWidth: 4,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
   },
   noteText: {
-    fontSize: 8.5,
+    fontSize: 9,
     fontWeight: "600",
     textAlign: "center",
   },
-  storyAvatarWrap: {
+  snapAvatarWrap: {
     position: "relative",
   },
-  storyPlusBadge: {
+  snapPlusBadge: {
     position: "absolute",
     bottom: -1,
     right: -1,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -692,17 +1123,39 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     borderWidth: 2,
   },
-  storyName: {
+  elapsedBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1.5,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  snapName: {
     fontSize: 11,
     fontWeight: "600",
     textAlign: "center",
+  },
+  sectionHeader: {
+    paddingHorizontal: SPACE.x4,
+    paddingTop: SPACE.x3,
+    paddingBottom: SPACE.x1,
+  },
+  sectionHeaderText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
   chatRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: SPACE.x3,
     paddingHorizontal: SPACE.x4,
-    paddingVertical: SPACE.x3,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
   },
   avatarContainer: {
     position: "relative",
@@ -710,7 +1163,7 @@ const styles = StyleSheet.create({
   chatDetails: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: 3,
   },
   chatHeaderRow: {
     flexDirection: "row",
@@ -719,46 +1172,90 @@ const styles = StyleSheet.create({
     gap: SPACE.x2,
   },
   chatName: {
-    fontSize: 15,
+    fontSize: 15.5,
     flex: 1,
   },
   chatTime: {
-    fontSize: 11.5,
+    fontSize: 12,
   },
   chatSnippetRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: SPACE.x2,
   },
   chatSnippet: {
-    fontSize: 13,
+    fontSize: 13.5,
     flex: 1,
   },
-  unreadBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-  unreadBadgeText: {
-    color: "#FFF",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  requestCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.x3,
-    padding: SPACE.x3,
-    marginHorizontal: SPACE.x4,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
+  unreadDotBlue: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
   },
   actionBtn: {
     paddingHorizontal: SPACE.x3,
     paddingVertical: 6,
     borderRadius: RADIUS.pill,
+  },
+  noteModalCard: {
+    padding: SPACE.x5,
+    width: "100%",
+  },
+  noteModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACE.x1,
+  },
+  noteModalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noteModalSubtitle: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    marginBottom: SPACE.x4,
+  },
+  inputContainer: {
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    paddingHorizontal: SPACE.x3,
+    paddingVertical: SPACE.x2,
+    marginBottom: SPACE.x4,
+  },
+  textInput: {
+    fontSize: 15,
+    minHeight: 38,
+  },
+  charCount: {
+    fontSize: 11,
+    textAlign: "right",
+    marginTop: 4,
+  },
+  noteModalActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.x2,
+  },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: SPACE.x3,
+    paddingVertical: SPACE.x2,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+  },
+  deleteBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

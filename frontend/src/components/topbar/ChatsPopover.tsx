@@ -236,12 +236,17 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
                     <Text
                       style={[
                         styles.itemName,
-                        { color: colors.ink },
+                        { color: colors.ink, flexShrink: 1 },
                         hasUnread && { fontWeight: "700" },
                       ]}
                       numberOfLines={1}
                     >
                       {peerName}
+                      {c.peer?.note ? (
+                        <Text style={{ fontSize: 11, color: colors.brand, fontWeight: "500" }}>
+                          {" "}· 💭 {c.peer.note}
+                        </Text>
+                      ) : null}
                     </Text>
                     {!!lastTime && (
                       <Text style={[styles.itemTime, { color: colors.inkFaint }]}>
