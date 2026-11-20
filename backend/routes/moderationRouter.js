@@ -19,5 +19,6 @@ router.post("/posts/:id", ...requireModerator, moderationController.moderatePost
 router.post("/comments/:id", ...requireModerator, moderationController.moderateComment);
 router.post("/theses/:id", ...requireModerator, moderationController.moderatePost); // Backwards-compatible alias for thesis posts
 router.post("/message-reports/:id", ...requireModerator, moderationController.moderateMessageReport);
+router.post("/reports/:id", ...requireModerator, moderationController.moderateReport);
 
 module.exports = router;

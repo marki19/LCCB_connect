@@ -603,56 +603,6 @@ const createReport = async (req, res, next) => {
   }
 };
 
-// Admin only - list reports
-const listReports = async (req, res, next) => {
-  try {
-    // Role lives on the profile loaded by loadProfile, not on the auth user.
-    const role = req.profile?.role;
-    if (role !== "admin" && role !== "superadmin") {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-
-    const { status, targetType, limit, cursor } = req.query;
-    const reports = await reportModel.listReports({
-      status: status || null,
-      targetType: targetType || null,
-      limit: clampLimit(limit),
-      cursor: cursor || null,
-    });
-    res.json(reports);
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Admin only - update report status
-const updateReportStatus = async (req, res, next) => {
-  try {
-    const role = req.profile?.role;
-    if (role !== "admin" && role !== "superadmin") {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-
-    const { id } = req.params;
-    const { status } = req.body;
-
-    if (!status) {
-      return res.status(400).json({ error: "status is required" });
-    }
-
-    const report = await reportModel.updateReportStatus(id, status, req.user.id);
-    if (!report) {
-      return res.status(404).json({ message: "Report not found" });
-    }
-    res.json(report);
-  } catch (error) {
-    if (error.code === "INVALID_STATUS") {
-      return res.status(400).json({ error: error.message });
-    }
-    next(error);
-  }
-};
-
 // ============================================================================
 // BLOCK ENDPOINTS
 // ============================================================================
@@ -729,8 +679,6 @@ module.exports = {
   getReposts,
   // Reports
   createReport,
-  listReports,
-  updateReportStatus,
   // Blocks
   blockUser,
   unblockUser,

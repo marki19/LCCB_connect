@@ -57,75 +57,102 @@ const createReport = async (reporterId, targetType, targetId, reason, note = nul
 };
 
 /**
- * List reports (admin only).
- * Supports filtering by status and target_type.
- * 
+ * Open reports for the moderation queue.
+ *
+ * `target_id` has no foreign key, so the target is resolved through LEFT JOINs
+ * on the four target surfaces. The department filter applies to the target
+ * author's department (COALESCE across the joins), mirroring how the post,
+ * comment, and message queues scope on the author. An unresolvable target has
+ * a NULL department, which never matches a department filter — fail-closed, so
+ * only campus admins see those.
+ *
  * @param {Object} options
- * @param {string|null} options.status - Filter by status
- * @param {string|null} options.targetType - Filter by target_type
+ * @param {string|null} options.departmentId - Scope to a department, or null for all
  * @param {number} options.limit - Max rows
- * @param {string|null} options.cursor - Keyset cursor
- * @returns {Promise<Array>} Array of reports
+ * @returns {Promise<Array>} Reports with reporter, target author, and excerpt
  */
-const listReports = async ({ status = null, targetType = null, limit = 100, cursor = null } = {}) => {
+const listOpenReports = async ({ departmentId = null, limit = 100 } = {}) => {
   const params = [];
-  const conditions = [];
-  
-  if (status && VALID_STATUSES.includes(status)) {
-    params.push(status);
-    conditions.push(`status = $${params.length}`);
+  let deptCondition = "";
+  if (departmentId) {
+    params.push(departmentId);
+    deptCondition = `AND target_author.department_id = $${params.length}::uuid`;
   }
-  
-  if (targetType && VALID_TARGET_TYPES.includes(targetType)) {
-    params.push(targetType);
-    conditions.push(`target_type = $${params.length}`);
-  }
-  
-  if (cursor) {
-    const [createdAt, id] = String(cursor).split("|");
-    if (createdAt && id) {
-      params.push(createdAt, id);
-      conditions.push(`(
-        created_at < $${params.length - 1}::timestamptz
-        OR (created_at = $${params.length - 1}::timestamptz AND id < $${params.length}::uuid)
-      )`);
-    }
-  }
-  
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   params.push(limit);
-  
+
   const sql = `
-    SELECT 
-      r.id,
-      r.reporter_id,
-      r.target_type,
-      r.target_id,
-      r.reason,
-      r.note,
-      r.status,
-      r.reviewed_by,
-      r.created_at,
+    SELECT
+      r.id, r.target_type, r.target_id, r.reason, r.note, r.status, r.created_at,
       json_build_object(
-        'id', pr.id,
-        'username', pr.username,
-        'full_name', pr.full_name,
-        'avatar_url', pr.avatar_url
-      ) AS reporter
+        'id', reporter.id,
+        'username', reporter.username,
+        'full_name', reporter.full_name,
+        'avatar_url', reporter.avatar_url
+      ) AS reporter,
+      json_build_object(
+        'id', target_author.id,
+        'username', target_author.username,
+        'full_name', target_author.full_name,
+        'avatar_url', target_author.avatar_url,
+        'department_id', target_author.department_id,
+        'department_name', td.name
+      ) AS author,
+      COALESCE(
+        rp.content,
+        cm.content,
+        mg.body,
+        CASE WHEN r.target_type = 'profile' THEN tp.bio END
+      ) AS excerpt,
+      rp.id AS post_id
     FROM reports r
-    LEFT JOIN profiles pr ON r.reporter_id = pr.id
-    ${whereClause}
-    ORDER BY r.created_at DESC, r.id DESC
+    LEFT JOIN profiles reporter ON reporter.id = r.reporter_id
+    LEFT JOIN posts rp
+      ON r.target_type = 'post' AND rp.id = r.target_id
+    LEFT JOIN comments cm
+      ON r.target_type = 'comment' AND cm.id = r.target_id
+    LEFT JOIN messages mg
+      ON r.target_type = 'message' AND mg.id = r.target_id
+    LEFT JOIN profiles tp
+      ON r.target_type = 'profile' AND tp.id = r.target_id::text
+    LEFT JOIN profiles target_author
+      ON target_author.id = COALESCE(rp.author_id, cm.user_id, mg.sender_id, tp.id)
+    LEFT JOIN departments td ON td.id = target_author.department_id
+    WHERE r.status = 'pending' ${deptCondition}
+    ORDER BY r.created_at DESC
     LIMIT $${params.length};
   `;
-  
   const result = await db.query(sql, params);
   return result.rows;
 };
 
 /**
+ * A single report with the target author's department, for the scope check.
+ * Same join structure as `listOpenReports` but for one id.
+ */
+const getReportForModeration = async (id) => {
+  const sql = `
+    SELECT r.id, r.target_type, r.target_id, r.reporter_id, r.status,
+           target_author.department_id AS author_department_id
+      FROM reports r
+      LEFT JOIN posts rp
+        ON r.target_type = 'post' AND rp.id = r.target_id
+      LEFT JOIN comments cm
+        ON r.target_type = 'comment' AND cm.id = r.target_id
+      LEFT JOIN messages mg
+        ON r.target_type = 'message' AND mg.id = r.target_id
+      LEFT JOIN profiles tp
+        ON r.target_type = 'profile' AND tp.id = r.target_id::text
+      LEFT JOIN profiles target_author
+        ON target_author.id = COALESCE(rp.author_id, cm.user_id, mg.sender_id, tp.id)
+     WHERE r.id = $1;
+  `;
+  const result = await db.query(sql, [id]);
+  return result.rows[0] || null;
+};
+
+/**
  * Update report status (admin only).
- * 
+ *
  * @param {string} reportId - Report UUID
  * @param {string} status - New status
  * @param {string} reviewerId - Admin user ID
@@ -149,23 +176,9 @@ const updateReportStatus = async (reportId, status, reviewerId) => {
   return result.rows[0] || null;
 };
 
-/**
- * Get report by ID (admin only).
- * 
- * @param {string} reportId - Report UUID
- * @returns {Promise<Object|null>} Report or null
- */
-const getReportById = async (reportId) => {
-  const result = await db.query(
-    `SELECT * FROM reports WHERE id = $1`,
-    [reportId]
-  );
-  return result.rows[0] || null;
-};
-
 module.exports = {
   createReport,
-  listReports,
+  listOpenReports,
+  getReportForModeration,
   updateReportStatus,
-  getReportById,
 };

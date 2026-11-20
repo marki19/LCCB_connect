@@ -46,9 +46,31 @@ meantime; the reverse order would drop the key and orphan the object forever.
 - [x] E1 Rail, feed screen, profile screen, inbox — "story" → "snap"
 
 ### F. Reports loop
-- [ ] F1 Surface open `reports` in the moderation queue
-- [ ] F2 Resolve action wired from the queue
-- [ ] F3 Remove now-redundant `GET|PUT /api/reports` if the queue covers them
+
+Design: `POST /api/reports` writes `reports` rows (`status='pending'`) but nothing
+consumed them. The queue now serves them:
+
+- `reportModel.listOpenReports({ departmentId })` — pending rows with the
+  reporter, the target's excerpt/author, and `post_id` (comments) resolved in
+  SQL via LEFT JOINs on posts/comments/messages/profiles. Department scoping
+  resolves the target author's department with a COALESCE across those joins;
+  fail-closed — an unresolvable target (deleted content, no department) matches
+  no department filter, so only campus admins see it.
+- `getModerationQueue` returns them as `contentReports`, added to `totalFlagged`.
+- Resolve mirrors `moderateMessageReport`: `POST /api/moderation/reports/:id`
+  takes `action: 'reviewed' | 'dismissed'`, a reason, the same department scope
+  check on the target author's department, and an audit record. The
+  `reports.status` values `pending|reviewed|dismissed|actioned` stay as they
+  are; the queue never sets `actioned` — hiding/deleting the underlying content
+  is the moderator's separate decision through the existing content actions.
+- Frontend: queue items carry `reportSource: 'message' | 'content'` so the
+  resolve dialog calls the right endpoint.
+- `GET|PUT /api/reports` removed (no frontend caller; the queue is a superset —
+  department-scoped, with target context the raw list never had).
+
+- [x] F1 Surface open `reports` in the moderation queue
+- [x] F2 Resolve action wired from the queue
+- [x] F3 Remove now-redundant `GET|PUT /api/reports` if the queue covers them
 
 ### G. Cleanup
 - [ ] G1 Remove `ALTER TABLE public.theses` blocks from the two legacy scripts
