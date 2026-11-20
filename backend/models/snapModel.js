@@ -247,6 +247,47 @@ const deleteSnap = async (snapId, authorId) => {
   return result.rows[0] || null;
 };
 
+/**
+ * Maintenance: the expired snaps due for purge, oldest expiry first.
+ *
+ * Returns only the row id and the storage key, which is all the sweep needs to
+ * delete the object and then the row.
+ */
+const listExpiredSnaps = async (limit = 200) => {
+  const sql = `
+    SELECT id, media_key
+    FROM public.snaps
+    WHERE expires_at <= NOW()
+    ORDER BY expires_at ASC
+    LIMIT $1;
+  `;
+  const result = await db.query(sql, [limit]);
+  return result.rows;
+};
+
+/**
+ * Maintenance: how many snaps are past expiry. Used by `--dry-run`, which
+ * cannot count by listing without deleting and looping forever.
+ */
+const countExpiredSnaps = async () => {
+  const sql = `SELECT COUNT(*)::int AS count FROM public.snaps WHERE expires_at <= NOW();`;
+  const result = await db.query(sql);
+  return result.rows[0]?.count ?? 0;
+};
+
+/**
+ * Maintenance: removes snap rows by id.
+ *
+ * Views, reactions and comments cascade. Deliberately not author-scoped:
+ * expiry is not a user action, so it does not go through `deleteSnap`.
+ */
+const purgeSnapRows = async (ids) => {
+  if (ids.length === 0) return 0;
+  const sql = `DELETE FROM public.snaps WHERE id = ANY($1::uuid[]);`;
+  const result = await db.query(sql, [ids]);
+  return result.rowCount;
+};
+
 module.exports = {
   createSnap,
   getRailSnaps,
@@ -257,4 +298,7 @@ module.exports = {
   recordReaction,
   removeReaction,
   deleteSnap,
+  listExpiredSnaps,
+  countExpiredSnaps,
+  purgeSnapRows,
 };

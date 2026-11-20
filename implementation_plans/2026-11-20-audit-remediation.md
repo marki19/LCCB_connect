@@ -34,12 +34,16 @@ Source: the security/connectivity audit delivered 2026-11-20. Security findings
 - [x] C6 Tests
 
 ### D. Snap expiry purge
-- [ ] D1 `snapModel.listExpiredSnaps` / `deleteExpiredSnaps`
-- [ ] D2 `scripts/cleanup-expired-snaps.js` — delete rows, then R2 objects
-- [ ] D3 Cover the sequence with a test where the store is stubbed
+- [x] D1 `snapModel.listExpiredSnaps` / `countExpiredSnaps` / `purgeSnapRows`
+- [x] D2 `scripts/cleanup-expired-snaps.js` - delete the R2 object first, then the row
+- [x] D3 Cover the sequence with a test where the store is stubbed
+
+Objects are deleted before their row so a storage failure leaves the row for the
+next run. The row is already past `expires_at`, so no reader can see it in the
+meantime; the reverse order would drop the key and orphan the object forever.
 
 ### E. Naming sweep
-- [ ] E1 Rail, feed screen, profile screen, inbox — "story" → "snap"
+- [x] E1 Rail, feed screen, profile screen, inbox — "story" → "snap"
 
 ### F. Reports loop
 - [ ] F1 Surface open `reports` in the moderation queue
