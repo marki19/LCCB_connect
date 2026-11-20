@@ -21,10 +21,16 @@ type Props = {
 const SUBTYPES: { key: RepositoryType; label: string }[] = [
   { key: "project", label: "Project" },
   { key: "capstone", label: "Capstone" },
-  { key: "thesis", label: "Thesis" },
+  { key: "thesis", label: "Thesis / Research" },
 ];
 
-const THESIS_CATEGORIES = ["Capstone", "Dissertation"];
+const THESIS_CATEGORIES = [
+  "Thesis",
+  "Capstone",
+  "Dissertation",
+  "Research Paper",
+  "Case Study",
+];
 
 export default function RepositoryFields({
   repositoryType,
@@ -71,10 +77,10 @@ export default function RepositoryFields({
         <TextInput
           placeholder={
             repositoryType === "thesis"
-              ? "Thesis / Dissertation title"
+              ? "Thesis / Research paper title"
               : repositoryType === "capstone"
-              ? "Capstone title"
-              : "Project title"
+              ? "Capstone / Final output title"
+              : "Project / Creative work title"
           }
           placeholderTextColor={colors.textTertiary}
           value={values.title}
@@ -90,14 +96,14 @@ export default function RepositoryFields({
         />
       </View>
 
-      {/* Tech Stack (Project & Capstone) */}
+      {/* Tools, Skills, or Materials used (Generalized across all courses) */}
       {repositoryType !== "thesis" && (
         <View style={styles.fieldGroup}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>
-            Technologies (comma-separated)
+            Tools, Materials, or Skills (optional)
           </Text>
           <TextInput
-            placeholder="React Native, Node.js, PostgreSQL"
+            placeholder="e.g. AutoCAD, SPSS, React, Figma, Oil on Canvas, Financial Modeling"
             placeholderTextColor={colors.textTertiary}
             value={values.technologies}
             onChangeText={(technologies) => onChange({ technologies })}
@@ -113,14 +119,14 @@ export default function RepositoryFields({
         </View>
       )}
 
-      {/* Repository / Source Code URL (Project) */}
-      {repositoryType === "project" && (
+      {/* Resource / Portfolio Link (Optional for Project & Capstone) */}
+      {repositoryType !== "thesis" && (
         <View style={styles.fieldGroup}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>
-            Repository URL
+            Project or Resource Link (optional)
           </Text>
           <TextInput
-            placeholder="https://github.com/username/repository"
+            placeholder="https://... (Portfolio, Google Drive, Behance, GitHub, Canva)"
             placeholderTextColor={colors.textTertiary}
             value={values.githubUrl}
             onChangeText={(githubUrl) => onChange({ githubUrl })}
@@ -138,14 +144,14 @@ export default function RepositoryFields({
         </View>
       )}
 
-      {/* Live Demo URL (Project) */}
-      {repositoryType === "project" && (
+      {/* Live Demo or Presentation URL (Optional) */}
+      {repositoryType !== "thesis" && (
         <View style={styles.fieldGroup}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>
-            Live Demo URL
+            Live Demo or Presentation Link (optional)
           </Text>
           <TextInput
-            placeholder="https://my-app.vercel.app"
+            placeholder="https://... (Website, Demo, Slides, Video)"
             placeholderTextColor={colors.textTertiary}
             value={values.liveUrl}
             onChangeText={(liveUrl) => onChange({ liveUrl })}
@@ -198,12 +204,12 @@ export default function RepositoryFields({
         </View>
       )}
 
-      {/* Category for Capstone (free-text or department area) */}
+      {/* Category / Department / Field for Capstone */}
       {repositoryType === "capstone" && (
         <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Category / Field</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Program / Field</Text>
           <TextInput
-            placeholder="e.g. Information Technology, Computer Science"
+            placeholder="e.g. Architecture, Business, Nursing, IT, Education, Fine Arts"
             placeholderTextColor={colors.textTertiary}
             value={values.category}
             onChangeText={(category) => onChange({ category })}
