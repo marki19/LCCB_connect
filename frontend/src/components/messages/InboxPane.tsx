@@ -23,7 +23,7 @@ import {
 } from "lucide-react-native";
 import Avatar from "../Avatar";
 import PeerPicker from "../PeerPicker";
-import StoryActionModal from "../profile/StoryActionModal";
+import QuickSnapComposer from "../snaps/QuickSnapComposer";
 import Modal from "../ui/Modal";
 import Button, { IconButton } from "../ui/Button";
 import { usePresence } from "../../contexts/PresenceContext";
@@ -89,8 +89,8 @@ export default function InboxPane({
   const [refreshing, setRefreshing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Story & Note state
-  const [storyModalOpen, setStoryModalOpen] = useState(false);
+  // Quick Snap & Note state
+  const [snapComposerOpen, setSnapComposerOpen] = useState(false);
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [userNote, setUserNote] = useState<string | null>(profile?.note ?? null);
   const [noteDraft, setNoteDraft] = useState(profile?.note ?? "");
@@ -320,14 +320,14 @@ export default function InboxPane({
   }, [filteredReceived, filteredSent]);
 
   const renderActiveFriends = () => (
-    <View style={styles.storiesSection}>
+    <View style={styles.snapsSection}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.storiesContainer}
+        contentContainerStyle={styles.snapsContainer}
       >
-        {/* Current user: Add story / note */}
-        <View style={styles.storyItem}>
+        {/* Current user: Quick Snap / note */}
+        <View style={styles.snapItem}>
           {/* Note speech bubble perched above avatar */}
           <Pressable
             onPress={() => {
@@ -360,32 +360,32 @@ export default function InboxPane({
 
           <Pressable
             style={({ pressed, hovered }: any) => [
-              styles.storyAvatarWrap,
+              styles.snapAvatarWrap,
               {
                 cursor: "pointer",
                 opacity: pressed ? 0.85 : hovered ? 0.95 : 1,
               },
             ]}
-            onPress={() => setStoryModalOpen(true)}
+            onPress={() => setSnapComposerOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel="Create story"
+            accessibilityLabel="Add a Quick Snap"
           >
             <Avatar
               name={profile?.full_name || profile?.username}
               avatarUrl={profile?.avatar_url}
               size={58}
             />
-            <View style={[styles.storyPlusBadge, { backgroundColor: colors.surfaceSunken, borderColor: colors.surfacePage }]}>
+            <View style={[styles.snapPlusBadge, { backgroundColor: colors.surfaceSunken, borderColor: colors.surfacePage }]}>
               <Plus size={12} color="#FFFFFF" strokeWidth={3} />
             </View>
           </Pressable>
 
-          <Text numberOfLines={1} style={[styles.storyName, { color: colors.inkFaint }]}>
-            Your story
+          <Text numberOfLines={1} style={[styles.snapName, { color: colors.inkFaint }]}>
+            Your snap
           </Text>
         </View>
 
-        {/* Friend stories & active status */}
+        {/* Friends' snaps and active status */}
         {activeRailPeers.map((peer) => {
           const isOnline = modeOf(peer.id) === "online";
           const firstName = (peer.full_name || peer.username || "Friend").split(" ")[0];
@@ -395,7 +395,7 @@ export default function InboxPane({
             <Pressable
               key={peer.id}
               style={({ pressed, hovered }: any) => [
-                styles.storyItem,
+                styles.snapItem,
                 {
                   cursor: "pointer",
                   opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
@@ -433,7 +433,7 @@ export default function InboxPane({
                 />
               </View>
 
-              <View style={styles.storyAvatarWrap}>
+              <View style={styles.snapAvatarWrap}>
                 <Avatar
                   name={peer.full_name || peer.username}
                   avatarUrl={peer.avatar_url}
@@ -465,7 +465,7 @@ export default function InboxPane({
                   </View>
                 )}
               </View>
-              <Text numberOfLines={1} style={[styles.storyName, { color: colors.ink, fontWeight: "600" }]}>
+              <Text numberOfLines={1} style={[styles.snapName, { color: colors.ink, fontWeight: "600" }]}>
                 {firstName}
               </Text>
             </Pressable>
@@ -886,10 +886,10 @@ export default function InboxPane({
         mode="message"
       />
 
-      {/* Story Action Modal (Camera / Gallery chooser) */}
-      <StoryActionModal
-        visible={storyModalOpen}
-        onClose={() => setStoryModalOpen(false)}
+      {/* Quick Snap composer (camera / gallery chooser) */}
+      <QuickSnapComposer
+        visible={snapComposerOpen}
+        onClose={() => setSnapComposerOpen(false)}
       />
 
       {/* Note Editor Modal */}
@@ -1052,18 +1052,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 4,
   },
-  storiesSection: {
+  snapsSection: {
     paddingVertical: SPACE.x3,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(150, 150, 150, 0.15)",
     marginBottom: SPACE.x1,
   },
-  storiesContainer: {
+  snapsContainer: {
     paddingHorizontal: SPACE.x4,
     gap: SPACE.x3,
     alignItems: "flex-end",
   },
-  storyItem: {
+  snapItem: {
     alignItems: "center",
     width: 74,
     gap: 4,
@@ -1100,10 +1100,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
-  storyAvatarWrap: {
+  snapAvatarWrap: {
     position: "relative",
   },
-  storyPlusBadge: {
+  snapPlusBadge: {
     position: "absolute",
     bottom: -1,
     right: -1,
@@ -1134,7 +1134,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  storyName: {
+  snapName: {
     fontSize: 11,
     fontWeight: "600",
     textAlign: "center",

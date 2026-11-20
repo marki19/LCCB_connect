@@ -1,5 +1,7 @@
 import { apiJson } from "./api";
 
+export type SnapAudience = "public" | "friends" | "department" | "private";
+
 export interface SnapItem {
   id: string;
   author_id: string;
@@ -11,7 +13,7 @@ export interface SnapItem {
   media_key: string;
   media_type: "image" | "video";
   caption?: string | null;
-  visibility: "public" | "friends" | "department" | "private";
+  visibility: SnapAudience;
   created_at: string;
   expires_at: string;
   is_viewed?: boolean;
@@ -37,7 +39,7 @@ export interface CreateSnapPayload {
   media_key: string;
   media_type: "image" | "video";
   caption?: string | null;
-  visibility?: "public" | "friends" | "department" | "private";
+  visibility?: SnapAudience;
 }
 
 /**

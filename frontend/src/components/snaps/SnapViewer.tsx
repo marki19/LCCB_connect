@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Modal,
   View,
@@ -8,16 +8,16 @@ import {
   SafeAreaView,
   Animated,
   ActivityIndicator,
-  Platform,
 } from "react-native";
-import { X, Heart, Eye, Trash2, ChevronLeft, ChevronRight } from "lucide-react-native";
+import { X, Heart, Eye, Trash2 } from "lucide-react-native";
 import { AppImage } from "../AppImage";
+import { AppVideo } from "../AppVideo";
 import Avatar from "../Avatar";
 import { resolveFileUrl } from "../../lib/files";
 import { recordSnapView, reactToSnap, unreactSnap, deleteSnap, type SnapGroup, type SnapItem } from "../../lib/snaps";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
-import { RADIUS, SPACE } from "../../lib/tokens";
+import { RADIUS } from "../../lib/tokens";
 
 interface SnapViewerProps {
   visible: boolean;
@@ -28,7 +28,8 @@ interface SnapViewerProps {
   onSnapDeleted?: (snapId: string) => void;
 }
 
-const SNAP_DURATION_MS = 5000;
+/** How long a still image stays on screen. Video uses its own duration. */
+const IMAGE_DURATION_MS = 5000;
 
 export default function SnapViewer({
   visible,
@@ -42,60 +43,38 @@ export default function SnapViewer({
   const { showToast } = useToast();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [reacted, setReacted] = useState(false);
-  const [reactionsCount, setReactionsCount] = useState(0);
-  const [viewsCount, setViewsCount] = useState(0);
 
-  const progressAnim = useRef(new Animated.Value(0)).current;
-
-  // Reset index when group changes
-  useEffect(() => {
-    setCurrentIndex(0);
-  }, [group?.author_id]);
+  // A stable animated value without reading a ref during render.
+  const [progressAnim] = useState(() => new Animated.Value(0));
 
   const currentSnap: SnapItem | undefined = group?.snaps[currentIndex];
   const isMine = currentSnap?.author_id === user?.id;
+  const isVideo = currentSnap?.media_type === "video";
 
-  // Initialize reaction & view counts
-  useEffect(() => {
-    if (currentSnap) {
-      setReacted(Boolean(currentSnap.viewer_reaction));
-      setReactionsCount(currentSnap.reactions_count || 0);
-      setViewsCount(currentSnap.views_count || 0);
+  /**
+   * Reactions live on the server. Only the viewer's own toggle is kept locally,
+   * tagged with the snap it belongs to, so changing snaps never needs an effect
+   * that copies props into state.
+   */
+  const [reactionEdit, setReactionEdit] = useState<{
+    snapId: string;
+    reacted: boolean;
+  } | null>(null);
 
-      // Record view if not own snap
-      if (!isMine) {
-        recordSnapView(currentSnap.id).catch(() => {});
-      }
-    }
-  }, [currentSnap?.id, isMine]);
+  const serverReacted = Boolean(currentSnap?.viewer_reaction);
+  const reacted =
+    reactionEdit && reactionEdit.snapId === currentSnap?.id
+      ? reactionEdit.reacted
+      : serverReacted;
+  const serverReactions = currentSnap?.reactions_count ?? 0;
+  const reactionsCount =
+    serverReactions + (reacted === serverReacted ? 0 : reacted ? 1 : -1);
+  const viewsCount = currentSnap?.views_count ?? 0;
 
-  // Progress Bar Animation
-  useEffect(() => {
-    if (!visible || !group || paused) {
-      progressAnim.stopAnimation();
-      return;
-    }
-
-    progressAnim.setValue(0);
-    const anim = Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: SNAP_DURATION_MS,
-      useNativeDriver: false,
-    });
-
-    anim.start(({ finished }) => {
-      if (finished) {
-        handleNext();
-      }
-    });
-
-    return () => {
-      anim.stop();
-    };
-  }, [visible, currentIndex, group?.author_id, paused]);
-
-  const handleNext = () => {
+  // Declared before the effects that call them: the image timer used to reach a
+  // `const` arrow declared further down, which worked only because the callback
+  // fires asynchronously.
+  const handleNext = useCallback(() => {
     if (!group) return;
     if (currentIndex < group.snaps.length - 1) {
       setCurrentIndex((i) => i + 1);
@@ -104,33 +83,76 @@ export default function SnapViewer({
     } else {
       onClose();
     }
-  };
+  }, [group, currentIndex, onNextGroup, onClose]);
 
-  const handlePrev = () => {
+  const handlePrev = useCallback(() => {
     if (!group) return;
     if (currentIndex > 0) {
       setCurrentIndex((i) => i - 1);
     } else if (onPrevGroup) {
       onPrevGroup();
     }
-  };
+  }, [group, currentIndex, onPrevGroup]);
+
+  // View receipts are a side effect only; every value the UI shows is derived
+  // above, so nothing is copied into state here.
+  useEffect(() => {
+    if (!currentSnap || isMine) return;
+    recordSnapView(currentSnap.id).catch(() => {});
+  }, [currentSnap, isMine]);
+
+  // A video reports its own elapsed time, so clear the bar as soon as the index
+  // moves rather than waiting for first progress from the new media.
+  useEffect(() => {
+    progressAnim.setValue(0);
+  }, [currentIndex, progressAnim]);
+
+  // Still images advance on a fixed timer; videos report their own position and
+  // advance from `onEnd`, so the bar tracks real playback instead of guesswork.
+  useEffect(() => {
+    if (!visible || !group || paused || isVideo) {
+      progressAnim.stopAnimation();
+      return;
+    }
+
+    progressAnim.setValue(0);
+    const anim = Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: IMAGE_DURATION_MS,
+      useNativeDriver: false,
+    });
+
+    anim.start(({ finished }) => {
+      if (finished) handleNext();
+    });
+
+    return () => {
+      anim.stop();
+    };
+  }, [visible, currentIndex, group, paused, isVideo, handleNext, progressAnim]);
+
+  const handleVideoProgress = useCallback(
+    (currentTime: number, duration: number) => {
+      if (!Number.isFinite(duration) || duration <= 0) return;
+      progressAnim.setValue(Math.min(currentTime / duration, 1));
+    },
+    [progressAnim]
+  );
 
   const handleToggleReaction = async () => {
     if (!currentSnap) return;
-    const newReacted = !reacted;
-    setReacted(newReacted);
-    setReactionsCount((c) => (newReacted ? c + 1 : Math.max(0, c - 1)));
+    const next = !reacted;
+    setReactionEdit({ snapId: currentSnap.id, reacted: next });
 
     try {
-      if (newReacted) {
+      if (next) {
         await reactToSnap(currentSnap.id, "heart");
       } else {
         await unreactSnap(currentSnap.id);
       }
     } catch {
-      // Revert on failure
-      setReacted(!newReacted);
-      setReactionsCount((c) => (!newReacted ? c + 1 : Math.max(0, c - 1)));
+      // Drop the local edit so the UI falls back to the server's value.
+      setReactionEdit(null);
     }
   };
 
@@ -138,7 +160,7 @@ export default function SnapViewer({
     if (!currentSnap) return;
     try {
       await deleteSnap(currentSnap.id);
-      showToast({ message: "Story deleted", tone: "info" });
+      showToast({ message: "Snap deleted", tone: "info" });
       onSnapDeleted?.(currentSnap.id);
       if (group && group.snaps.length > 1) {
         handleNext();
@@ -146,7 +168,7 @@ export default function SnapViewer({
         onClose();
       }
     } catch (err: any) {
-      showToast({ message: err?.message || "Failed to delete story", tone: "error" });
+      showToast({ message: err?.message || "Failed to delete snap", tone: "error" });
     }
   };
 
@@ -155,7 +177,6 @@ export default function SnapViewer({
   }
 
   const mediaUrl = resolveFileUrl(currentSnap.media_key);
-  const snapCount = group.snaps.length;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -208,7 +229,7 @@ export default function SnapViewer({
               <Pressable
                 onPress={handleDelete}
                 accessibilityRole="button"
-                accessibilityLabel="Delete story"
+                accessibilityLabel="Delete snap"
                 style={styles.headerIconBtn}
               >
                 <Trash2 size={20} color="#FFFFFF" />
@@ -217,7 +238,7 @@ export default function SnapViewer({
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
-              accessibilityLabel="Close story"
+              accessibilityLabel="Close snap"
               style={styles.headerIconBtn}
             >
               <X size={24} color="#FFFFFF" />
@@ -228,11 +249,24 @@ export default function SnapViewer({
         {/* Media Canvas with Tap Zones */}
         <View style={styles.canvasContainer}>
           {mediaUrl ? (
-            <AppImage
-              source={mediaUrl}
-              style={styles.mediaImage}
-              contentFit="contain"
-            />
+            isVideo ? (
+              <AppVideo
+                source={mediaUrl}
+                style={styles.mediaImage}
+                contentFit="contain"
+                autoPlay
+                paused={paused}
+                nativeControls={false}
+                onProgress={handleVideoProgress}
+                onEnd={handleNext}
+              />
+            ) : (
+              <AppImage
+                source={mediaUrl}
+                style={styles.mediaImage}
+                contentFit="contain"
+              />
+            )
           ) : (
             <View style={styles.loaderWrap}>
               <ActivityIndicator size="large" color="#FFFFFF" />
@@ -276,7 +310,7 @@ export default function SnapViewer({
             <Pressable
               onPress={handleToggleReaction}
               accessibilityRole="button"
-              accessibilityLabel={reacted ? "Unlike story" : "Like story"}
+              accessibilityLabel={reacted ? "Unlike snap" : "Like snap"}
               style={styles.reactionBtn}
             >
               <Heart

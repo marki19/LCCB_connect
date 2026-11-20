@@ -19,14 +19,14 @@ import type { SnapGroup } from "../../lib/snaps";
 interface SnapRailProps {
   groups: SnapGroup[];
   loading?: boolean;
-  onAddStory: () => void;
+  onAddSnap: () => void;
   onOpenGroup: (group: SnapGroup) => void;
 }
 
 export default function SnapRail({
   groups,
   loading = false,
-  onAddStory,
+  onAddSnap,
   onOpenGroup,
 }: SnapRailProps) {
   const { user, profile } = useAuth();
@@ -45,7 +45,7 @@ export default function SnapRail({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Create / Self Story Card */}
+        {/* Your snap, or a card to add one */}
         {selfGroup && selfGroup.snaps.length > 0 ? (
           // Self with active snaps
           <View
@@ -60,7 +60,7 @@ export default function SnapRail({
             <Pressable
               onPress={() => onOpenGroup(selfGroup)}
               accessibilityRole="button"
-              accessibilityLabel="View your story"
+              accessibilityLabel="View your snaps"
               style={({ pressed, hovered }: any) => [
                 {
                   position: "absolute",
@@ -86,15 +86,15 @@ export default function SnapRail({
                 />
               </View>
               <Text style={styles.cardAuthorName} numberOfLines={1}>
-                Your story
+                Your snap
               </Text>
             </Pressable>
 
             {/* Sibling add button, not nested inside another button */}
             <Pressable
-              onPress={onAddStory}
+              onPress={onAddSnap}
               accessibilityRole="button"
-              accessibilityLabel="Add to your story"
+              accessibilityLabel="Add a Quick Snap"
               style={({ pressed, hovered }: any) => [
                 styles.addFloatingBtn,
                 {
@@ -107,11 +107,11 @@ export default function SnapRail({
             </Pressable>
           </View>
         ) : (
-          // Self without active snaps (Create story card)
+          // No active snap yet: a card that starts one
           <Pressable
-            onPress={onAddStory}
+            onPress={onAddSnap}
             accessibilityRole="button"
-            accessibilityLabel="Create story"
+            accessibilityLabel="Add a Quick Snap"
             style={({ pressed, hovered }: any) => [
               styles.card,
               {
@@ -121,27 +121,27 @@ export default function SnapRail({
               },
             ]}
           >
-            <View style={styles.createStoryWrap}>
-              <View style={styles.createStoryTop}>
+            <View style={styles.createSnapWrap}>
+              <View style={styles.createSnapTop}>
                 <Avatar
                   name={profile?.full_name || profile?.username || "You"}
                   avatarUrl={profile?.avatar_url}
                   size={58}
                 />
               </View>
-              <View style={[styles.createStoryBottom, { backgroundColor: colors.surface }]}>
-                <View style={[styles.createStoryPlus, { backgroundColor: colors.brandSolid }]}>
+              <View style={[styles.createSnapBottom, { backgroundColor: colors.surface }]}>
+                <View style={[styles.createSnapPlus, { backgroundColor: colors.brandSolid }]}>
                   <Plus size={18} color="#FFFFFF" strokeWidth={3} />
                 </View>
-                <Text style={[styles.createStoryLabel, { color: colors.ink }]}>
-                  Create story
+                <Text style={[styles.createSnapLabel, { color: colors.ink }]}>
+                  Add a snap
                 </Text>
               </View>
             </View>
           </Pressable>
         )}
 
-        {/* Peer Story Cards */}
+        {/* Peers' snaps */}
         {loading && peerGroups.length === 0 ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="small" color={colors.brand} />
@@ -156,7 +156,7 @@ export default function SnapRail({
                 key={group.author_id}
                 onPress={() => onOpenGroup(group)}
                 accessibilityRole="button"
-                accessibilityLabel={`${group.full_name || group.username}'s story`}
+                accessibilityLabel={`${group.full_name || group.username}'s snaps`}
                 style={({ pressed, hovered }: any) => [
                   styles.card,
                   {
@@ -274,21 +274,21 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  createStoryWrap: {
+  createSnapWrap: {
     flex: 1,
   },
-  createStoryTop: {
+  createSnapTop: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  createStoryBottom: {
+  createSnapBottom: {
     height: 52,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
   },
-  createStoryPlus: {
+  createSnapPlus: {
     position: "absolute",
     top: -16,
     width: 32,
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     borderColor: "#FFFFFF",
     elevation: 4,
   },
-  createStoryLabel: {
+  createSnapLabel: {
     fontSize: 11.5,
     fontWeight: "700",
     marginTop: 14,

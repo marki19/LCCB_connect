@@ -20,7 +20,7 @@ interface ProfileActionsProps {
   onFriendAction: () => void;
   actionBusy: boolean;
   onEditProfile: () => void;
-  onAddStory?: () => void;
+  onAddSnap?: () => void;
   onMore?: () => void;
 }
 
@@ -31,7 +31,7 @@ export default function ProfileActions({
   onFriendAction,
   actionBusy,
   onEditProfile,
-  onAddStory,
+  onAddSnap,
   onMore,
 }: ProfileActionsProps) {
   const { colors } = useTheme();
@@ -39,11 +39,11 @@ export default function ProfileActions({
   if (isSelf) {
     return (
       <View style={styles.row}>
-        {onAddStory && (
+        {onAddSnap && (
           <Pressable
-            onPress={onAddStory}
+            onPress={onAddSnap}
             accessibilityRole="button"
-            accessibilityLabel="Add to story"
+            accessibilityLabel="Add a Quick Snap"
             style={({ pressed, hovered }: any) => [
               styles.actionBtn,
               {
@@ -56,7 +56,7 @@ export default function ProfileActions({
           >
             <Plus size={16} color={colors.textOnBrandSolid} strokeWidth={2.5} />
             <Text style={[styles.btnText, { color: colors.textOnBrandSolid }]}>
-              Add to story
+              Add a snap
             </Text>
           </Pressable>
         )}

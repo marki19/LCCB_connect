@@ -30,7 +30,7 @@ import SettingsSidebar from "../../src/components/SettingsSidebar";
 import Avatar from "../../src/components/Avatar";
 import SnapRail from "../../src/components/snaps/SnapRail";
 import SnapViewer from "../../src/components/snaps/SnapViewer";
-import StoryActionModal from "../../src/components/profile/StoryActionModal";
+import QuickSnapComposer from "../../src/components/snaps/QuickSnapComposer";
 import { getSnapRail, type SnapGroup } from "../../src/lib/snaps";
 import { usePrefetchImages } from "../../src/hooks/usePrefetchImages";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -120,7 +120,7 @@ export default function HomeScreen() {
 
   const [snapGroups, setSnapGroups] = useState<SnapGroup[]>([]);
   const [snapsLoading, setSnapsLoading] = useState(false);
-  const [storyModalOpen, setStoryModalOpen] = useState(false);
+  const [snapComposerOpen, setSnapComposerOpen] = useState(false);
   const [activeSnapGroup, setActiveSnapGroup] = useState<SnapGroup | null>(null);
 
   const fetchSnapRail = useCallback(async () => {
@@ -412,7 +412,7 @@ export default function HomeScreen() {
                     <SnapRail
                       groups={snapGroups}
                       loading={snapsLoading}
-                      onAddStory={() => setStoryModalOpen(true)}
+                      onAddSnap={() => setSnapComposerOpen(true)}
                       onOpenGroup={(group) => setActiveSnapGroup(group)}
                     />
                   </View>
@@ -541,13 +541,15 @@ export default function HomeScreen() {
 
       <SettingsSidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <StoryActionModal
-        visible={storyModalOpen}
-        onClose={() => setStoryModalOpen(false)}
-        onStoryCreated={() => void fetchSnapRail()}
+      <QuickSnapComposer
+        visible={snapComposerOpen}
+        onClose={() => setSnapComposerOpen(false)}
+        onCreated={() => void fetchSnapRail()}
       />
 
       <SnapViewer
+        // Remount per group so playback and counters start at the first snap.
+        key={activeSnapGroup?.author_id ?? "no-snap-group"}
         visible={Boolean(activeSnapGroup)}
         group={activeSnapGroup}
         onClose={() => setActiveSnapGroup(null)}
