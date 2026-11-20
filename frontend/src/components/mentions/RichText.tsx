@@ -28,8 +28,8 @@ export function RichText({ text, mentions, style, numberOfLines }: RichTextProps
             <Text
               key={`mention-${idx}`}
               style={{
-                color: colors.primary,
-                fontWeight: "600",
+                color: colors.action || colors.primary,
+                fontWeight: "700",
               }}
               onPress={(e) => {
                 e?.stopPropagation?.();

@@ -94,27 +94,29 @@ export function renderMentions(
   }
 
   // 2. Find Mentions (@username)
-  if (mentionMap.size > 0) {
-    const mentionRegex = /(?:^|[^\w])@([a-z0-9._]{3,30})/gi;
-    let mentionMatch: RegExpExecArray | null;
-    while ((mentionMatch = mentionRegex.exec(text)) !== null) {
-      const fullMatch = mentionMatch[0];
-      const username = mentionMatch[1];
-      const usernameLower = username.toLowerCase();
-      const token = mentionMap.get(usernameLower);
+  const mentionRegex = /(?:^|[^\w])@([a-z0-9._]{3,30})/gi;
+  let mentionMatch: RegExpExecArray | null;
+  while ((mentionMatch = mentionRegex.exec(text)) !== null) {
+    const fullMatch = mentionMatch[0];
+    const username = mentionMatch[1];
+    const usernameLower = username.toLowerCase();
+    const token = mentionMap.get(usernameLower);
 
-      if (token) {
-        const atIndex =
-          mentionMatch.index + (fullMatch.startsWith("@") ? 0 : fullMatch.indexOf("@"));
-        matches.push({
-          start: atIndex,
-          end: atIndex + 1 + username.length,
-          type: "mention",
-          text: `@${username}`,
-          username: token.username,
-          user_id: token.user_id || token.id,
-        });
-      }
+    // If mentions list is provided with entries, match against token.
+    // If no mentions array is provided, highlight all valid @handles as mentions.
+    const isMention = token || mentionMap.size === 0;
+
+    if (isMention) {
+      const atIndex =
+        mentionMatch.index + (fullMatch.startsWith("@") ? 0 : fullMatch.indexOf("@"));
+      matches.push({
+        start: atIndex,
+        end: atIndex + 1 + username.length,
+        type: "mention",
+        text: `@${username}`,
+        username: token?.username || username,
+        user_id: token?.user_id || token?.id || username,
+      });
     }
   }
 

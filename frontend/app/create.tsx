@@ -333,6 +333,9 @@ export default function CreatePostModal() {
     }
     const results = await pickDocuments();
     if (results && results.length > 0) {
+      if (!title.trim() && postKind === "repository") {
+        setTitle(results[0].name.replace(/\.[^/.]+$/, ""));
+      }
       const remaining = 10 - docList.length;
       const nextDocs: ComposerAttachmentItem[] = [
         ...docList,
@@ -358,7 +361,7 @@ export default function CreatePostModal() {
 
   const isPostValid = Boolean(
     postKind === "repository"
-      ? trimmedTitle.length > 0 && (repositoryType !== "thesis" || docList.length > 0)
+      ? (trimmedTitle.length > 0 || docList.length > 0) && (repositoryType !== "thesis" || docList.length > 0)
       : (trimmedContent.length > 0 || imageUris.length > 0 || docList.length > 0 || previewData)
   );
 
@@ -495,6 +498,8 @@ export default function CreatePostModal() {
         : {};
 
       const mentionIds = mentions.map((m) => m.user_id || m.id).filter(Boolean) as string[];
+      const fallbackTitle = docList[0]?.name ? docList[0].name.replace(/\.[^/.]+$/, "") : null;
+      const resolvedTitle = trimmedTitle || (postKind === "repository" ? fallbackTitle : null) || finalPreviewMetadata?.title || null;
 
       if (isEditing && postId) {
         // Edit mode — PUT /posts/:id
@@ -510,7 +515,7 @@ export default function CreatePostModal() {
           mention_ids: mentionIds,
           content: trimmedContent || undefined,
           type: effectivePostType,
-          title: trimmedTitle || finalPreviewMetadata?.title || null,
+          title: resolvedTitle,
           technologies: techArray,
           github_url: postKind === "repository" && githubUrl.trim() ? githubUrl.trim() : normalizedUrl,
           preview_metadata: finalPreviewMetadata || null,
@@ -535,7 +540,7 @@ export default function CreatePostModal() {
             mention_ids: mentionIds,
             content: trimmedContent || null,
             type: effectivePostType,
-            title: trimmedTitle || finalPreviewMetadata?.title || null,
+            title: resolvedTitle,
             technologies: techArray,
             github_url: postKind === "repository" && githubUrl.trim() ? githubUrl.trim() : normalizedUrl,
             image_url: finalImageKey,
@@ -549,7 +554,10 @@ export default function CreatePostModal() {
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          const errMsg = errData.message || errData.error || "Failed to create post";
+          const errMsg =
+            Array.isArray(errData.fields) && errData.fields.length > 0
+              ? errData.fields.map((f: any) => f.message).join("\n")
+              : (errData.message || errData.error || "Failed to create post");
           if (errData.code === "PROFILE_INCOMPLETE" || errData.code === "VERIFICATION_REQUIRED" || errData.code === "not_verified") {
             if (Platform.OS === "web") {
               const proceed = typeof window !== "undefined" && window.confirm

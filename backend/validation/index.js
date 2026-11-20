@@ -162,7 +162,7 @@ const attachmentSchema = z.preprocess(
 // ---- posts -----------------------------------------------------------------
 const postFields = {
   content: z.string().max(5000).nullable().optional(),
-  type: z.enum(["text", "image", "project", "capstone", "website"]).optional(),
+  type: z.enum(["text", "image", "project", "capstone", "website", "thesis", "discussion"]).optional(),
   kind: z.enum(["discussion", "repository", "announcement"]).optional(),
   repository_type: z.enum(["project", "capstone", "thesis"]).nullable().optional(),
   repository_category: optionalText(100),

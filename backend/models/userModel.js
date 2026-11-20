@@ -196,6 +196,15 @@ const getAllUsers = async ({
 const getPublicProfile = async (targetId, viewerId = null) => {
   if (!targetId) return null;
 
+  // Resolve target UUID if targetId is username or UUID
+  let resolvedTargetId = targetId;
+  const targetCheck = await db.query(
+    `SELECT id FROM public.profiles WHERE id = $1 OR LOWER(username) = LOWER($1) LIMIT 1`,
+    [targetId]
+  );
+  if (!targetCheck.rows[0]) return null;
+  resolvedTargetId = targetCheck.rows[0].id;
+
   // 1. Block check: if blocked in either direction, profile is hidden
   if (viewerId) {
     const blockCheck = await db.query(
@@ -204,7 +213,7 @@ const getPublicProfile = async (targetId, viewerId = null) => {
         WHERE (b.blocker_id = $1 AND b.blocked_id = $2)
            OR (b.blocker_id = $2 AND b.blocked_id = $1)
       ) AS is_blocked`,
-      [viewerId, targetId]
+      [viewerId, resolvedTargetId]
     );
     if (blockCheck.rows[0]?.is_blocked) {
       return null;
@@ -269,7 +278,7 @@ const getPublicProfile = async (targetId, viewerId = null) => {
     WHERE p.id = $1;
   `;
 
-  const result = await db.query(sql, [targetId, viewerId]);
+  const result = await db.query(sql, [resolvedTargetId, viewerId]);
   const row = result.rows[0];
   if (!row) return null;
 
