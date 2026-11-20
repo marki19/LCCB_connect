@@ -465,14 +465,12 @@ export default function CreatePostModal() {
           storage_key: key,
           file_name: `image-${i + 1}.${key.split('.').pop() || 'jpg'}`,
           mime_type: key.endsWith('.png') ? 'image/png' : key.endsWith('.webp') ? 'image/webp' : 'image/jpeg',
-          sort_order: i,
         })),
-        ...uploadedDocs.map((doc, i) => ({
+        ...uploadedDocs.map((doc) => ({
           storage_key: doc.key,
           file_name: doc.name,
           mime_type: normalizeMimeType(doc.name, doc.mime),
           size_bytes: doc.size ?? null,
-          sort_order: finalImageKeys.length + i,
         })),
       ];
 
