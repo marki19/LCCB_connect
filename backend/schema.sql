@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   year_level TEXT,
   role TEXT DEFAULT 'user' CHECK (
     role IN (
-      'user', 'student', 'faculty', 'departmentAdmin', 'department_admin',
+      'guest', 'user', 'student', 'faculty', 'departmentAdmin', 'department_admin',
       'admin', 'superadmin', 'superAdmin'
     )
   ),

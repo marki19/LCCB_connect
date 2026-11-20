@@ -2,20 +2,35 @@ require("./env.helper");
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const db = require("../db");
 const postModel = require("../models/postModel");
 
 let userId;
 let createdPostIds = [];
+let createdUserId = null;
 
 before(async () => {
   const res = await db.query("SELECT id FROM profiles LIMIT 1");
-  userId = res.rows[0].id;
+  if (res.rows.length > 0) {
+    userId = res.rows[0].id;
+  } else {
+    createdUserId = crypto.randomUUID();
+    userId = createdUserId;
+    await db.query(
+      `INSERT INTO public.profiles (id, username, full_name, role)
+       VALUES ($1, $2, $3, 'student')`,
+      [createdUserId, `test_att_${Date.now()}`, "Attachment Tester"]
+    );
+  }
 });
 
 after(async () => {
   if (createdPostIds.length > 0) {
     await db.query("DELETE FROM posts WHERE id = ANY($1::uuid[])", [createdPostIds]);
+  }
+  if (createdUserId) {
+    await db.query("DELETE FROM profiles WHERE id = $1", [createdUserId]);
   }
   await db.pool.end();
 });
