@@ -6,6 +6,9 @@
 --    'private' (hidden from public profile).
 
 ALTER TABLE public.profiles
+  DROP CONSTRAINT IF EXISTS profiles_role_check;
+
+ALTER TABLE public.profiles
   DROP CONSTRAINT IF EXISTS chk_profiles_role;
 
 ALTER TABLE public.profiles
