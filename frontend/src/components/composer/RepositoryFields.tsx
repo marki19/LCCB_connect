@@ -77,10 +77,10 @@ export default function RepositoryFields({
         <TextInput
           placeholder={
             repositoryType === "thesis"
-              ? "Thesis / Research paper title"
+              ? "Thesis title"
               : repositoryType === "capstone"
-              ? "Capstone / Final output title"
-              : "Project / Creative work title"
+              ? "Capstone title"
+              : "Project title"
           }
           placeholderTextColor={colors.textTertiary}
           value={values.title}
@@ -96,14 +96,14 @@ export default function RepositoryFields({
         />
       </View>
 
-      {/* Tools, Skills, or Materials used (Generalized across all courses) */}
+      {/* Tools or skills */}
       {repositoryType !== "thesis" && (
         <View style={styles.fieldGroup}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>
-            Tools, Materials, or Skills (optional)
+            Tools or skills (optional)
           </Text>
           <TextInput
-            placeholder="e.g. AutoCAD, SPSS, React, Figma, Oil on Canvas, Financial Modeling"
+            placeholder="e.g. React, Figma, AutoCAD"
             placeholderTextColor={colors.textTertiary}
             value={values.technologies}
             onChangeText={(technologies) => onChange({ technologies })}
@@ -119,14 +119,14 @@ export default function RepositoryFields({
         </View>
       )}
 
-      {/* Resource / Portfolio Link (Optional for Project & Capstone) */}
+      {/* Project or Resource Link */}
       {repositoryType !== "thesis" && (
         <View style={styles.fieldGroup}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>
-            Project or Resource Link (optional)
+            Project link (optional)
           </Text>
           <TextInput
-            placeholder="https://... (Portfolio, Google Drive, Behance, GitHub, Canva)"
+            placeholder="https://..."
             placeholderTextColor={colors.textTertiary}
             value={values.githubUrl}
             onChangeText={(githubUrl) => onChange({ githubUrl })}
@@ -144,14 +144,14 @@ export default function RepositoryFields({
         </View>
       )}
 
-      {/* Live Demo or Presentation URL (Optional) */}
-      {repositoryType !== "thesis" && (
+      {/* Live Demo URL (Project only) */}
+      {repositoryType === "project" && (
         <View style={styles.fieldGroup}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>
-            Live Demo or Presentation Link (optional)
+            Live demo (optional)
           </Text>
           <TextInput
-            placeholder="https://... (Website, Demo, Slides, Video)"
+            placeholder="https://..."
             placeholderTextColor={colors.textTertiary}
             value={values.liveUrl}
             onChangeText={(liveUrl) => onChange({ liveUrl })}
@@ -209,7 +209,7 @@ export default function RepositoryFields({
         <View style={styles.fieldGroup}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>Program / Field</Text>
           <TextInput
-            placeholder="e.g. Architecture, Business, Nursing, IT, Education, Fine Arts"
+            placeholder="e.g. Architecture, BSIT, Nursing"
             placeholderTextColor={colors.textTertiary}
             value={values.category}
             onChangeText={(category) => onChange({ category })}
