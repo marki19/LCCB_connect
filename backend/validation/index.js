@@ -575,6 +575,17 @@ const createSnapSchema = z
   })
   .strict();
 
+/**
+ * A comment body: required, trimmed, and bounded. Trimming happens here so the
+ * stored value and the rendered value can never disagree on whitespace.
+ */
+const createSnapCommentSchema = z
+  .object({
+    body: z.string().trim().min(1, "Comment cannot be empty").max(500),
+    parent_id: requiredUuid().optional(),
+  })
+  .strict();
+
 const friendRequestSchema = z.object({ addressee_id: requiredUuid() }).strict();
 
 // ---- admin console (SPEC-superadmin-console.md) ----------------------------
@@ -769,4 +780,5 @@ const validate = (schema) => (req, res, next) => {
     mfaChallengeSchema,
     createSnapSchema,
     snapReactionSchema,
+    createSnapCommentSchema,
   };

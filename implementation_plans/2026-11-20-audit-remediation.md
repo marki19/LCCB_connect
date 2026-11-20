@@ -26,12 +26,12 @@ Source: the security/connectivity audit delivered 2026-11-20. Security findings
 - [x] B3 Rename the component and its copy to Quick Snap
 
 ### C. Snap comments and replies
-- [ ] C1 Migration `061_snap_comments.sql` (table + RLS + index)
-- [ ] C2 `snapCommentModel` with visibility-gated reads
-- [ ] C3 Read/write routes under `/api/snaps/:id/comments`, `requireVerified` on writes
-- [ ] C4 Validation schemas
-- [ ] C5 Comment sheet in the viewer
-- [ ] C6 Tests
+- [x] C1 Migration `061_snap_comments.sql` (table + RLS + index)
+- [x] C2 `snapCommentModel` with visibility-gated reads
+- [x] C3 Read/write routes under `/api/snaps/:id/comments`, `requireVerified` on writes
+- [x] C4 Validation schemas
+- [x] C5 Comment sheet in the viewer
+- [x] C6 Tests
 
 ### D. Snap expiry purge
 - [ ] D1 `snapModel.listExpiredSnaps` / `deleteExpiredSnaps`

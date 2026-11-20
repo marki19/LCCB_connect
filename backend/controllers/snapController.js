@@ -1,4 +1,5 @@
 const snapModel = require("../models/snapModel");
+const snapCommentModel = require("../models/snapCommentModel");
 
 /**
  * Creates a new snap.
@@ -133,6 +134,59 @@ const unreact = async (req, res, next) => {
 };
 
 /**
+ * Returns a snap's comments and replies.
+ *
+ * Same visibility gate as every other snap read: a comment on a snap the caller
+ * cannot see must not leak the snap's existence.
+ */
+const listComments = async (req, res, next) => {
+  try {
+    if (!(await requireVisibleSnap(req, res))) return;
+    const comments = await snapCommentModel.listComments(req.params.id);
+    res.json({ comments });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Adds a comment, or a reply to a top-level comment on the same snap.
+ *
+ * The parent is checked before insert so a reply can never attach to another
+ * snap's thread or nest a second level.
+ */
+const createComment = async (req, res, next) => {
+  try {
+    if (!(await requireVisibleSnap(req, res))) return;
+
+    const { body, parent_id } = req.body;
+
+    if (parent_id) {
+      const validParent = await snapCommentModel.parentIsTopLevelOfSnap(
+        parent_id,
+        req.params.id
+      );
+      if (!validParent) {
+        return res.status(400).json({
+          error: "parent_id must be a top-level comment on this snap",
+        });
+      }
+    }
+
+    const comment = await snapCommentModel.createComment({
+      snapId: req.params.id,
+      authorId: req.user.id,
+      parentId: parent_id || null,
+      body,
+    });
+
+    res.status(201).json(comment);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Deletes author's own snap.
  */
 const deleteSnap = async (req, res, next) => {
@@ -158,4 +212,6 @@ module.exports = {
   react,
   unreact,
   deleteSnap,
+  listComments,
+  createComment,
 };

@@ -9,10 +9,11 @@ import {
   Animated,
   ActivityIndicator,
 } from "react-native";
-import { X, Heart, Eye, Trash2 } from "lucide-react-native";
+import { X, Heart, Eye, Trash2, MessageCircle } from "lucide-react-native";
 import { AppImage } from "../AppImage";
 import { AppVideo } from "../AppVideo";
 import Avatar from "../Avatar";
+import SnapCommentsSheet from "./SnapCommentsSheet";
 import { resolveFileUrl } from "../../lib/files";
 import { recordSnapView, reactToSnap, unreactSnap, deleteSnap, type SnapGroup, type SnapItem } from "../../lib/snaps";
 import { useAuth } from "../../contexts/AuthContext";
@@ -43,6 +44,9 @@ export default function SnapViewer({
   const { showToast } = useToast();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  // Counts are cached per snap so the button never shows another snap's number.
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
 
   // A stable animated value without reading a ref during render.
   const [progressAnim] = useState(() => new Animated.Value(0));
@@ -70,6 +74,7 @@ export default function SnapViewer({
   const reactionsCount =
     serverReactions + (reacted === serverReacted ? 0 : reacted ? 1 : -1);
   const viewsCount = currentSnap?.views_count ?? 0;
+  const commentCount = (currentSnap && commentCounts[currentSnap.id]) || 0;
 
   // Declared before the effects that call them: the image timer used to reach a
   // `const` arrow declared further down, which worked only because the callback
@@ -299,31 +304,62 @@ export default function SnapViewer({
 
         {/* Bottom Interactive Bar */}
         <View style={styles.bottomBar}>
-          {isMine ? (
-            <View style={styles.viewsCounter}>
-              <Eye size={18} color="#FFFFFF" />
-              <Text style={styles.viewsCountText}>
-                {viewsCount} {viewsCount === 1 ? "view" : "views"}
-              </Text>
-            </View>
-          ) : (
-            <Pressable
-              onPress={handleToggleReaction}
-              accessibilityRole="button"
-              accessibilityLabel={reacted ? "Unlike snap" : "Like snap"}
-              style={styles.reactionBtn}
-            >
-              <Heart
-                size={26}
-                color={reacted ? "#EF4444" : "#FFFFFF"}
-                fill={reacted ? "#EF4444" : "transparent"}
-              />
-              {reactionsCount > 0 && (
-                <Text style={styles.reactionCountText}>{reactionsCount}</Text>
-              )}
-            </Pressable>
-          )}
+          <View style={styles.bottomLeft}>
+            {isMine ? (
+              <View style={styles.viewsCounter}>
+                <Eye size={18} color="#FFFFFF" />
+                <Text style={styles.viewsCountText}>
+                  {viewsCount} {viewsCount === 1 ? "view" : "views"}
+                </Text>
+              </View>
+            ) : (
+              <Pressable
+                onPress={handleToggleReaction}
+                accessibilityRole="button"
+                accessibilityLabel={reacted ? "Unlike snap" : "Like snap"}
+                style={styles.reactionBtn}
+              >
+                <Heart
+                  size={26}
+                  color={reacted ? "#EF4444" : "#FFFFFF"}
+                  fill={reacted ? "#EF4444" : "transparent"}
+                />
+                {reactionsCount > 0 && (
+                  <Text style={styles.reactionCountText}>{reactionsCount}</Text>
+                )}
+              </Pressable>
+            )}
+          </View>
+
+          <Pressable
+            onPress={() => {
+              setCommentsOpen(true);
+              // Stop the story clock while the reader is typing.
+              setPaused(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Comments"
+            style={styles.reactionBtn}
+          >
+            <MessageCircle size={24} color="#FFFFFF" />
+            {commentCount > 0 && (
+              <Text style={styles.reactionCountText}>{commentCount}</Text>
+            )}
+          </Pressable>
         </View>
+
+        {commentsOpen && (
+          <SnapCommentsSheet
+            snapId={currentSnap.id}
+            onClose={() => {
+              setCommentsOpen(false);
+              setPaused(false);
+            }}
+            onCountChange={(count) =>
+              setCommentCounts((prev) => ({ ...prev, [currentSnap.id]: count }))
+            }
+          />
+        )}
       </SafeAreaView>
     </Modal>
   );
@@ -441,10 +477,14 @@ const styles = StyleSheet.create({
   bottomBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
     zIndex: 20,
+  },
+  bottomLeft: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   reactionBtn: {
     flexDirection: "row",
