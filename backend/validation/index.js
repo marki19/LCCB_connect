@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const { normalizeRole, SELECTABLE_ROLES } = require("../utils/roles");
+const { parseKey } = require("../services/filePolicy");
 
 /**
  * Request body schemas + a `validate` middleware.
@@ -549,9 +550,25 @@ const snapReactionSchema = z
   })
   .strict();
 
+/**
+ * A snap's media must be a key the uploader produced: `snaps/<32-hex>.<ext>`.
+ *
+ * Anything else — an absolute URL, another category's key, a traversal path —
+ * is refused. Without this a snap could point at an off-platform host, turning
+ * every viewer into a beacon for whoever owns that URL.
+ */
+const SnapMediaKey = z
+  .string()
+  .trim()
+  .min(1)
+  .max(500)
+  .refine((value) => parseKey(value)?.category === "snaps", {
+    message: "media_key must be a snaps/ storage key",
+  });
+
 const createSnapSchema = z
   .object({
-    media_key: z.string().trim().min(1).max(500),
+    media_key: SnapMediaKey,
     media_type: z.enum(["image", "video"]),
     caption: z.string().trim().max(300).nullable().optional(),
     visibility: z.enum(["public", "friends", "department", "private"]).optional().default("public"),

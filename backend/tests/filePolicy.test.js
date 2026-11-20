@@ -37,14 +37,16 @@ describe("category model", () => {
     );
   });
 
-  test("treats theses and documents as private", () => {
+  test("treats theses, documents, and snaps as private", () => {
     assert.equal(isPublicCategory("avatars"), true);
     assert.equal(isPublicCategory("posts"), true);
     assert.equal(isPublicCategory("videos"), true);
-    assert.equal(isPublicCategory("snaps"), true);
     assert.equal(isPublicCategory("covers"), true);
     assert.equal(isPublicCategory("theses"), false);
     assert.equal(isPublicCategory("documents"), false);
+    // Snap media expires after 24 hours and is audience-scoped, so it must
+    // never be fetchable without a session.
+    assert.equal(isPublicCategory("snaps"), false);
   });
 
   test("defines a rule set for every category", () => {

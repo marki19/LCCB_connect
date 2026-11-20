@@ -3,6 +3,11 @@ import { apiJson } from "./api";
 export interface SnapItem {
   id: string;
   author_id: string;
+  /**
+   * Ready to render. The API signs the stored key before serialising, so this
+   * is a short-lived https URL, not a bucket key — pass it straight to
+   * `resolveFileUrl`, never reconstruct `/api/files/snaps/...` yourself.
+   */
   media_key: string;
   media_type: "image" | "video";
   caption?: string | null;

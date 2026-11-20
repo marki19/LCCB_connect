@@ -175,6 +175,24 @@ const getSnapById = async (snapId, viewerId) => {
 };
 
 /**
+ * Reports whether a snap is currently visible to a viewer.
+ *
+ * Writes must consult this before touching `snap_views` / `snap_reactions`:
+ * reading through `visible_snaps` alone would let any authenticated caller
+ * react to an expired, hidden, or out-of-audience snap by id.
+ */
+const isSnapVisible = async (snapId, viewerId) => {
+  const sql = `
+    SELECT 1
+      FROM public.visible_snaps($2) s
+     WHERE s.id = $1
+     LIMIT 1;
+  `;
+  const result = await db.query(sql, [snapId, viewerId]);
+  return result.rowCount > 0;
+};
+
+/**
  * Records a snap view by a viewer.
  */
 const recordView = async (snapId, viewerId) => {
@@ -234,6 +252,7 @@ module.exports = {
   getRailSnaps,
   getUserSnaps,
   getSnapById,
+  isSnapVisible,
   recordView,
   recordReaction,
   removeReaction,

@@ -14,10 +14,15 @@ const CATEGORIES = ["avatars", "posts", "theses", "documents", "videos", "snaps"
 
 /**
  * Categories whose contents are safe for anonymous visitors: profile pictures,
- * post images, video attachments, 24-hour snaps, and cover photos. Everything
- * else is gated behind an ownership check.
+ * post images, video attachments, and cover photos.
+ *
+ * Snap media is deliberately absent. A snap expires after 24 hours and is
+ * audience-scoped (public / friends / department / private), so serving its
+ * bytes from an unauthenticated, permanently cached URL would break both
+ * promises. Snaps are resolved through the visibility-checked file route
+ * instead.
  */
-const PUBLIC_CATEGORIES = ["avatars", "posts", "videos", "snaps", "covers"];
+const PUBLIC_CATEGORIES = ["avatars", "posts", "videos", "covers"];
 
 const PRIVATE_CATEGORIES = CATEGORIES.filter((c) => !PUBLIC_CATEGORIES.includes(c));
 

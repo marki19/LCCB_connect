@@ -69,10 +69,29 @@ const getSnap = async (req, res, next) => {
 };
 
 /**
+ * Verifies the caller may act on this snap before any write.
+ *
+ * Snap reads already go through `visible_snaps`, but a write addressed by id
+ * would otherwise bypass that: an expired, hidden, or out-of-audience snap is
+ * still a valid `snap_views` / `snap_reactions` target. Sends 404 itself so an
+ * invisible snap is indistinguishable from a missing one, and returns `false`
+ * so the caller can stop.
+ */
+async function requireVisibleSnap(req, res) {
+  const visible = await snapModel.isSnapVisible(req.params.id, req.user.id);
+  if (!visible) {
+    res.status(404).json({ error: "Snap not found or expired" });
+    return false;
+  }
+  return true;
+}
+
+/**
  * Records a snap view by the current user.
  */
 const recordView = async (req, res, next) => {
   try {
+    if (!(await requireVisibleSnap(req, res))) return;
     const snapId = req.params.id;
     const viewerId = req.user.id;
     const view = await snapModel.recordView(snapId, viewerId);
@@ -87,6 +106,7 @@ const recordView = async (req, res, next) => {
  */
 const react = async (req, res, next) => {
   try {
+    if (!(await requireVisibleSnap(req, res))) return;
     const snapId = req.params.id;
     const userId = req.user.id;
     const reaction = req.body?.reaction || "heart";
@@ -102,6 +122,7 @@ const react = async (req, res, next) => {
  */
 const unreact = async (req, res, next) => {
   try {
+    if (!(await requireVisibleSnap(req, res))) return;
     const snapId = req.params.id;
     const userId = req.user.id;
     await snapModel.removeReaction(snapId, userId);
