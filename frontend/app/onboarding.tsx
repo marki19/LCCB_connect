@@ -365,7 +365,7 @@ export default function OnboardingScreen() {
               >
                 <Text style={{ fontSize: 28 }}>✅</Text>
               </View>
-              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>You're verified</Text>
+              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>You&apos;re verified</Text>
               <Text
                 style={{
                   ...TYPE.body,

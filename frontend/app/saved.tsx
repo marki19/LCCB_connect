@@ -286,7 +286,7 @@ export default function SavedPostsScreen() {
               <Text style={{ fontWeight: "700", color: colors.textPrimary }}>
                 {item.author?.name || "Author"}
               </Text>
-              's post
+              &apos;s post
             </Text>
           </TouchableOpacity>
 

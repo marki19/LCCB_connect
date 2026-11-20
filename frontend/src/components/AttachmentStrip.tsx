@@ -1,7 +1,8 @@
-import React from "react";
-import { View, Text, TouchableOpacity, Linking, StyleSheet } from "react-native";
-import { FileText, ExternalLink, Download } from "lucide-react-native";
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { FileText, Eye } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
+import FilePreviewModal, { FilePreviewItem } from "./files/FilePreviewModal";
 import type { PostAttachment } from "../types";
 
 type Props = {
@@ -17,6 +18,7 @@ function formatSize(bytes?: number | null): string {
 
 export default function AttachmentStrip({ attachments }: Props) {
   const { colors } = useTheme();
+  const [previewDoc, setPreviewDoc] = useState<FilePreviewItem | null>(null);
 
   if (!attachments || attachments.length === 0) return null;
 
@@ -27,14 +29,6 @@ export default function AttachmentStrip({ attachments }: Props) {
 
   if (docs.length === 0) return null;
 
-  const handleOpenDoc = (url?: string) => {
-    if (url) {
-      Linking.openURL(url).catch((err) => {
-        console.error("Failed to open document URL:", err);
-      });
-    }
-  };
-
   return (
     <View style={styles.container}>
       <Text style={[styles.header, { color: colors.textTertiary }]}>
@@ -43,13 +37,19 @@ export default function AttachmentStrip({ attachments }: Props) {
       <View style={styles.list}>
         {docs.map((doc, idx) => {
           const formattedSize = formatSize(doc.size_bytes);
-          const hasUrl = Boolean(doc.url);
 
           return (
             <TouchableOpacity
               key={doc.id || doc.storage_key || idx}
-              onPress={() => handleOpenDoc(doc.url)}
-              disabled={!hasUrl}
+              onPress={() =>
+                setPreviewDoc({
+                  url: doc.url,
+                  storage_key: doc.storage_key,
+                  file_name: doc.file_name,
+                  mime_type: doc.mime_type,
+                  size_bytes: doc.size_bytes,
+                })
+              }
               activeOpacity={0.75}
               style={[
                 styles.chip,
@@ -59,7 +59,7 @@ export default function AttachmentStrip({ attachments }: Props) {
                 },
               ]}
               accessibilityRole="button"
-              accessibilityLabel={`Open document ${doc.file_name}`}
+              accessibilityLabel={`Preview document ${doc.file_name}`}
             >
               <View style={[styles.iconWrap, { backgroundColor: colors.actionSurface }]}>
                 <FileText size={16} color={colors.action} />
@@ -80,13 +80,19 @@ export default function AttachmentStrip({ attachments }: Props) {
                 ) : null}
               </View>
 
-              {hasUrl && (
-                <ExternalLink size={14} color={colors.textTertiary} style={styles.openIcon} />
-              )}
+              <View style={styles.previewIconWrap}>
+                <Eye size={15} color={colors.textTertiary} />
+              </View>
             </TouchableOpacity>
           );
         })}
       </View>
+
+      <FilePreviewModal
+        visible={Boolean(previewDoc)}
+        file={previewDoc}
+        onClose={() => setPreviewDoc(null)}
+      />
     </View>
   );
 }
@@ -136,5 +142,9 @@ const styles = StyleSheet.create({
   },
   openIcon: {
     marginLeft: 4,
+  },
+  previewIconWrap: {
+    marginLeft: 4,
+    padding: 2,
   },
 });

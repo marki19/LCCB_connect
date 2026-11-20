@@ -371,7 +371,7 @@ export default function DesktopTopBar({
                 >
                   <Search size={14} color={colors.action} style={{ marginRight: 6 }} />
                   <Text style={[styles.allResultsText, { color: colors.action }]}>
-                    See all results for "{searchQuery}"
+                    See all results for &quot;{searchQuery}&quot;
                   </Text>
                 </Pressable>
               </View>

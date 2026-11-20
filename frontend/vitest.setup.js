@@ -147,6 +147,17 @@ vi.mock("expo-document-picker", () => ({
   getDocumentAsync: vi.fn().mockResolvedValue({ canceled: true }),
 }));
 
+vi.mock("expo-image", () => ({
+  Image: ({ testID, ...props }) => {
+    const img = document.createElement("img");
+    if (testID) img.setAttribute("data-testid", testID);
+    Object.entries(props).forEach(([key, value]) => {
+      if (key !== "children" && key !== "source") img.setAttribute(key, String(value));
+    });
+    return img;
+  },
+}));
+
 vi.mock("expo-blob", () => ({}));
 
 vi.mock("expo-constants", () => ({

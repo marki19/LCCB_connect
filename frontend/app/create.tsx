@@ -44,6 +44,7 @@ import {
   pickImage,
   pickMultipleImages,
   pickDocuments,
+  normalizeMimeType,
   MAX_UPLOAD_BYTES,
 } from "../src/lib/upload";
 import { apiFetch, updatePost } from "../src/lib/api";
@@ -466,7 +467,7 @@ export default function CreatePostModal() {
         ...uploadedDocs.map((doc, i) => ({
           storage_key: doc.key,
           file_name: doc.name,
-          mime_type: doc.mime,
+          mime_type: normalizeMimeType(doc.name, doc.mime),
           size_bytes: doc.size ?? null,
           sort_order: finalImageKeys.length + i,
         })),
