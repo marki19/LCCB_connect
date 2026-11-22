@@ -1255,8 +1255,8 @@ async function refreshSession(req, res, next) {
       // Rotate: revoke the used refresh token and mint fresh tokens
       await nativeAuth.revokeRefreshToken(decoded.jti).catch(() => {});
       const session = await nativeAuth.signTokens(profile, { aal });
-      const account_kind = isSchoolAccount(email) ? "school" : "outsider";
-    return sendTokens(res, session, 200, { user: profile, account_kind });
+      const account_kind = isSchoolAccount(profile?.email || decoded?.email) ? "school" : "outsider";
+      return sendTokens(res, session, 200, { user: profile, account_kind });
     }
 
     return res.status(401).json({ error: "Invalid or expired refresh token" });
