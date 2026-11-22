@@ -232,6 +232,16 @@ export default function HomeScreen() {
               kind: row.kind || "post",
               author_department_id: row.author_department_id || null,
               author_course_id: row.author_course_id || null,
+              repository_type: row.repository_type || null,
+              repository_category: row.repository_category || null,
+              live_url: row.live_url || null,
+              attachments: Array.isArray(row.attachments)
+                ? row.attachments.map((att: any) => ({
+                    ...att,
+                    url: resolveFileUrl(att.url || att.storage_key),
+                  }))
+                : [],
+              mentions: Array.isArray(row.mentions) ? row.mentions : [],
             };
 
             // Handle reposts: backend returns kind="repost" with embedded original + reposter info

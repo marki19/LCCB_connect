@@ -10,16 +10,6 @@ async function applyOptimizations() {
     CREATE INDEX IF NOT EXISTS idx_likes_post ON public.likes(post_id);
     CREATE INDEX IF NOT EXISTS idx_comments_post ON public.comments(post_id);
 
-    DO $$
-    BEGIN
-      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'theses') THEN
-        CREATE INDEX IF NOT EXISTS idx_theses_uploader ON public.theses(uploader_id);
-        CREATE INDEX IF NOT EXISTS idx_theses_created_at ON public.theses(created_at DESC);
-        ALTER TABLE public.theses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-      END IF;
-    END
-    $$;
-
     -- 2. Add updated_at timestamps
     ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();

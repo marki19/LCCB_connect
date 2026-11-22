@@ -37,6 +37,10 @@ export default function NoteBubble({
 
   const hasNote = Boolean(note && note.trim().length > 0);
 
+  const handleCloseModal = useCallback(() => {
+    if (!saving) setModalOpen(false);
+  }, [saving]);
+
   // If not owner and has no note, don't render anything
   if (!isSelf && !hasNote) {
     return null;
@@ -47,10 +51,6 @@ export default function NoteBubble({
     setNoteInput(note || "");
     setModalOpen(true);
   };
-
-  const handleCloseModal = useCallback(() => {
-    if (!saving) setModalOpen(false);
-  }, [saving]);
 
   const handleSaveNote = async () => {
     const clean = noteInput.trim();
