@@ -77,6 +77,7 @@ const listeners = {
   notification: new Set<Listener<NotificationEvent>>(),
   presence: new Set<Listener<PresenceState>>(),
   status: new Set<Listener<ConnectionStatus>>(),
+  unreadRefresh: new Set<Listener<number | undefined>>(),
 };
 
 function subscribe<T>(set: Set<Listener<T>>, listener: Listener<T>): Unsubscribe {
@@ -97,6 +98,17 @@ export const onNotification = (cb: Listener<NotificationEvent>) =>
   subscribe(listeners.notification, cb);
 export const onPresence = (cb: Listener<PresenceState>) => subscribe(listeners.presence, cb);
 export const onStatus = (cb: Listener<ConnectionStatus>) => subscribe(listeners.status, cb);
+export const onUnreadRefresh = (cb: Listener<number | undefined>) =>
+  subscribe(listeners.unreadRefresh, cb);
+export const emitUnreadRefresh = (newCount?: number) => {
+  for (const listener of listeners.unreadRefresh) {
+    try {
+      listener(newCount);
+    } catch (e) {
+      console.error("Error in onUnreadRefresh listener:", e);
+    }
+  }
+};
 
 // ---- module state ----------------------------------------------------------
 

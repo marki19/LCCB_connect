@@ -1,4 +1,5 @@
 import { apiJson } from "./api";
+import { emitUnreadRefresh } from "./realtime";
 import type {
   Conversation,
   Friend,
@@ -91,11 +92,29 @@ export type MarkReadResult = {
   last_read_seq: number;
 };
 
-export function markRead(conversationId: string, uptoSeq?: number): Promise<MarkReadResult> {
-  return apiJson<MarkReadResult>(`/conversations/${conversationId}/read`, {
+export async function markRead(conversationId: string, uptoSeq?: number): Promise<MarkReadResult> {
+  // Optimistically trigger immediate unread count refetch/refresh
+  emitUnreadRefresh();
+
+  const result = await apiJson<MarkReadResult>(`/conversations/${conversationId}/read`, {
     method: "POST",
     body: JSON.stringify({ upto_seq: Math.max(0, uptoSeq || 0) }),
   });
+
+  // Immediately notify all topbar and tab badges with the fresh unread count
+  apiJson<{ unread: number }>("/conversations/unread-count")
+    .then((data) => {
+      if (typeof data?.unread === "number") {
+        emitUnreadRefresh(data.unread);
+      } else {
+        emitUnreadRefresh();
+      }
+    })
+    .catch(() => {
+      emitUnreadRefresh();
+    });
+
+  return result;
 }
 
 /** Delivered receipt: recipient-only; a non-recipient gets a 404. */

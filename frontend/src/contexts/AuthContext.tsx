@@ -19,10 +19,17 @@ type Profile = {
   year_level: string | null;
   role: string | null;
   skills: string[] | null;
+  account_kind?: "school" | "outsider" | null;
+  contact_scope?: "public" | "organization" | "private" | null;
+  guest_declared_at?: string | null;
+  guest_purpose?: string | null;
+  guest_affiliation_type?: string | null;
+  guest_affiliation_name?: string | null;
+  guest_location?: string | null;
   // Identity verification (migration 016). Denormalized auth email + app student_id.
   email?: string | null;
   student_id?: string | null;
-  verification_status?: 'unverified' | 'pending' | 'verified' | null;
+  verification_status?: 'unverified' | 'pending' | 'verified' | 'approved' | null;
   verified_at?: string | null;
   // Identity completeness (BE-2): derived server-side from full_name + student_id + department_id + course_id.
   identity_complete?: boolean;

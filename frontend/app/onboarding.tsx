@@ -109,6 +109,22 @@ export default function OnboardingScreen() {
   );
 
   useEffect(() => {
+    if (profile) {
+      if (profile.role === "guest" && profile.verification_status === "pending") {
+        router.replace("/pending-review" as any);
+        return;
+      }
+      const isOutsider =
+        profile.account_kind === "outsider" ||
+        (profile.email && !profile.email.endsWith("@lccbonline.edu.ph"));
+      if (profile.role === "user" && isOutsider && !profile.guest_declared_at) {
+        router.replace("/guest-declaration" as any);
+        return;
+      }
+    }
+  }, [profile, router]);
+
+  useEffect(() => {
     loadMine(previewRole);
   }, [loadMine, previewRole]);
 

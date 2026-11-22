@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
-import { openConversation } from "../lib/messages";
+import { openConversation, markRead } from "../lib/messages";
 
 export interface ActiveChatPeer {
   conversationId?: string;
@@ -26,12 +26,15 @@ export function FloatingChatProvider({ children }: { children: React.ReactNode }
     setActiveChat(peer);
     setIsMinimized(false);
 
-    if (!peer.conversationId && peer.peerId) {
+    if (peer.conversationId) {
+      void markRead(peer.conversationId).catch(() => undefined);
+    } else if (peer.peerId) {
       try {
         const conv = await openConversation(peer.peerId);
         setActiveChat((curr) =>
           curr?.peerId === peer.peerId ? { ...curr, conversationId: conv.id } : curr
         );
+        void markRead(conv.id).catch(() => undefined);
       } catch (err) {
         console.error("Failed to open conversation for floating chat:", err);
       }

@@ -44,11 +44,13 @@ export function useProfileData(id?: string | null) {
   const [error, setError] = useState<string | null>(null);
 
   const [posts, setPosts] = useState<Post[]>([]);
+  const [repositories, setRepositories] = useState<Post[]>([]);
   const [theses, setTheses] = useState<any[]>([]);
   const [friends, setFriends] = useState<any[]>([]);
   const [photos, setPhotos] = useState<UserPhoto[]>([]);
 
   const [loadingPosts, setLoadingPosts] = useState(false);
+  const [loadingRepositories, setLoadingRepositories] = useState(false);
   const [loadingTheses, setLoadingTheses] = useState(false);
   const [loadingFriends, setLoadingFriends] = useState(false);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
@@ -141,6 +143,41 @@ export function useProfileData(id?: string | null) {
     }
   }, [id]);
 
+  // Manual re-fetch repositories (projects, capstones, and theses)
+  const fetchRepositories = useCallback(async () => {
+    if (!id) return;
+    setLoadingRepositories(true);
+    try {
+      const res = await apiFetch(`/posts?author_id=${id}&kind=repository&limit=50`);
+      if (res.ok) {
+        const data = await res.json();
+        const rawList = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.posts)
+          ? data.posts
+          : [];
+        const adaptedList = rawList.map(adaptPost);
+        setRepositories(adaptedList);
+        setTheses(
+          adaptedList
+            .filter((p: any) => p.repository_type === "thesis" || p.type === "thesis")
+            .map((p: any) => ({
+              ...p,
+              abstract: p.description || p.content,
+              category: p.repository_category,
+              pdf_url:
+                p.attachments?.find((a: any) => a.mime_type === "application/pdf")?.storage_key ||
+                (p as any).pdf_url,
+            }))
+        );
+      }
+    } catch (err) {
+      console.error("Failed to load user repositories:", err);
+    } finally {
+      setLoadingRepositories(false);
+    }
+  }, [id]);
+
   // Manual re-fetch theses
   const fetchTheses = useCallback(async () => {
     if (!id) return;
@@ -213,15 +250,18 @@ export function useProfileData(id?: string | null) {
     error,
     posts,
     setPosts,
+    repositories,
     theses,
     friends,
     photos,
     loadingPosts,
+    loadingRepositories,
     loadingTheses,
     loadingFriends,
     loadingPhotos,
     fetchProfile,
     fetchPosts,
+    fetchRepositories,
     fetchTheses,
     fetchFriends,
     fetchPhotos,

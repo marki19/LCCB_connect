@@ -163,6 +163,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   userRouter
 );
 app.use(
@@ -170,6 +171,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   postRouter
 );
 app.use(
@@ -177,6 +179,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   reportRouter
 );
 app.use(
@@ -184,6 +187,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   blockRouter
 );
 
@@ -192,6 +196,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   searchRouter
 );
 app.use(
@@ -199,6 +204,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   moderationRouter
 );
 app.use(
@@ -206,6 +212,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   notificationRouter
 );
 
@@ -216,6 +223,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   conversationRouter
 );
 app.use(
@@ -223,6 +231,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   messageRouter
 );
 app.use(
@@ -230,6 +239,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   friendRouter
 );
 // Same mount path as `userRouter`; `/me/...` and `/:id/block` are two-segment
@@ -240,6 +250,7 @@ app.use(
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
   socialRouter
 );
 

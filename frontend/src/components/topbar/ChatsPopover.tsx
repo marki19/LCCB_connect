@@ -19,11 +19,13 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePresence } from "../../contexts/PresenceContext";
 import { useFloatingChat } from "../../contexts/FloatingChatContext";
-import { listConversations, listRequests } from "../../lib/messages";
+import { listConversations, listRequests, markRead } from "../../lib/messages";
 import type { Conversation } from "../../types";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
 import { resolveFileUrl } from "../../lib/files";
+import { formatMessagePreview } from "../../lib/chatMedia";
+import { emitUnreadRefresh } from "../../lib/realtime";
 import { TOP_BAR_HEIGHT } from "./constants";
 
 interface ChatsPopoverProps {
@@ -45,7 +47,7 @@ const formatWhen = (iso?: string | null) => {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
-export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
+export default function ChatsPopover({ onClose, unreadCount = 0 }: ChatsPopoverProps) {
   const { colors } = useTheme();
   const { profile, session } = useAuth();
   const { modeOf } = usePresence();
@@ -93,7 +95,7 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
   const filtered = search.trim()
     ? conversations.filter((c) => {
         const name = (c.peer?.full_name ?? c.peer?.username ?? "").toLowerCase();
-        const msg = (c.last_message?.body ?? "").toLowerCase();
+        const msg = formatMessagePreview(c.last_message?.body).toLowerCase();
         const term = search.toLowerCase();
         return name.includes(term) || msg.includes(term);
       })
@@ -101,6 +103,13 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
 
   const handleOpenConversation = (c: Conversation) => {
     onClose();
+    if (c.unread > 0) {
+      setConversations((prev) =>
+        prev.map((item) => (item.id === c.id ? { ...item, unread: 0 } : item))
+      );
+      emitUnreadRefresh(Math.max(0, unreadCount - c.unread));
+    }
+    markRead(c.id).catch(() => {});
     if (Platform.OS === "web") {
       openChat({
         conversationId: c.id,
@@ -163,10 +172,10 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Search Messenger"
+          placeholder="Search"
           placeholderTextColor={colors.inkFaint}
           style={[styles.searchInput, { color: colors.ink }]}
-          accessibilityLabel="Search conversations"
+          accessibilityLabel="Search"
         />
       </View>
 
@@ -189,7 +198,9 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
             const peerId = c.peer?.id;
             const online = peerId ? modeOf(peerId) === "online" : false;
             const peerName = c.peer?.full_name ?? c.peer?.username ?? "Conversation";
-            const lastText = c.last_message?.body ?? (c.status === "requested" ? "Message request" : "Started a conversation");
+            const lastText = c.last_message?.body
+              ? formatMessagePreview(c.last_message.body)
+              : (c.status === "requested" ? "Message request" : "Started a conversation");
             const lastTime = formatWhen(c.last_message?.created_at || c.last_message_at || c.created_at);
             const hasUnread = (c.unread ?? 0) > 0;
 

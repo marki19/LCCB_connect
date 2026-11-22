@@ -21,7 +21,7 @@ import {
 import { elevation, RADIUS, SPACE } from "../../src/lib/tokens";
 import { useState, useEffect } from "react";
 import { apiJson } from "../../src/lib/api";
-import { onMessage, onConversation } from "../../src/lib/realtime";
+import { onMessage, onConversation, onUnreadRefresh } from "../../src/lib/realtime";
 
 type TabItem = {
   name: string;
@@ -114,6 +114,13 @@ function MobileTabBar({
     const unsubMsg = onMessage(() => {
       loadCounts();
     });
+    const unsubUnread = onUnreadRefresh((newCount) => {
+      if (typeof newCount === "number") {
+        setUnreadMessages(newCount);
+      } else {
+        loadCounts();
+      }
+    });
     const unsubConv = onConversation(() => {
       loadCounts();
     });
@@ -121,6 +128,7 @@ function MobileTabBar({
     return () => {
       cancelled = true;
       unsubMsg();
+      unsubUnread();
       unsubConv();
     };
   }, [isGuest, profile?.id]);

@@ -16,6 +16,7 @@ const passwordResetModel = require("../models/passwordResetModel");
 const { sanitizeProfile } = require("../utils/profile");
 const { mirrorGoogleAvatar } = require("../services/googleAvatar");
 const identityService = require("../services/identity");
+const { isSchoolAccount } = require("../services/verificationPolicy");
 
 const GENERIC_LOGIN_ERROR = "Invalid email, student ID, or password";
 const GENERIC_CODE_ERROR = "That code is incorrect or has expired. Request a new one.";
@@ -335,7 +336,8 @@ async function login(req, res, next) {
       mfaChallenged: false,
     });
     await accountService.enforceSessionCap(data.user.id, { role: profile?.role }).catch(() => undefined);
-    return sendTokens(res, data.session);
+    const account_kind = isSchoolAccount(profile?.email) ? "school" : "outsider";
+    return sendTokens(res, data.session, 200, { user: profile, account_kind });
   } catch (err) {
     next(err);
   }
@@ -605,7 +607,8 @@ async function verifySignup(req, res, next) {
       session = await nativeAuth.signTokens(createdProfile, { aal: "aal1" });
     }
     await accountService.enforceSessionCap(userId, { role: createdProfile.role || "user" }).catch(() => undefined);
-    return sendTokens(res, session, 201);
+    const account_kind = isSchoolAccount(normalizedEmail) ? "school" : "outsider";
+    return sendTokens(res, session, 201, { user: createdProfile, account_kind });
   } catch (err) {
     next(err);
   }
@@ -1053,9 +1056,11 @@ async function googleAuth(req, res, next) {
         mfaChallenged: false,
       });
 
+      const account_kind = isSchoolAccount(email) ? "school" : "outsider";
       return sendTokens(res, session, 200, {
         mfa_enrollment_required: true,
         message: "Admin accounts require MFA. Please complete MFA enrollment.",
+        account_kind,
       });
     }
 
@@ -1086,7 +1091,8 @@ async function googleAuth(req, res, next) {
     });
     await accountService.enforceSessionCap(user.id, { role: profile?.role }).catch(() => undefined);
 
-    return sendTokens(res, session, 200, { user: profile });
+    const account_kind = isSchoolAccount(email) ? "school" : "outsider";
+    return sendTokens(res, session, 200, { user: profile, account_kind });
   } catch (err) {
     next(err);
   }
@@ -1249,7 +1255,8 @@ async function refreshSession(req, res, next) {
       // Rotate: revoke the used refresh token and mint fresh tokens
       await nativeAuth.revokeRefreshToken(decoded.jti).catch(() => {});
       const session = await nativeAuth.signTokens(profile, { aal });
-      return sendTokens(res, session, 200, { user: profile });
+      const account_kind = isSchoolAccount(email) ? "school" : "outsider";
+    return sendTokens(res, session, 200, { user: profile, account_kind });
     }
 
     return res.status(401).json({ error: "Invalid or expired refresh token" });

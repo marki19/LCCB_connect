@@ -1,4 +1,4 @@
-const { normalizeRole, ROLES, SELECTABLE_ROLES } = require("../utils/roles");
+const { normalizeRole, ROLES, SELECTABLE_ROLES, DECLARATION_ROLES } = require("../utils/roles");
 
 /**
  * Verification policy: who may be verified, what each role must prove, and who
@@ -63,6 +63,7 @@ function fieldsFor(role) {
  */
 function needsRoleChoice(role) {
   const canonical = canonicalRole(role);
+  if (canonical === ROLES.GUEST) return false;
   return canonical === null || canonical === ROLES.USER;
 }
 
@@ -122,10 +123,10 @@ function resolveRequestRole(profileRole, requestedRole) {
  */
 const REVIEWER_SCOPE = {
   [ROLES.SUPER_ADMIN]: {
-    roles: [ROLES.ADMIN, ROLES.DEPARTMENT_ADMIN],
+    roles: [ROLES.ADMIN, ROLES.DEPARTMENT_ADMIN, ROLES.GUEST],
     byDepartment: false,
   },
-  [ROLES.ADMIN]: { roles: [ROLES.DEPARTMENT_ADMIN], byDepartment: false },
+  [ROLES.ADMIN]: { roles: [ROLES.DEPARTMENT_ADMIN, ROLES.GUEST], byDepartment: false },
   [ROLES.DEPARTMENT_ADMIN]: {
     roles: [ROLES.FACULTY, ROLES.STUDENT],
     byDepartment: true,
@@ -230,6 +231,7 @@ module.exports = {
   ROLE_FIELDS,
   fieldsFor,
   SELECTABLE_ROLES,
+  DECLARATION_ROLES,
   needsRoleChoice,
   isSelectable,
   canVerify,

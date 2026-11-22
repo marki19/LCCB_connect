@@ -36,8 +36,10 @@ const {
   requestPasswordResetSchema,
   verifyPasswordResetSchema,
   mfaChallengeSchema,
+  guestDeclarationSchema,
 } = require("../validation");
-const { requireAuth, loadProfile } = require("../middleware/auth");
+const { requireAuth, loadProfile, requireActiveAccount } = require("../middleware/auth");
+const guestDeclarationController = require("../controllers/guestDeclarationController");
 
 /**
  * POST /api/auth/login
@@ -185,5 +187,18 @@ router.post("/refresh", refreshSession);
  * Requires authenticated user.
  */
 router.post("/logout", requireAuth, logout);
+
+/**
+ * POST /api/auth/guest
+ * Allows an authenticated non-school account to declare guest/outsider intent.
+ */
+router.post(
+  "/guest",
+  requireAuth,
+  loadProfile,
+  requireActiveAccount,
+  validate(guestDeclarationSchema),
+  guestDeclarationController.declare
+);
 
 module.exports = router;

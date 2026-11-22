@@ -22,10 +22,11 @@ import {
 import Avatar, { PRESENCE_COLORS, PRESENCE_LABELS } from "../src/components/Avatar";
 import { usePresence } from "../src/contexts/PresenceContext";
 import { useTheme } from "../src/contexts/ThemeContext";
+import { useAuth } from "../src/contexts/AuthContext";
 import { fetchDepartments } from "../src/lib/catalog";
 import { getMessagePolicy, setMessagePolicy, listBlocked, unblockUser } from "../src/lib/messages";
 import type { BlockedUser } from "../src/lib/messages";
-import { apiFetch } from "../src/lib/api";
+import { apiFetch, apiJson } from "../src/lib/api";
 import { safeBack } from "../src/lib/navigation";
 import type { Department, MessagePolicy, PresenceMode } from "../src/types";
 import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
@@ -44,6 +45,28 @@ const POLICY_OPTIONS: { value: MessagePolicy; label: string; hint: string }[] = 
   { value: "department", label: "My department", hint: "Only people in your department." },
   { value: "selected", label: "Selected departments", hint: "Only the departments you choose below." },
   { value: "nobody", label: "Nobody", hint: "Others can only send a message request." },
+];
+
+const CONTACT_SCOPE_OPTIONS: {
+  value: "public" | "organization" | "private";
+  label: string;
+  hint: string;
+}[] = [
+  {
+    value: "public",
+    label: "Public",
+    hint: "Visible to all accounts, including external guests.",
+  },
+  {
+    value: "organization",
+    label: "LCCB Only",
+    hint: "Visible only to verified school students and staff.",
+  },
+  {
+    value: "private",
+    label: "Private",
+    hint: "Hidden from everyone except yourself.",
+  },
 ];
 
 const PRESENCE_ORDER: PresenceMode[] = ["online", "away", "busy", "dnd", "invisible"];
@@ -96,6 +119,12 @@ export default function MessagingSettings() {
   const router = useRouter();
   const { mode, setMode } = usePresence();
   const { colors, preference, setColorScheme } = useTheme();
+  const { profile, refreshProfile } = useAuth();
+
+  const [contactScope, setContactScope] = useState<"public" | "organization" | "private">(
+    (profile?.contact_scope as any) || "organization"
+  );
+  const [savingScope, setSavingScope] = useState(false);
 
   const [policy, setPolicy] = useState<MessagePolicy>("department");
   const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
@@ -158,6 +187,23 @@ export default function MessagingSettings() {
   const choosePolicy = (next: MessagePolicy) => {
     setPolicy(next);
     void persistPolicy(next);
+  };
+
+  const chooseContactScope = async (scope: "public" | "organization" | "private") => {
+    setContactScope(scope);
+    if (!profile?.id) return;
+    setSavingScope(true);
+    try {
+      await apiJson(`/users/${profile.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ contact_scope: scope }),
+      });
+      await refreshProfile();
+    } catch (e) {
+      console.error("Failed to update contact visibility:", e);
+    } finally {
+      setSavingScope(false);
+    }
   };
 
   const toggleDept = (id: string) => {
@@ -255,6 +301,48 @@ export default function MessagingSettings() {
                       >
                         <OptIcon size={16} color={active ? colors.brand : colors.inkFaint} />
                       </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                          style={{
+                            ...TYPE.bodyStrong,
+                            fontWeight: active ? "700" : "500",
+                            color: colors.ink,
+                          }}
+                        >
+                          {opt.label}
+                        </Text>
+                        <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: 1 }}>
+                          {opt.hint}
+                        </Text>
+                      </View>
+                      <Radio active={active} />
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </Card>
+
+            {/* Contact info visibility (§6.4) */}
+            <SectionLabel>Contact Information Visibility</SectionLabel>
+            <Card padding={0}>
+              {CONTACT_SCOPE_OPTIONS.map((opt, index) => {
+                const active = contactScope === opt.value;
+                return (
+                  <View key={opt.value}>
+                    <Divider first={index === 0} />
+                    <Pressable
+                      onPress={() => void chooseContactScope(opt.value)}
+                      accessibilityRole="radio"
+                      aria-checked={active}
+                      style={({ pressed }) => ({
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: SPACE.x3,
+                        paddingHorizontal: SPACE.x4,
+                        paddingVertical: SPACE.x3,
+                        backgroundColor: pressed ? colors.surfaceSunken : "transparent",
+                      })}
+                    >
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text
                           style={{
