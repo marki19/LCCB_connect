@@ -124,6 +124,7 @@ export default function ResetPasswordScreen() {
       footer={footer}
       backHref="/(auth)/login"
       backLabel="Back to sign in"
+      backgroundIntensity="medium"
     >
       {error ? <Alert tone="error" message={error} /> : null}
 

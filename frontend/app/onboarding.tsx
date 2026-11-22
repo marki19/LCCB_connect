@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ScrollView, View, Text, SafeAreaView, Pressable } from "react-native";
+import { ScrollView, View, Text, SafeAreaView, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { ChevronRight } from "lucide-react-native";
 import { useAuth } from "../src/contexts/AuthContext";
@@ -13,6 +13,7 @@ import Modal from "../src/components/ui/Modal";
 import Reveal from "../src/components/ui/Reveal";
 import VerificationForm from "../src/components/verification/VerificationForm";
 import type { SelectableRole, VerificationRole } from "../src/lib/verification";
+import InteractiveBackground from "../src/components/auth/InteractiveBackground";
 
 type VerificationStatus = "unverified" | "pending" | "approved" | "declined";
 
@@ -55,6 +56,17 @@ const ROLE_CHOICES: { role: SelectableRole; title: string; blurb: string }[] = [
   { role: "departmentAdmin", title: "Department admin", blurb: "Runs a department and reviews its requests." },
   { role: "admin", title: "Campus admin", blurb: "Reviews requests across the whole campus." },
 ];
+
+// Wrapper that adds the interactive background
+function OnboardingWrapper({ children, intensity = "medium" }: { children: React.ReactNode; intensity?: "low" | "medium" | "high" }) {
+  const { colors } = useTheme();
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <InteractiveBackground intensity={intensity} />
+      {children}
+    </SafeAreaView>
+  );
+}
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -205,32 +217,33 @@ export default function OnboardingScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: colors.surfacePage,
-        }}
-      >
-        <Reveal style={{ width: "100%", maxWidth: 540, alignSelf: "center" }}>
-          <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
-            <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center", marginBottom: SPACE.x4 }}>
-              {isSuperadmin ? "Superadmin access" : "Verify your identity"}
-            </Text>
-            <Text style={{ ...TYPE.body, color: colors.inkSoft, textAlign: "center" }}>
-              Loading your verification status…
-            </Text>
-          </Card>
-        </Reveal>
-      </SafeAreaView>
+      <OnboardingWrapper intensity="low">
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Reveal style={{ width: "100%", maxWidth: 540, alignSelf: "center" }}>
+            <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
+              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center", marginBottom: SPACE.x4 }}>
+                {isSuperadmin ? "Superadmin access" : "Verify your identity"}
+              </Text>
+              <Text style={{ ...TYPE.body, color: colors.inkSoft, textAlign: "center" }}>
+                Loading your verification status…
+              </Text>
+            </Card>
+          </Reveal>
+        </View>
+      </OnboardingWrapper>
     );
   }
 
   // Admin & Superadmin — no verification needed
   if (isAdmin) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <OnboardingWrapper intensity="low">
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
           <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
             <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
@@ -259,7 +272,7 @@ export default function OnboardingScreen() {
             </Card>
           </Reveal>
         </ScrollView>
-      </SafeAreaView>
+      </OnboardingWrapper>
     );
   }
 
@@ -271,7 +284,7 @@ export default function OnboardingScreen() {
 
   if (isPending) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <OnboardingWrapper intensity="low">
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
           <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
             <Card style={{ padding: SPACE.x8 }}>
@@ -342,13 +355,13 @@ export default function OnboardingScreen() {
             </Card>
           </Reveal>
         </ScrollView>
-      </SafeAreaView>
+      </OnboardingWrapper>
     );
   }
 
   if (isApproved) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <OnboardingWrapper intensity="low">
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
           <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
             <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
@@ -365,7 +378,7 @@ export default function OnboardingScreen() {
               >
                 <Text style={{ fontSize: 28 }}>✅</Text>
               </View>
-              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>You're verified</Text>
+              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>You&apos;re verified</Text>
               <Text
                 style={{
                   ...TYPE.body,
@@ -383,14 +396,14 @@ export default function OnboardingScreen() {
             </Card>
           </Reveal>
         </ScrollView>
-      </SafeAreaView>
+      </OnboardingWrapper>
     );
   }
 
   // No role yet — the account chooses what it is before the form makes sense.
   if (needsRole) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <OnboardingWrapper intensity="medium">
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
           <View style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
             <Reveal>
@@ -434,14 +447,14 @@ export default function OnboardingScreen() {
             </Reveal>
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </OnboardingWrapper>
     );
   }
 
   // No verification path (a superadmin, or a non-school account).
   if (!role) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+      <OnboardingWrapper intensity="low">
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
           <Reveal style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
             <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
@@ -457,35 +470,39 @@ export default function OnboardingScreen() {
             </Card>
           </Reveal>
         </ScrollView>
-      </SafeAreaView>
+      </OnboardingWrapper>
     );
   }
 
   // Unverified or declined — show the form
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfacePage }}>
-      <VerificationForm
-        role={role}
-        fields={mine?.fields ?? null}
-        schoolAccount={mine?.school_account ?? false}
-        initialValues={initialValues}
-        fullNameLocked={fullNameLocked}
-        requestStatus={requestStatus}
-        declineNote={mine?.request?.note ?? null}
-        onSendOtp={handleSendOtp}
-        onSubmit={handleSubmit}
-        onSkip={handleSkip}
-      />
+    <OnboardingWrapper intensity="medium">
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: SPACE.x4, paddingBottom: SPACE.x10 }}>
+        <View style={{ width: "100%", maxWidth: 540, alignSelf: "center" }}>
+          <VerificationForm
+            role={role}
+            fields={mine?.fields ?? null}
+            schoolAccount={mine?.school_account ?? false}
+            initialValues={initialValues}
+            fullNameLocked={fullNameLocked}
+            requestStatus={requestStatus}
+            declineNote={mine?.request?.note ?? null}
+            onSendOtp={handleSendOtp}
+            onSubmit={handleSubmit}
+            onSkip={handleSkip}
+          />
 
-      <Modal visible={!!notice} onClose={() => setNotice(null)} maxWidth={440} accessibilityLabel={notice?.title ?? "Notice"}>
-        <View style={{ padding: SPACE.x6 }}>
-          <Text style={{ ...TYPE.h2, color: colors.ink }}>{notice?.title}</Text>
-          <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>{notice?.message}</Text>
-          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: SPACE.x5 }}>
-            <Button label="Got it" onPress={() => setNotice(null)} />
-          </View>
+          <Modal visible={!!notice} onClose={() => setNotice(null)} maxWidth={440} accessibilityLabel={notice?.title ?? "Notice"}>
+            <View style={{ padding: SPACE.x6 }}>
+              <Text style={{ ...TYPE.h2, color: colors.ink }}>{notice?.title}</Text>
+              <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2 }}>{notice?.message}</Text>
+              <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: SPACE.x5 }}>
+                <Button label="Got it" onPress={() => setNotice(null)} />
+              </View>
+            </View>
+          </Modal>
         </View>
-      </Modal>
-    </SafeAreaView>
+      </ScrollView>
+    </OnboardingWrapper>
   );
 }

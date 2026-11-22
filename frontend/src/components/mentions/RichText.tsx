@@ -11,7 +11,7 @@ interface RichTextProps {
   numberOfLines?: number;
 }
 
-export function RichText({ text, mentions, style, numberOfLines }: RichTextProps) {
+function RichText({ text, mentions, style, numberOfLines }: RichTextProps) {
   const router = useRouter();
   const { colors } = useTheme();
 

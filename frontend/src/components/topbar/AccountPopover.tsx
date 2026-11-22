@@ -5,7 +5,7 @@
  * Choosing "Theme" slides panel 1 in from the right; its back arrow returns.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import Avatar from "../Avatar";
 import ThemeOptions from "../settings/ThemeOptions";
 import SlideSwitcher from "../ui/SlideSwitcher";
 import { TOP_BAR_HEIGHT } from "./constants";
+import { usePopoverPosition, getArrowStyle, getBorderArrowStyle } from "../../lib/popoverPosition";
 
 /** Outer width of the panel, including its 1px border. */
 const POPOVER_WIDTH = 280;
@@ -37,9 +38,14 @@ type AccountPanel = "menu" | "theme";
 
 interface AccountPopoverProps {
   onClose: () => void;
+  /** Anchor element ref for positioning */
+  anchorRef?: React.RefObject<any>;
 }
 
-export default function AccountPopover({ onClose }: AccountPopoverProps) {
+export default function AccountPopover({ 
+  onClose,
+  anchorRef,
+}: AccountPopoverProps) {
   const { colors, preference } = useTheme();
   const { profile, signOut } = useAuth();
   const { openSettingsSidebar } = useSettingsSidebar();
@@ -60,15 +66,29 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
     try { await signOut(); } catch (e) { console.error(e); }
   };
 
-  const popoverStyle =
-    Platform.OS === "web"
-      ? ({
-          position: "fixed" as any,
-          top: TOP_BAR_HEIGHT + 8,
-          right: 8,
-          zIndex: 1001,
-        } as any)
-      : { position: "absolute" as any, top: TOP_BAR_HEIGHT + 8, right: 8, zIndex: 1001 };
+  // Use the new popover positioning hook (anchored to the trigger button)
+  const { position, arrowPosition, arrowOffset, updatePosition } = usePopoverPosition({
+    preferredPosition: "bottom-end",
+    popoverWidth: POPOVER_WIDTH,
+    popoverHeight: 480,
+    enabled: true,
+  }, anchorRef);
+
+  // Trigger position update when anchor is ready
+  useEffect(() => {
+    updatePosition();
+  }, [updatePosition, anchorRef]);
+
+  if (!position) {
+    return null;
+  }
+
+  const popoverStyle = {
+    position: "absolute" as const,
+    top: position.top,
+    left: position.left,
+    zIndex: 1001,
+  };
 
   return (
     <View
@@ -82,6 +102,24 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
         },
       ]}
     >
+      {/* Arrow indicator */}
+      {arrowPosition && (
+        <>
+          <View
+            style={getBorderArrowStyle(arrowPosition, arrowOffset, colors.border)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+          <View
+            style={getArrowStyle(arrowPosition, arrowOffset, colors.surface)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+        </>
+      )}
+
       <SlideSwitcher index={panel === "theme" ? 1 : 0} width={PANEL_WIDTH}>
         {/* ── Panel 0: account menu ── */}
         <View>
@@ -251,6 +289,7 @@ function MenuItem({
 const styles = StyleSheet.create({
   container: {
     width: POPOVER_WIDTH,
+    maxHeight: 480,
     borderRadius: RADIUS.lg,
     borderWidth: POPOVER_BORDER,
     shadowOffset: { width: 0, height: 4 },

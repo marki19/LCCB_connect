@@ -181,6 +181,41 @@ export const LIGHT_TOKENS = {
   accentText: "#8A5C00",
   accentWash: "#FBF0D2",
 
+  // ── Theme accent colors (user-selectable) ────────────────────────────────
+  // These provide a modern SaaS personalization system. The default
+  // preserves the existing cobalt branding; users can switch any of
+  // the following to instantly update buttons, links, focus states, badges, etc.
+  accentColor: {
+    light: {
+      blue: "#0E3C9C",
+      indigo: "#4F46E5",
+      teal: "#10B981",
+      green: "#22C55E",
+      olive: "#84CC16",
+      yellow: "#F59E0B",
+      orange: "#F97316",
+      brown: "#A16207",
+      rose: "#EF4444",
+      pink: "#EC4899",
+      purple: "#8B5CF6",
+      violet: "#A855F7",
+    },
+    dark: {
+      blue: "#6E9BFF",
+      indigo: "#6366F1",
+      teal: "#059669",
+      green: "#14B8A6",
+      olive: "#65D174",
+      yellow: "#FACC15",
+      orange: "#F97316",
+      brown: "#D97706",
+      rose: "#F87171",
+      pink: "#EC4899",
+      purple: "#A78BF A",
+      violet: "#C4B5FD",
+    },
+  },
+
   // ── Editorial layer: jade ────────────────────────────────────────────────
   jade: "#0B7C5C",
   jadeBright: "#17A97C",
@@ -268,6 +303,38 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
   action: "#6E9BFF",
   actionSurface: "rgba(110, 155, 255, 0.14)",
   actionSurfaceAlt: "rgba(110, 155, 255, 0.22)",
+
+  // Theme accent color (overridden by user preference in ThemeContext)
+  accentColor: {
+    light: {
+      blue: "#0E3C9C",
+      indigo: "#4F46E5",
+      teal: "#10B981",
+      green: "#22C55E",
+      olive: "#84CC16",
+      yellow: "#F59E0B",
+      orange: "#F97316",
+      brown: "#A16207",
+      rose: "#EF4444",
+      pink: "#EC4899",
+      purple: "#8B5CF6",
+      violet: "#A855F7",
+    },
+    dark: {
+      blue: "#6E9BFF",
+      indigo: "#6366F1",
+      teal: "#059669",
+      green: "#14B8A6",
+      olive: "#65D174",
+      yellow: "#FACC15",
+      orange: "#F97316",
+      brown: "#D97706",
+      rose: "#F87171",
+      pink: "#EC4899",
+      purple: "#A78BFA",
+      violet: "#C4B5FD",
+    },
+  },
 
   // Semantic: Destructive / Danger
   destructive: "#FF8B7E",

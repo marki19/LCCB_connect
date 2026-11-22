@@ -5,7 +5,7 @@ import { BookOpen, FolderGit2, GraduationCap, MessageSquare } from "lucide-react
 import Avatar from "./Avatar";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
-import { RADIUS, SPACE, elevation } from "../lib/tokens";
+import { RADIUS, SPACE, elevation, TYPE } from "../lib/tokens";
 
 interface PostComposerProps {
   style?: StyleProp<ViewStyle>;
@@ -95,6 +95,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
           onPress={() => router.push({ pathname: "/create", params: { type: "project" } })}
           accessibilityRole="button"
           accessibilityLabel="Share Project"
+          accessibilityHint="Create a new project post"
           style={({ pressed, hovered }: any) => ({
             flex: 1,
             flexDirection: "row",
@@ -108,7 +109,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
             transform: [{ scale: pressed ? 0.95 : 1 }],
           })}
         >
-          <FolderGit2 size={18} color="#10B981" strokeWidth={2} />
+          <FolderGit2 size={18} color={colors.success} strokeWidth={2} />
           <Text style={{ fontSize: 13, fontWeight: "600", color: colors.inkSoft }}>Project</Text>
         </Pressable>
 
@@ -116,6 +117,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
           onPress={() => router.push({ pathname: "/create", params: { type: "capstone" } })}
           accessibilityRole="button"
           accessibilityLabel="Share Capstone"
+          accessibilityHint="Create a new capstone post"
           style={({ pressed, hovered }: any) => ({
             flex: 1,
             flexDirection: "row",
@@ -129,7 +131,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
             transform: [{ scale: pressed ? 0.95 : 1 }],
           })}
         >
-          <GraduationCap size={18} color="#F59E0B" strokeWidth={2} />
+          <GraduationCap size={18} color={colors.warning} strokeWidth={2} />
           <Text style={{ fontSize: 13, fontWeight: "600", color: colors.inkSoft }}>Capstone</Text>
         </Pressable>
 
@@ -137,6 +139,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
           onPress={() => router.push({ pathname: "/create", params: { type: "thesis" } })}
           accessibilityRole="button"
           accessibilityLabel="Submit Thesis"
+          accessibilityHint="Submit a new thesis"
           style={({ pressed, hovered }: any) => ({
             flex: 1,
             flexDirection: "row",
@@ -150,7 +153,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
             transform: [{ scale: pressed ? 0.95 : 1 }],
           })}
         >
-          <BookOpen size={18} color="#8B5CF6" strokeWidth={2} />
+          <BookOpen size={18} color={colors.info} strokeWidth={2} />
           <Text style={{ fontSize: 13, fontWeight: "600", color: colors.inkSoft }}>Thesis</Text>
         </Pressable>
 
@@ -158,6 +161,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
           onPress={() => router.push({ pathname: "/create", params: { type: "text" } })}
           accessibilityRole="button"
           accessibilityLabel="Start Discussion"
+          accessibilityHint="Start a new discussion"
           style={({ pressed, hovered }: any) => ({
             flex: 1,
             flexDirection: "row",
@@ -171,7 +175,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
             transform: [{ scale: pressed ? 0.95 : 1 }],
           })}
         >
-          <MessageSquare size={18} color="#3B82F6" strokeWidth={2} />
+          <MessageSquare size={18} color={colors.brand} strokeWidth={2} />
           <Text style={{ fontSize: 13, fontWeight: "600", color: colors.inkSoft }}>Discuss</Text>
         </Pressable>
       </View>

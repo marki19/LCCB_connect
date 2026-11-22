@@ -174,27 +174,27 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const toneStyle = {
     success: {
       border: colors.success,
-      surface: colors.successSurface || "rgba(79, 211, 172, 0.12)",
-      text: colors.successText || "#6FE3C0",
+      surface: colors.successSurface || colors.brandWash,
+      text: colors.successText || colors.success,
       defaultIcon: <CheckCircle2 size={18} color={colors.success} />,
     },
     info: {
       border: colors.primary,
-      surface: colors.primarySurface || "rgba(110, 155, 255, 0.14)",
+      surface: colors.primarySurface || colors.brandWash,
       text: colors.primary,
       defaultIcon: <Bell size={18} color={colors.primary} />,
     },
     error: {
       border: colors.destructive,
-      surface: colors.destructiveSurface || "rgba(255, 139, 126, 0.12)",
-      text: colors.destructiveText || "#FF9F94",
+      surface: colors.destructiveSurface || colors.destructiveSurface,
+      text: colors.destructiveText || colors.destructive,
       defaultIcon: <AlertCircle size={18} color={colors.destructive} />,
     },
     warning: {
-      border: colors.badgeProjectText || "#F2B21B",
-      surface: colors.badgeProjectBg || "rgba(242, 178, 27, 0.14)",
-      text: colors.badgeProjectText || "#F2B21B",
-      defaultIcon: <AlertCircle size={18} color={colors.badgeProjectText || "#F2B21B"} />,
+      border: colors.gold,
+      surface: colors.goldSurface || colors.brandWash,
+      text: colors.goldText || colors.warning,
+      defaultIcon: <AlertCircle size={18} color={colors.gold} />,
     },
   }[tone];
 
@@ -231,7 +231,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               styles.toast,
               {
                 width: maxWidth,
-                backgroundColor: isDark ? "#0A1726" : colors.surfaceElevated,
+                backgroundColor: isDark ? colors.surface : colors.surfaceElevated,
                 borderColor: toneStyle.border,
               },
             ]}

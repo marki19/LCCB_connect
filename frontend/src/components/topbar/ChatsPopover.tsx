@@ -25,10 +25,13 @@ import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
 import { resolveFileUrl } from "../../lib/files";
 import { TOP_BAR_HEIGHT } from "./constants";
+import { usePopoverPosition, getArrowStyle, getBorderArrowStyle } from "../../lib/popoverPosition";
 
 interface ChatsPopoverProps {
   onClose: () => void;
   unreadCount: number;
+  /** Anchor element ref for positioning */
+  anchorRef?: React.RefObject<any>;
 }
 
 const formatWhen = (iso?: string | null) => {
@@ -45,7 +48,10 @@ const formatWhen = (iso?: string | null) => {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
-export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
+export default function ChatsPopover({ 
+  onClose,
+  anchorRef,
+}: ChatsPopoverProps) {
   const { colors } = useTheme();
   const { profile, session } = useAuth();
   const { modeOf } = usePresence();
@@ -118,15 +124,29 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
     router.push(href as any);
   };
 
-  const popoverStyle =
-    Platform.OS === "web"
-      ? ({
-          position: "fixed" as any,
-          top: TOP_BAR_HEIGHT + 8,
-          right: 56,
-          zIndex: 1001,
-        } as any)
-      : { position: "absolute" as any, top: TOP_BAR_HEIGHT + 8, right: 56, zIndex: 1001 };
+  // Use the new popover positioning hook (anchored to the trigger button)
+  const { position, arrowPosition, arrowOffset, updatePosition } = usePopoverPosition({
+    preferredPosition: "bottom-end",
+    popoverWidth: 360,
+    popoverHeight: 540,
+    enabled: true,
+  }, anchorRef);
+
+  // Trigger position update when anchor is ready
+  useEffect(() => {
+    updatePosition();
+  }, [updatePosition, anchorRef]);
+
+  if (!position) {
+    return null;
+  }
+
+  const popoverStyle = {
+    position: "absolute" as const,
+    top: position.top,
+    left: position.left,
+    zIndex: 1001,
+  };
 
   return (
     <View
@@ -140,6 +160,24 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
         },
       ]}
     >
+      {/* Arrow indicator */}
+      {arrowPosition && (
+        <>
+          <View
+            style={getBorderArrowStyle(arrowPosition, arrowOffset, colors.border)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+          <View
+            style={getArrowStyle(arrowPosition, arrowOffset, colors.surface)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+        </>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.ink }]}>Chats</Text>
@@ -222,7 +260,7 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
                       style={[
                         styles.presenceDot,
                         {
-                          backgroundColor: "#10B981",
+                          backgroundColor: colors.success,
                           borderColor: colors.surface,
                         },
                       ]}
@@ -244,7 +282,7 @@ export default function ChatsPopover({ onClose }: ChatsPopoverProps) {
                       {peerName}
                       {c.peer?.note ? (
                         <Text style={{ fontSize: 11, color: colors.brand, fontWeight: "500" }}>
-                          {" "}· 💭 {c.peer.note}
+                          {" "}· <span>💭</span> {c.peer.note}
                         </Text>
                       ) : null}
                     </Text>

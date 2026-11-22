@@ -8,7 +8,7 @@
  * Outside click / Escape closes the active panel.
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef } from "react";
 import {
   View,
   Text,
@@ -78,6 +78,10 @@ export default function DesktopTopBar({
   const [liveUnreadCount, setLiveUnreadCount] = useState(unreadCount);
   const [liveNotificationCount, setLiveNotificationCount] = useState(notificationCount);
   const barRef = useRef<any>(null);
+  const menuAnchorRef = useRef<any>(null);
+  const chatsAnchorRef = useRef<any>(null);
+  const notificationsAnchorRef = useRef<any>(null);
+  const accountAnchorRef = useRef<any>(null);
 
   // Sync prop changes
   useEffect(() => {
@@ -371,7 +375,7 @@ export default function DesktopTopBar({
                 >
                   <Search size={14} color={colors.action} style={{ marginRight: 6 }} />
                   <Text style={[styles.allResultsText, { color: colors.action }]}>
-                    See all results for "{searchQuery}"
+                    See all results for &quot;{searchQuery}&quot;
                   </Text>
                 </Pressable>
               </View>
@@ -397,6 +401,7 @@ export default function DesktopTopBar({
         <View style={styles.right}>
           {/* Grid / Menu */}
           <TopBarButton
+            ref={menuAnchorRef}
             onPress={() => toggle("menu")}
             active={activePopover === "menu"}
             accessibilityLabel="Open menu"
@@ -408,6 +413,7 @@ export default function DesktopTopBar({
 
           {/* Chats */}
           <TopBarButton
+            ref={chatsAnchorRef}
             onPress={() => toggle("chats")}
             active={activePopover === "chats"}
             accessibilityLabel="Open chats"
@@ -420,6 +426,7 @@ export default function DesktopTopBar({
 
           {/* Notifications */}
           <TopBarButton
+            ref={notificationsAnchorRef}
             onPress={() => toggle("notifications")}
             active={activePopover === "notifications"}
             accessibilityLabel="Open notifications"
@@ -432,6 +439,7 @@ export default function DesktopTopBar({
 
           {/* Account */}
           <Pressable
+            ref={accountAnchorRef}
             onPress={() => toggle("account")}
             onHoverIn={() => setAccountHovered(true)}
             onHoverOut={() => setAccountHovered(false)}
@@ -466,19 +474,20 @@ export default function DesktopTopBar({
 
       {/* ── POPOVERS ── render above the fixed trap layer (zIndex 1001) */}
       {activePopover === "menu" && (
-        <MenuPopover onClose={closeAll} />
+        <MenuPopover onClose={closeAll} anchorRef={menuAnchorRef} />
       )}
       {activePopover === "chats" && (
-        <ChatsPopover onClose={closeAll} unreadCount={liveUnreadCount} />
+        <ChatsPopover onClose={closeAll} anchorRef={chatsAnchorRef} unreadCount={liveUnreadCount} />
       )}
       {activePopover === "notifications" && (
         <NotificationsPopover
           onClose={closeAll}
+          anchorRef={notificationsAnchorRef}
           onClearUnread={() => setLiveNotificationCount(0)}
         />
       )}
       {activePopover === "account" && (
-        <AccountPopover onClose={closeAll} />
+        <AccountPopover onClose={closeAll} anchorRef={accountAnchorRef} />
       )}
     </>
   );
@@ -498,7 +507,7 @@ interface TopBarButtonProps {
   children: React.ReactNode;
 }
 
-function TopBarButton({
+const TopBarButton = forwardRef<any, TopBarButtonProps>(function TopBarButton({
   onPress,
   active,
   accessibilityLabel,
@@ -506,10 +515,11 @@ function TopBarButton({
   badge,
   colors,
   children,
-}: TopBarButtonProps) {
+}, ref) {
   const [hovered, setHovered] = useState(false);
   return (
     <Pressable
+      ref={ref}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
@@ -539,7 +549,7 @@ function TopBarButton({
       <HoverLabel label={label} visible={hovered} top={TOP_BAR_HEIGHT - 4} />
     </Pressable>
   );
-}
+});
 
 // ── NavTab ───────────────────────────────────────────────────────────────────
 

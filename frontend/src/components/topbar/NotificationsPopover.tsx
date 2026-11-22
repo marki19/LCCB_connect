@@ -3,7 +3,7 @@
  * Shows notification list with "Mark all read" and link to full notifications page.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -20,13 +20,20 @@ import { apiJson } from "../../lib/api";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
 import { TOP_BAR_HEIGHT } from "./constants";
+import { usePopoverPosition, getArrowStyle, getBorderArrowStyle } from "../../lib/popoverPosition";
 
 interface NotificationsPopoverProps {
   onClose: () => void;
   onClearUnread?: () => void;
+  /** Anchor element ref for positioning */
+  anchorRef?: React.RefObject<any>;
 }
 
-export default function NotificationsPopover({ onClose, onClearUnread }: NotificationsPopoverProps) {
+export default function NotificationsPopover({ 
+  onClose, 
+  onClearUnread,
+  anchorRef,
+}: NotificationsPopoverProps) {
   const { colors } = useTheme();
   const { profile, session } = useAuth();
   const router = useRouter();
@@ -84,17 +91,32 @@ export default function NotificationsPopover({ onClose, onClearUnread }: Notific
     router.push(href as any);
   };
 
-  const popoverStyle =
-    Platform.OS === "web"
-      ? ({
-          position: "fixed" as any,
-          top: TOP_BAR_HEIGHT + 8,
-          right: 104,
-          zIndex: 1001,
-        } as any)
-      : { position: "absolute" as any, top: TOP_BAR_HEIGHT + 8, right: 104, zIndex: 1001 };
+  // Use the new popover positioning hook (anchored to the trigger button)
+  const { position, arrowPosition, arrowOffset, updatePosition } = usePopoverPosition({
+    preferredPosition: "bottom-end",
+    popoverWidth: 360,
+    popoverHeight: 540,
+    enabled: true,
+  }, anchorRef);
 
   const hasUnread = notifications.some((n) => n.is_read === false || n.read === false);
+
+  // Trigger position update when anchor is ready
+  useEffect(() => {
+    updatePosition();
+  }, [updatePosition, anchorRef]);
+
+  if (!position) {
+    // Return null or a loading state while position is calculated
+    return null;
+  }
+
+  const popoverStyle = {
+    position: "absolute" as const,
+    top: position.top,
+    left: position.left,
+    zIndex: 1001,
+  };
 
   return (
     <View
@@ -108,6 +130,24 @@ export default function NotificationsPopover({ onClose, onClearUnread }: Notific
         },
       ]}
     >
+      {/* Arrow indicator */}
+      {arrowPosition && (
+        <>
+          <View
+            style={getBorderArrowStyle(arrowPosition, arrowOffset, colors.border)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+          <View
+            style={getArrowStyle(arrowPosition, arrowOffset, colors.surface)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+        </>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.ink }]}>Notifications</Text>

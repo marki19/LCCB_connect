@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, Easing } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from "react-native";
 import { UserX, Check, Undo2 } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
@@ -82,58 +82,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontWeight: "600",
     color: colors.textOnPrimary,
   },
-  // Toast styles
-  toastContainer: {
-    position: "absolute",
-    bottom: SPACE.x6,
-    left: SPACE.x4,
-    right: SPACE.x4,
-    zIndex: 1000,
-  },
-  toast: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACE.x4,
-    paddingVertical: SPACE.x3,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...(colors.shadow ? { shadowColor: colors.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 } : {}),
-  },
-  toastIconWrapper: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: SPACE.x3,
-  },
-  toastContent: {
-    flex: 1,
-  },
-  toastTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.textPrimary,
-  },
-  toastSubtitle: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    marginTop: 1,
-  },
-  toastAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACE.x2,
-    paddingVertical: SPACE.x1,
-    borderRadius: RADIUS.sm,
-  },
-  toastActionText: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginLeft: SPACE.x1,
-  },
 });
 
 export default function BlockConfirmDialog({
@@ -148,13 +96,49 @@ export default function BlockConfirmDialog({
   const { colors } = useTheme();
   const toast = useToast();
   const styles = createStyles(colors);
+  const containerRef = useRef<any>(null);
+  const previouslyFocused = useRef<any>(null);
 
   const [isBlocked, setIsBlocked] = useState(initiallyBlocked);
   const [loading, setLoading] = useState(false);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState<"blocked" | "unblocked" | null>(null);
-  const toastAnim = useState(new Animated.Value(0))[0];
   const prevInitiallyBlocked = useRef(initiallyBlocked);
+
+  // Focus management for accessibility
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (Platform.OS === "web") {
+      const doc: any = (globalThis as any).document;
+      previouslyFocused.current = doc?.activeElement ?? null;
+    }
+
+    const timeout = setTimeout(() => {
+      containerRef.current?.focus?.();
+    }, 50);
+
+    return () => {
+      clearTimeout(timeout);
+      if (Platform.OS === "web" && previouslyFocused.current) {
+        try {
+          previouslyFocused.current.focus?.();
+        } catch {}
+      }
+    };
+  }, [isOpen]);
+
+  // Escape key handler
+  useEffect(() => {
+    if (!isOpen || Platform.OS !== "web") return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (prevInitiallyBlocked.current !== initiallyBlocked) {
@@ -162,30 +146,6 @@ export default function BlockConfirmDialog({
       setIsBlocked(initiallyBlocked);
     }
   }, [initiallyBlocked]);
-
-  const showToastMessage = (type: "blocked" | "unblocked") => {
-    setToastMessage(type);
-    setShowToast(true);
-    Animated.timing(toastAnim, {
-      toValue: 1,
-      duration: 250,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-    setTimeout(() => hideToast(), 5000);
-  };
-
-  const hideToast = () => {
-    Animated.timing(toastAnim, {
-      toValue: 0,
-      duration: 200,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
-      setShowToast(false);
-      setToastMessage(null);
-    });
-  };
 
   const handleConfirm = async () => {
     if (loading) return;
@@ -195,13 +155,11 @@ export default function BlockConfirmDialog({
         await unblockUser(targetUserId);
         setIsBlocked(false);
         toast.showToast({ message: "User unblocked.", tone: "success" });
-        showToastMessage("unblocked");
         onUnblocked?.();
       } else {
         await blockUser(targetUserId);
         setIsBlocked(true);
         toast.showToast({ message: "User blocked.", tone: "error" });
-        showToastMessage("blocked");
         onBlocked?.();
       }
       onClose();
@@ -232,115 +190,71 @@ export default function BlockConfirmDialog({
     : `This will block ${targetUserName}. They won't see your posts, and you won't see theirs. You also won't be able to message each other.`;
 
   return (
-    <>
-      <TouchableOpacity style={styles.overlay} onPress={onClose} accessible={false}>
-        <TouchableOpacity style={styles.container} onPress={() => {}} accessible={false}>
-          <View
-            style={[
-              styles.iconWrapper,
-              { backgroundColor: isBlocked ? colors.successSurface : colors.destructiveSurface },
-            ]}
-          >
-            <UserX size={28} color={isBlocked ? colors.success : colors.destructive} />
-          </View>
-
-          <Text style={styles.title}>{isBlocked ? "Unblock User" : "Block User"}</Text>
-
-          <Text style={styles.message}>{confirmDescription}</Text>
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={onClose}
-              disabled={loading}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.confirmButton,
-                { backgroundColor: confirmColors.bg },
-                loading && { opacity: 0.7 },
-              ]}
-              onPress={handleConfirm}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              <Text style={[
-                styles.confirmButtonText,
-                { color: confirmColors.text },
-              ]}>
-                {loading ? "..." : confirmLabel}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
-
-      {/* Toast */}
-      <Animated.View
-        style={[
-          styles.toastContainer,
-          {
-            opacity: toastAnim,
-            transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [60, 0] }) }],
-          },
-        ]}
+    <TouchableOpacity
+      style={styles.overlay}
+      onPress={onClose}
+      accessible={false}
+      accessibilityRole="button"
+      accessibilityLabel="Close block dialog"
+    >
+      <TouchableOpacity
+        ref={containerRef}
+        style={[styles.container, { elevation: 20 }]}
+        onPress={() => {}}
+        accessible={false}
+        accessibilityViewIsModal
+        accessibilityRole="dialog"
+        accessibilityLabel={isBlocked ? "Unblock user confirmation" : "Block user confirmation"}
+        importantForAccessibility="yes"
       >
-        {showToast && toastMessage && (
+        <View
+          style={[
+            styles.iconWrapper,
+            { backgroundColor: isBlocked ? colors.successSurface : colors.destructiveSurface },
+          ]}
+          accessible={false}
+          accessibilityElementsHidden={true}
+          importantForAccessibility="no-hide-descendants"
+        >
+          <UserX size={28} color={isBlocked ? colors.success : colors.destructive} />
+        </View>
+
+        <Text style={styles.title}>{isBlocked ? "Unblock User" : "Block User"}</Text>
+
+        <Text style={styles.message}>{confirmDescription}</Text>
+
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={onClose}
+            disabled={loading}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[
-              styles.toast,
-              {
-                backgroundColor: toastMessage === "blocked" ? colors.destructiveSurface : colors.successSurface,
-                borderColor: toastMessage === "blocked" ? colors.destructive : colors.success,
-              },
+              styles.confirmButton,
+              { backgroundColor: confirmColors.bg },
+              loading && { opacity: 0.7 },
             ]}
-            onPress={hideToast}
-            activeOpacity={0.7}
+            onPress={handleConfirm}
+            disabled={loading}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={confirmLabel}
+            accessibilityState={{ disabled: loading }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <View
-              style={[
-                styles.toastIconWrapper,
-                { backgroundColor: toastMessage === "blocked" ? colors.destructiveSurface : colors.successSurface },
-              ]}
-            >
-              {toastMessage === "blocked" ? (
-                <UserX size={16} color={colors.destructive} />
-              ) : (
-                <Check size={16} color={colors.success} />
-              )}
-            </View>
-            <View style={styles.toastContent}>
-              <Text
-                style={[
-                  styles.toastTitle,
-                  { color: toastMessage === "blocked" ? colors.destructive : colors.success },
-                ]}
-              >
-                {toastMessage === "blocked" ? "User blocked" : "User unblocked"}
-              </Text>
-              <Text style={styles.toastSubtitle}>
-                {toastMessage === "blocked"
-                  ? `${targetUserName} can no longer see your posts.`
-                  : `${targetUserName} can now see your posts again.`}
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.toastAction} onPress={() => {}}>
-              <Undo2 size={14} color={toastMessage === "blocked" ? colors.destructive : colors.success} />
-              <Text
-                style={[
-                  styles.toastActionText,
-                  { color: toastMessage === "blocked" ? colors.destructive : colors.success },
-                ]}
-              >
-                Undo
-              </Text>
-            </TouchableOpacity>
+            <Text style={[styles.confirmButtonText, { color: confirmColors.text }]}>
+              {loading ? "..." : confirmLabel}
+            </Text>
           </TouchableOpacity>
-        )}
-      </Animated.View>
-    </>
+        </View>
+      </TouchableOpacity>
+    </TouchableOpacity>
   );
 }

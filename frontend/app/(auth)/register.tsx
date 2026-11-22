@@ -160,6 +160,7 @@ export default function RegisterScreen() {
       footer={footer}
       backHref="/(auth)/login"
       backLabel="Back to sign in"
+      backgroundIntensity="high"
     >
       {generalError ? <Alert tone="error" message={generalError} /> : null}
 

@@ -466,7 +466,7 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
                   fontWeight: "600",
                 }}
               >
-                💭 "{peer.note}"
+                💭 &quot;{peer.note}&quot;
               </Text>
             ) : (
               <Text

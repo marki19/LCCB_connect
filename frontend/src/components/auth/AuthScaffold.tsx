@@ -8,6 +8,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  StyleSheet,
 } from "react-native";
 import { Link } from "expo-router";
 import { BookOpen, ChevronLeft, ShieldCheck, Users } from "lucide-react-native";
@@ -17,6 +18,7 @@ import Card from "../ui/Card";
 import Reveal from "../ui/Reveal";
 import ThemeToggle from "../ui/ThemeToggle";
 import { RADIUS, SPACE } from "../../lib/tokens";
+import InteractiveBackground from "./InteractiveBackground";
 
 type AuthScaffoldProps = {
   title: string;
@@ -26,6 +28,10 @@ type AuthScaffoldProps = {
   /** Optional back link shown above the form (e.g. "Back to sign in"). */
   backHref?: string;
   backLabel?: string;
+  /** Background intensity for the interactive background */
+  backgroundIntensity?: "low" | "medium" | "high";
+  /** Custom background component (overrides default interactive background) */
+  background?: ReactNode;
 };
 
 const VALUE_PROPS = [
@@ -41,6 +47,8 @@ export default function AuthScaffold({
   footer,
   backHref,
   backLabel = "Back",
+  backgroundIntensity = "medium",
+  background,
 }: AuthScaffoldProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -143,6 +151,11 @@ export default function AuthScaffold({
   if (isDesktop) {
     return (
       <View style={{ flex: 1, flexDirection: "row", backgroundColor: colors.surfacePage }}>
+        {background ? (
+          <View style={StyleSheet.absoluteFill}>{background}</View>
+        ) : (
+          <InteractiveBackground intensity={backgroundIntensity} />
+        )}
         {themeToggle}
 
         <View
@@ -276,6 +289,11 @@ export default function AuthScaffold({
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: colors.surfacePage }}
     >
+      {background ? (
+        <View style={StyleSheet.absoluteFill}>{background}</View>
+      ) : (
+        <InteractiveBackground intensity={backgroundIntensity} />
+      )}
       {themeToggle}
       <ScrollView
         contentContainerStyle={{
