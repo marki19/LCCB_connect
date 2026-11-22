@@ -276,6 +276,17 @@ export function resolveMessageReport(
   });
 }
 
+export function resolveContentReport(
+  id: string,
+  action: "reviewed" | "dismissed",
+  reason: string
+): Promise<void> {
+  return apiJson(`/moderation/reports/${encodeURIComponent(id)}`, {
+    method: "POST",
+    body: JSON.stringify({ action, reason: validateNonEmptyReason(reason, "resolveContentReport") }),
+  });
+}
+
 export function listAdminAudit(params: {
   actor_id?: string;
   action?: string;

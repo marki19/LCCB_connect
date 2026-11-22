@@ -356,23 +356,6 @@ async function recordSessionEvent({
 }
 
 /**
- * Get the AAL (Authenticator Assurance Level) from a session token.
- * Supabase includes `aal` in the JWT claims when MFA is enrolled.
- * Returns 'aal1', 'aal2', or 'aal1' (default).
- */
-function getAalFromToken(token) {
-  if (!token) return "aal1";
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return "aal1";
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
-    return payload.aal || "aal1";
-  } catch {
-    return "aal1";
-  }
-}
-
-/**
  * Log successful login and return AAL.
  */
 async function recordLogin({
@@ -632,7 +615,6 @@ module.exports = {
   consumeMfaChallenge,
   _clearPendingMfaChallenges,
   recordSessionEvent,
-  getAalFromToken,
   recordLogin,
   recordLogout,
   recordMfaEnroll,

@@ -35,6 +35,21 @@ async function verifyFileOwnership(category, filename, user) {
   // an ILIKE pattern, and an unescaped `%` or `_` would widen the match.
   const likePattern = `%${escapeLike(filename)}`;
 
+  // Snap media is audience-scoped and expires. Visibility, not upload
+  // ownership, decides who may read it, so ask the same function the rail
+  // uses. The key is matched exactly: every snap row is written with its
+  // `snaps/` prefix, so the legacy bare-filename tolerance is unnecessary.
+  if (category === "snaps") {
+    const { rows } = await db.query(
+      `SELECT 1
+         FROM public.visible_snaps($1) s
+        WHERE s.media_key = $2
+        LIMIT 1`,
+      [String(user.id), `${category}/${filename}`]
+    );
+    return rows.length > 0;
+  }
+
   if (category === "theses") {
     const { rows } = await db.query(
       `SELECT p.author_id AS uploader_id
@@ -104,8 +119,9 @@ function redirectToObject(res, key, { isPublic }) {
 /**
  * GET /api/files/:category/:filename
  *
- * avatars/posts/videos are public.
+ * avatars/posts/videos/covers are public.
  * theses/documents require auth + ownership (or admin) and return 404 otherwise.
+ * snaps require auth and are served only to a viewer who can see the snap.
  */
 router.get("/:category/:filename", (req, res, next) => {
   const category = (req.params.category || "").toLowerCase();

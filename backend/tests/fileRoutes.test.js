@@ -200,6 +200,35 @@ describe("GET /api/files/:category/:filename", () => {
     assert.equal(res.status, 404);
   });
 
+  test("requires authentication for snap media", async () => {
+    const res = await request(app).get("/api/files/snaps/9f83ab24e10c71a39bd5.jpg");
+    assert.equal(res.status, 401);
+  });
+
+  test("returns 404 when the snap is not visible to the caller", async () => {
+    asUser("viewer-user-id");
+    query.setImpl(async () => ({ rows: [] }));
+
+    const res = await request(app)
+      .get("/api/files/snaps/9f83ab24e10c71a39bd5.jpg")
+      .set("Authorization", "Bearer valid-token");
+
+    assert.equal(res.status, 404);
+  });
+
+  test("redirects a viewer who can see the snap, without caching", async () => {
+    asUser("viewer-user-id");
+    query.setImpl(async () => ({ rows: [{ exists: 1 }] }));
+
+    const res = await request(app)
+      .get("/api/files/snaps/9f83ab24e10c71a39bd5.jpg")
+      .set("Authorization", "Bearer valid-token");
+
+    assert.equal(res.status, 302);
+    assert.equal(res.headers["cache-control"], "private, no-store");
+    assert.match(res.headers.location, /snaps\/9f83ab24e10c71a39bd5\.jpg/);
+  });
+
   test("returns 404 for an unknown category", async () => {
     const res = await request(app).get("/api/files/secrets/test.jpg");
     assert.equal(res.status, 404);

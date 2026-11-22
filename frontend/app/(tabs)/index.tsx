@@ -28,6 +28,10 @@ import PostCard from "../../src/components/PostCard";
 import RepostCard from "../../src/components/RepostCard";
 import SettingsSidebar from "../../src/components/SettingsSidebar";
 import Avatar from "../../src/components/Avatar";
+import SnapRail from "../../src/components/snaps/SnapRail";
+import SnapViewer from "../../src/components/snaps/SnapViewer";
+import QuickSnapComposer from "../../src/components/snaps/QuickSnapComposer";
+import { getSnapRail, type SnapGroup } from "../../src/lib/snaps";
 import { usePrefetchImages } from "../../src/hooks/usePrefetchImages";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
@@ -113,6 +117,24 @@ export default function HomeScreen() {
   const [error, setError] = useState("");
   const { activeCategory: filter, setCategory: setFilter } = useFeedFilter();
   const loadedRef = useRef(false);
+
+  const [snapGroups, setSnapGroups] = useState<SnapGroup[]>([]);
+  const [snapsLoading, setSnapsLoading] = useState(false);
+  const [snapComposerOpen, setSnapComposerOpen] = useState(false);
+  const [activeSnapGroup, setActiveSnapGroup] = useState<SnapGroup | null>(null);
+
+  const fetchSnapRail = useCallback(async () => {
+    if (isGuest || !profile?.id) return;
+    try {
+      setSnapsLoading(true);
+      const groups = await getSnapRail();
+      setSnapGroups(groups);
+    } catch (err) {
+      console.error("Failed to load snap rail:", err);
+    } finally {
+      setSnapsLoading(false);
+    }
+  }, [isGuest, profile?.id]);
 
   const handlePostDeleted = useCallback((id: string | number) => {
     setPosts((prev) => prev.filter((p) => String(p.id) !== String(id)));
@@ -261,7 +283,8 @@ export default function HomeScreen() {
       void fetchUnifiedFeed();
       void fetchActivePeers();
       void fetchUnreadCount();
-    }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount])
+      void fetchSnapRail();
+    }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount, fetchSnapRail])
   );
 
   useEffect(() => {
@@ -271,9 +294,9 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchUnifiedFeed(), fetchActivePeers(), fetchUnreadCount()]);
+    await Promise.all([fetchUnifiedFeed(), fetchActivePeers(), fetchUnreadCount(), fetchSnapRail()]);
     setRefreshing(false);
-  }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount]);
+  }, [fetchUnifiedFeed, fetchActivePeers, fetchUnreadCount, fetchSnapRail]);
 
   const emptyCopy = FILTER_COPY[filter];
 
@@ -383,6 +406,17 @@ export default function HomeScreen() {
             ListHeaderComponent={
               <View>
                 <IdentityBanner />
+
+                {!isGuest && (
+                  <View style={{ marginHorizontal: SPACE.x4, marginBottom: SPACE.x3 }}>
+                    <SnapRail
+                      groups={snapGroups}
+                      loading={snapsLoading}
+                      onAddSnap={() => setSnapComposerOpen(true)}
+                      onOpenGroup={(group) => setActiveSnapGroup(group)}
+                    />
+                  </View>
+                )}
 
                 {error ? (
                   <View
@@ -506,6 +540,37 @@ export default function HomeScreen() {
       </View>
 
       <SettingsSidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      <QuickSnapComposer
+        visible={snapComposerOpen}
+        onClose={() => setSnapComposerOpen(false)}
+        onCreated={() => void fetchSnapRail()}
+      />
+
+      <SnapViewer
+        // Remount per group so playback and counters start at the first snap.
+        key={activeSnapGroup?.author_id ?? "no-snap-group"}
+        visible={Boolean(activeSnapGroup)}
+        group={activeSnapGroup}
+        onClose={() => setActiveSnapGroup(null)}
+        onSnapDeleted={() => void fetchSnapRail()}
+        onNextGroup={() => {
+          if (!activeSnapGroup) return;
+          const idx = snapGroups.findIndex((g) => g.author_id === activeSnapGroup.author_id);
+          if (idx >= 0 && idx < snapGroups.length - 1) {
+            setActiveSnapGroup(snapGroups[idx + 1]);
+          } else {
+            setActiveSnapGroup(null);
+          }
+        }}
+        onPrevGroup={() => {
+          if (!activeSnapGroup) return;
+          const idx = snapGroups.findIndex((g) => g.author_id === activeSnapGroup.author_id);
+          if (idx > 0) {
+            setActiveSnapGroup(snapGroups[idx - 1]);
+          }
+        }}
+      />
     </View>
   );
 }

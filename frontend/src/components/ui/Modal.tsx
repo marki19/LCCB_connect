@@ -65,6 +65,8 @@ export default function Modal({
   const progressAnim = useMemo(() => new Animated.Value(visible ? 1 : 0), []);
   const contentRef = useRef<View>(null);
   const previouslyFocused = useRef<any>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (visible) {
@@ -96,16 +98,21 @@ export default function Modal({
     previouslyFocused.current = doc?.activeElement ?? null;
 
     const onKeyDown = (event: any) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseRef.current?.();
     };
     win?.addEventListener?.("keydown", onKeyDown);
 
-    // Move focus into the dialog so screen readers announce it.
+    // Move focus into the dialog for screen readers, but only if focus is
+    // not already on an autoFocus or interactive child within the modal.
     const t = setTimeout(() => {
       try {
-        (contentRef.current as any)?.focus?.();
+        const active = doc?.activeElement;
+        const container = contentRef.current as any;
+        if (container && (!active || !container.contains(active))) {
+          container.focus?.();
+        }
       } catch {}
-    }, 30);
+    }, 50);
 
     return () => {
       win?.removeEventListener?.("keydown", onKeyDown);
@@ -114,7 +121,7 @@ export default function Modal({
         previouslyFocused.current?.focus?.();
       } catch {}
     };
-  }, [visible, onClose]);
+  }, [visible]);
 
   const isMobile = width < 640;
   const asSheet = isMobile && sheetOnMobile;

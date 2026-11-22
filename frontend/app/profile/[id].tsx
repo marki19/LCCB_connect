@@ -50,7 +50,7 @@ import ProfileAboutTab from "../../src/components/profile/ProfileAboutTab";
 import ProfileFriendsTab from "../../src/components/profile/ProfileFriendsTab";
 import ProfilePhotosTab from "../../src/components/profile/ProfilePhotosTab";
 import ProfileThesesList from "../../src/components/profile/ProfileThesesList";
-import StoryActionModal from "../../src/components/profile/StoryActionModal";
+import QuickSnapComposer from "../../src/components/snaps/QuickSnapComposer";
 import { RADIUS, SPACE } from "../../src/lib/tokens";
 
 export default function UserProfileScreen() {
@@ -68,7 +68,7 @@ export default function UserProfileScreen() {
     (tab as ProfileTabKey) || "all"
   );
   const [actionBusy, setActionBusy] = useState(false);
-  const [storyModalOpen, setStoryModalOpen] = useState(false);
+  const [snapComposerOpen, setSnapComposerOpen] = useState(false);
 
   const {
     userData,
@@ -239,7 +239,7 @@ export default function UserProfileScreen() {
       onFriendAction={handleFriendAction}
       actionBusy={actionBusy}
       onEditProfile={() => router.push("/edit-profile")}
-      onAddStory={() => setStoryModalOpen(true)}
+      onAddSnap={() => setSnapComposerOpen(true)}
       onMore={() => {}}
     />
   );
@@ -446,7 +446,7 @@ export default function UserProfileScreen() {
         {profileHeaderCard}
         <View style={{ marginTop: SPACE.x4 }}>{renderTabContent()}</View>
       </View>
-      <StoryActionModal visible={storyModalOpen} onClose={() => setStoryModalOpen(false)} />
+      <QuickSnapComposer visible={snapComposerOpen} onClose={() => setSnapComposerOpen(false)} />
     </ScrollView>
   );
 

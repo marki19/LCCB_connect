@@ -224,3 +224,26 @@ describe("__resetSigner", () => {
     __setSigner((key) => `https://r2.example/${key}`);
   });
 });
+
+describe("snap media", () => {
+  it("signs media_key so snap bytes are never served from a public key", () => {
+    const resolved = withStorageUrlsSync({ id: "s1", media_key: "snaps/abc123.jpg" });
+
+    assert.equal(resolved.media_key, "https://r2.example/snaps/abc123.jpg?sig=abc");
+    assert.deepEqual(signed.map((s) => s.key), ["snaps/abc123.jpg"]);
+  });
+
+  it("leaves an already-expanded media_key alone", () => {
+    const resolved = withStorageUrlsSync({ media_key: "https://r2.example/snaps/abc123.jpg?sig=abc" });
+    assert.equal(resolved.media_key, "https://r2.example/snaps/abc123.jpg?sig=abc");
+  });
+
+  it("signs snap media nested inside a rail group", () => {
+    const rail = [
+      { author_id: "u1", snaps: [{ id: "s1", media_key: "snaps/abc123.jpg" }] },
+    ];
+    const resolved = withStorageUrlsSync(rail);
+
+    assert.match(resolved[0].snaps[0].media_key, /^https:\/\/r2\.example\/snaps\/abc123\.jpg/);
+  });
+});

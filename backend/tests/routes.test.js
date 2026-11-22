@@ -101,8 +101,6 @@ const m = {
   getVisibleRepostsForPost: stub(repostModel, "getVisibleRepostsForPost"),
   createRepostNotification: stub(notificationModel, "createRepostNotification"),
   createReport: stub(reportModel, "createReport"),
-  listReports: stub(reportModel, "listReports"),
-  updateReportStatus: stub(reportModel, "updateReportStatus"),
   blockUser: stub(blockModel, "blockUser"),
   unblockUser: stub(blockModel, "unblockUser"),
   listBlocked: stub(blockModel, "listBlocked"),
@@ -884,15 +882,9 @@ describe("reports and blocks", () => {
     assert.equal(res.status, 200);
   });
 
-  it("GET /api/reports is admin-only", async () => {
-    m.listReports.setImpl(async () => []);
-
-    const asStudent = await request(app).get("/api/reports").set(AUTH);
-    assert.equal(asStudent.status, 403);
-
-    session.role = "admin";
-    const asAdmin = await request(app).get("/api/reports").set(AUTH);
-    assert.equal(asAdmin.status, 200);
+  it("GET /api/reports no longer exists — the moderation queue serves reports", async () => {
+    const res = await request(app).get("/api/reports").set(AUTH);
+    assert.equal(res.status, 404);
   });
 });
 

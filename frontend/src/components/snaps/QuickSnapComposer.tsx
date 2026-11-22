@@ -5,22 +5,33 @@ import Modal from "../ui/Modal";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useToast } from "../../contexts/ToastContext";
 import { captureSnap, pickSnap, uploadToStorage, MAX_UPLOAD_BYTES } from "../../lib/upload";
+import { createSnap, type SnapAudience } from "../../lib/snaps";
 import { RADIUS, SPACE } from "../../lib/tokens";
 
-interface StoryActionModalProps {
+interface QuickSnapComposerProps {
   visible: boolean;
   onClose: () => void;
-  onStoryCreated?: () => void;
+  onCreated?: () => void;
 }
 
-export default function StoryActionModal({
+/** The three audiences a snap can be sent to. `private` is author-only and is
+ *  not offered here — a snap nobody else can see is what saving to the device
+ *  is for. */
+const AUDIENCES: { value: SnapAudience; label: string }[] = [
+  { value: "public", label: "Public" },
+  { value: "friends", label: "Friends" },
+  { value: "department", label: "Department" },
+];
+
+export default function QuickSnapComposer({
   visible,
   onClose,
-  onStoryCreated,
-}: StoryActionModalProps) {
+  onCreated,
+}: QuickSnapComposerProps) {
   const { colors } = useTheme();
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
+  const [audience, setAudience] = useState<SnapAudience>("public");
 
   const handleCapture = async () => {
     try {
@@ -52,29 +63,37 @@ export default function StoryActionModal({
         media.type,
         MAX_UPLOAD_BYTES.snap
       );
-      if (uploaded) {
-        showToast({ message: "Story added successfully!", tone: "success" });
-        onStoryCreated?.();
-        onClose();
-      } else {
-        showToast({ message: "Failed to upload story", tone: "error" });
+      if (!uploaded?.key) {
+        showToast({ message: "Couldn't upload that file", tone: "error" });
+        return;
       }
+
+      await createSnap({
+        media_key: uploaded.key,
+        media_type: media.type.startsWith("video/") ? "video" : "image",
+        visibility: audience,
+      });
+      showToast({ message: "Quick Snap added", tone: "success" });
+      onCreated?.();
+      onClose();
     } catch (err: any) {
-      showToast({ message: err?.message || "Failed to add story", tone: "error" });
+      showToast({ message: err?.message || "Couldn't create snap", tone: "error" });
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal visible={visible} onClose={busy ? () => {} : onClose}>
-      <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <Modal visible={visible} onClose={busy ? () => {} : onClose} maxWidth={420} sheetOnMobile={false}>
+      <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.ink }]}>Add to story</Text>
+          <Text style={[styles.title, { color: colors.ink }]}>Quick Snap</Text>
           <Pressable
             onPress={onClose}
             disabled={busy}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
             style={({ pressed, hovered }: any) => [
               styles.closeBtn,
               {
@@ -87,14 +106,43 @@ export default function StoryActionModal({
           </Pressable>
         </View>
 
-        <Text style={[styles.subtitle, { color: colors.inkSoft }]}>
-          Choose how you want to share your photo or video story.
-        </Text>
+        <View style={styles.audienceRow}>
+          {AUDIENCES.map((option) => {
+            const selected = audience === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => setAudience(option.value)}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel={option.label}
+                accessibilityState={{ selected }}
+                style={({ pressed, hovered }: any) => [
+                  styles.audienceChip,
+                  {
+                    backgroundColor: selected ? colors.brandSolid : colors.surfaceSunken,
+                    borderColor: selected ? colors.brandSolid : colors.border,
+                    opacity: pressed ? 0.8 : hovered ? 0.94 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.audienceLabel,
+                    { color: selected ? "#FFFFFF" : colors.inkSoft },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         {busy ? (
           <View style={styles.busyBox}>
             <ActivityIndicator size="large" color={colors.brand} />
-            <Text style={[styles.busyText, { color: colors.inkSoft }]}>Uploading story...</Text>
+            <Text style={[styles.busyText, { color: colors.inkSoft }]}>Uploading…</Text>
           </View>
         ) : (
           <View style={styles.actions}>
@@ -115,12 +163,7 @@ export default function StoryActionModal({
               <View style={[styles.iconWrap, { backgroundColor: colors.brandWash }]}>
                 <Camera size={24} color={colors.brand} />
               </View>
-              <View style={styles.actionContent}>
-                <Text style={[styles.actionTitle, { color: colors.ink }]}>Use Camera</Text>
-                <Text style={[styles.actionDesc, { color: colors.inkFaint }]}>
-                  Take a new photo or video up to 30 seconds
-                </Text>
-              </View>
+              <Text style={[styles.actionTitle, { color: colors.ink }]}>Use Camera</Text>
             </Pressable>
 
             <Pressable
@@ -140,12 +183,7 @@ export default function StoryActionModal({
               <View style={[styles.iconWrap, { backgroundColor: colors.successSurface }]}>
                 <ImageIcon size={24} color={colors.success} />
               </View>
-              <View style={styles.actionContent}>
-                <Text style={[styles.actionTitle, { color: colors.ink }]}>Upload Photo / Video</Text>
-                <Text style={[styles.actionDesc, { color: colors.inkFaint }]}>
-                  Pick an existing image or video from your device
-                </Text>
-              </View>
+              <Text style={[styles.actionTitle, { color: colors.ink }]}>Upload Photo / Video</Text>
             </Pressable>
           </View>
         )}
@@ -157,16 +195,13 @@ export default function StoryActionModal({
 const styles = StyleSheet.create({
   container: {
     padding: SPACE.x5,
-    borderRadius: RADIUS.xl,
     width: "100%",
-    maxWidth: 420,
-    alignSelf: "center",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: SPACE.x2,
+    marginBottom: SPACE.x4,
   },
   title: {
     fontSize: 18,
@@ -179,10 +214,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  subtitle: {
-    fontSize: 13,
-    lineHeight: 18,
+  audienceRow: {
+    flexDirection: "row",
+    gap: SPACE.x2,
     marginBottom: SPACE.x4,
+  },
+  audienceChip: {
+    flex: 1,
+    paddingVertical: SPACE.x2,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  audienceLabel: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   actions: {
     gap: SPACE.x3,
@@ -202,16 +248,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  actionContent: {
-    flex: 1,
-  },
   actionTitle: {
     fontSize: 15,
     fontWeight: "600",
-  },
-  actionDesc: {
-    fontSize: 12,
-    marginTop: 2,
   },
   busyBox: {
     paddingVertical: SPACE.x8,

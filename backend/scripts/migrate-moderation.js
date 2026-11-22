@@ -14,18 +14,7 @@ async function applyModerationMigration() {
       ADD COLUMN IF NOT EXISTS moderation_status TEXT DEFAULT 'approved',
       ADD COLUMN IF NOT EXISTS moderation_reason TEXT;
 
-    -- 3. Add moderation columns to theses (if table still exists)
-    DO $$
-    BEGIN
-      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'theses') THEN
-        ALTER TABLE public.theses 
-          ADD COLUMN IF NOT EXISTS moderation_status TEXT DEFAULT 'approved',
-          ADD COLUMN IF NOT EXISTS moderation_reason TEXT;
-      END IF;
-    END
-    $$;
-
-    -- 4. Constraint on moderation_status
+    -- 3. Constraint on moderation_status
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_posts_moderation') THEN
@@ -36,16 +25,10 @@ async function applyModerationMigration() {
         ALTER TABLE public.comments ADD CONSTRAINT chk_comments_moderation 
           CHECK (moderation_status IN ('approved', 'flagged', 'hidden'));
       END IF;
-      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'theses') THEN
-        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_theses_moderation') THEN
-          ALTER TABLE public.theses ADD CONSTRAINT chk_theses_moderation 
-            CHECK (moderation_status IN ('approved', 'flagged', 'hidden'));
-        END IF;
-      END IF;
     END
     $$;
 
-    -- 5. Notifications table (Raw SQL)
+    -- 4. Notifications table (Raw SQL)
     CREATE TABLE IF NOT EXISTS public.notifications (
       id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -58,20 +41,13 @@ async function applyModerationMigration() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
-    -- 6. Indexes for moderation and notifications
+    -- 5. Indexes for moderation and notifications
     CREATE INDEX IF NOT EXISTS idx_posts_moderation ON public.posts(moderation_status);
     CREATE INDEX IF NOT EXISTS idx_comments_moderation ON public.comments(moderation_status);
-    DO $$
-    BEGIN
-      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'theses') THEN
-        CREATE INDEX IF NOT EXISTS idx_theses_moderation ON public.theses(moderation_status);
-      END IF;
-    END
-    $$;
     CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON public.notifications(user_id, is_read);
     CREATE INDEX IF NOT EXISTS idx_notifications_dept ON public.notifications(department);
 
-    -- 7. Row Level Security for notifications (deny-by-default).
+    -- 6. Row Level Security for notifications (deny-by-default).
     --    Do NOT add a 'USING (true)' policy here: it would expose every user's
     --    notifications to the public anon key. Access goes through the Express
     --    API, which connects as the table owner and bypasses RLS. The DROP below

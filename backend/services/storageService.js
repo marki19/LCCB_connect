@@ -19,6 +19,10 @@ const DEFAULT_SIGNED_URL_EXPIRES = 300;
 /**
  * Which bucket each file column points into. The bucket name selects the key
  * prefix, so legacy column names (`assets`) keep working.
+ *
+ * A private category resolves to a short-lived presigned URL; a public one
+ * resolves to a bare key the client turns into `/api/files/<key>`. `media_key`
+ * is private (snaps), so clients receive a renderable URL there.
  */
 const FILE_FIELD_BUCKETS = {
   image_url: "assets",
@@ -26,6 +30,7 @@ const FILE_FIELD_BUCKETS = {
   avatar_url: "avatars",
   video_url: "videos",
   cover_url: "covers",
+  media_key: "snaps",
   attachments: "documents",
 };
 
@@ -37,6 +42,7 @@ const BUCKET_CATEGORY = {
   theses: "theses",
   documents: "documents",
   videos: "videos",
+  snaps: "snaps",
   covers: "covers",
 };
 
