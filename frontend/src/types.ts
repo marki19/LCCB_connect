@@ -218,6 +218,30 @@ export type FriendSuggestion = {
   reason: "mutual" | "department" | "campus";
 };
 
+/**
+ * One row from GET /api/notifications.
+ *
+ * `new_message` / `message_request` rows never appear here — the API filters
+ * them out so the bell and the Chats tab cannot disagree about what is unread.
+ */
+export type NotificationItem = {
+  id: string;
+  user_id: string;
+  actor_id: string | null;
+  type: string;
+  target_id: string | null;
+  department: string | null;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+  actor: {
+    id: string;
+    full_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+  } | null;
+};
+
 export function messageStatus(message: Message): MessageStatus {
   if (message.read_at) return 'seen';
   if (message.delivered_at) return 'delivered';

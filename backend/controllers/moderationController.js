@@ -429,7 +429,17 @@ const moderateReport = async (req, res, next) => {
 
 const getNotifications = async (req, res, next) => {
   try {
-    const notifications = await notificationModel.getUserNotifications(req.user.id);
+    // The bell and the inbox both page with `limit`; clamp it so a caller cannot
+    // ask for an unbounded result set.
+    const requested = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requested)
+      ? Math.min(Math.max(requested, 1), 100)
+      : undefined;
+
+    const notifications = await notificationModel.getUserNotifications(
+      req.user.id,
+      limit ? { limit } : undefined
+    );
     const unread = await notificationModel.getUnreadCount(req.user.id);
     res.json({ unread, notifications });
   } catch (err) {

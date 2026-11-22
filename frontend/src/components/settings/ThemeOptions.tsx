@@ -1,13 +1,16 @@
-import { Text, View, Pressable } from "react-native";
-import { Palette } from "lucide-react-native";
+import { useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import { Palette, Pipette } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import {
+  ACCENT_CHOICES,
   colorSchemeLabel,
   type ColorSchemePreference,
   type AccentColorPreference,
 } from "../../lib/theme";
-import { SPACE, TYPE } from "../../lib/tokens";
+import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import RadioOption from "../ui/RadioOption";
+import AccentColorPicker from "./AccentColorPicker";
 
 /**
  * Presentation order: the two explicit choices first, the automatic one last —
@@ -21,26 +24,14 @@ const OPTION_DESCRIPTION: Record<ColorSchemePreference, string> = {
   system: "Follow your device's appearance.",
 };
 
-/** Accent color labels in display order. */
-const ACCENT_ORDER: readonly AccentColorPreference[] = [
-  "blue",
-  "indigo",
-  "teal",
-  "green",
-  "olive",
-  "yellow",
-  "orange",
-  "brown",
-  "rose",
-  "pink",
-  "purple",
-  "violet",
-];
+/** Human-readable name for an accent swatch. */
+function accentLabel(accent: AccentColorPreference): string {
+  if (accent === "default") return "Default";
+  if (accent === "custom") return "Color picker";
+  return accent.charAt(0).toUpperCase() + accent.slice(1);
+}
 
-/**
- * Pick a checkmark color with enough contrast against `hex`.
- * Light accents need a dark dot; dark accents need a light dot.
- */
+/** Pick a checkmark color with enough contrast against `hex`. */
 function contrastingDot(hex: string): string {
   const clean = hex.replace("#", "");
   if (clean.length < 6) return "#FFFFFF";
@@ -52,6 +43,11 @@ function contrastingDot(hex: string): string {
   return luminance > 0.55 ? "#0B1B33" : "#FFFFFF";
 }
 
+/** Swatch footprint. The cell is larger than the dot so the selection ring
+ *  has room and the grid keeps a consistent rhythm. */
+const SWATCH_SIZE = 36;
+const SWATCH_CELL = 44;
+
 export default function ThemeOptions() {
   const {
     colors,
@@ -60,35 +56,24 @@ export default function ThemeOptions() {
     setColorScheme,
     accentPreference,
     setAccent,
+    customAccentHex,
     accentColor: resolvedAccentHex,
   } = useTheme();
 
-  const descriptionFor = (value: ColorSchemePreference) =>
-    value === "system"
-      ? `${OPTION_DESCRIPTION.system} Currently ${resolved}.`
-      : OPTION_DESCRIPTION[value];
+  const descriptionFor = (value: ColorSchemePreference) => OPTION_DESCRIPTION[value];
 
   const isDark = resolved === "dark";
 
   // Resolve each swatch's hex from the active palette (light/dark aware).
   const accentPalette = colors.accentColor[isDark ? "dark" : "light"];
-  const accentSwatches: Record<AccentColorPreference, string> = {} as Record<
-    AccentColorPreference,
-    string
-  >;
-  for (const label of ACCENT_ORDER) {
-    accentSwatches[label] = accentPalette[label];
-  }
+  const swatchHex = (label: AccentColorPreference): string => {
+    if (label === "custom") return customAccentHex || accentPalette.default;
+    return accentPalette[label] || accentPalette.default;
+  };
 
-  // Border style for the selected swatch uses the resolved hex, not the label.
-  const selectedBorderStyle = accentPreference
-    ? {
-        borderWidth: 3,
-        borderColor: resolvedAccentHex,
-        // Push the ring outside so it doesn't inflate the swatch footprint.
-        margin: -4,
-      }
-    : {};
+  // Hover state drives the floating name label above the swatch grid.
+  const [hoveredAccent, setHoveredAccent] = useState<AccentColorPreference | null>(null);
+  const [pickerVisible, setPickerVisible] = useState(false);
 
   return (
     <View
@@ -153,44 +138,136 @@ export default function ThemeOptions() {
             flexWrap: "wrap",
             gap: SPACE.x2,
             marginTop: SPACE.x1,
+            padding: SPACE.x2,
           }}
         >
-          {ACCENT_ORDER.map((label) => {
-            const hex = accentSwatches[label];
+          {ACCENT_CHOICES.map((label) => {
+            const hex = swatchHex(label);
             const isSelected = accentPreference === label;
+            const isHovered = hoveredAccent === label;
+            const isPicker = label === "custom";
+
             return (
-              <Pressable
+              <View
                 key={label}
                 style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 12,
-                  backgroundColor: hex,
+                  width: SWATCH_CELL,
+                  height: SWATCH_CELL,
                   alignItems: "center",
                   justifyContent: "center",
-                  ...selectedBorderStyle,
+                  zIndex: isHovered ? 10 : undefined,
                 }}
-                onPress={() => setAccent(label)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isSelected }}
-                accessibilityLabel={`Set ${label} accent color`}
               >
-                {/* Checkmark for selected color — contrast-aware dot */}
-                {isSelected && (
+                {/* Floating name label, shown on hover (web/desktop). */}
+                {isHovered ? (
                   <View
+                    pointerEvents="none"
                     style={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: 6,
-                      backgroundColor: contrastingDot(hex),
+                      position: "absolute",
+                      bottom: "100%",
+                      left: 0,
+                      right: 0,
+                      marginBottom: SPACE.x1,
+                      alignItems: "center",
+                    }}
+                  >
+                    <View
+                      style={{
+                        backgroundColor: colors.ink,
+                        borderRadius: RADIUS.sm,
+                        paddingHorizontal: SPACE.x2,
+                        paddingVertical: SPACE.x1,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          ...TYPE.caption,
+                          fontWeight: "700",
+                          color: colors.surface,
+                        }}
+                      >
+                        {accentLabel(label)}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Selection ring sits outside the dot so the dot itself never
+                    changes size when the selection moves. */}
+                {isSelected ? (
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: "absolute",
+                      top: 1,
+                      left: 1,
+                      width: SWATCH_SIZE + 6,
+                      height: SWATCH_SIZE + 6,
+                      borderRadius: RADIUS.md + 3,
+                      borderWidth: 3,
+                      borderColor: resolvedAccentHex,
                     }}
                   />
-                )}
-              </Pressable>
+                ) : null}
+
+                <Pressable
+                  onPress={() => (isPicker ? setPickerVisible(true) : setAccent(label))}
+                  onKeyDown={(event: any) => {
+                    if (event.key === " " || event.key === "Spacebar") {
+                      event.preventDefault?.();
+                      event.stopPropagation?.();
+                      if (isPicker) setPickerVisible(true);
+                      else setAccent(label);
+                    }
+                  }}
+                  onHoverIn={() => setHoveredAccent(label)}
+                  onHoverOut={() => setHoveredAccent(null)}
+                  accessibilityRole={isPicker ? "button" : "radio"}
+                  aria-checked={isPicker ? undefined : isSelected}
+                  aria-pressed={isPicker ? isSelected : undefined}
+                  accessibilityState={{ selected: isSelected, disabled: false }}
+                  accessibilityLabel={
+                    isPicker ? "Open custom accent color picker" : `${accentLabel(label)} accent color`
+                  }
+                  accessibilityHint={
+                    isSelected ? "Selected" : `Use ${accentLabel(label)} as the app accent`
+                  }
+                  hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
+                  style={{
+                    width: SWATCH_SIZE,
+                    height: SWATCH_SIZE,
+                    borderRadius: RADIUS.md,
+                    backgroundColor: hex,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: isHovered ? 0.85 : 1,
+                    cursor: "pointer",
+                    // Layout-free transition keeps the grid stable on web.
+                    transitionProperty: "background-color, opacity, border-color",
+                    transitionDuration: "180ms",
+                    transitionTimingFunction: "ease",
+                  } as any}
+                >
+                  {isPicker ? (
+                    <Pipette size={18} color={contrastingDot(hex)} strokeWidth={2.2} />
+                  ) : isSelected ? (
+                    <View
+                      style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 6,
+                        backgroundColor: contrastingDot(hex),
+                      }}
+                    />
+                  ) : null}
+                </Pressable>
+              </View>
             );
           })}
         </View>
       </View>
+
+      <AccentColorPicker visible={pickerVisible} onClose={() => setPickerVisible(false)} />
     </View>
   );
 }

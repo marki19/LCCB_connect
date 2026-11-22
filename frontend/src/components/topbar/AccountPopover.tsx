@@ -11,7 +11,7 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Platform,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { ArrowLeft, ChevronRight, LogOut, Palette, Settings, Shield } from "lucide-react-native";
@@ -25,7 +25,6 @@ import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
 import ThemeOptions from "../settings/ThemeOptions";
 import SlideSwitcher from "../ui/SlideSwitcher";
-import { TOP_BAR_HEIGHT } from "./constants";
 import { usePopoverPosition, getArrowStyle, getBorderArrowStyle } from "../../lib/popoverPosition";
 
 /** Outer width of the panel, including its 1px border. */
@@ -48,6 +47,7 @@ export default function AccountPopover({
 }: AccountPopoverProps) {
   const { colors, preference } = useTheme();
   const { profile, signOut } = useAuth();
+  const { height: windowHeight } = useWindowDimensions();
   const { openSettingsSidebar } = useSettingsSidebar();
   const router = useRouter();
 
@@ -66,11 +66,16 @@ export default function AccountPopover({
     try { await signOut(); } catch (e) { console.error(e); }
   };
 
+  // The theme sub-panel needs more vertical room than the menu panel. Size the
+  // card to fit all accent swatches at once (no scrolling) while staying inside
+  // short viewports.
+  const maxPopoverHeight = Math.min(640, Math.max(420, windowHeight - 96));
+
   // Use the new popover positioning hook (anchored to the trigger button)
   const { position, arrowPosition, arrowOffset, updatePosition } = usePopoverPosition({
     preferredPosition: "bottom-end",
     popoverWidth: POPOVER_WIDTH,
-    popoverHeight: 480,
+    popoverHeight: maxPopoverHeight,
     enabled: true,
   }, anchorRef);
 
@@ -99,6 +104,7 @@ export default function AccountPopover({
           backgroundColor: colors.surface,
           borderColor: colors.border,
           shadowColor: colors.shadow,
+          maxHeight: maxPopoverHeight,
         },
       ]}
     >
@@ -289,7 +295,6 @@ function MenuItem({
 const styles = StyleSheet.create({
   container: {
     width: POPOVER_WIDTH,
-    maxHeight: 480,
     borderRadius: RADIUS.lg,
     borderWidth: POPOVER_BORDER,
     shadowOffset: { width: 0, height: 4 },

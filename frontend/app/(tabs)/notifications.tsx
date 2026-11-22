@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -19,38 +19,33 @@ import {
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { apiFetch } from "../../src/lib/api";
+import { useNotifications } from "../../src/contexts/NotificationsContext";
 import { RADIUS, SPACE, TYPE } from "../../src/lib/tokens";
+import {
+  notificationActorName,
+  notificationHref,
+  notificationLabel,
+} from "../../src/lib/notifications";
 import Button from "../../src/components/ui/Button";
 import Card from "../../src/components/ui/Card";
 import Reveal from "../../src/components/ui/Reveal";
 import { Skeleton } from "../../src/components/ui/Skeleton";
 import EmptyState from "../../src/components/admin/EmptyState";
 import StatusBadge, { badgeTone, type BadgeTone } from "../../src/components/admin/StatusBadge";
-
-type NotificationItem = {
-  id: string;
-  user_id: string;
-  actor_id?: string | null;
-  actor_name?: string | null;
-  actor_department?: string | null;
-  type: string;
-  title: string;
-  message: string;
-  entity_type?: string | null;
-  entity_id?: string | null;
-  target_id?: string | null;
-  is_read: boolean;
-  created_at: string;
-};
+import type { NotificationItem } from "../../src/types";
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const {
+    notifications,
+    unreadCount,
+    loading,
+    refreshing,
+    refresh,
+    markAllRead,
+    markRead,
+  } = useNotifications();
   const [now, setNow] = useState(() => Date.now());
 
   // "time ago" labels need a render-independent clock; refresh once per minute
@@ -59,108 +54,10 @@ export default function NotificationsScreen() {
     return () => clearInterval(refreshClock);
   }, []);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const res = await apiFetch("/moderation/notifications");
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : data.notifications || [];
-        setNotifications(list);
-        setUnreadCount(
-          typeof data.unread === "number"
-            ? data.unread
-            : list.filter((n: NotificationItem) => !n.is_read).length
-        );
-      } else {
-        // Fallback: If unauthenticated or no moderation records yet
-        setNotifications([]);
-        setUnreadCount(0);
-      }
-    } catch (err) {
-      console.warn("Failed to fetch notifications from backend:", err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Canonical fetch-on-mount: all state updates happen after await, and the
-    // ignore flag makes unmounting safe. onRefresh reuses fetchNotifications.
-    let ignore = false;
-    (async () => {
-      try {
-        const res = await apiFetch("/moderation/notifications");
-        if (ignore) return;
-        if (res.ok) {
-          const data = await res.json();
-          const list = Array.isArray(data) ? data : data.notifications || [];
-          setNotifications(list);
-          setUnreadCount(
-            typeof data.unread === "number"
-              ? data.unread
-              : list.filter((n: NotificationItem) => !n.is_read).length
-          );
-        } else {
-          // Fallback: If unauthenticated or no moderation records yet
-          setNotifications([]);
-          setUnreadCount(0);
-        }
-      } catch (err) {
-        console.warn("Failed to fetch notifications from backend:", err);
-      } finally {
-        if (!ignore) setLoading(false);
-      }
-    })();
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchNotifications();
-  };
-
-  const handleMarkAsRead = async (item: NotificationItem) => {
-    if (!item.is_read) {
-      try {
-        await apiFetch(`/moderation/notifications/${item.id}/read`, {
-          method: "PUT",
-        });
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === item.id ? { ...n, is_read: true } : n))
-        );
-        setUnreadCount((prev) => Math.max(0, prev - 1));
-      } catch (err) {
-        console.warn("Failed to mark notification read:", err);
-      }
-    }
-
-    // Navigate to target if applicable
-    if (item.type === "friend_request" || item.type === "friend_accepted") {
-      router.push("/friends" as any);
-    } else if (item.type === "mention" && (item.target_id || item.entity_id)) {
-      router.push(`/post/${item.target_id || item.entity_id}` as any);
-    } else if (item.entity_type === "post" && item.entity_id) {
-      router.push(`/post/${item.entity_id}` as any);
-    } else if (item.type === "flagged_post" || item.type === "flagged_comment") {
-      router.push("/(admin)/content" as any);
-    } else if (item.type === "announcement" && item.entity_type === "post" && item.entity_id) {
-      router.push(`/post/${item.entity_id}` as any);
-    }
-  };
-
-  const handleMarkAllRead = async () => {
-    try {
-      await apiFetch("/moderation/notifications/read-all", {
-        method: "POST",
-      });
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      setUnreadCount(0);
-    } catch (err) {
-      console.warn("Failed to mark all notifications read:", err);
-    }
+  const handlePress = (item: NotificationItem) => {
+    void markRead(item.id);
+    const href = notificationHref(item);
+    if (href) router.push(href as any);
   };
 
   const getInitials = (name?: string | null) => {
@@ -247,7 +144,7 @@ export default function NotificationsScreen() {
               variant="secondary"
               size="sm"
               icon={CheckCheck}
-              onPress={handleMarkAllRead}
+              onPress={() => void markAllRead()}
             />
           ) : null}
         </View>
@@ -301,7 +198,7 @@ export default function NotificationsScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={onRefresh}
+              onRefresh={refresh}
               colors={[colors.primary]}
               tintColor={colors.primary}
             />
@@ -319,14 +216,15 @@ export default function NotificationsScreen() {
           renderItem={({ item, index }) => {
             const { Icon, tone } = renderIcon(item.type);
             const palette = badgeTone(tone, colors);
-            const initials = getInitials(item.actor_name);
+            const actorName = notificationActorName(item);
+            const initials = getInitials(actorName);
 
             return (
               <Reveal delay={Math.min(index, 8) * 35}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`${item.title}. ${item.message}`}
-                  onPress={() => handleMarkAsRead(item)}
+                  accessibilityLabel={`${notificationLabel(item.type)}. ${item.message}`}
+                  onPress={() => handlePress(item)}
                   style={({ pressed }) => ({
                     flexDirection: "row",
                     gap: SPACE.x3,
@@ -395,7 +293,7 @@ export default function NotificationsScreen() {
                           flex: 1,
                         }}
                       >
-                        {item.title}
+                        {notificationLabel(item.type)}
                       </Text>
                       <Text
                         style={{
@@ -415,7 +313,7 @@ export default function NotificationsScreen() {
                       {item.message}
                     </Text>
 
-                    {item.actor_department && (
+                    {item.department && (
                       <Text
                         style={{
                           ...TYPE.caption,
@@ -424,7 +322,7 @@ export default function NotificationsScreen() {
                           fontWeight: "500",
                         }}
                       >
-                        Dept: {item.actor_department}
+                        Dept: {item.department}
                       </Text>
                     )}
                   </View>

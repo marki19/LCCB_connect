@@ -1,6 +1,7 @@
 import { Tabs, useRouter } from "expo-router";
 import DesktopLayout from "../../src/components/DesktopLayout";
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useNotifications } from "../../src/contexts/NotificationsContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import {
   View,
@@ -84,25 +85,24 @@ function MobileTabBar({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { profile } = useAuth();
+  const { unreadCount: unreadNotifications } = useNotifications();
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   const isGuest = profile?.role === "guest";
 
-  // Real-time unread count sync
+  // Real-time unread count sync for chats. The bell badge comes from the shared
+  // notifications store, which every surface updates.
   useEffect(() => {
     if (isGuest || !profile?.id) return;
     let cancelled = false;
 
     const loadCounts = async () => {
       try {
-        const [msgData, notifData] = await Promise.all([
-          apiJson<{ unread: number }>("/conversations/unread-count").catch(() => ({ unread: 0 })),
-          apiJson<{ unread: number }>("/notifications/unread-count").catch(() => ({ unread: 0 })),
-        ]);
-        if (!cancelled) {
-          if (typeof msgData?.unread === "number") setUnreadMessages(msgData.unread);
-          if (typeof notifData?.unread === "number") setUnreadNotifications(notifData.unread);
+        const msgData = await apiJson<{ unread: number }>(
+          "/conversations/unread-count"
+        ).catch(() => ({ unread: 0 }));
+        if (!cancelled && typeof msgData?.unread === "number") {
+          setUnreadMessages(msgData.unread);
         }
       } catch {
         // Best effort

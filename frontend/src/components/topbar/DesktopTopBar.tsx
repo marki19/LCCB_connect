@@ -33,11 +33,12 @@ import {
   FolderGit2,
 } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
+import { useNotifications } from "../../contexts/NotificationsContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useFeedFilter, type FeedCategory } from "../../contexts/FeedFilterContext";
 import { RADIUS, SPACE, TYPE, elevation } from "../../lib/tokens";
 import { getSearchSuggestions, apiJson } from "../../lib/api";
-import { onMessage, onConversation, onNotification } from "../../lib/realtime";
+import { onMessage, onConversation } from "../../lib/realtime";
 import Avatar from "../Avatar";
 import HoverLabel from "../ui/HoverLabel";
 import MenuPopover from "./MenuPopover";
@@ -58,15 +59,14 @@ const CATEGORY_TABS = [
 
 interface DesktopTopBarProps {
   unreadCount?: number;
-  notificationCount?: number;
 }
 
 export default function DesktopTopBar({
   unreadCount = 0,
-  notificationCount = 0,
 }: DesktopTopBarProps) {
   const { colors } = useTheme();
   const { profile } = useAuth();
+  const { unreadCount: unreadNotifications } = useNotifications();
   const { activeCategory, setCategory } = useFeedFilter();
   const router = useRouter();
   const segments = useSegments();
@@ -76,21 +76,19 @@ export default function DesktopTopBar({
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [liveUnreadCount, setLiveUnreadCount] = useState(unreadCount);
-  const [liveNotificationCount, setLiveNotificationCount] = useState(notificationCount);
   const barRef = useRef<any>(null);
   const menuAnchorRef = useRef<any>(null);
   const chatsAnchorRef = useRef<any>(null);
   const notificationsAnchorRef = useRef<any>(null);
   const accountAnchorRef = useRef<any>(null);
 
-  // Sync prop changes
-  useEffect(() => {
+  // Adopt a changed prop during render (React's recommended alternative to a
+  // sync effect); the live subscription below then takes over.
+  const [syncedUnreadCount, setSyncedUnreadCount] = useState(unreadCount);
+  if (syncedUnreadCount !== unreadCount) {
+    setSyncedUnreadCount(unreadCount);
     setLiveUnreadCount(unreadCount);
-  }, [unreadCount]);
-
-  useEffect(() => {
-    setLiveNotificationCount(notificationCount);
-  }, [notificationCount]);
+  }
 
   // Initial fetch and Realtime subscriptions
   useEffect(() => {
@@ -103,15 +101,6 @@ export default function DesktopTopBar({
       .then((data) => {
         if (!cancelled && typeof data?.unread === "number") {
           setLiveUnreadCount(data.unread);
-        }
-      })
-      .catch(() => {});
-
-    // Fetch initial notification unread count
-    apiJson<{ unread: number }>("/notifications/unread-count")
-      .then((data) => {
-        if (!cancelled && typeof data?.unread === "number") {
-          setLiveNotificationCount(data.unread);
         }
       })
       .catch(() => {});
@@ -134,18 +123,10 @@ export default function DesktopTopBar({
         .catch(() => {});
     });
 
-    // Listen for realtime notifications
-    const unsubNotif = onNotification((evt) => {
-      if (evt.action === "INSERT" && !evt.notification.is_read) {
-        setLiveNotificationCount((c) => c + 1);
-      }
-    });
-
     return () => {
       cancelled = true;
       unsubMsg();
       unsubConv();
-      unsubNotif();
     };
   }, [profile?.id, profile?.role]);
 
@@ -432,7 +413,7 @@ export default function DesktopTopBar({
             accessibilityLabel="Open notifications"
             label="Notifications"
             colors={colors}
-            badge={liveNotificationCount}
+            badge={unreadNotifications}
           >
             <Bell size={18} color={colors.ink} strokeWidth={2} />
           </TopBarButton>
@@ -483,7 +464,6 @@ export default function DesktopTopBar({
         <NotificationsPopover
           onClose={closeAll}
           anchorRef={notificationsAnchorRef}
-          onClearUnread={() => setLiveNotificationCount(0)}
         />
       )}
       {activePopover === "account" && (

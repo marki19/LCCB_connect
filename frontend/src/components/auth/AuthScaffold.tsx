@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   StyleSheet,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, useIsFocused } from "expo-router";
 import { BookOpen, ChevronLeft, ShieldCheck, Users } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -28,9 +28,9 @@ type AuthScaffoldProps = {
   /** Optional back link shown above the form (e.g. "Back to sign in"). */
   backHref?: string;
   backLabel?: string;
-  /** Background intensity for the interactive background */
+  /** Background intensity for the interactive background. */
   backgroundIntensity?: "low" | "medium" | "high";
-  /** Custom background component (overrides default interactive background) */
+  /** Custom background component (overrides default interactive background). */
   background?: ReactNode;
 };
 
@@ -51,6 +51,10 @@ export default function AuthScaffold({
   background,
 }: AuthScaffoldProps) {
   const { colors } = useTheme();
+  // React Navigation keeps visited screens mounted. Rendering a full-screen,
+  // opaque background on every mounted screen stacks layers that hide the
+  // animated blobs after navigating back. Only the focused screen paints it.
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 960;
@@ -148,14 +152,16 @@ export default function AuthScaffold({
     </View>
   );
 
+  const backgroundLayer = background ? (
+    <View style={StyleSheet.absoluteFill}>{background}</View>
+  ) : isFocused ? (
+    <InteractiveBackground intensity={backgroundIntensity} />
+  ) : null;
+
   if (isDesktop) {
     return (
       <View style={{ flex: 1, flexDirection: "row", backgroundColor: colors.surfacePage }}>
-        {background ? (
-          <View style={StyleSheet.absoluteFill}>{background}</View>
-        ) : (
-          <InteractiveBackground intensity={backgroundIntensity} />
-        )}
+        {backgroundLayer}
         {themeToggle}
 
         <View
@@ -289,11 +295,7 @@ export default function AuthScaffold({
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: colors.surfacePage }}
     >
-      {background ? (
-        <View style={StyleSheet.absoluteFill}>{background}</View>
-      ) : (
-        <InteractiveBackground intensity={backgroundIntensity} />
-      )}
+      {backgroundLayer}
       {themeToggle}
       <ScrollView
         contentContainerStyle={{

@@ -62,6 +62,18 @@ describe("GET /api/notifications", () => {
     assert.equal(res.body.notifications.length, 1);
     assert.equal(res.body.notifications[0].message, "John liked your post");
   });
+
+  it("passes the requested limit through to the query", async () => {
+    query.setImpl(async () => ({ rows: [] }));
+
+    await request(app).get("/api/notifications?limit=5").set(AUTH);
+
+    const listCall = query.calls.find((c) =>
+      String(c[0]).includes("FROM public.notifications n")
+    );
+    assert.ok(listCall, "expected a notification list query");
+    assert.equal(listCall[1][1], 5);
+  });
 });
 
 describe("GET /api/notifications/unread-count", () => {
@@ -117,6 +129,14 @@ describe("messages never appear in the bell", () => {
     await request(app).get("/api/notifications/unread-count").set(AUTH);
     const countSql = query.calls.map((c) => c[0]).join("\n");
     assert.match(countSql, /NOT IN \('new_message', 'message_request'\)/);
+  });
+
+  it("excludes message types when marking everything read", async () => {
+    query.setImpl(async () => ({ rows: [] }));
+
+    await request(app).post("/api/notifications/read-all").set(AUTH);
+    const sql = query.calls.map((c) => c[0]).join("\n");
+    assert.match(sql, /NOT IN \('new_message', 'message_request'\)/);
   });
 });
 

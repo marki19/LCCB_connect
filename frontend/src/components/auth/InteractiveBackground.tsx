@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
   Easing,
@@ -178,22 +178,32 @@ export default function InteractiveBackground({
 
   // ─── Particle Animation (seamless ping-pong drift) ────────────────────────
   const particleAnims = useMemo(
-    () =>
-      particles.map((p) => {
-        const y = new Animated.Value(0);
-        const travel = (SCREEN_HEIGHT + p.size) * p.speed;
-        const duration = 14000 + Math.random() * 8000;
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(y, { toValue: -travel, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-            Animated.timing(y, { toValue: 0, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-          ])
-        ).start();
-        return y;
-      }),
-     
+    () => particles.map(() => new Animated.Value(0)),
     [particles]
   );
+
+  // Start/stop the loops with the component lifecycle. Auth screens blur and
+  // remount as users navigate, so loops started in useMemo would otherwise
+  // keep running after the background is removed.
+  useEffect(() => {
+    const loops = particleAnims.map((y, i) => {
+      const p = particles[i];
+      if (!p) return null;
+      const travel = (SCREEN_HEIGHT + p.size) * p.speed;
+      const duration = 14000 + Math.random() * 8000;
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(y, { toValue: -travel, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+          Animated.timing(y, { toValue: 0, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        ])
+      );
+      loop.start();
+      return loop;
+    });
+    return () => {
+      loops.forEach((loop) => loop?.stop());
+    };
+  }, [particleAnims, particles]);
 
   // ─── Web-only cursor tracking + hover detection ────────────────────────────
   useEffect(() => {
@@ -254,16 +264,21 @@ export default function InteractiveBackground({
   const floatElementAnims = useMemo<Animated.Value[]>(() => floatingElements.map(() => new Animated.Value(0)), [floatingElements]);
 
   useEffect(() => {
-    floatElementAnims.forEach((v, i) => {
+    const loops = floatElementAnims.map((v, i) => {
       const el = floatingElements[i];
-      if (!el) return;
-      Animated.loop(
+      if (!el) return null;
+      const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(v, { toValue: 1, duration: (FLOAT_DURATION / el.floatSpeed) / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
           Animated.timing(v, { toValue: 0, duration: (FLOAT_DURATION / el.floatSpeed) / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
         ])
-      ).start();
+      );
+      loop.start();
+      return loop;
     });
+    return () => {
+      loops.forEach((loop) => loop?.stop());
+    };
   }, [floatElementAnims, floatingElements]);
 
   const floatTranslateY = (el: FloatElement, i: number) => floatElementAnims[i]?.interpolate?.({ inputRange: [0, 1], outputRange: [-el.floatSpeed * 16, el.floatSpeed * 16] }) ?? floatAnim;

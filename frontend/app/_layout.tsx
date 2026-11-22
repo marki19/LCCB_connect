@@ -4,6 +4,7 @@ import { Platform, useWindowDimensions , LogBox } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
+import { NotificationsProvider } from "../src/contexts/NotificationsContext";
 import { PresenceProvider } from "../src/contexts/PresenceContext";
 import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 import { FloatingChatProvider } from "../src/contexts/FloatingChatContext";
@@ -198,17 +199,19 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <PresenceProvider>
-            <FloatingChatProvider>
-              <SettingsSidebarProvider>
-                <FeedFilterProvider>
-                  <ToastProvider>
-                    <RouteGuard />
-                  </ToastProvider>
-                </FeedFilterProvider>
-              </SettingsSidebarProvider>
-            </FloatingChatProvider>
-          </PresenceProvider>
+          <NotificationsProvider>
+            <PresenceProvider>
+              <FloatingChatProvider>
+                <SettingsSidebarProvider>
+                  <FeedFilterProvider>
+                    <ToastProvider>
+                      <RouteGuard />
+                    </ToastProvider>
+                  </FeedFilterProvider>
+                </SettingsSidebarProvider>
+              </FloatingChatProvider>
+            </PresenceProvider>
+          </NotificationsProvider>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
