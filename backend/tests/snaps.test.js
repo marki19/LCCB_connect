@@ -198,7 +198,7 @@ describe("Quick Snap guest read-only rule", () => {
       .send({ media_key: "snaps/9f83ab24e10c71a39bd5e0a1b2c3d4e5.jpg", media_type: "image" });
 
     assert.equal(res.status, 403);
-    assert.equal(res.body.code, "not_verified");
+    assert.equal(res.body.code, "guest_read_only");
   });
 
   it("refuses a guest reacting to a snap", async () => {
@@ -405,7 +405,7 @@ describe("Quick Snap comments", () => {
       .send({ body: "hello" });
 
     assert.equal(res.status, 403);
-    assert.equal(res.body.code, "not_verified");
+    assert.equal(res.body.code, "guest_read_only");
   });
 
   it("creates a comment", async () => {

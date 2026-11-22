@@ -123,10 +123,10 @@ function resolveRequestRole(profileRole, requestedRole) {
  */
 const REVIEWER_SCOPE = {
   [ROLES.SUPER_ADMIN]: {
-    roles: [ROLES.ADMIN, ROLES.DEPARTMENT_ADMIN, ROLES.GUEST],
+    roles: [ROLES.ADMIN, ROLES.DEPARTMENT_ADMIN],
     byDepartment: false,
   },
-  [ROLES.ADMIN]: { roles: [ROLES.DEPARTMENT_ADMIN, ROLES.GUEST], byDepartment: false },
+  [ROLES.ADMIN]: { roles: [ROLES.DEPARTMENT_ADMIN], byDepartment: false },
   [ROLES.DEPARTMENT_ADMIN]: {
     roles: [ROLES.FACULTY, ROLES.STUDENT],
     byDepartment: true,
