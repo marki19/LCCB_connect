@@ -38,11 +38,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useFeedFilter, type FeedCategory } from "../../contexts/FeedFilterContext";
 import { RADIUS, SPACE, TYPE, elevation } from "../../lib/tokens";
 import { getSearchSuggestions, apiJson } from "../../lib/api";
-<<<<<<< HEAD
-import { onMessage, onConversation } from "../../lib/realtime";
-=======
-import { onMessage, onConversation, onNotification, onUnreadRefresh } from "../../lib/realtime";
->>>>>>> 0f38479ce9a12f0616651918ec8f4dac0f5dd616
+import { onMessage, onConversation, onUnreadRefresh } from "../../lib/realtime";
 import Avatar from "../Avatar";
 import HoverLabel from "../ui/HoverLabel";
 import MenuPopover from "./MenuPopover";
@@ -109,28 +105,9 @@ export default function DesktopTopBar({
       })
       .catch(() => {});
 
-<<<<<<< HEAD
-    // Listen for realtime messages
-    const unsubMsg = onMessage((evt) => {
-      if (evt.action === "INSERT") {
-        setLiveUnreadCount((c) => c + 1);
-      }
-    });
-
-    // Listen for conversation updates (reconnect, seen receipts)
-    const unsubConv = onConversation(() => {
-=======
-    // Fetch initial notification unread count
-    apiJson<{ unread: number }>("/notifications/unread-count")
-      .then((data) => {
-        if (!cancelled && typeof data?.unread === "number") {
-          setLiveNotificationCount(data.unread);
-        }
-      })
-      .catch(() => {});
-
+    // Shared resync for anything that changes the authoritative unread count
+    // (new messages, reconnect, seen receipts, local read events).
     const refetchUnread = () => {
->>>>>>> 0f38479ce9a12f0616651918ec8f4dac0f5dd616
       apiJson<{ unread: number }>("/conversations/unread-count")
         .then((data) => {
           if (!cancelled && typeof data?.unread === "number") {

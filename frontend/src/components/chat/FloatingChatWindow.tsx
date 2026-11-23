@@ -487,33 +487,6 @@ function FloatingChatInner({
               const isLatest = idx === messages.length - 1;
 
               return (
-<<<<<<< HEAD
-                <View
-                  key={m.id}
-                  style={[
-                    styles.bubbleRow,
-                    isMine ? styles.bubbleRowMine : styles.bubbleRowPeer,
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.bubble,
-                      isMine
-                        ? [styles.bubbleMine, { backgroundColor: colors.brandSolid }]
-                        : [styles.bubblePeer, { backgroundColor: colors.surfaceSunken }],
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.bubbleText,
-                        { color: isMine ? colors.textOnPrimary : colors.ink },
-                      ]}
-                    >
-                      {m.body}
-                    </Text>
-                  </View>
-                </View>
-=======
                 <React.Fragment key={m.id}>
                   {showDivider && (
                     <View style={styles.timeDivider}>
@@ -530,7 +503,6 @@ function FloatingChatInner({
                     onPressImage={(url, cap) => setLightboxData({ url, caption: cap })}
                   />
                 </React.Fragment>
->>>>>>> 0f38479ce9a12f0616651918ec8f4dac0f5dd616
               );
             })}
 

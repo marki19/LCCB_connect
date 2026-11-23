@@ -50,14 +50,11 @@ const formatWhen = (iso?: string | null) => {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
-<<<<<<< HEAD
-export default function ChatsPopover({ 
+export default function ChatsPopover({
   onClose,
+  unreadCount = 0,
   anchorRef,
 }: ChatsPopoverProps) {
-=======
-export default function ChatsPopover({ onClose, unreadCount = 0 }: ChatsPopoverProps) {
->>>>>>> 0f38479ce9a12f0616651918ec8f4dac0f5dd616
   const { colors } = useTheme();
   const { profile, session } = useAuth();
   const { modeOf } = usePresence();
