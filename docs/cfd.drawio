@@ -1,0 +1,103 @@
+<mxfile host="app.diagrams.net" modified="2026-11-21T20:04:00.000Z" agent="Gemini" version="24.0.0" type="device">
+  <diagram id="cfd-level-0" name="Context Diagram (Level 0)">
+    <mxGraphModel dx="1600" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="800" background="#FFFFFF">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Central Process 0 -->
+        <mxCell id="c_p0" value="&lt;b&gt;0&lt;/b&gt;&lt;br&gt;LCCB Connect" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="680" y="280" width="240" height="240" as="geometry"/>
+        </mxCell>
+
+        <!-- Left External Entities -->
+        <mxCell id="c_stu" value="Student" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="100" width="210" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_fac" value="Faculty" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="360" width="210" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_gst" value="Guest" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="620" width="210" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Right External Entities -->
+        <mxCell id="c_dadm" value="Department Administrator" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="100" width="210" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_adm" value="Administrator" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="360" width="210" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_sadm" value="Super Administrator" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="620" width="210" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- LEFT FLOWS -->
+        <!-- Student -->
+        <mxCell id="cf_stu_in" value="Account and Content Submission" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=1;exitY=0.25;entryX=0.18;entryY=0.12;entryPerimeter=0;" edge="1" parent="1" source="c_stu" target="c_p0">
+          <mxGeometry x="-0.4" relative="1" as="geometry">
+            <Array as="points"><mxPoint x="620" y="120"/><mxPoint x="620" y="309"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="cf_stu_out" value="Session, Feed, and Notification" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=0.07;exitY=0.24;exitPerimeter=0;entryX=1;entryY=0.75;" edge="1" parent="1" source="c_p0" target="c_stu">
+          <mxGeometry x="0.4" relative="1" as="geometry">
+            <Array as="points"><mxPoint x="590" y="338"/><mxPoint x="590" y="160"/></Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Faculty -->
+        <mxCell id="cf_fac_in" value="Account and Academic Submission" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=1;exitY=0.25;entryX=0.01;entryY=0.42;entryPerimeter=0;" edge="1" parent="1" source="c_fac" target="c_p0">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="cf_fac_out" value="Session, Feed, and Notification" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=0.01;exitY=0.58;exitPerimeter=0;entryX=1;entryY=0.75;" edge="1" parent="1" source="c_p0" target="c_fac">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Guest -->
+        <mxCell id="cf_gst_in" value="Public Read Request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=1;exitY=0.25;entryX=0.07;entryY=0.76;entryPerimeter=0;" edge="1" parent="1" source="c_gst" target="c_p0">
+          <mxGeometry x="-0.4" relative="1" as="geometry">
+            <Array as="points"><mxPoint x="590" y="640"/><mxPoint x="590" y="462"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="cf_gst_out" value="Public Content Page" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=0.18;exitY=0.88;exitPerimeter=0;entryX=1;entryY=0.75;" edge="1" parent="1" source="c_p0" target="c_gst">
+          <mxGeometry x="0.4" relative="1" as="geometry">
+            <Array as="points"><mxPoint x="620" y="491"/><mxPoint x="620" y="680"/></Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- RIGHT FLOWS -->
+        <!-- Department Administrator -->
+        <mxCell id="cf_dadm_in" value="Department Decision" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=0;exitY=0.25;entryX=0.82;entryY=0.12;entryPerimeter=0;" edge="1" parent="1" source="c_dadm" target="c_p0">
+          <mxGeometry x="-0.4" relative="1" as="geometry">
+            <Array as="points"><mxPoint x="980" y="120"/><mxPoint x="980" y="309"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="cf_dadm_out" value="Department Queue and Receipt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=0.93;exitY=0.24;exitPerimeter=0;entryX=0;entryY=0.75;" edge="1" parent="1" source="c_p0" target="c_dadm">
+          <mxGeometry x="0.4" relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1010" y="338"/><mxPoint x="1010" y="160"/></Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Administrator -->
+        <mxCell id="cf_adm_in" value="Administrative Directive" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=0;exitY=0.25;entryX=0.99;entryY=0.42;entryPerimeter=0;" edge="1" parent="1" source="c_adm" target="c_p0">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="cf_adm_out" value="Administrative Report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=0.99;exitY=0.58;exitPerimeter=0;entryX=0;entryY=0.75;" edge="1" parent="1" source="c_p0" target="c_adm">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Super Administrator -->
+        <mxCell id="cf_sadm_in" value="System Directive" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=0;exitY=0.25;entryX=0.93;entryY=0.76;entryPerimeter=0;" edge="1" parent="1" source="c_sadm" target="c_p0">
+          <mxGeometry x="-0.4" relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1010" y="640"/><mxPoint x="1010" y="462"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="cf_sadm_out" value="System Report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=11;endArrow=classic;exitX=0.82;exitY=0.88;exitPerimeter=0;entryX=0;entryY=0.75;" edge="1" parent="1" source="c_p0" target="c_sadm">
+          <mxGeometry x="0.4" relative="1" as="geometry">
+            <Array as="points"><mxPoint x="980" y="491"/><mxPoint x="980" y="680"/></Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

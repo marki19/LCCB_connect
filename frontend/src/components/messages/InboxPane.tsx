@@ -17,7 +17,6 @@ import {
   Plus,
   Inbox,
   Clock,
-  LayoutGrid,
   X,
   Trash2,
 } from "lucide-react-native";
@@ -37,8 +36,10 @@ import {
   listRequests,
   listFriends,
   openConversation,
+  markRead,
 } from "../../lib/messages";
 import { updateNote, deleteNote } from "../../lib/api";
+import { formatMessagePreview } from "../../lib/chatMedia";
 import type { Conversation, Friend } from "../../types";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Card from "../ui/Card";
@@ -213,7 +214,10 @@ export default function InboxPane({
     void load();
   };
 
-  const openThread = (id: string) => onSelect(id);
+  const openThread = (id: string) => {
+    void markRead(id).catch(() => undefined);
+    onSelect(id);
+  };
 
   const handleStartFriendChat = async (peerId: string) => {
     try {
@@ -244,7 +248,7 @@ export default function InboxPane({
     if (!query) return conversations;
     return conversations.filter((c) => {
       const name = c.peer?.full_name || c.peer?.username || "";
-      const lastMsg = c.last_message?.body || "";
+      const lastMsg = formatMessagePreview(c.last_message?.body);
       return name.toLowerCase().includes(query) || lastMsg.toLowerCase().includes(query);
     });
   }, [conversations, query]);
@@ -253,7 +257,7 @@ export default function InboxPane({
     if (!query) return received;
     return received.filter((c) => {
       const name = c.peer?.full_name || c.peer?.username || "";
-      const lastMsg = c.last_message?.body || "";
+      const lastMsg = formatMessagePreview(c.last_message?.body);
       return name.toLowerCase().includes(query) || lastMsg.toLowerCase().includes(query);
     });
   }, [received, query]);
@@ -262,7 +266,7 @@ export default function InboxPane({
     if (!query) return sent;
     return sent.filter((c) => {
       const name = c.peer?.full_name || c.peer?.username || "";
-      const lastMsg = c.last_message?.body || "";
+      const lastMsg = formatMessagePreview(c.last_message?.body);
       return name.toLowerCase().includes(query) || lastMsg.toLowerCase().includes(query);
     });
   }, [sent, query]);
@@ -481,8 +485,9 @@ export default function InboxPane({
     const isOnline = peer ? modeOf(peer.id) === "online" : false;
     const hasUnread = item.unread > 0;
     const isFromMe = item.last_message?.sender_id === profile?.id;
+    const previewBody = formatMessagePreview(item.last_message?.body);
     const snippetText = item.last_message
-      ? `${isFromMe ? "You: " : ""}${item.last_message.body}`
+      ? `${isFromMe ? "You: " : ""}${previewBody}`
       : "Started a conversation";
 
     return (
@@ -569,7 +574,7 @@ export default function InboxPane({
     const peer = item.peer;
     const active = activeId === item.id;
     const isOnline = peer ? modeOf(peer.id) === "online" : false;
-    const lastMsg = item.last_message?.body;
+    const lastMsg = formatMessagePreview(item.last_message?.body);
 
     return (
       <Pressable
@@ -713,7 +718,7 @@ export default function InboxPane({
           {showBack ? (
             <IconButton icon={ArrowLeft} label="Back" onPress={onBack ?? (() => {})} />
           ) : null}
-          <Text style={[styles.headerTitle, { color: colors.ink }]}>messenger</Text>
+          <Text style={[styles.headerTitle, { color: colors.ink }]}>Messages</Text>
         </View>
 
         <Pressable
@@ -735,19 +740,18 @@ export default function InboxPane({
       </View>
 
       <View style={{ flex: 1, width: "100%" }}>
-        {/* Search Bar - Ask Meta AI or search */}
+        {/* Search Bar */}
         <View style={styles.searchWrap}>
           <View style={[styles.searchBar, { backgroundColor: colors.surfaceSunken, borderColor: colors.line }]}>
             <Search size={18} color={colors.inkFaint} />
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Ask Meta AI or search"
+              placeholder="Search"
               placeholderTextColor={colors.inkFaint}
               style={[styles.searchInput, { color: colors.ink }]}
-              accessibilityLabel="Search Messenger"
+              accessibilityLabel="Search"
             />
-            <LayoutGrid size={18} color={colors.inkFaint} />
           </View>
         </View>
 
@@ -922,7 +926,7 @@ export default function InboxPane({
             <TextInput
               value={noteDraft}
               onChangeText={setNoteDraft}
-              placeholder="What's on your mind? (e.g. meet?? pass ako jn)"
+              placeholder="Share a thought..."
               placeholderTextColor={colors.inkFaint}
               maxLength={60}
               autoFocus

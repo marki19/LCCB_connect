@@ -32,7 +32,7 @@ import { usePresence } from "../contexts/PresenceContext";
 import { isAdminRole, isDepartmentAdminRole } from "../lib/roles";
 import { setAdminAppPreview } from "../lib/panelMode";
 import { apiJson } from "../lib/api";
-import { onMessage, onConversation } from "../lib/realtime";
+import { onMessage, onConversation, onUnreadRefresh } from "../lib/realtime";
 import { elevation, RADIUS, SPACE, TYPE, type ThemeTokens } from "../lib/tokens";
 import DesktopTopBar, { TOP_BAR_HEIGHT } from "./topbar/DesktopTopBar";
 import FloatingChatWindow from "./chat/FloatingChatWindow";
@@ -130,6 +130,16 @@ export default function DesktopLayout({
     const unsubMsg = onMessage((evt) => {
       if (evt.action === "INSERT") {
         setUnreadCount((c) => c + 1);
+      } else if (evt.action === "UPDATE") {
+        load();
+      }
+    });
+
+    const unsubUnread = onUnreadRefresh((newCount) => {
+      if (typeof newCount === "number") {
+        setUnreadCount(newCount);
+      } else {
+        load();
       }
     });
 
@@ -140,6 +150,7 @@ export default function DesktopLayout({
     return () => {
       cancelled = true;
       unsubMsg();
+      unsubUnread();
       unsubConv();
     };
   }, [isGuest, profile?.id]);

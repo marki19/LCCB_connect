@@ -43,12 +43,14 @@ import {
 } from "../../lib/chatMedia";
 import ChatImageBubble from "./ChatImageBubble";
 import ChatImageLightbox from "./ChatImageLightbox";
+import { AppImage } from "../AppImage";
+import { messageStatus, type Message } from "../../types";
 
 export default function FloatingChatWindow() {
   const { activeChat, isMinimized, closeChat, toggleMinimize } = useFloatingChat();
   const { colors } = useTheme();
   const { modeOf } = usePresence();
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const router = useRouter();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
@@ -73,13 +75,162 @@ export default function FloatingChatWindow() {
         router.push(`/messages/${id}`);
       }}
       colors={colors}
-      userId={session?.user?.id ?? null}
+      userId={profile?.id ?? session?.user?.id ?? null}
       modeOf={modeOf}
       chatWidth={CHAT_WINDOW_WIDTH}
       chatHeight={CHAT_WINDOW_HEIGHT}
       minimizedWidth={MINIMIZED_WIDTH}
       minimizedHeight={MINIMIZED_HEIGHT}
     />
+  );
+}
+
+const formatMessageTime = (iso?: string | null) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const timeStr = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (isToday) return timeStr;
+  const isThisYear = d.getFullYear() === now.getFullYear();
+  const dateStr = d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(isThisYear ? {} : { year: "numeric" }),
+  });
+  return `${dateStr}, ${timeStr}`;
+};
+
+const formatMessageDivider = (iso?: string | null) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const timeStr = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (isToday) return `Today, ${timeStr}`;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) {
+    return `Yesterday, ${timeStr}`;
+  }
+
+  const isThisYear = d.getFullYear() === now.getFullYear();
+  const dateStr = d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(isThisYear ? {} : { year: "numeric" }),
+  });
+  return `${dateStr}, ${timeStr}`;
+};
+
+function FloatingTicks({ message }: { message: Message }) {
+  const { colors } = useTheme();
+  const status = messageStatus(message);
+  if (status === "seen") return <CheckCheck size={11} color={colors.brand} />;
+  if (status === "delivered") return <CheckCheck size={11} color={colors.inkFaint} />;
+  return <Check size={11} color={colors.inkFaint} />;
+}
+
+function FloatingMessageRow({
+  message,
+  mine,
+  colors,
+  showTimestampDefault = false,
+  onPressImage,
+}: {
+  message: Message;
+  mine: boolean;
+  colors: any;
+  showTimestampDefault?: boolean;
+  onPressImage?: (url: string, caption?: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [clicked, setClicked] = useState(false);
+  const isExposed = hovered || clicked || showTimestampDefault;
+  const parsed = parseMessageContent(message.body);
+
+  const toggleClicked = () => {
+    setClicked((prev) => !prev);
+  };
+
+  return (
+    <View
+      style={[
+        styles.bubbleRow,
+        mine ? styles.bubbleRowMine : styles.bubbleRowPeer,
+      ]}
+    >
+      <Pressable
+        onPress={toggleClicked}
+        onHoverIn={() => setHovered(true)}
+        onHoverOut={() => setHovered(false)}
+        accessibilityRole="button"
+        accessibilityLabel={parsed.isMedia ? "photo" : message.body}
+        accessibilityHint="Tap to show or hide sent time"
+        style={({ pressed }: any) => [
+          {
+            maxWidth: "82%",
+            width: parsed.isMedia ? 230 : undefined,
+            alignSelf: mine ? "flex-end" : "flex-start",
+            cursor: "pointer",
+            opacity: pressed ? 0.88 : (hovered || clicked) ? 0.96 : 1,
+          },
+        ]}
+      >
+        {parsed.isMedia && parsed.mediaUrl ? (
+          <ChatImageBubble
+            mediaUrl={parsed.mediaUrl}
+            caption={parsed.text}
+            isMine={mine}
+            maxWidth={230}
+            onPressImage={onPressImage}
+          />
+        ) : (
+          <View
+            style={[
+              styles.bubble,
+              mine
+                ? [styles.bubbleMine, { backgroundColor: colors.brandSolid }]
+                : [styles.bubblePeer, { backgroundColor: colors.surfaceSunken }],
+            ]}
+          >
+            <Text
+              style={[
+                styles.bubbleText,
+                { color: mine ? "#FFFFFF" : colors.ink },
+              ]}
+            >
+              {message.body}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+
+      {/* Exposed time sent on hover, click, or cluster end / latest message */}
+      {isExposed && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 3,
+            marginTop: 2,
+            marginBottom: showTimestampDefault ? 4 : 0,
+            paddingHorizontal: 4,
+            alignSelf: mine ? "flex-end" : "flex-start",
+          }}
+        >
+          <Text style={{ fontSize: 10, color: colors.inkFaint, fontWeight: "500" }}>
+            {mine
+              ? (hovered || clicked ? `Sent ${formatMessageTime(message.created_at)}` : formatMessageTime(message.created_at))
+              : formatMessageTime(message.created_at)}
+          </Text>
+          {mine && <FloatingTicks message={message} />}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -111,7 +262,7 @@ function FloatingChatInner({
   minimizedHeight: number;
 }) {
   const conversationId = peer.conversationId ?? null;
-  const { messages, pending, loading, peerTyping, send, notifyTyping } =
+  const { messages, pending, loading, peerTyping, send, sendMedia, notifyTyping } =
     useConversationRealtime(conversationId);
 
   const [draft, setDraft] = useState("");
@@ -149,33 +300,24 @@ function FloatingChatInner({
     if ((!text && !attachedImage) || sending || uploading) return;
     setSending(true);
 
-    let payloadBody = text;
     if (attachedImage) {
-      setUploading(true);
+      const imgUri = attachedImage.uri;
+      setDraft("");
+      setAttachedImage(null);
       try {
-        const key = await uploadChatImage(attachedImage.uri);
-        if (!key) {
-          Alert.alert("Upload failed", "Could not upload image. Please try again.");
-          setUploading(false);
-          setSending(false);
-          return;
-        }
-        payloadBody = formatMediaMessage(key, text);
+        await sendMedia(imgUri, text);
       } catch (err) {
-        console.error("Image upload error:", err);
-        Alert.alert("Upload failed", "Could not upload image.");
-        setUploading(false);
-        setSending(false);
-        return;
+        console.error("Image send error:", err);
+        Alert.alert("Upload failed", err instanceof Error ? err.message : "Could not upload image.");
       } finally {
-        setUploading(false);
+        setSending(false);
       }
+      return;
     }
 
     setDraft("");
-    setAttachedImage(null);
     try {
-      await send(payloadBody);
+      await send(text);
     } catch (err) {
       console.error("Failed to send message in floating chat:", err);
     } finally {
@@ -321,31 +463,31 @@ function FloatingChatInner({
           </View>
         ) : (
           <>
-            {messages.map((m) => {
-              const isMine = m.sender_id === userId;
-              const parsed = parseMessageContent(m.body);
+            {messages.map((m, idx) => {
+              const prev = idx > 0 ? messages[idx - 1] : null;
+              const next = idx < messages.length - 1 ? messages[idx + 1] : null;
 
-              if (parsed.isMedia && parsed.mediaUrl) {
-                return (
-                  <View
-                    key={m.id}
-                    style={[
-                      styles.bubbleRow,
-                      isMine ? styles.bubbleRowMine : styles.bubbleRowPeer,
-                    ]}
-                  >
-                    <ChatImageBubble
-                      mediaUrl={parsed.mediaUrl}
-                      caption={parsed.text}
-                      isMine={isMine}
-                      maxWidth={230}
-                      onPressImage={(url, cap) => setLightboxData({ url, caption: cap })}
-                    />
-                  </View>
-                );
-              }
+              // Time divider if first message or > 15 minutes between messages
+              const showDivider =
+                !prev ||
+                (m.created_at &&
+                  prev.created_at &&
+                  Math.abs(new Date(m.created_at).getTime() - new Date(prev.created_at).getTime()) >
+                    15 * 60 * 1000);
+
+              // Show timestamp below message if cluster boundary, time gap > 3 mins, or last message
+              const isLastInCluster =
+                !next ||
+                next.sender_id !== m.sender_id ||
+                (next.created_at &&
+                  m.created_at &&
+                  Math.abs(new Date(next.created_at).getTime() - new Date(m.created_at).getTime()) >
+                    3 * 60 * 1000);
+
+              const isLatest = idx === messages.length - 1;
 
               return (
+<<<<<<< HEAD
                 <View
                   key={m.id}
                   style={[
@@ -371,6 +513,24 @@ function FloatingChatInner({
                     </Text>
                   </View>
                 </View>
+=======
+                <React.Fragment key={m.id}>
+                  {showDivider && (
+                    <View style={styles.timeDivider}>
+                      <Text style={[styles.timeDividerText, { color: colors.inkFaint }]}>
+                        {formatMessageDivider(m.created_at)}
+                      </Text>
+                    </View>
+                  )}
+                  <FloatingMessageRow
+                    message={m}
+                    mine={m.sender_id === userId}
+                    colors={colors}
+                    showTimestampDefault={isLastInCluster || isLatest}
+                    onPressImage={(url, cap) => setLightboxData({ url, caption: cap })}
+                  />
+                </React.Fragment>
+>>>>>>> 0f38479ce9a12f0616651918ec8f4dac0f5dd616
               );
             })}
 
@@ -398,7 +558,7 @@ function FloatingChatInner({
                     style={[
                       styles.bubble,
                       styles.bubbleMine,
-                      { backgroundColor: colors.brandSolid, opacity: 0.8 },
+                      { backgroundColor: colors.brandSolid, opacity: 0.8, maxWidth: "82%" },
                     ]}
                   >
                     <Text style={[styles.bubbleText, { color: colors.textOnPrimary }]}>{p.body}</Text>
@@ -439,7 +599,11 @@ function FloatingChatInner({
           ]}
         >
           <View style={styles.attachmentThumbBox}>
-            <Image source={{ uri: attachedImage.uri }} style={styles.attachmentThumb} />
+            <AppImage
+              source={{ uri: attachedImage.uri }}
+              style={styles.attachmentThumb}
+              contentFit="cover"
+            />
             <TouchableOpacity
               onPress={() => setAttachedImage(null)}
               style={styles.attachmentCloseBtn}
@@ -476,7 +640,7 @@ function FloatingChatInner({
         <TextInput
           value={draft}
           onChangeText={handleDraftChange}
-          placeholder={attachedImage ? "Add a caption…" : "Aa"}
+          placeholder={attachedImage ? "Add a caption…" : "Message…"}
           placeholderTextColor={colors.inkFaint}
           style={[
             styles.composerInput,
@@ -667,18 +831,28 @@ const styles = StyleSheet.create({
   emptyPrompt: {
     fontSize: 12,
   },
+  timeDivider: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 8,
+  },
+  timeDividerText: {
+    fontSize: 10.5,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+    opacity: 0.85,
+  },
   bubbleRow: {
-    flexDirection: "row",
-    marginVertical: 1,
+    marginVertical: 2,
+    width: "100%",
   },
   bubbleRowMine: {
-    justifyContent: "flex-end",
+    alignItems: "flex-end",
   },
   bubbleRowPeer: {
-    justifyContent: "flex-start",
+    alignItems: "flex-start",
   },
   bubble: {
-    maxWidth: "78%",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,

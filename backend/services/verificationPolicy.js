@@ -1,4 +1,4 @@
-const { normalizeRole, ROLES, SELECTABLE_ROLES } = require("../utils/roles");
+const { normalizeRole, ROLES, SELECTABLE_ROLES, DECLARATION_ROLES } = require("../utils/roles");
 
 /**
  * Verification policy: who may be verified, what each role must prove, and who
@@ -63,6 +63,7 @@ function fieldsFor(role) {
  */
 function needsRoleChoice(role) {
   const canonical = canonicalRole(role);
+  if (canonical === ROLES.GUEST) return false;
   return canonical === null || canonical === ROLES.USER;
 }
 
@@ -230,6 +231,7 @@ module.exports = {
   ROLE_FIELDS,
   fieldsFor,
   SELECTABLE_ROLES,
+  DECLARATION_ROLES,
   needsRoleChoice,
   isSelectable,
   canVerify,

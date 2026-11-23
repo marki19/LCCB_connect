@@ -21,7 +21,7 @@ export function resolveFileUrl(value: string | null | undefined): string | null 
   if (!value || typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  if (/^(https?:|data:|blob:|file:)/i.test(trimmed)) {
+  if (/^(https?:|data:|blob:|file:|content:|ph:)/i.test(trimmed)) {
     return trimmed;
   }
   return fileUrl(trimmed);

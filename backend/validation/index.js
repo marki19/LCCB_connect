@@ -362,6 +362,21 @@ const verificationDecisionSchema = z
   })
   .strict();
 
+const guestDeclarationSchema = z
+  .object({
+    purpose: z.string().trim().min(1, "Purpose is required").max(500),
+    affiliation_type: z.enum([
+      "student_elsewhere",
+      "faculty_elsewhere",
+      "professional",
+      "researcher",
+      "other",
+    ]),
+    affiliation_name: z.string().trim().min(1, "Affiliation name is required").max(200),
+    location: z.string().trim().max(200).optional().nullable(),
+  })
+  .strict();
+
 // Login identifier: email or student ID. Branching on "@" happens in the
 // controller, so the schema accepts either shape. Bounds are deliberately loose:
 // a malformed password must fall through to the generic 401, not a validation
@@ -794,6 +809,7 @@ const validate = (schema) => (req, res, next) => {
   verificationSubmitSchema,
   verificationOtpSchema,
   verificationDecisionSchema,
+  guestDeclarationSchema,
   loginIdentifierSchema,
   verifySignupSchema,
   resendSignupSchema,

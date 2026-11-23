@@ -17,6 +17,7 @@ import {
   sendMessage,
 } from "../lib/messages";
 import { enqueue, onOutboxFailed, onOutboxSent } from "../lib/outbox";
+import { formatMediaMessage, uploadChatImage } from "../lib/chatMedia";
 import type { Message } from "../types";
 
 /**
@@ -53,6 +54,7 @@ export type UseConversationRealtime = {
   peerTyping: boolean;
   status: ConnectionStatus;
   send: (body: string) => Promise<Message | null>;
+  sendMedia: (localUri: string, caption?: string) => Promise<Message | null>;
   notifyTyping: (typing: boolean) => void;
   markReadNow: () => void;
   loadOlder: () => Promise<void>;
@@ -99,7 +101,7 @@ export function useConversationRealtime(
         lastSeqRef.current = last;
         hasMoreRef.current = rows.length === pageSize;
         loadedRef.current = true;
-        if (last > 0) void markRead(conversationId, last).catch(() => undefined);
+        void markRead(conversationId, last).catch(() => undefined);
       } catch {
         // History load is best-effort; realtime + catch-up fill the gap.
       } finally {
@@ -126,8 +128,10 @@ export function useConversationRealtime(
       // My own message echoed back → drop a matching optimistic bubble.
       if (incoming.sender_id === userId) {
         setPending((prev) => prev.filter((p) => p.body !== incoming.body));
-      } else if (!incoming.delivered_at) {
-        void markDelivered(incoming.id).catch(() => undefined);
+      } else {
+        if (!incoming.delivered_at) {
+          void markDelivered(incoming.id).catch(() => undefined);
+        }
         // The thread is open, so a received message is immediately seen.
         void markRead(conversationId, incoming.seq).catch(() => undefined);
       }
@@ -225,6 +229,37 @@ export function useConversationRealtime(
     [conversationId]
   );
 
+  const sendMedia = useCallback(
+    async (localUri: string, caption?: string) => {
+      if (!conversationId) return null;
+      const clientMsgId = newClientMessageId();
+      const createdAt = new Date().toISOString();
+      const trimmedCaption = caption?.trim();
+
+      // Show immediate optimistic bubble with local URI
+      const optimisticBody = formatMediaMessage(localUri, trimmedCaption);
+      setPending((prev) => [...prev, { clientMsgId, body: optimisticBody, createdAt }]);
+
+      try {
+        const key = await uploadChatImage(localUri);
+        if (!key) {
+          setPending((prev) => prev.filter((p) => p.clientMsgId !== clientMsgId));
+          throw new Error("Could not upload image. Please try again.");
+        }
+        const serverBody = formatMediaMessage(key, trimmedCaption);
+        const message = await sendMessage(conversationId, serverBody, clientMsgId);
+        setPending((prev) => prev.filter((p) => p.clientMsgId !== clientMsgId));
+        setMessages((prev) => mergeMessages(prev, [message]));
+        lastSeqRef.current = Math.max(lastSeqRef.current, message.seq);
+        return message;
+      } catch (err) {
+        setPending((prev) => prev.filter((p) => p.clientMsgId !== clientMsgId));
+        throw err;
+      }
+    },
+    [conversationId]
+  );
+
   const notifyTyping = useCallback(
     (typing: boolean) => {
       if (!conversationId) return;
@@ -255,6 +290,7 @@ export function useConversationRealtime(
     peerTyping,
     status,
     send,
+    sendMedia,
     notifyTyping,
     markReadNow,
     loadOlder,

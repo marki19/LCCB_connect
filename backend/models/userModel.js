@@ -33,6 +33,7 @@ const PROFILE_COLUMNS = [
   "twitter_url",
   "relationship_status",
   "gender",
+  "contact_scope",
   "profile_completed",
   "profile_banner_dismissed",
   "last_seen_at",
@@ -230,6 +231,7 @@ const getPublicProfile = async (targetId, viewerId = null) => {
       p.cover_url,
       p.note,
       p.note_updated_at,
+      p.contact_scope,
       p.contact_email,
       p.facebook_url,
       p.instagram_url,
@@ -291,6 +293,32 @@ const getPublicProfile = async (targetId, viewerId = null) => {
         : "pending_in"
       : "none";
 
+  const isSelf = Boolean(viewerId && String(viewerId) === String(row.id));
+
+  // Determine if contact details should be masked for guests or outsiders
+  let hideContact = false;
+  const scope = row.contact_scope || "organization";
+
+  if (!isSelf) {
+    if (scope === "private") {
+      hideContact = true;
+    } else if (scope !== "public") {
+      // Organization scope: hide from guest accounts or unauthenticated viewers
+      if (!viewerId) {
+        hideContact = true;
+      } else {
+        const viewerRes = await db.query(
+          `SELECT role FROM public.profiles WHERE id = $1`,
+          [viewerId]
+        );
+        const viewerRole = viewerRes.rows[0]?.role;
+        if (!viewerRole || viewerRole === "guest" || viewerRole === "user") {
+          hideContact = true;
+        }
+      }
+    }
+  }
+
   return {
     id: row.id,
     username: row.username,
@@ -299,10 +327,11 @@ const getPublicProfile = async (targetId, viewerId = null) => {
     cover_url: row.cover_url,
     note: row.note,
     note_updated_at: row.note_updated_at,
-    contact_email: row.contact_email,
-    facebook_url: row.facebook_url,
-    instagram_url: row.instagram_url,
-    twitter_url: row.twitter_url,
+    contact_scope: scope,
+    contact_email: hideContact ? null : row.contact_email,
+    facebook_url: hideContact ? null : row.facebook_url,
+    instagram_url: hideContact ? null : row.instagram_url,
+    twitter_url: hideContact ? null : row.twitter_url,
     relationship_status: row.relationship_status,
     gender: row.gender,
     bio: row.bio,
@@ -317,7 +346,7 @@ const getPublicProfile = async (targetId, viewerId = null) => {
     verified_status: row.verified_status,
     verification_status: row.verification_status,
     friendship,
-    is_self: Boolean(viewerId && String(viewerId) === String(row.id)),
+    is_self: isSelf,
     stats: {
       posts_count: row.posts_count || 0,
       theses_count: row.theses_count || 0,
@@ -374,7 +403,7 @@ const updateUser = async (id, userData) => {
     avatar_url, bio, course, year_level, role, skills,
     department_id, course_id, message_policy, student_id, verification_status,
     contact_email, facebook_url, instagram_url, twitter_url,
-    relationship_status, gender,
+    relationship_status, gender, contact_scope,
   } = userData;
   // Permanent identity: full_name and username are not updatable via updateUser.
   const sql = `
@@ -396,7 +425,8 @@ const updateUser = async (id, userData) => {
         instagram_url = CASE WHEN $17::boolean THEN $18 ELSE instagram_url END,
         twitter_url = CASE WHEN $19::boolean THEN $20 ELSE twitter_url END,
         relationship_status = CASE WHEN $21::boolean THEN $22 ELSE relationship_status END,
-        gender = CASE WHEN $23::boolean THEN $24 ELSE gender END
+        gender = CASE WHEN $23::boolean THEN $24 ELSE gender END,
+        contact_scope = CASE WHEN $25::boolean THEN $26 ELSE contact_scope END
     WHERE id = $12
     RETURNING ${PROFILE_RETURNING};
   `;
@@ -425,6 +455,8 @@ const updateUser = async (id, userData) => {
     relationship_status ? String(relationship_status).trim() : null,
     hasProp("gender"),
     gender ? String(gender).trim() : null,
+    hasProp("contact_scope"),
+    contact_scope && ["public", "organization", "private"].includes(contact_scope) ? contact_scope : null,
   ];
   const result = await db.query(sql, values);
   return result.rows[0];

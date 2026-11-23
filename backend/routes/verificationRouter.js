@@ -33,6 +33,7 @@ router.put("/mine", validate(verificationSubmitSchema), controller.updateMine);
 // Reviewer queue and decisions. The mount admits every reviewer role; the
 // controller applies the matrix per request.
 router.get("/queue", requireRole("departmentAdmin", "admin", "superadmin"), controller.queue);
+router.get("/requests", requireRole("departmentAdmin", "admin", "superadmin"), controller.queue);
 router.post("/:id/approve", requireRole("departmentAdmin", "admin", "superadmin"), controller.approve);
 router.post(
   "/:id/decline",

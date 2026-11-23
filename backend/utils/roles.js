@@ -55,6 +55,7 @@ const ALL_ROLES = [
  * self-selectable, and no verification request may carry it.
  */
 const SELECTABLE_ROLES = ["student", "faculty", "departmentAdmin", "admin"];
+const DECLARATION_ROLES = ["guest"];
 
 module.exports = {
   normalizeRole,
@@ -64,4 +65,5 @@ module.exports = {
   FACULTY_ROLES,
   ALL_ROLES,
   SELECTABLE_ROLES,
+  DECLARATION_ROLES,
 };

@@ -38,7 +38,11 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useFeedFilter, type FeedCategory } from "../../contexts/FeedFilterContext";
 import { RADIUS, SPACE, TYPE, elevation } from "../../lib/tokens";
 import { getSearchSuggestions, apiJson } from "../../lib/api";
+<<<<<<< HEAD
 import { onMessage, onConversation } from "../../lib/realtime";
+=======
+import { onMessage, onConversation, onNotification, onUnreadRefresh } from "../../lib/realtime";
+>>>>>>> 0f38479ce9a12f0616651918ec8f4dac0f5dd616
 import Avatar from "../Avatar";
 import HoverLabel from "../ui/HoverLabel";
 import MenuPopover from "./MenuPopover";
@@ -105,6 +109,7 @@ export default function DesktopTopBar({
       })
       .catch(() => {});
 
+<<<<<<< HEAD
     // Listen for realtime messages
     const unsubMsg = onMessage((evt) => {
       if (evt.action === "INSERT") {
@@ -114,6 +119,18 @@ export default function DesktopTopBar({
 
     // Listen for conversation updates (reconnect, seen receipts)
     const unsubConv = onConversation(() => {
+=======
+    // Fetch initial notification unread count
+    apiJson<{ unread: number }>("/notifications/unread-count")
+      .then((data) => {
+        if (!cancelled && typeof data?.unread === "number") {
+          setLiveNotificationCount(data.unread);
+        }
+      })
+      .catch(() => {});
+
+    const refetchUnread = () => {
+>>>>>>> 0f38479ce9a12f0616651918ec8f4dac0f5dd616
       apiJson<{ unread: number }>("/conversations/unread-count")
         .then((data) => {
           if (!cancelled && typeof data?.unread === "number") {
@@ -121,11 +138,35 @@ export default function DesktopTopBar({
           }
         })
         .catch(() => {});
+    };
+
+    // Listen for realtime messages
+    const unsubMsg = onMessage((evt) => {
+      if (evt.action === "INSERT") {
+        setLiveUnreadCount((c) => c + 1);
+      } else if (evt.action === "UPDATE") {
+        refetchUnread();
+      }
+    });
+
+    // Listen for local or realtime unread count refresh
+    const unsubUnread = onUnreadRefresh((newCount) => {
+      if (typeof newCount === "number") {
+        setLiveUnreadCount(newCount);
+      } else {
+        refetchUnread();
+      }
+    });
+
+    // Listen for conversation updates (reconnect, seen receipts)
+    const unsubConv = onConversation(() => {
+      refetchUnread();
     });
 
     return () => {
       cancelled = true;
       unsubMsg();
+      unsubUnread();
       unsubConv();
     };
   }, [profile?.id, profile?.role]);
@@ -278,7 +319,7 @@ export default function DesktopTopBar({
             >
               <Search size={14} color={colors.inkFaint} />
               <TextInput
-                placeholder="Search…"
+                placeholder="Search"
                 placeholderTextColor={colors.inkFaint}
                 style={[styles.searchInput, { color: colors.ink }]}
                 accessibilityLabel="Search LCCB Connect"

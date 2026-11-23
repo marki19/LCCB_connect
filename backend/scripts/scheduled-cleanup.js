@@ -17,6 +17,9 @@
  *   SUPABASE_SERVICE_ROLE_KEY
  */
 
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
 const { cleanupExpiredPendingSignups } = require("./cleanup-expired-pending-signups");
 const { cleanupGhostAuthUsers } = require("./cleanup-ghost-auth-users");
 const { prune } = require("./prune");
@@ -29,6 +32,17 @@ async function runScheduledCleanup() {
     console.error(
       `[cleanup] Missing required environment variable(s): ${missing.join(", ")}.\n` +
         `[cleanup] Ensure these are set in .env (for local runs) or in GitHub Repository Secrets (for GitHub Actions).`
+    );
+    process.exit(1);
+  }
+
+  // Pre-validate DATABASE_URL scheme to prevent cryptic EAI_AGAIN 'base' errors
+  const dbUrl = process.env.DATABASE_URL?.trim();
+  if (dbUrl && !dbUrl.startsWith("postgresql://") && !dbUrl.startsWith("postgres://")) {
+    console.error(
+      `[cleanup] FATAL: DATABASE_URL must start with "postgresql://" or "postgres://".\n` +
+        `[cleanup] Received: "${dbUrl.slice(0, 20)}...".\n` +
+        `[cleanup] Check GitHub Repository Secrets -> Actions -> DATABASE_URL and ensure it contains only the URL without variable name or quotes.`
     );
     process.exit(1);
   }
@@ -69,8 +83,6 @@ async function runScheduledCleanup() {
 }
 
 if (require.main === module) {
-  // Load .env for local runs
-  require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
   runScheduledCleanup().then(() => process.exit(0));
 }
 

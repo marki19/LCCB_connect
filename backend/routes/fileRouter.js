@@ -96,24 +96,50 @@ async function verifyFileOwnership(category, filename, user) {
 }
 
 /**
- * Redirects to a short-lived presigned URL.
- *
- * The bytes never traverse this process: R2 serves them directly, which keeps
- * file traffic off the API instance and costs nothing because R2 charges no
- * egress. Private categories must not be stored by shared caches, so they get
- * `no-store`; public ones are content-addressed by hash and never change.
+ * Streams the object from storage with CORS headers, or falls back to presigned 302 redirect.
  */
-function redirectToObject(res, key, { isPublic }) {
+async function streamOrRedirectObject(res, key, { isPublic }) {
   const url = objectStorage.presignGet(key);
 
-  res.setHeader(
-    "Cache-Control",
-    isPublic ? "private, max-age=240" : "private, no-store"
-  );
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  try {
+    const upstream = await fetch(url);
+    if (!upstream.ok) {
+      if (upstream.status === 404) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      return res.redirect(302, url);
+    }
 
-  return res.redirect(302, url);
+    res.setHeader(
+      "Content-Type",
+      upstream.headers.get("content-type") || "application/octet-stream"
+    );
+    const len = upstream.headers.get("content-length");
+    if (len) res.setHeader("Content-Length", len);
+
+    res.setHeader(
+      "Cache-Control",
+      isPublic ? "public, max-age=31536000, immutable" : "private, no-store"
+    );
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+
+    const { Readable } = require("stream");
+    if (upstream.body) {
+      return Readable.fromWeb(upstream.body).pipe(res);
+    }
+    return res.end();
+  } catch (err) {
+    console.error("[fileRouter] stream error, falling back to redirect:", err);
+    res.setHeader(
+      "Cache-Control",
+      isPublic ? "private, max-age=240" : "private, no-store"
+    );
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    return res.redirect(302, url);
+  }
 }
 
 /**
@@ -139,7 +165,7 @@ router.get("/:category/:filename", (req, res, next) => {
   const isPublic = isPublicCategory(category);
 
   if (isPublic) {
-    return redirectToObject(res, key, { isPublic });
+    return streamOrRedirectObject(res, key, { isPublic });
   }
 
   return requireAuth(req, res, () => {
@@ -150,7 +176,7 @@ router.get("/:category/:filename", (req, res, next) => {
         if (!allowed) {
           return res.status(404).json({ error: "File not found" });
         }
-        return redirectToObject(res, key, { isPublic });
+        return streamOrRedirectObject(res, key, { isPublic });
       } catch (err) {
         return next(err);
       }

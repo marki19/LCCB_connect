@@ -36,6 +36,7 @@ export default function ChatImageBubble({
   maxWidth = 240,
 }: ChatImageBubbleProps) {
   const { colors } = useTheme();
+  const bubbleHeight = Math.max(150, Math.round((maxWidth || 240) * 0.75));
 
   // Resolution is a pure string join, so it belongs in render rather than in an
   // effect: no state, no loading window, no double render.
@@ -65,7 +66,8 @@ export default function ChatImageBubble({
       style={[
         styles.container,
         {
-          maxWidth,
+          width: maxWidth,
+          maxWidth: "100%",
           backgroundColor: isMine ? colors.brandSolid : colors.surfaceSunken,
           borderColor: isMine ? "transparent" : colors.border,
           borderBottomRightRadius: isMine ? 4 : 16,
@@ -77,7 +79,7 @@ export default function ChatImageBubble({
         activeOpacity={0.88}
         onPress={handlePress}
         disabled={!resolvedUrl || sending}
-        style={styles.imageWrap}
+        style={[styles.imageWrap, { height: bubbleHeight }]}
         accessibilityLabel="Chat photo attachment"
       >
         {resolvedUrl && !loadError ? (
@@ -88,7 +90,8 @@ export default function ChatImageBubble({
               contentFit="cover"
               onLoadStart={() => setImageLoading(true)}
               onLoadEnd={() => setImageLoading(false)}
-              onError={() => {
+              onError={(e) => {
+                console.warn("[ChatImageBubble] Image load error:", e, resolvedUrl);
                 setImageLoading(false);
                 setLoadError(true);
               }}
@@ -100,13 +103,22 @@ export default function ChatImageBubble({
             )}
           </>
         ) : (
-          <View style={[styles.fallbackWrap, { backgroundColor: colors.surfaceSunken }]}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              if (resolvedUrl) {
+                setLoadError(false);
+                setImageLoading(true);
+              }
+            }}
+            style={[styles.fallbackWrap, { backgroundColor: colors.surfaceSunken }]}
+          >
             {loadError ? (
-              <Text style={[styles.errorText, { color: colors.inkFaint }]}>Image unavailable</Text>
+              <Text style={[styles.errorText, { color: colors.inkFaint }]}>Image unavailable (tap to retry)</Text>
             ) : (
               <ActivityIndicator size="small" color={colors.brand} />
             )}
-          </View>
+          </TouchableOpacity>
         )}
 
         {sending && (
@@ -146,12 +158,18 @@ const styles = StyleSheet.create({
   imageWrap: {
     width: "100%",
     aspectRatio: 4 / 3,
+    minHeight: 150,
     borderRadius: 13,
     overflow: "hidden",
     backgroundColor: "rgba(0,0,0,0.06)",
     position: "relative",
   },
   image: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     width: "100%",
     height: "100%",
   },

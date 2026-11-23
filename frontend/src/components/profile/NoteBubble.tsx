@@ -181,7 +181,7 @@ export default function NoteBubble({
               <TextInput
                 value={noteInput}
                 onChangeText={setNoteInput}
-                placeholder="What's on your mind? (e.g. meet?? pass ako jn)"
+                placeholder="Share a thought..."
                 placeholderTextColor={colors.inkFaint}
                 maxLength={60}
                 autoFocus
