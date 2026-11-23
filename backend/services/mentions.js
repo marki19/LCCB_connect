@@ -29,7 +29,9 @@ async function getMentionableUsers(authorId, query = "", limit = 8, client = nul
   const cappedLimit = Math.min(Math.max(1, parseInt(limit, 10) || 8), 50);
 
   const sql = `
-    SELECT p.id, p.username, p.full_name, p.avatar_url
+    SELECT p.id, p.username, p.full_name, p.avatar_url,
+           public.is_friend($1, p.id) AS is_friend,
+           (a.department_id IS NOT NULL AND a.department_id = p.department_id) AS is_dept_mate
     FROM public.profiles p
     LEFT JOIN public.profiles a ON a.id = $1
     WHERE p.id <> $1

@@ -8,6 +8,7 @@
  */
 
 import type { Department, Course } from "../types";
+import { apiJson } from "./api";
 
 /** The canonical role vocabulary the server uses. */
 export type VerificationRole =
@@ -262,4 +263,80 @@ export function validateAll(
     if (err) errors[def.key] = err;
   }
   return errors;
+}
+
+// ---- Guest / Outsider Account Types & API -----------------------------------
+
+export type AffiliationType =
+  | "student_elsewhere"
+  | "faculty_elsewhere"
+  | "professional"
+  | "researcher"
+  | "other";
+
+export interface GuestAccessRequest {
+  id: string;
+  user_id: string;
+  purpose: string;
+  affiliation_type: AffiliationType;
+  affiliation_name: string;
+  location?: string | null;
+  status: "pending" | "approved" | "declined";
+  submitted_at: string;
+  decided_at?: string | null;
+  decided_by?: string | null;
+  decision_note?: string | null;
+  username?: string;
+  full_name?: string;
+  email?: string;
+  avatar_url?: string | null;
+}
+
+export interface GuestDeclarationPayload {
+  purpose: string;
+  affiliation_type: AffiliationType;
+  affiliation_name: string;
+  location?: string;
+}
+
+export async function declareGuest(
+  payload: GuestDeclarationPayload
+): Promise<{ success: boolean; request_id: string; status: string }> {
+  return apiJson("/auth/guest", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listGuestRequests(
+  options: { status?: string; limit?: number } = {}
+): Promise<GuestAccessRequest[]> {
+  const query = new URLSearchParams();
+  query.set("kind", "guest");
+  if (options.status) query.set("status", options.status);
+  if (options.limit) query.set("limit", String(options.limit));
+  const res = await apiJson<{ requests: GuestAccessRequest[] }>(
+    `/verification/requests?${query.toString()}`
+  );
+  return res.requests || [];
+}
+
+export async function approveGuestRequest(
+  id: string,
+  note?: string
+): Promise<GuestAccessRequest> {
+  return apiJson<GuestAccessRequest>(`/verification/${id}/approve?kind=guest`, {
+    method: "POST",
+    body: JSON.stringify({ kind: "guest", note }),
+  });
+}
+
+export async function declineGuestRequest(
+  id: string,
+  note?: string
+): Promise<GuestAccessRequest> {
+  return apiJson<GuestAccessRequest>(`/verification/${id}/decline?kind=guest`, {
+    method: "POST",
+    body: JSON.stringify({ kind: "guest", note }),
+  });
 }

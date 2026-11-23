@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, TextStyle, StyleProp } from "react-native";
+import { Text, TextStyle, StyleProp, Linking } from "react-native";
 import { useRouter } from "expo-router";
 import { renderMentions, type MentionToken } from "../../lib/mentions";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -26,12 +26,13 @@ export function RichText({ text, mentions, style, numberOfLines }: RichTextProps
           const targetId = seg.user_id;
           return (
             <Text
-              key={idx}
+              key={`mention-${idx}`}
               style={{
-                color: colors.primary,
-                fontWeight: "600",
+                color: colors.action || colors.primary,
+                fontWeight: "700",
               }}
-              onPress={() => {
+              onPress={(e) => {
+                e?.stopPropagation?.();
                 if (targetId) {
                   router.push(`/profile/${targetId}` as any);
                 }
@@ -41,7 +42,29 @@ export function RichText({ text, mentions, style, numberOfLines }: RichTextProps
             </Text>
           );
         }
-        return <Text key={idx}>{seg.text}</Text>;
+
+        if (seg.url) {
+          return (
+            <Text
+              key={`link-${idx}`}
+              style={{
+                color: colors.action,
+                textDecorationLine: "underline",
+                fontWeight: "500",
+              }}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                Linking.openURL(seg.url!).catch((err) => {
+                  console.error("Failed to open link:", err);
+                });
+              }}
+            >
+              {seg.text}
+            </Text>
+          );
+        }
+
+        return <Text key={`text-${idx}`}>{seg.text}</Text>;
       })}
     </Text>
   );

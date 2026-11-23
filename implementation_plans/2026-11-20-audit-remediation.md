@@ -73,9 +73,9 @@ consumed them. The queue now serves them:
 - [x] F3 Remove now-redundant `GET|PUT /api/reports` if the queue covers them
 
 ### G. Cleanup
-- [ ] G1 Remove `ALTER TABLE public.theses` blocks from the two legacy scripts
-- [ ] G2 Bring lint back under the 63-error baseline
-- [ ] G3 Full gate run
+- [x] G1 Remove `ALTER TABLE public.theses` blocks from the two legacy scripts
+- [x] G2 Bring lint back under the 63-error baseline
+- [x] G3 Full gate run
 
 ## Gates per slice
 

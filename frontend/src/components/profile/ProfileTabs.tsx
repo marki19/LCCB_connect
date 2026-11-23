@@ -3,11 +3,12 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { SPACE } from "../../lib/tokens";
 
-export type ProfileTabKey = "all" | "about" | "friends" | "photos" | "theses";
+export type ProfileTabKey = "all" | "about" | "friends" | "photos" | "repositories" | "theses";
 
 interface ProfileTabsProps {
   activeTab: ProfileTabKey;
   onTabChange: (tab: ProfileTabKey) => void;
+  repositoriesCount?: number;
   thesesCount?: number;
   friendsCount?: number;
 }
@@ -15,17 +16,20 @@ interface ProfileTabsProps {
 export default function ProfileTabs({
   activeTab,
   onTabChange,
+  repositoriesCount,
   thesesCount = 0,
   friendsCount = 0,
 }: ProfileTabsProps) {
   const { colors } = useTheme();
+
+  const repoBadgeCount = repositoriesCount !== undefined ? repositoriesCount : thesesCount;
 
   const tabs: { key: ProfileTabKey; label: string; count?: number }[] = [
     { key: "all", label: "All" },
     { key: "about", label: "About" },
     { key: "friends", label: "Friends", count: friendsCount },
     { key: "photos", label: "Photos" },
-    { key: "theses", label: "Theses", count: thesesCount },
+    { key: "repositories", label: "Repositories", count: repoBadgeCount },
   ];
 
   return (
@@ -36,7 +40,9 @@ export default function ProfileTabs({
         contentContainerStyle={styles.scrollContent}
       >
         {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
+          const isActive =
+            activeTab === tab.key ||
+            (tab.key === "repositories" && activeTab === "theses");
           return (
             <Pressable
               key={tab.key}

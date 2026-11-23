@@ -445,22 +445,23 @@ const markDelivered = async (messageId, recipientId) => {
  * read, advances the read marker, and clears the thread's bell rows.
  */
 const markRead = async (conversationId, userId, uptoSeq) => {
+  const seqTarget = Number(uptoSeq) || 0;
   return db.withTransaction(async (client) => {
     const updated = await client.query(
       `UPDATE public.messages
           SET read_at = COALESCE(read_at, NOW())
         WHERE conversation_id = $1 AND recipient_id = $2
-          AND read_at IS NULL AND seq <= $3
+          AND read_at IS NULL AND ($3::int = 0 OR seq <= $3)
         RETURNING id, seq;`,
-      [conversationId, userId, uptoSeq]
+      [conversationId, userId, seqTarget]
     );
 
     await client.query(
       `INSERT INTO public.conversation_state (conversation_id, user_id, last_read_seq)
-       VALUES ($1, $2, $3)
+       VALUES ($1, $2, COALESCE(NULLIF($3, 0), (SELECT COALESCE(MAX(seq), 0) FROM public.messages WHERE conversation_id = $1)))
        ON CONFLICT (conversation_id, user_id) DO UPDATE
          SET last_read_seq = GREATEST(public.conversation_state.last_read_seq, EXCLUDED.last_read_seq);`,
-      [conversationId, userId, uptoSeq]
+      [conversationId, userId, seqTarget]
     );
 
     await client.query(

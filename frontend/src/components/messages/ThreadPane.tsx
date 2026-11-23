@@ -34,6 +34,7 @@ import Modal from "../ui/Modal";
 import NoteBubble from "../profile/NoteBubble";
 import ChatImageBubble from "../chat/ChatImageBubble";
 import ChatImageLightbox from "../chat/ChatImageLightbox";
+import { AppImage } from "../AppImage";
 import { pickImage } from "../../lib/upload";
 import {
   formatMediaMessage,
@@ -76,15 +77,143 @@ type ThreadPaneProps = {
 
 const REPORT_REASONS = ["Spam", "Harassment", "Inappropriate content", "Scam or fraud"];
 
-const formatClock = (iso: string) =>
-  new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const formatMessageTime = (iso?: string | null) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const timeStr = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (isToday) return timeStr;
+  const isThisYear = d.getFullYear() === now.getFullYear();
+  const dateStr = d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(isThisYear ? {} : { year: "numeric" }),
+  });
+  return `${dateStr}, ${timeStr}`;
+};
 
 function Ticks({ message }: { message: Message }) {
   const { colors } = useTheme();
   const status = messageStatus(message);
-  if (status === "seen") return <CheckCheck size={13} color={colors.bubbleMineText} />;
-  if (status === "delivered") return <CheckCheck size={13} color={colors.textOnActionMuted} />;
-  return <Check size={13} color={colors.textOnActionMuted} />;
+  if (status === "seen") return <CheckCheck size={12} color={colors.brand} />;
+  if (status === "delivered") return <CheckCheck size={12} color={colors.inkFaint} />;
+  return <Check size={12} color={colors.inkFaint} />;
+}
+
+function ThreadMessageRow({
+  message,
+  mine,
+  peerName,
+  colors,
+  onLongPress,
+  onPressImage,
+}: {
+  message: Message;
+  mine: boolean;
+  peerName: string;
+  colors: any;
+  onLongPress?: () => void;
+  onPressImage?: (url: string, caption?: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [clicked, setClicked] = useState(false);
+  const isExposed = hovered || clicked;
+  const parsed = parseMessageContent(message.body);
+
+  const toggleClicked = () => {
+    setClicked((prev) => !prev);
+  };
+
+  return (
+    <View
+      style={{
+        marginBottom: SPACE.x2,
+        paddingHorizontal: SPACE.x3,
+        alignItems: mine ? "flex-end" : "flex-start",
+      }}
+    >
+      <Pressable
+        onPress={toggleClicked}
+        onLongPress={onLongPress}
+        delayLongPress={350}
+        onHoverIn={() => setHovered(true)}
+        onHoverOut={() => setHovered(false)}
+        accessibilityRole="button"
+        accessibilityLabel={`${mine ? "You" : peerName}: ${parsed.isMedia ? "photo" : message.body}`}
+        accessibilityHint="Tap to show or hide sent time"
+        style={({ pressed }: any) => [
+          {
+            maxWidth: "78%",
+            width: parsed.isMedia ? 280 : undefined,
+            cursor: "pointer",
+            opacity: pressed ? 0.88 : (hovered || clicked) ? 0.96 : 1,
+          },
+        ]}
+      >
+        {parsed.isMedia && parsed.mediaUrl ? (
+          <ChatImageBubble
+            mediaUrl={parsed.mediaUrl}
+            caption={parsed.text}
+            isMine={mine}
+            maxWidth={280}
+            onPressImage={onPressImage}
+          />
+        ) : (
+          <View
+            style={{
+              backgroundColor: mine ? colors.bubbleMine : colors.bubblePeer,
+              borderRadius: RADIUS.lg,
+              borderBottomRightRadius: mine ? 4 : RADIUS.lg,
+              borderBottomLeftRadius: mine ? RADIUS.lg : 4,
+              paddingHorizontal: SPACE.x3,
+              paddingVertical: SPACE.x2,
+              borderWidth: mine ? 0 : 1,
+              borderColor: mine ? "transparent" : colors.border,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 15,
+                lineHeight: 20,
+                color: mine ? colors.bubbleMineText : colors.bubblePeerText,
+              }}
+            >
+              {message.body}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+
+      {/* Exposed time sent on hover or after click */}
+      {isExposed && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            marginTop: 3,
+            paddingHorizontal: 4,
+            alignSelf: mine ? "flex-end" : "flex-start",
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 11,
+              color: colors.inkFaint,
+              fontWeight: "500",
+            }}
+          >
+            {mine
+              ? `Sent ${formatMessageTime(message.created_at)}`
+              : formatMessageTime(message.created_at)}
+          </Text>
+          {mine && <Ticks message={message} />}
+        </View>
+      )}
+    </View>
+  );
 }
 
 export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) {
@@ -94,7 +223,7 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
   const { modeOf } = usePresence();
   const { colors } = useTheme();
 
-  const { messages, pending, loading, peerTyping, send, notifyTyping, loadOlder } =
+  const { messages, pending, loading, peerTyping, send, sendMedia, notifyTyping, loadOlder } =
     useConversationRealtime(conversationId);
 
   // Foreground push suppression (§10): while this thread is focused, don't show
@@ -216,39 +345,27 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
     setSending(true);
     notifyTyping(false);
 
-    let payloadBody = text;
     if (attachedImage) {
-      setUploadingImage(true);
+      const imgUri = attachedImage.uri;
+      setDraft("");
+      setAttachedImage(null);
       try {
-        const key = await uploadChatImage(attachedImage.uri);
-        if (!key) {
-          setNotice({
-            title: "Upload failed",
-            message: "Could not upload image. Please try again.",
-          });
-          setUploadingImage(false);
-          setSending(false);
-          return;
-        }
-        payloadBody = formatMediaMessage(key, text);
+        await sendMedia(imgUri, text);
       } catch (err) {
         setNotice({
           title: "Upload failed",
           message: err instanceof Error ? err.message : "Could not upload image.",
         });
-        setUploadingImage(false);
-        setSending(false);
-        return;
       } finally {
-        setUploadingImage(false);
+        setSending(false);
       }
+      return;
     }
 
     setDraft("");
-    setAttachedImage(null);
 
     try {
-      await send(payloadBody);
+      await send(text);
     } catch (err) {
       // A 4xx (blocked / validation) is permanent — surface it. A network/5xx
       // failure was queued in the outbox and shows as a pending bubble instead.
@@ -359,112 +476,16 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
 
   const renderBubble = (message: Message) => {
     const mine = message.sender_id === userId;
-    const parsed = parseMessageContent(message.body);
-
-    if (parsed.isMedia && parsed.mediaUrl) {
-      return (
-        <Pressable
-          key={message.id}
-          onLongPress={() => openReport(message)}
-          delayLongPress={350}
-          accessibilityRole="button"
-          accessibilityLabel={`${mine ? "You" : peerName} sent a photo`}
-          style={{
-            flexDirection: "row",
-            justifyContent: mine ? "flex-end" : "flex-start",
-            marginBottom: SPACE.x2,
-            paddingHorizontal: SPACE.x3,
-          }}
-        >
-          <ChatImageBubble
-            mediaUrl={parsed.mediaUrl}
-            caption={parsed.text}
-            isMine={mine}
-            maxWidth={280}
-            onPressImage={(url, cap) => setLightboxData({ url, caption: cap })}
-            statusFooter={
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                  marginTop: 3,
-                  gap: 4,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 10,
-                    color: mine ? colors.textOnActionMuted : colors.textTertiary,
-                  }}
-                >
-                  {formatClock(message.created_at)}
-                </Text>
-                {mine && <Ticks message={message} />}
-              </View>
-            }
-          />
-        </Pressable>
-      );
-    }
-
     return (
-      <Pressable
+      <ThreadMessageRow
         key={message.id}
+        message={message}
+        mine={mine}
+        peerName={peerName}
+        colors={colors}
         onLongPress={() => openReport(message)}
-        delayLongPress={350}
-        accessibilityRole="text"
-        accessibilityLabel={`${mine ? "You" : peerName}: ${message.body}`}
-        style={{
-          flexDirection: "row",
-          justifyContent: mine ? "flex-end" : "flex-start",
-          marginBottom: SPACE.x2,
-          paddingHorizontal: SPACE.x3,
-        }}
-      >
-        <View
-          style={{
-            maxWidth: "78%",
-            backgroundColor: mine ? colors.bubbleMine : colors.bubblePeer,
-            borderRadius: RADIUS.lg,
-            borderBottomRightRadius: mine ? 4 : RADIUS.lg,
-            borderBottomLeftRadius: mine ? RADIUS.lg : 4,
-            paddingHorizontal: SPACE.x3,
-            paddingVertical: SPACE.x2,
-            borderWidth: mine ? 0 : 1,
-            borderColor: mine ? "transparent" : colors.border,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 15,
-              lineHeight: 20,
-              color: mine ? colors.bubbleMineText : colors.bubblePeerText,
-            }}
-          >
-            {message.body}
-          </Text>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              marginTop: 3,
-              gap: 4,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 10,
-                color: mine ? colors.textOnActionMuted : colors.textTertiary,
-              }}
-            >
-              {formatClock(message.created_at)}
-            </Text>
-            {mine && <Ticks message={message} />}
-          </View>
-        </View>
-      </Pressable>
+        onPressImage={(url, cap) => setLightboxData({ url, caption: cap })}
+      />
     );
   };
 
@@ -612,7 +633,7 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
                   fontWeight: "600",
                 }}
               >
-                💭 "{peer.note}"
+                💭 &quot;{peer.note}&quot;
               </Text>
             ) : (
               <Text
@@ -912,9 +933,10 @@ export default function ThreadPane({ conversationId, onBack }: ThreadPaneProps) 
             }}
           >
             <View style={{ position: "relative" }}>
-              <Image
+              <AppImage
                 source={{ uri: attachedImage.uri }}
                 style={{ width: 56, height: 56, borderRadius: RADIUS.md }}
+                contentFit="cover"
               />
               <Pressable
                 onPress={() => setAttachedImage(null)}

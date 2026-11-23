@@ -88,7 +88,7 @@ export default function DesktopContactsRail({ peers }: DesktopContactsRailProps)
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search contacts…"
+            placeholder="Search"
             placeholderTextColor={colors.inkFaint}
             style={[styles.searchInput, { color: colors.ink }]}
             autoFocus

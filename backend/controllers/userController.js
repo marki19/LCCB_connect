@@ -9,6 +9,7 @@ const mentionsService = require("../services/mentions");
 const { AdminAuthUnavailableError } = require("../services/supabaseAdmin");
 const { clampLimit } = require("../models/pagination");
 const { sanitizeProfile } = require("../utils/profile");
+const { isSchoolAccount } = require("../services/verificationPolicy");
 const {
   isAdmin,
   canManage,
@@ -90,7 +91,8 @@ const getUser = async (req, res, next) => {
     const identity_complete = Boolean(
       user.full_name && user.student_id && user.department_id && user.course_id
     );
-    res.json({ ...sanitizeProfile(user), identity_complete });
+    const account_kind = isSchoolAccount(user.email) ? "school" : "outsider";
+    res.json({ ...sanitizeProfile(user), identity_complete, account_kind });
   } catch (error) {
     next(error);
   }

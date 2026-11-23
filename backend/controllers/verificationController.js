@@ -1,4 +1,5 @@
 const verificationModel = require("../models/verificationModel");
+const guestAccessModel = require("../models/guestAccessModel");
 const verificationOtpModel = require("../models/verificationOtpModel");
 const userModel = require("../models/userModel");
 const departmentModel = require("../models/departmentModel");
@@ -361,6 +362,17 @@ const getMine = async (req, res, next) => {
 /** GET /api/verification/queue — the requests this reviewer may act on. */
 const queue = async (req, res, next) => {
   try {
+    if (req.query.kind === "guest") {
+      const normRole = (req.profile?.role || "").toLowerCase().replace(/[-_]/g, "");
+      if (normRole !== "admin" && normRole !== "superadmin") {
+        return res.status(403).json({ error: "Forbidden: only admins can review guest requests" });
+      }
+      const status = req.query.status || "pending";
+      const limit = Math.min(Math.max(parseInt(req.query.limit || "50", 10) || 50, 1), 100);
+      const rows = await guestAccessModel.listRequests({ status, limit });
+      return res.json({ requests: rows });
+    }
+
     const context = reviewerContext(req.profile);
     if (context.error) {
       return res.status(context.status).json({ error: context.error });
@@ -439,6 +451,22 @@ async function authorizeReview(req, res) {
 /** POST /api/verification/:id/approve */
 const approve = async (req, res, next) => {
   try {
+    if (req.query.kind === "guest" || req.body?.kind === "guest") {
+      const normRole = (req.profile?.role || "").toLowerCase().replace(/[-_]/g, "");
+      if (normRole !== "admin" && normRole !== "superadmin") {
+        return res.status(403).json({ error: "Forbidden: only admins can review guest requests" });
+      }
+      const note = req.body?.note || null;
+      const updated = await guestAccessModel.approve(req.params.id, req.user.id, note);
+      await auditService.recordRequest(req, {
+        action: ACTIONS.VERIFICATION_APPROVE,
+        targetType: "guest_access_request",
+        targetId: updated.id,
+        metadata: { role: "guest" },
+      });
+      return res.json(updated);
+    }
+
     const request = await authorizeReview(req, res);
     if (!request) return;
 
@@ -478,6 +506,23 @@ const approve = async (req, res, next) => {
 /** POST /api/verification/:id/decline */
 const decline = async (req, res, next) => {
   try {
+    if (req.query.kind === "guest" || req.body?.kind === "guest") {
+      const normRole = (req.profile?.role || "").toLowerCase().replace(/[-_]/g, "");
+      if (normRole !== "admin" && normRole !== "superadmin") {
+        return res.status(403).json({ error: "Forbidden: only admins can review guest requests" });
+      }
+      const note = req.body?.note || null;
+      const updated = await guestAccessModel.decline(req.params.id, req.user.id, note);
+      await auditService.recordRequest(req, {
+        action: ACTIONS.VERIFICATION_DECLINE,
+        targetType: "guest_access_request",
+        targetId: updated.id,
+        reason: note,
+        metadata: { role: "guest" },
+      });
+      return res.json(updated);
+    }
+
     const request = await authorizeReview(req, res);
     if (!request) return;
 

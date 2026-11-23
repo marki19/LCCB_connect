@@ -109,6 +109,22 @@ export default function OnboardingScreen() {
   );
 
   useEffect(() => {
+    if (profile) {
+      if (profile.role === "guest" && profile.verification_status === "pending") {
+        router.replace("/pending-review" as any);
+        return;
+      }
+      const isOutsider =
+        profile.account_kind === "outsider" ||
+        (profile.email && !profile.email.endsWith("@lccbonline.edu.ph"));
+      if (profile.role === "user" && isOutsider && !profile.guest_declared_at) {
+        router.replace("/guest-declaration" as any);
+        return;
+      }
+    }
+  }, [profile, router]);
+
+  useEffect(() => {
     loadMine(previewRole);
   }, [loadMine, previewRole]);
 
@@ -365,7 +381,7 @@ export default function OnboardingScreen() {
               >
                 <Text style={{ fontSize: 28 }}>✅</Text>
               </View>
-              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>You're verified</Text>
+              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>You&apos;re verified</Text>
               <Text
                 style={{
                   ...TYPE.body,

@@ -301,12 +301,32 @@ const STAFF_VERIFICATION_EXEMPT = new Set([
 
 function requireVerified(req, res, next) {
   const role = normalizeRole(getRole(req));
+  if (role === "guest") {
+    return res.status(403).json({
+      error: "Guest accounts are read-only",
+      code: "guest_read_only",
+    });
+  }
   if (STAFF_VERIFICATION_EXEMPT.has(role)) return next();
-  if (req.profile?.verification_status === "verified") return next();
+  if (req.profile?.verification_status === "verified" || req.profile?.verification_status === "approved") return next();
   return res.status(403).json({
     error: "Verify your identity to do that",
     code: "not_verified",
   });
+}
+
+function requireContentAccess(req, res, next) {
+  const role = normalizeRole(getRole(req));
+  const isApprovedGuest =
+    req.profile?.verification_status === "verified" ||
+    req.profile?.verification_status === "approved";
+  if (role === "guest" && !isApprovedGuest) {
+    return res.status(403).json({
+      error: "Guest access is pending approval",
+      code: "guest_pending",
+    });
+  }
+  return next();
 }
 
 // Composable role security gates
@@ -339,6 +359,7 @@ module.exports = {
   isStudent,
   isSuspendedProfile,
   requireVerified,
+  requireContentAccess,
   // Privilege ranking (account management)
   ROLE_RANK,
   rankOf,

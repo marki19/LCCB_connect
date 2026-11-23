@@ -1,0 +1,92 @@
+<mxfile host="app.diagrams.net" modified="2026-11-21T21:35:00.000Z" agent="Antigravity" version="24.0.0" type="device">
+  <diagram id="dfd-level-2-p2" name="Level 2 DFD - Process 2.0 Content &amp; Repositories">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" background="#FFFFFF">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- EXTERNAL ENTITIES (In-scope for Process 2.0) -->
+        <mxCell id="e_stu" value="Student" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="100" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_fac" value="Faculty" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="380" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_gst" value="Guest" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="660" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_dept" value="Department Admin" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="940" width="180" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- SUB-PROCESSES OF PROCESS 2.0 -->
+        <mxCell id="p2_1" value="&lt;b&gt;2.1&lt;/b&gt;&lt;br&gt;Validate Post &amp;amp;&lt;br&gt;Attachments" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="60" width="150" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2_2" value="&lt;b&gt;2.2&lt;/b&gt;&lt;br&gt;Store Media &amp;amp;&lt;br&gt;Generate URLs" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="340" width="150" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2_3" value="&lt;b&gt;2.3&lt;/b&gt;&lt;br&gt;Screen Content &amp;amp;&lt;br&gt;Check Policy" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="620" width="150" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2_4" value="&lt;b&gt;2.4&lt;/b&gt;&lt;br&gt;Index Repository &amp;amp;&lt;br&gt;Catalog Metadata" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="900" width="150" height="150" as="geometry"/>
+        </mxCell>
+
+        <!-- DATA STORES -->
+        <!-- D2 Content & Repositories -->
+        <mxCell id="d2" value="Content &amp;amp; Repositories" style="shape=partialRectangle;top=1;bottom=1;left=1;right=0;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;html=1;align=left;verticalAlign=middle;spacingLeft=55;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="390" width="240" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="d2_div" value="" style="endArrow=none;html=0;rounded=0;strokeColor=#000000;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="1200" y="390" as="sourcePoint"/><mxPoint x="1200" y="440" as="targetPoint"/></mxGeometry>
+        </mxCell>
+        <mxCell id="d2_lbl" value="D2" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="390" width="50" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- D5 Audit & Moderation Logs -->
+        <mxCell id="d5" value="Audit &amp;amp; Moderation Logs" style="shape=partialRectangle;top=1;bottom=1;left=1;right=0;fillColor=#FFFFFF;strokeColor=#000000;fontColor=#000000;html=1;align=left;verticalAlign=middle;spacingLeft=55;fontSize=12;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="670" width="240" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="d5_div" value="" style="endArrow=none;html=0;rounded=0;strokeColor=#000000;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="1200" y="670" as="sourcePoint"/><mxPoint x="1200" y="720" as="targetPoint"/></mxGeometry>
+        </mxCell>
+        <mxCell id="d5_lbl" value="D5" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="670" width="50" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- FLOWS -->
+        <mxCell id="f_stu_p21_in" value="Post Draft &amp;amp; Thesis Upload" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=1;exitY=0.25;entryX=0;entryY=0.3;" edge="1" parent="1" source="e_stu" target="p2_1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f_stu_p21_out" value="Validation Receipt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=0;exitY=0.7;entryX=1;entryY=0.75;" edge="1" parent="1" source="p2_1" target="e_stu"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="f_fac_p21_in" value="Academic Review Draft" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=1;exitY=0.25;entryX=0;entryY=0.5;" edge="1" parent="1" source="e_fac" target="p2_1">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="380" y="398"/><mxPoint x="380" y="135"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="f_fac_p21_out" value="Submission Status" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=0.25;exitY=1;entryX=1;entryY=0.75;" edge="1" parent="1" source="p2_1" target="e_fac">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="678" y="240"/><mxPoint x="410" y="240"/><mxPoint x="410" y="433"/></Array></mxGeometry>
+        </mxCell>
+
+        <mxCell id="f_p21_p22" value="Validated File Payload" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p2_1" target="p2_2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f_p22_d2_w" value="Persist File Keys" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=1;exitY=0.5;entryX=0;entryY=0.3;" edge="1" parent="1" source="p2_2" target="d2"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="f_p22_p23" value="Content for Screening" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p2_2" target="p2_3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f_p23_d5_w" value="Flagged Content Log" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="p2_3" target="d5"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="f_p23_p24" value="Approved Content" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="p2_3" target="p2_4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f_p24_d2_w" value="Publish to Repository" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=1;exitY=0.5;entryX=0.5;entryY=1;" edge="1" parent="1" source="p2_4" target="d2"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1270" y="975"/></Array></mxGeometry></mxCell>
+
+        <mxCell id="f_gst_p24_in" value="Public Repository Request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=1;exitY=0.25;entryX=0;entryY=0.3;" edge="1" parent="1" source="e_gst" target="p2_4">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="380" y="678"/><mxPoint x="380" y="945"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="f_gst_p24_out" value="Public Theses &amp;amp; Works" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=0;exitY=0.7;entryX=1;entryY=0.75;" edge="1" parent="1" source="p2_4" target="e_gst">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="410" y="1005"/><mxPoint x="410" y="713"/></Array></mxGeometry>
+        </mxCell>
+
+        <mxCell id="f_dept_p24_in" value="Department Announcements" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=1;exitY=0.25;entryX=0;entryY=0.5;" edge="1" parent="1" source="e_dept" target="p2_4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="f_dept_p24_out" value="Announcement Receipts" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;labelBackgroundColor=#FFFFFF;fontSize=10;endArrow=classic;exitX=0.25;exitY=1;entryX=1;entryY=0.75;" edge="1" parent="1" source="p2_4" target="e_dept"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

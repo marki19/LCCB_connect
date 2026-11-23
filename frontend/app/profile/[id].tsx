@@ -49,6 +49,7 @@ import ProfilePhotosCard from "../../src/components/profile/ProfilePhotosCard";
 import ProfileAboutTab from "../../src/components/profile/ProfileAboutTab";
 import ProfileFriendsTab from "../../src/components/profile/ProfileFriendsTab";
 import ProfilePhotosTab from "../../src/components/profile/ProfilePhotosTab";
+import ProfileRepositoriesTab from "../../src/components/profile/ProfileRepositoriesTab";
 import ProfileThesesList from "../../src/components/profile/ProfileThesesList";
 import QuickSnapComposer from "../../src/components/snaps/QuickSnapComposer";
 import { RADIUS, SPACE } from "../../src/lib/tokens";
@@ -77,22 +78,29 @@ export default function UserProfileScreen() {
     error,
     posts,
     setPosts,
+    repositories,
     theses,
     friends,
     photos,
     loadingPosts,
+    loadingRepositories,
     loadingTheses,
     loadingFriends,
     loadingPhotos,
+    fetchRepositories,
     fetchTheses,
   } = useProfileData(id);
 
-  // Sync tab with theses fetch
+  // Sync tab with repositories/theses fetch
   useEffect(() => {
-    if (activeTab === "theses" && theses.length === 0 && !loadingTheses) {
-      fetchTheses();
+    if (
+      (activeTab === "repositories" || activeTab === "theses") &&
+      repositories.length === 0 &&
+      !loadingRepositories
+    ) {
+      fetchRepositories();
     }
-  }, [activeTab, theses.length, loadingTheses, fetchTheses]);
+  }, [activeTab, repositories.length, loadingRepositories, fetchRepositories]);
 
   // Handle Tab Switch
   const handleTabChange = (newTab: ProfileTabKey) => {
@@ -269,6 +277,7 @@ export default function UserProfileScreen() {
       <ProfileTabs
         activeTab={activeTab}
         onTabChange={handleTabChange}
+        repositoriesCount={(userData.stats as any)?.repositories_count ?? (repositories.length || userData.stats?.theses_count)}
         thesesCount={userData.stats?.theses_count}
         friendsCount={userData.stats?.friends_count}
       />
@@ -289,8 +298,14 @@ export default function UserProfileScreen() {
       return <ProfilePhotosTab photos={photos} loading={loadingPhotos} />;
     }
 
-    if (activeTab === "theses") {
-      return <ProfileThesesList theses={theses} loading={loadingTheses} />;
+    if (activeTab === "repositories" || activeTab === "theses") {
+      return (
+        <ProfileRepositoriesTab
+          repositories={repositories}
+          loading={loadingRepositories}
+          isSelf={isSelf}
+        />
+      );
     }
 
     // Default: "all" tab

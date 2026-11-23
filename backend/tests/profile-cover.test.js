@@ -128,6 +128,9 @@ describe("Cover photo policy & endpoints", () => {
 
   it("GET /api/users/:id/photos returns image posts", async () => {
     stub(db, "query", async (sql, params) => {
+      if (sql.includes("LOWER(username) = LOWER($1)") || sql.includes("SELECT id FROM public.profiles")) {
+        return { rows: [{ id: "target-user", username: "target" }] };
+      }
       if (sql.includes("FROM public.blocks")) {
         return { rows: [{ is_blocked: false }] };
       }
@@ -137,8 +140,8 @@ describe("Cover photo policy & endpoints", () => {
       if (sql.includes("visible_posts")) {
         return {
           rows: [
-            { id: "post-1", image_url: "posts/photo1.jpg", image_urls: null, created_at: new Date().toISOString() },
-            { id: "post-2", image_url: null, image_urls: ["posts/photo2.jpg"], created_at: new Date().toISOString() },
+            { post_id: "post-1", storage_key: "posts/photo1.jpg", sort_order: 0, created_at: new Date().toISOString() },
+            { post_id: "post-2", storage_key: "posts/photo2.jpg", sort_order: 1, created_at: new Date().toISOString() },
           ],
         };
       }

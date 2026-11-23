@@ -228,6 +228,35 @@ export async function pickMultipleImages(options: { selectionLimit?: number } = 
   return [];
 }
 
+export function normalizeMimeType(fileName: string, rawMime?: string): string {
+  const ext = (fileName || '').split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'pdf':
+      return 'application/pdf';
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'pptx':
+      return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    case 'doc':
+      return 'application/msword';
+    case 'ppt':
+      return 'application/vnd.ms-powerpoint';
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'webp':
+      return 'image/webp';
+    case 'mp4':
+      return 'video/mp4';
+    case 'webm':
+      return 'video/webm';
+    default:
+      return rawMime && rawMime !== 'application/octet-stream' ? rawMime : 'application/pdf';
+  }
+}
+
 export interface PickedDocument {
   uri: string;
   type: string;
@@ -253,7 +282,7 @@ export async function pickDocuments(): Promise<PickedDocument[]> {
   if (!result.canceled && result.assets && result.assets.length > 0) {
     return result.assets.map((asset) => ({
       uri: asset.uri,
-      type: asset.mimeType || 'application/octet-stream',
+      type: normalizeMimeType(asset.name, asset.mimeType || undefined),
       name: asset.name,
       size: asset.size,
     }));

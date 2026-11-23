@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
 import { FileText, X } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
+import FilePreviewModal, { FilePreviewItem } from "../files/FilePreviewModal";
 
 export type ComposerAttachmentItem = {
   id?: string;
@@ -27,6 +28,7 @@ function formatSize(bytes?: number | null): string {
 
 export default function AttachmentList({ attachments, onRemove }: Props) {
   const { colors } = useTheme();
+  const [previewDoc, setPreviewDoc] = useState<FilePreviewItem | null>(null);
 
   if (!attachments || attachments.length === 0) return null;
 
@@ -37,8 +39,20 @@ export default function AttachmentList({ attachments, onRemove }: Props) {
         const formattedSize = formatSize(item.size);
 
         return (
-          <View
+          <TouchableOpacity
             key={`${item.uri}-${index}`}
+            activeOpacity={0.75}
+            onPress={() =>
+              setPreviewDoc({
+                url: item.uri,
+                storage_key: item.key,
+                file_name: item.name,
+                mime_type: item.mime,
+                size_bytes: item.size,
+              })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Preview ${item.name}`}
             style={[
               styles.item,
               {
@@ -71,15 +85,24 @@ export default function AttachmentList({ attachments, onRemove }: Props) {
             </View>
 
             <TouchableOpacity
-              onPress={() => onRemove(index)}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onRemove(index);
+              }}
               style={[styles.removeButton, { backgroundColor: colors.surface }]}
               accessibilityLabel={`Remove ${item.name}`}
             >
               <X size={14} color={colors.textSecondary} />
             </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         );
       })}
+
+      <FilePreviewModal
+        visible={Boolean(previewDoc)}
+        file={previewDoc}
+        onClose={() => setPreviewDoc(null)}
+      />
     </View>
   );
 }

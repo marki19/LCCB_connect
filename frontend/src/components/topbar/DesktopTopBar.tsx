@@ -37,7 +37,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useFeedFilter, type FeedCategory } from "../../contexts/FeedFilterContext";
 import { RADIUS, SPACE, TYPE, elevation } from "../../lib/tokens";
 import { getSearchSuggestions, apiJson } from "../../lib/api";
-import { onMessage, onConversation, onNotification } from "../../lib/realtime";
+import { onMessage, onConversation, onNotification, onUnreadRefresh } from "../../lib/realtime";
 import Avatar from "../Avatar";
 import HoverLabel from "../ui/HoverLabel";
 import MenuPopover from "./MenuPopover";
@@ -112,15 +112,7 @@ export default function DesktopTopBar({
       })
       .catch(() => {});
 
-    // Listen for realtime messages
-    const unsubMsg = onMessage((evt) => {
-      if (evt.action === "INSERT") {
-        setLiveUnreadCount((c) => c + 1);
-      }
-    });
-
-    // Listen for conversation updates (reconnect, seen receipts)
-    const unsubConv = onConversation(() => {
+    const refetchUnread = () => {
       apiJson<{ unread: number }>("/conversations/unread-count")
         .then((data) => {
           if (!cancelled && typeof data?.unread === "number") {
@@ -128,6 +120,29 @@ export default function DesktopTopBar({
           }
         })
         .catch(() => {});
+    };
+
+    // Listen for realtime messages
+    const unsubMsg = onMessage((evt) => {
+      if (evt.action === "INSERT") {
+        setLiveUnreadCount((c) => c + 1);
+      } else if (evt.action === "UPDATE") {
+        refetchUnread();
+      }
+    });
+
+    // Listen for local or realtime unread count refresh
+    const unsubUnread = onUnreadRefresh((newCount) => {
+      if (typeof newCount === "number") {
+        setLiveUnreadCount(newCount);
+      } else {
+        refetchUnread();
+      }
+    });
+
+    // Listen for conversation updates (reconnect, seen receipts)
+    const unsubConv = onConversation(() => {
+      refetchUnread();
     });
 
     // Listen for realtime notifications
@@ -140,6 +155,7 @@ export default function DesktopTopBar({
     return () => {
       cancelled = true;
       unsubMsg();
+      unsubUnread();
       unsubConv();
       unsubNotif();
     };
@@ -293,7 +309,7 @@ export default function DesktopTopBar({
             >
               <Search size={14} color={colors.inkFaint} />
               <TextInput
-                placeholder="Search…"
+                placeholder="Search"
                 placeholderTextColor={colors.inkFaint}
                 style={[styles.searchInput, { color: colors.ink }]}
                 accessibilityLabel="Search LCCB Connect"
@@ -371,7 +387,7 @@ export default function DesktopTopBar({
                 >
                   <Search size={14} color={colors.action} style={{ marginRight: 6 }} />
                   <Text style={[styles.allResultsText, { color: colors.action }]}>
-                    See all results for "{searchQuery}"
+                    See all results for &quot;{searchQuery}&quot;
                   </Text>
                 </Pressable>
               </View>

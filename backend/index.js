@@ -33,6 +33,15 @@ const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
 
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`[boot] Port ${PORT} is already in use by another process.`);
+    process.exit(1);
+  }
+  console.error("[boot] Server error:", err);
+  process.exit(1);
+});
+
 let isShuttingDown = false;
 function shutdown(signal) {
   if (isShuttingDown) return;

@@ -102,43 +102,67 @@ const AttachmentMime = z.enum([
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/msword",
   "application/vnd.ms-powerpoint",
+  "application/octet-stream",
 ]);
 
-const attachmentSchema = z
-  .object({
-    storage_key: StorageKey,
-    file_name: z.string().trim().min(1).max(255),
-    mime_type: AttachmentMime,
-    size_bytes: z.number().int().min(0).nullable().optional(),
-  })
-  .strict()
-  .superRefine((data, ctx) => {
-    const isImageMime = data.mime_type.startsWith("image/");
-    const isImageKey = data.storage_key.startsWith("posts/");
-    const isDocMime = !isImageMime;
-    const isDocKey =
-      data.storage_key.startsWith("documents/") ||
-      data.storage_key.startsWith("theses/");
+const normalizeAttachmentMime = (mime, fileName) => {
+  const ext = (fileName || "").split(".").pop()?.toLowerCase();
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (ext === "pptx") return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  if (ext === "doc") return "application/msword";
+  if (ext === "ppt") return "application/vnd.ms-powerpoint";
+  if (ext === "png") return "image/png";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "webp") return "image/webp";
+  return mime && mime !== "application/octet-stream" ? mime : "application/pdf";
+};
 
-    if (isImageMime && !isImageKey) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["storage_key"],
-        message: "Image attachment storage_key must start with posts/",
-      });
-    } else if (isDocMime && !isDocKey) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["storage_key"],
-        message: "Document attachment storage_key must start with documents/ or theses/",
-      });
+const attachmentSchema = z.preprocess(
+  (val) => {
+    if (val && typeof val === "object") {
+      const mime = normalizeAttachmentMime(val.mime_type, val.file_name);
+      return { ...val, mime_type: mime };
     }
-  });
+    return val;
+  },
+  z
+    .object({
+      storage_key: StorageKey,
+      file_name: z.string().trim().min(1).max(255),
+      mime_type: AttachmentMime,
+      size_bytes: z.number().int().min(0).nullable().optional(),
+      sort_order: z.number().int().min(0).optional(),
+    })
+    .strict()
+    .superRefine((data, ctx) => {
+      const isImageMime = data.mime_type.startsWith("image/");
+      const isImageKey = data.storage_key.startsWith("posts/");
+      const isDocMime = !isImageMime;
+      const isDocKey =
+        data.storage_key.startsWith("documents/") ||
+        data.storage_key.startsWith("theses/");
+
+      if (isImageMime && !isImageKey) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["storage_key"],
+          message: "Image attachment storage_key must start with posts/",
+        });
+      } else if (isDocMime && !isDocKey) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["storage_key"],
+          message: "Document attachment storage_key must start with documents/ or theses/",
+        });
+      }
+    })
+);
 
 // ---- posts -----------------------------------------------------------------
 const postFields = {
   content: z.string().max(5000).nullable().optional(),
-  type: z.enum(["text", "image", "project", "capstone", "website"]).optional(),
+  type: z.enum(["text", "image", "project", "capstone", "website", "thesis", "discussion"]).optional(),
   kind: z.enum(["discussion", "repository", "announcement"]).optional(),
   repository_type: z.enum(["project", "capstone", "thesis"]).nullable().optional(),
   repository_category: optionalText(100),
@@ -335,6 +359,21 @@ const verificationOtpSchema = z.object({}).strict();
 const verificationDecisionSchema = z
   .object({
     note: z.string().trim().min(3, "Give a reason of at least 3 characters").max(300),
+  })
+  .strict();
+
+const guestDeclarationSchema = z
+  .object({
+    purpose: z.string().trim().min(1, "Purpose is required").max(500),
+    affiliation_type: z.enum([
+      "student_elsewhere",
+      "faculty_elsewhere",
+      "professional",
+      "researcher",
+      "other",
+    ]),
+    affiliation_name: z.string().trim().min(1, "Affiliation name is required").max(200),
+    location: z.string().trim().max(200).optional().nullable(),
   })
   .strict();
 
@@ -770,6 +809,7 @@ const validate = (schema) => (req, res, next) => {
   verificationSubmitSchema,
   verificationOtpSchema,
   verificationDecisionSchema,
+  guestDeclarationSchema,
   loginIdentifierSchema,
   verifySignupSchema,
   resendSignupSchema,
