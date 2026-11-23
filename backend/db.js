@@ -3,6 +3,27 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const { Pool } = require("pg");
 
+/**
+ * Sanitizes connection strings to handle common mistakes in env configs
+ * (e.g., pasting "DATABASE_URL=postgresql://...", enclosing quotes, or leading spaces).
+ */
+function sanitizeDatabaseUrl(raw) {
+  if (!raw || typeof raw !== "string") return raw;
+  let str = raw.trim();
+  str = str.replace(/^DATABASE_URL\s*=\s*/i, "").trim();
+  if (
+    (str.startsWith('"') && str.endsWith('"')) ||
+    (str.startsWith("'") && str.endsWith("'"))
+  ) {
+    str = str.slice(1, -1).trim();
+  }
+  return str;
+}
+
+if (process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = sanitizeDatabaseUrl(process.env.DATABASE_URL);
+}
+
 // Supabase's public root CA. Bundling it lets the API verify the database
 // certificate instead of accepting any TLS certificate.
 const SUPABASE_CA_PATH = path.join(__dirname, "certs", "supabase-root-2021.crt");
