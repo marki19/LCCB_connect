@@ -2,22 +2,14 @@ import React, { useState } from "react";
 import { View, Text, type StyleProp, type ViewStyle } from "react-native";
 import type { PresenceMode } from "../types";
 import { useTheme } from "../contexts/ThemeContext";
-import { LIGHT_TOKENS } from "../lib/tokens";
 import { resolveFileUrl } from "../lib/files";
 import { AppImage } from "./AppImage";
+import { type ThemeTokens } from "../lib/tokens";
 
 /**
  * Shared avatar + presence dot. `mode === null` means "not tracked" (offline or
  * invisible), so no dot renders.
  */
-
-export const PRESENCE_COLORS: Record<PresenceMode, string> = {
-  online: LIGHT_TOKENS.jadeBright,
-  away: LIGHT_TOKENS.accentBright,
-  busy: LIGHT_TOKENS.coralBright,
-  dnd: LIGHT_TOKENS.irisBright,
-  invisible: LIGHT_TOKENS.textDisabled,
-};
 
 export const PRESENCE_LABELS: Record<PresenceMode, string> = {
   online: "Online",
@@ -26,6 +18,21 @@ export const PRESENCE_LABELS: Record<PresenceMode, string> = {
   dnd: "Do not disturb",
   invisible: "Invisible",
 };
+
+function presenceColor(mode: PresenceMode, colors: ThemeTokens) {
+  switch (mode) {
+    case "online":
+      return colors.presenceOnline;
+    case "away":
+      return colors.presenceAway;
+    case "busy":
+      return colors.presenceBusy;
+    case "dnd":
+      return colors.presenceDnd;
+    case "invisible":
+      return colors.presenceInvisible;
+  }
+}
 
 export function initialsOf(name?: string | null): string {
   if (!name) return "LC";
@@ -118,7 +125,7 @@ export default function Avatar({
             width: dot,
             height: dot,
             borderRadius: dot / 2,
-            backgroundColor: PRESENCE_COLORS[mode] ?? LIGHT_TOKENS.textDisabled,
+            backgroundColor: presenceColor(mode, colors),
             borderWidth: ring,
             borderColor: colors.surface,
           }}

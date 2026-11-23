@@ -43,7 +43,8 @@ import { formatMessagePreview } from "../../lib/chatMedia";
 import type { Conversation, Friend } from "../../types";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Card from "../ui/Card";
-import EmptyState from "../admin/EmptyState";
+import EmptyState from "../ui/EmptyState";
+import TabPill from "../ui/TabPill";
 
 type InboxPaneProps = {
   onSelect: (conversationId: string) => void;
@@ -81,6 +82,12 @@ export default function InboxPane({
   const { showToast } = useToast();
 
   const [tabChoice, setTabChoice] = useState<"chats" | "requests" | null>(null);
+
+const handleTabChange = (value: string) => {
+  if (value === "chats" || value === "requests") {
+    setTabChoice(value);
+  }
+};
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [received, setReceived] = useState<Conversation[]>([]);
   const [sent, setSent] = useState<Conversation[]>([]);
@@ -448,7 +455,7 @@ export default function InboxPane({
                     style={[
                       styles.onlineDot,
                       {
-                        backgroundColor: "#22C55E",
+                        backgroundColor: colors.presenceOnline,
                         borderColor: colors.surfacePage,
                       },
                     ]}
@@ -463,7 +470,7 @@ export default function InboxPane({
                       },
                     ]}
                   >
-                    <Text style={{ fontSize: 9, fontWeight: "700", color: "#22C55E" }}>
+                    <Text style={{ fontSize: 9, fontWeight: "700", color: colors.presenceOnline }}>
                       12m
                     </Text>
                   </View>
@@ -501,7 +508,7 @@ export default function InboxPane({
           {
             cursor: "pointer",
             backgroundColor: active
-              ? colors.brandWash
+              ? colors.primarySurface
               : pressed || hovered
               ? colors.hoverOverlay
               : "transparent",
@@ -519,7 +526,7 @@ export default function InboxPane({
             <View
               style={[
                 styles.onlineDot,
-                { backgroundColor: "#22C55E", borderColor: colors.surfacePage },
+                { backgroundColor: colors.presenceOnline, borderColor: colors.surfacePage },
               ]}
             />
           ) : null}
@@ -563,7 +570,7 @@ export default function InboxPane({
               {snippetText}
             </Text>
             {hasUnread ? (
-              <View style={[styles.unreadDotBlue, { backgroundColor: "#0084FF" }]} />
+              <View style={[styles.unreadDotBlue, { backgroundColor: colors.brand }]} />
             ) : null}
           </View>
         </View>
@@ -587,7 +594,7 @@ export default function InboxPane({
           {
             cursor: "pointer",
             backgroundColor: active
-              ? colors.brandWash
+              ? colors.primarySurface
               : pressed || hovered
               ? colors.hoverOverlay
               : "transparent",
@@ -605,7 +612,7 @@ export default function InboxPane({
             <View
               style={[
                 styles.onlineDot,
-                { backgroundColor: "#22C55E", borderColor: colors.surfacePage },
+                { backgroundColor: colors.presenceOnline, borderColor: colors.surfacePage },
               ]}
             />
           ) : null}
@@ -657,44 +664,22 @@ export default function InboxPane({
             </View>
           ) : (
             <View style={{ flexDirection: "row", gap: SPACE.x2, marginTop: 4 }}>
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
+              <Button
+                label="Accept"
+                variant="primary"
+                size="sm"
+                onPress={() => {
                   void handleAccept(item);
                 }}
-                style={({ pressed, hovered }: any) => [
-                  styles.actionBtn,
-                  {
-                    backgroundColor: colors.brandSolid,
-                    cursor: "pointer",
-                    opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
-                  },
-                ]}
-              >
-                <Text style={{ ...TYPE.micro, color: colors.textOnBrandSolid, fontWeight: "700" }}>
-                  Accept
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
+              />
+              <Button
+                label="View"
+                variant="ghost"
+                size="sm"
+                onPress={() => {
                   openThread(item.id);
                 }}
-                style={({ pressed, hovered }: any) => [
-                  styles.actionBtn,
-                  {
-                    backgroundColor: colors.surfaceSunken,
-                    borderColor: colors.border,
-                    borderWidth: 1,
-                    cursor: "pointer",
-                    opacity: pressed ? 0.8 : hovered ? 0.9 : 1,
-                  },
-                ]}
-              >
-                <Text style={{ ...TYPE.micro, color: colors.inkSoft, fontWeight: "600" }}>
-                  View
-                </Text>
-              </Pressable>
+              />
             </View>
           )}
         </View>
@@ -718,7 +703,7 @@ export default function InboxPane({
           {showBack ? (
             <IconButton icon={ArrowLeft} label="Back" onPress={onBack ?? (() => {})} />
           ) : null}
-          <Text style={[styles.headerTitle, { color: colors.ink }]}>Messages</Text>
+          <Text style={[TYPE.h2, { color: colors.ink }, styles.headerTitle]}>Messages</Text>
         </View>
 
         <Pressable
@@ -757,64 +742,15 @@ export default function InboxPane({
 
         {/* Tab Pills: Chats / Requests */}
         <View style={styles.tabsRow}>
-          <Pressable
-            onPress={() => setTabChoice("chats")}
-            style={({ pressed, hovered }: any) => [
-              styles.tabPill,
-              {
-                backgroundColor:
-                  tab === "chats"
-                    ? colors.brandSolid
-                    : hovered || pressed
-                    ? colors.surfaceSunken
-                    : colors.panel,
-                borderColor: tab === "chats" ? colors.brandSolid : colors.line,
-                cursor: "pointer",
-                transform: [{ scale: pressed ? 0.95 : 1 }],
-              },
+          <TabPill
+            options={[
+              { value: "chats", label: "Chats" },
+              { value: "requests", label: "Requests", badgeCount: pendingCount },
             ]}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                { color: tab === "chats" ? colors.textOnBrandSolid : colors.inkSoft },
-              ]}
-            >
-              Chats
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => setTabChoice("requests")}
-            style={({ pressed, hovered }: any) => [
-              styles.tabPill,
-              {
-                backgroundColor:
-                  tab === "requests"
-                    ? colors.brandSolid
-                    : hovered || pressed
-                    ? colors.surfaceSunken
-                    : colors.panel,
-                borderColor: tab === "requests" ? colors.brandSolid : colors.line,
-                cursor: "pointer",
-                transform: [{ scale: pressed ? 0.95 : 1 }],
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                { color: tab === "requests" ? colors.textOnBrandSolid : colors.inkSoft },
-              ]}
-            >
-              Requests
-            </Text>
-            {pendingCount > 0 ? (
-              <View style={[styles.badgeDot, { backgroundColor: colors.coral }]}>
-                <Text style={{ color: "#FFF", fontSize: 10, fontWeight: "800" }}>{pendingCount}</Text>
-              </View>
-            ) : null}
-          </Pressable>
+            value={tab}
+            onChange={handleTabChange}
+            variant="pill"
+          />
         </View>
 
         {/* Main List */}

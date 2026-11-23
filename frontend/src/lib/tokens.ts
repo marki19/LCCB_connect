@@ -142,6 +142,13 @@ export const LIGHT_TOKENS = {
   bubblePeerText: "#0B1B33",
   textOnActionMuted: "#D8E2F8",
 
+  // Presence (theme-aware)
+  presenceOnline: "#0B7C5C",
+  presenceAway: "#C98A00",
+  presenceBusy: "#C0392B",
+  presenceDnd: "#8B5CF6",
+  presenceInvisible: "#9AA3B2",
+
   // Sidebar (admin)
   sidebarBg: "#0A1830",
   sidebarBorder: "rgba(246, 242, 232, 0.10)",
@@ -474,6 +481,13 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
 
   // ── Editorial layer: iris (Do Not Disturb presence) ──────────────────────
   irisBright: "#A78BFA",
+
+  // ── Presence (theme-aware) ───────────────────────────────────────────────
+  presenceOnline: "#17A97C",
+  presenceAway: "#F2B21B",
+  presenceBusy: "#FF8B7E",
+  presenceDnd: "#A78BFA",
+  presenceInvisible: "#62748F",
 
   // ── Command sidebar ──────────────────────────────────────────────────────
   navBg: "#060B14",
