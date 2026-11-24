@@ -75,7 +75,7 @@ export type Post = {
   repository_category?: string | null;
   live_url?: string | null;
   attachments?: PostAttachment[];
-  mentions?: Array<{ user_id?: string; username: string; full_name?: string }>;
+  mentions?: { user_id?: string; username: string; full_name?: string }[];
   repost?: RepostInfo;
   author_department_id?: string | null;
   author_course_id?: string | null;
@@ -216,6 +216,30 @@ export type FriendSuggestion = {
   mutual_count: number;
   /** Which ranking tier placed this row: 'mutual' | 'department' | 'campus'. */
   reason: "mutual" | "department" | "campus";
+};
+
+/**
+ * One row from GET /api/notifications.
+ *
+ * `new_message` / `message_request` rows never appear here — the API filters
+ * them out so the bell and the Chats tab cannot disagree about what is unread.
+ */
+export type NotificationItem = {
+  id: string;
+  user_id: string;
+  actor_id: string | null;
+  type: string;
+  target_id: string | null;
+  department: string | null;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+  actor: {
+    id: string;
+    full_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+  } | null;
 };
 
 export function messageStatus(message: Message): MessageStatus {

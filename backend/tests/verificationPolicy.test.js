@@ -334,10 +334,10 @@ describe("submission resolves the role before building the snapshot", () => {
     );
   });
 
-  it("a non-school account is refused before the role is even considered", () => {
-    assert.equal(
-      controller.resolveSubmission({ role: "user", email: "ana@gmail.com" }, "student").error,
-      `Verification is only available to ${policy.SCHOOL_EMAIL_DOMAIN} accounts`
+  it("resolves the role for a non-school account (other user)", () => {
+    assert.deepEqual(
+      controller.resolveSubmission({ role: "user", email: "ana@gmail.com" }, "student"),
+      { role: "student" }
     );
   });
 

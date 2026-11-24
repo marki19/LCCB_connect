@@ -98,11 +98,27 @@ export default function SlideSwitcher({ index, width, children, style }: SlideSw
           transform: [{ translateX }],
         }}
       >
-        {panels.map((panel, panelIndex) => (
-          <View key={panelIndex} style={{ width }} onLayout={recordHeight(panelIndex)}>
-            {panel}
-          </View>
-        ))}
+        {panels.map((panel, panelIndex) => {
+          const isVisible = panelIndex === index;
+          return (
+            <View
+              key={panelIndex}
+              collapsable={false}
+              // The track is wider than the viewport. On the web, an
+              // off-screen panel can still receive pointer events in some
+              // browsers even though it is clipped. Explicitly disable hits
+              // (and hide it from screen readers) so only the visible panel
+              // is interactive and announced.
+              pointerEvents={isVisible ? "auto" : "none"}
+              accessibilityElementsHidden={!isVisible}
+              importantForAccessibility={isVisible ? "auto" : "no-hide-descendants"}
+              style={{ width }}
+              onLayout={recordHeight(panelIndex)}
+            >
+              {panel}
+            </View>
+          );
+        })}
       </Animated.View>
     </Animated.View>
   );

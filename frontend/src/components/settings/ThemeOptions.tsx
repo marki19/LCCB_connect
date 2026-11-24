@@ -1,4 +1,4 @@
-import { Text, View } from "react-native";
+import { View, Text } from "react-native";
 import { Palette } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import {
@@ -7,6 +7,7 @@ import {
 } from "../../lib/theme";
 import { SPACE, TYPE } from "../../lib/tokens";
 import RadioOption from "../ui/RadioOption";
+import AccentColorGrid from "./AccentColorGrid";
 
 /**
  * Presentation order: the two explicit choices first, the automatic one last —
@@ -20,17 +21,10 @@ const OPTION_DESCRIPTION: Record<ColorSchemePreference, string> = {
   system: "Follow your device's appearance.",
 };
 
-/**
- * The appearance picker. Reads and writes the same persisted preference as the
- * theme toggle in the header, so every entry point stays in sync.
- */
 export default function ThemeOptions() {
-  const { colors, preference, resolved, setColorScheme } = useTheme();
+  const { colors, preference, setColorScheme } = useTheme();
 
-  const descriptionFor = (value: ColorSchemePreference) =>
-    value === "system"
-      ? `${OPTION_DESCRIPTION.system} Currently ${resolved}.`
-      : OPTION_DESCRIPTION[value];
+  const descriptionFor = (value: ColorSchemePreference) => OPTION_DESCRIPTION[value];
 
   return (
     <View
@@ -78,6 +72,9 @@ export default function ThemeOptions() {
           onPress={() => void setColorScheme(value)}
         />
       ))}
+
+      {/* Accent color grid — shared with the mobile Settings screen. */}
+      <AccentColorGrid style={{ marginTop: SPACE.x4, paddingHorizontal: SPACE.x2 }} />
     </View>
   );
 }

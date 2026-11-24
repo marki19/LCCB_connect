@@ -1,3 +1,4 @@
+import React from "react";
 import {
   View,
   Text,
@@ -62,12 +63,12 @@ function IconButton({
             height: 17,
             borderRadius: 9,
             paddingHorizontal: 4,
-            backgroundColor: colors.coral,
+            backgroundColor: colors.destructiveSurface,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: colors.textOnDanger, fontSize: 9, fontWeight: "800" }}>
+          <Text style={{ color: colors.destructiveText, fontSize: 9, fontWeight: "800" }}>
             {badgeCount > 99 ? "99+" : badgeCount}
           </Text>
         </View>
@@ -79,7 +80,7 @@ function IconButton({
 export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors } = useTheme();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
   const compact = width < 380;
 

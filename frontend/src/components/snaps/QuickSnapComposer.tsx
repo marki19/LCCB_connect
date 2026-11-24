@@ -160,7 +160,7 @@ export default function QuickSnapComposer({
                 },
               ]}
             >
-              <View style={[styles.iconWrap, { backgroundColor: colors.brand + "18" }]}>
+              <View style={[styles.iconWrap, { backgroundColor: colors.brandWash }]}>
                 <Camera size={24} color={colors.brand} />
               </View>
               <Text style={[styles.actionTitle, { color: colors.ink }]}>Use Camera</Text>
@@ -180,8 +180,8 @@ export default function QuickSnapComposer({
                 },
               ]}
             >
-              <View style={[styles.iconWrap, { backgroundColor: "#10B98118" }]}>
-                <ImageIcon size={24} color="#10B981" />
+              <View style={[styles.iconWrap, { backgroundColor: colors.successSurface }]}>
+                <ImageIcon size={24} color={colors.success} />
               </View>
               <Text style={[styles.actionTitle, { color: colors.ink }]}>Upload Photo / Video</Text>
             </Pressable>

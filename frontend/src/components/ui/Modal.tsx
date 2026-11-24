@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
 import {
   Animated,
   Easing,
@@ -62,7 +62,7 @@ export default function Modal({
   if (visible && !shown) setShown(true);
   const shouldRender = visible || shown;
 
-  const progressAnim = useRef(new Animated.Value(visible ? 1 : 0)).current;
+  const progressAnim = useMemo(() => new Animated.Value(visible ? 1 : 0), []);
   const contentRef = useRef<View>(null);
   const previouslyFocused = useRef<any>(null);
   const onCloseRef = useRef(onClose);

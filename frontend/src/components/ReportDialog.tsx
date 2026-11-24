@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, ScrollView } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, ScrollView, Platform, useWindowDimensions } from "react-native";
 import { X, Flag, AlertTriangle } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
@@ -36,7 +36,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: SPACE.x4,
     paddingTop: SPACE.x4,
     paddingBottom: SPACE.x5,
-    maxHeight: "90%",
+    maxHeight: "85%",
   },
   handle: {
     width: 40,
@@ -163,20 +163,68 @@ export default function ReportDialog({ targetType, targetId, isOpen, onClose, on
   const { colors } = useTheme();
   const { showToast } = useToast();
   const styles = createStyles(colors);
+  const { height } = useWindowDimensions();
+  const containerRef = useRef<any>(null);
+  const previouslyFocused = useRef<any>(null);
 
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  // Focus management for accessibility
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (Platform.OS === "web") {
+      const doc: any = (globalThis as any).document;
+      previouslyFocused.current = doc?.activeElement ?? null;
+    }
+
+    // Focus the container for screen readers
+    const timeout = setTimeout(() => {
+      containerRef.current?.focus?.();
+    }, 50);
+
+    return () => {
+      clearTimeout(timeout);
+      if (Platform.OS === "web" && previouslyFocused.current) {
+        try {
+          previouslyFocused.current.focus?.();
+        } catch {}
+      }
+    };
+  }, [isOpen]);
+
+  // Escape key handler
+  useEffect(() => {
+    if (!isOpen || Platform.OS !== "web") return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Announce error to screen readers
+  useEffect(() => {
+    if (errorMessage) {
+      // The error will be announced via accessibilityLiveRegion on the error text
+    }
+  }, [errorMessage]);
 
   const handleSubmit = async () => {
     if (!selectedReason) {
-      Alert.alert("Select a reason", "Please choose a reason for reporting this content.");
+      setErrorMessage("Please choose a reason for reporting this content.");
       return;
     }
     if (loading) return;
 
+    setErrorMessage(null);
     setLoading(true);
     try {
       await createReport(targetType, targetId, selectedReason, note.trim() || undefined);
@@ -188,37 +236,63 @@ export default function ReportDialog({ targetType, targetId, isOpen, onClose, on
       onClose();
     } catch (e: any) {
       if (e.code === "DUPLICATE_REPORT") {
-        Alert.alert("Already reported", "You've already reported this content.");
+        setErrorMessage("You've already reported this content.");
       } else {
-        Alert.alert("Error", e.message || "Failed to submit report. Please try again.");
+        setErrorMessage(e.message || "Failed to submit report. Please try again.");
       }
     } finally {
       setLoading(false);
     }
   };
 
+  if (!isOpen) return null;
+
+  const containerMaxHeight = Math.min(height * 0.85, 600);
+
   return (
-    <TouchableOpacity style={styles.overlay} onPress={onClose} accessible={false}>
-      <TouchableOpacity style={styles.container} onPress={() => {}} accessible={false}>
-        <View style={styles.handle} />
-        
+    <TouchableOpacity
+      style={styles.overlay}
+      onPress={onClose}
+      accessible={false}
+      accessibilityRole="button"
+      accessibilityLabel="Close report dialog"
+    >
+      <TouchableOpacity
+        ref={containerRef}
+        style={[{ ...styles.container, maxHeight: containerMaxHeight }, { elevation: 20 }]}
+        onPress={() => {}}
+        accessible={false}
+        accessibilityViewIsModal
+        accessibilityRole="dialog"
+        accessibilityLabel="Report content dialog"
+        importantForAccessibility="yes"
+      >
+        <View style={styles.handle} accessible={false} accessibilityElementsHidden={true} importantForAccessibility="no-hide-descendants" />
+
         <View style={styles.header}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <AlertTriangle size={22} color={colors.warning} style={{ marginRight: SPACE.x3 }} />
             <Text style={styles.title}>Report Content</Text>
           </View>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={onClose}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Close report dialog"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <X size={22} color={colors.textTertiary} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.divider} />
+        <View style={styles.divider} accessible={false} accessibilityElementsHidden={true} importantForAccessibility="no-hide-descendants" />
 
         <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary, marginBottom: SPACE.x2 }}>
           Why are you reporting this?
         </Text>
 
-        <ScrollView style={styles.reasonList} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.reasonList} showsVerticalScrollIndicator={false} accessibilityLabel="Report reasons">
           {REPORT_REASONS.map((reason) => (
             <TouchableOpacity
               key={reason.value}
@@ -228,12 +302,18 @@ export default function ReportDialog({ targetType, targetId, isOpen, onClose, on
               ]}
               onPress={() => setSelectedReason(reason.value)}
               activeOpacity={0.7}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: selectedReason === reason.value }}
+              accessibilityLabel={`${reason.label}. ${reason.description}`}
             >
               <View
                 style={[
                   styles.reasonRadio,
                   selectedReason === reason.value && styles.reasonRadioSelected,
                 ]}
+                accessible={false}
+                accessibilityElementsHidden={true}
+                importantForAccessibility="no-hide-descendants"
               >
                 {selectedReason === reason.value && <View style={styles.reasonRadioInner} />}
               </View>
@@ -245,7 +325,7 @@ export default function ReportDialog({ targetType, targetId, isOpen, onClose, on
           ))}
         </ScrollView>
 
-        <View style={styles.divider} />
+        <View style={styles.divider} accessible={false} accessibilityElementsHidden={true} importantForAccessibility="no-hide-descendants" />
 
         <Text style={styles.noteLabel}>Additional details (optional)</Text>
         <TextInput
@@ -256,8 +336,20 @@ export default function ReportDialog({ targetType, targetId, isOpen, onClose, on
           onChangeText={setNote}
           maxLength={500}
           placeholderTextColor={colors.textMuted}
+          accessibilityLabel="Additional details for report"
+          accessibilityHint="Optional. Add any context that helps us understand the issue."
         />
         <Text style={styles.charCount}>{note.length}/500</Text>
+
+        {errorMessage ? (
+          <Text
+            style={{ ...styles.charCount, color: colors.destructive, marginTop: SPACE.x2, textAlign: "left" }}
+            accessibilityLiveRegion="assertive"
+            accessibilityRole="alert"
+          >
+            {errorMessage}
+          </Text>
+        ) : null}
 
         <TouchableOpacity
           style={[
@@ -267,6 +359,9 @@ export default function ReportDialog({ targetType, targetId, isOpen, onClose, on
           onPress={handleSubmit}
           disabled={!selectedReason || loading}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={loading ? "Submitting report" : "Submit report"}
+          accessibilityState={{ disabled: !selectedReason || loading }}
         >
           <Flag size={18} color={colors.textOnPrimary} />
           <Text style={styles.submitButtonText}>

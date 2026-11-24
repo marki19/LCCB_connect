@@ -16,6 +16,7 @@ import {
   Platform,
   Image,
   Alert,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -51,6 +52,14 @@ export default function FloatingChatWindow() {
   const { modeOf } = usePresence();
   const { session, profile } = useAuth();
   const router = useRouter();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+
+  // Responsive floating chat dimensions
+  const isSmallScreen = windowWidth < 360;
+  const CHAT_WINDOW_WIDTH = isSmallScreen ? 300 : 330;
+  const CHAT_WINDOW_HEIGHT = isSmallScreen ? 400 : 440;
+  const MINIMIZED_WIDTH = isSmallScreen ? 200 : 220;
+  const MINIMIZED_HEIGHT = 46;
 
   if (!activeChat) return null;
 
@@ -68,6 +77,10 @@ export default function FloatingChatWindow() {
       colors={colors}
       userId={profile?.id ?? session?.user?.id ?? null}
       modeOf={modeOf}
+      chatWidth={CHAT_WINDOW_WIDTH}
+      chatHeight={CHAT_WINDOW_HEIGHT}
+      minimizedWidth={MINIMIZED_WIDTH}
+      minimizedHeight={MINIMIZED_HEIGHT}
     />
   );
 }
@@ -230,6 +243,10 @@ function FloatingChatInner({
   colors,
   userId,
   modeOf,
+  chatWidth,
+  chatHeight,
+  minimizedWidth,
+  minimizedHeight,
 }: {
   peer: { conversationId?: string; peerId: string; peerName?: string; avatarUrl?: string };
   isMinimized: boolean;
@@ -239,6 +256,10 @@ function FloatingChatInner({
   colors: any;
   userId: string | null;
   modeOf: (id: string) => string | null;
+  chatWidth: number;
+  chatHeight: number;
+  minimizedWidth: number;
+  minimizedHeight: number;
 }) {
   const conversationId = peer.conversationId ?? null;
   const { messages, pending, loading, peerTyping, send, sendMedia, notifyTyping } =
@@ -317,12 +338,16 @@ function FloatingChatInner({
       <View
         style={[
           styles.minimizedContainer,
-          Platform.OS === "web" ? ({ position: "fixed", zIndex: 1050 } as any) : {},
           {
+            width: minimizedWidth,
+            height: minimizedHeight,
+            bottom: 0,
+            right: 24,
             backgroundColor: colors.surface,
             borderColor: colors.border,
             shadowColor: colors.shadowStrong,
           },
+          Platform.OS === "web" ? ({ position: "fixed" as const, zIndex: 1050 } as any) : {},
         ]}
       >
         <Pressable
@@ -351,12 +376,14 @@ function FloatingChatInner({
     <View
       style={[
         styles.windowContainer,
-        Platform.OS === "web" ? ({ position: "fixed", zIndex: 1050 } as any) : {},
         {
+          width: chatWidth,
+          height: chatHeight,
           backgroundColor: colors.surface,
           borderColor: colors.border,
           shadowColor: colors.shadowStrong,
         },
+        Platform.OS === "web" ? ({ position: "fixed" as const, zIndex: 1050, bottom: 0, right: 24 } as any) : {},
       ]}
     >
       {/* Header */}
@@ -382,7 +409,7 @@ function FloatingChatInner({
             <Text style={[styles.headerName, { color: colors.ink }]} numberOfLines={1}>
               {peer.peerName || "Chat"}
             </Text>
-            <Text style={[styles.headerStatus, { color: peerOnline ? "#10B981" : colors.inkFaint }]}>
+            <Text style={[styles.headerStatus, { color: peerOnline ? colors.success : colors.inkFaint }]}>
               {peerOnline ? "Active now" : "Offline"}
             </Text>
           </View>
@@ -506,7 +533,7 @@ function FloatingChatInner({
                       { backgroundColor: colors.brandSolid, opacity: 0.8, maxWidth: "82%" },
                     ]}
                   >
-                    <Text style={[styles.bubbleText, { color: "#FFFFFF" }]}>{p.body}</Text>
+                    <Text style={[styles.bubbleText, { color: colors.textOnPrimary }]}>{p.body}</Text>
                   </View>
                 </View>
               );
@@ -554,7 +581,7 @@ function FloatingChatInner({
               style={styles.attachmentCloseBtn}
               accessibilityLabel="Remove photo"
             >
-              <X size={11} color="#FFFFFF" strokeWidth={3} />
+              <X size={11} color={colors.textOnPrimary} strokeWidth={3} />
             </TouchableOpacity>
           </View>
           <Text style={[styles.attachmentText, { color: colors.inkFaint }]} numberOfLines={1}>
@@ -626,11 +653,11 @@ function FloatingChatInner({
           accessibilityLabel="Send message"
         >
           {uploading || sending ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color={colors.textOnPrimary} />
           ) : (
             <Send
               size={16}
-              color={draft.trim() || attachedImage ? "#FFFFFF" : colors.inkFaint}
+              color={draft.trim() || attachedImage ? colors.textOnPrimary : colors.inkFaint}
               strokeWidth={2.2}
             />
           )}
@@ -654,8 +681,8 @@ const styles = StyleSheet.create({
     right: 24,
     width: 330,
     height: 440,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
     borderWidth: 1,
     borderBottomWidth: 0,
     overflow: "hidden",
@@ -669,8 +696,8 @@ const styles = StyleSheet.create({
     right: 24,
     width: 220,
     height: 46,
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
+    borderTopLeftRadius: RADIUS.lg,
+    borderTopRightRadius: RADIUS.lg,
     borderWidth: 1,
     borderBottomWidth: 0,
     flexDirection: "row",
@@ -685,7 +712,7 @@ const styles = StyleSheet.create({
   minimizedPressable: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: SPACE.x2,
     flex: 1,
   },
   header: {
@@ -699,7 +726,7 @@ const styles = StyleSheet.create({
   headerInfo: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: SPACE.x2,
     flex: 1,
     minWidth: 0,
   },
@@ -714,7 +741,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#10B981",
+    backgroundColor: "#10B981", // Overridden in component
     borderWidth: 2,
   },
   presenceDotSmall: {
@@ -724,7 +751,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#10B981",
+    backgroundColor: "#10B981", // Overridden in component
     borderWidth: 1.5,
   },
   headerText: {
@@ -879,4 +906,3 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
-

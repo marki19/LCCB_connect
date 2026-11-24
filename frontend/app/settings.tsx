@@ -19,7 +19,16 @@ import {
   Smartphone,
   ChevronRight,
 } from "lucide-react-native";
-import Avatar, { PRESENCE_COLORS, PRESENCE_LABELS } from "../src/components/Avatar";
+import Avatar, { PRESENCE_LABELS } from "../src/components/Avatar";
+import { LIGHT_TOKENS } from "../src/lib/tokens";
+
+const PRESENCE_COLORS = {
+  online: LIGHT_TOKENS.presenceOnline,
+  away: LIGHT_TOKENS.presenceAway,
+  busy: LIGHT_TOKENS.presenceBusy,
+  dnd: LIGHT_TOKENS.presenceDnd,
+  invisible: LIGHT_TOKENS.presenceInvisible,
+};
 import { usePresence } from "../src/contexts/PresenceContext";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { useAuth } from "../src/contexts/AuthContext";
@@ -32,6 +41,7 @@ import type { Department, MessagePolicy, PresenceMode } from "../src/types";
 import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
 import { IconButton } from "../src/components/ui/Button";
 import Card from "../src/components/ui/Card";
+import AccentColorGrid from "../src/components/settings/AccentColorGrid";
 
 /**
  * Messaging settings (Messaging_plan.md §4, §8, §12):
@@ -320,6 +330,19 @@ export default function MessagingSettings() {
                   </View>
                 );
               })}
+            </Card>
+
+            {/* Accent color */}
+            <Card padding={0} style={{ marginTop: SPACE.x3 }}>
+              <View style={{ paddingHorizontal: SPACE.x4, paddingTop: SPACE.x3 }}>
+                <Text style={{ ...TYPE.bodyStrong, fontWeight: "700", color: colors.ink }}>
+                  Accent color
+                </Text>
+                <Text style={{ ...TYPE.caption, color: colors.inkFaint, marginTop: 2 }}>
+                  Choose the color used for buttons, links and highlights.
+                </Text>
+              </View>
+              <AccentColorGrid style={{ paddingHorizontal: SPACE.x3, paddingBottom: SPACE.x3, paddingTop: SPACE.x2 }} showLabel={false} />
             </Card>
 
             {/* Contact info visibility (§6.4) */}

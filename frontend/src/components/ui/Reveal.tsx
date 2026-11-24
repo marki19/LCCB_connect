@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useMemo, type ReactNode } from "react";
 import { Animated, Easing, type StyleProp, type ViewStyle } from "react-native";
 import { MOTION } from "../../lib/tokens";
 
@@ -17,7 +17,7 @@ type RevealProps = {
  * without triggering Reanimated inline style warnings.
  */
 export default function Reveal({ children, delay = 0, style, distance = 10 }: RevealProps) {
-  const translateYAnim = useRef(new Animated.Value(distance)).current;
+  const translateYAnim = useMemo(() => new Animated.Value(distance), []);
 
   useEffect(() => {
     const timer = setTimeout(() => {

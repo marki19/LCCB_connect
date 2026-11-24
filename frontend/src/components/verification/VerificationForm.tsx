@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AlertCircle } from "lucide-react-native";
+import { AlertCircle, Shield, Clock, CheckCircle2 } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { fetchDepartments, fetchCourses } from "../../lib/catalog";
 import { buildFieldDefs, validateAll } from "../../lib/verification";
@@ -317,7 +317,7 @@ export default function VerificationForm({
                 justifyContent: "center",
               }}
             >
-              <Text style={{ fontSize: 28 }}>🛡️</Text>
+              <Shield size={28} color={colors.brand} strokeWidth={2} />
             </View>
             <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>Superadmin access</Text>
             <Text style={{ ...TYPE.body, color: colors.inkSoft, textAlign: "center" }}>
@@ -348,7 +348,7 @@ export default function VerificationForm({
                   alignSelf: "center",
                 }}
               >
-                <Text style={{ fontSize: 24 }}>⏳</Text>
+                <Clock size={24} color={colors.warning} strokeWidth={2} />
               </View>
               <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>Verification under review</Text>
               <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2, textAlign: "center" }}>
@@ -417,13 +417,13 @@ export default function VerificationForm({
                   width: 64,
                   height: 64,
                   borderRadius: RADIUS.xl,
-                  backgroundColor: colors.jadeWash,
+                  backgroundColor: colors.successSurface,
                   alignItems: "center",
                   justifyContent: "center",
                   marginBottom: SPACE.x5,
                 }}
               >
-                <Text style={{ fontSize: 28 }}>✅</Text>
+                <CheckCircle2 size={28} color={colors.success} strokeWidth={2} />
               </View>
               <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>You&apos;re verified</Text>
               <Text
@@ -479,7 +479,7 @@ export default function VerificationForm({
                     marginBottom: SPACE.x4,
                   }}
                 >
-                  <Text style={{ fontSize: 24 }}>🛡️</Text>
+                  <Shield size={24} color={colors.brand} strokeWidth={2} />
                 </View>
                 <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center" }}>
                   {requestStatus === "declined" ? "Resubmit verification" : "Verify your identity"}

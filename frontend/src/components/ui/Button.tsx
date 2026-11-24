@@ -46,15 +46,6 @@ function palette(variant: ButtonVariant, colors: ThemeTokens) {
         text: colors.textPrimary,
         icon: colors.textSecondary,
       };
-    case "ghost":
-      return {
-        bg: "transparent",
-        bgHover: colors.surfaceSunken,
-        bgPressed: colors.hoverOverlay,
-        border: "transparent",
-        text: colors.textSecondary,
-        icon: colors.textSecondary,
-      };
     case "danger":
       return {
         bg: colors.destructive,
@@ -72,6 +63,15 @@ function palette(variant: ButtonVariant, colors: ThemeTokens) {
         border: "transparent",
         text: colors.primary,
         icon: colors.primary,
+      };
+    case "ghost":
+      return {
+        bg: "transparent",
+        bgHover: colors.hoverOverlay,
+        bgPressed: colors.activeOverlay,
+        border: "transparent",
+        text: colors.textSecondary,
+        icon: colors.textSecondary,
       };
     case "primary":
     default:
@@ -237,12 +237,12 @@ export function IconButton({
             height: 16,
             borderRadius: 8,
             paddingHorizontal: 4,
-            backgroundColor: colors.destructive,
+            backgroundColor: colors.destructiveSurface,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: colors.textOnDanger, fontSize: 9, fontWeight: "700" }}>
+          <Text style={{ color: colors.destructiveText, fontSize: 9, fontWeight: "700" }}>
             {badgeCount > 99 ? "99+" : badgeCount}
           </Text>
         </View>

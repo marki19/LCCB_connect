@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -128,7 +128,7 @@ export default function PostDetailScreen() {
   const [composerFocused, setComposerFocused] = useState(false);
 
   const inputRef = useRef<any>(null);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useMemo(() => new Animated.Value(1), []);
 
   useEffect(() => {
     const fetchDetails = async () => {
