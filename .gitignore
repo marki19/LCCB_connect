@@ -67,3 +67,13 @@ backend/uploads/*
 # Mobile native prebuild & signing keys
 *.keystore
 *.jks
+
+# Temporary files & session tokens
+*.tmp.*
+*/*.tmp.*
+*/*/*.tmp.*
+*.tmp
+*/*.tmp
+session.json
+*/session.json
+
