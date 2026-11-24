@@ -65,9 +65,6 @@ function snapshotFor(role, body) {
  * profile. Returns `{ role }` or `{ error }`.
  */
 function resolveSubmission(profile, requestedRole) {
-  if (!policy.isSchoolAccount(profile?.email)) {
-    return { error: `Verification is only available to ${policy.SCHOOL_EMAIL_DOMAIN} accounts` };
-  }
   const resolved = policy.resolveRequestRole(profile?.role, requestedRole);
   if (resolved.error) return resolved;
   if (!policy.fieldsFor(resolved.role)) {
@@ -179,13 +176,12 @@ const sendOtp = async (req, res, next) => {
     if (!policy.canVerify(req.profile?.role)) {
       return res.status(403).json({ error: "This account does not verify" });
     }
-    if (!policy.isSchoolAccount(req.profile?.email)) {
-      return res
-        .status(403)
-        .json({ error: `Verification is only available to ${policy.SCHOOL_EMAIL_DOMAIN} accounts` });
+
+    const email = req.profile?.email?.trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ error: "Account has no email address" });
     }
 
-    const email = req.profile.email.trim().toLowerCase();
     const { code, expiresAt } = await verificationOtpModel.issue({
       userId: req.user.id,
       email,
@@ -199,7 +195,7 @@ const sendOtp = async (req, res, next) => {
     });
 
     res.status(202).json({
-      message: "Verification code sent to your school account",
+      message: "Verification code sent to your email",
       expires_at: expiresAt,
     });
   } catch (err) {
@@ -228,7 +224,15 @@ const submit = async (req, res, next) => {
     const { snapshot, error } = snapshotFor(resolved.role, req.body);
     if (error) return res.status(400).json({ error });
 
-    if (!(await requireVerifiedCode(req, res))) return;
+    const isSchool = policy.isSchoolAccount(profile?.email);
+    if (!isSchool) {
+      if (!req.body.otp_code) {
+        return res.status(400).json({ error: "Enter the 6-digit code we emailed you" });
+      }
+      if (!(await requireVerifiedCode(req, res))) return;
+    } else if (req.body.otp_code) {
+      if (!(await requireVerifiedCode(req, res))) return;
+    }
 
     // Only the catalog fields this role carries; validateCatalogReferences
     // ignores the ones that are null.
@@ -263,7 +267,7 @@ const submit = async (req, res, next) => {
     await auditService.recordRequest(req, {
       action: ACTIONS.VERIFICATION_SUBMIT,
       targetType: "verification_request",
-      targetId: request.id,
+      targetId: request?.id,
       targetLabel: `${snapshot.full_name} (${snapshot.student_id})`,
       metadata: { role: snapshot.role },
     });
@@ -299,7 +303,15 @@ const updateMine = async (req, res, next) => {
     const { snapshot, error } = snapshotFor(resolved.role, req.body);
     if (error) return res.status(400).json({ error });
 
-    if (!(await requireVerifiedCode(req, res))) return;
+    const isSchool = policy.isSchoolAccount(profile?.email);
+    if (!isSchool) {
+      if (!req.body.otp_code) {
+        return res.status(400).json({ error: "Enter the 6-digit code we emailed you" });
+      }
+      if (!(await requireVerifiedCode(req, res))) return;
+    } else if (req.body.otp_code) {
+      if (!(await requireVerifiedCode(req, res))) return;
+    }
 
     const refError = await validateCatalogReferences({
       department_id: snapshot.department_id,

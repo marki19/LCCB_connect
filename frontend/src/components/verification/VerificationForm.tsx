@@ -221,13 +221,6 @@ export default function VerificationForm({
   };
 
   const handleSendOtp = async () => {
-    if (!schoolAccount) {
-      setNotice({
-        title: "School account required",
-        message: "Verification is only available to @lccbonline.edu.ph accounts.",
-      });
-      return;
-    }
     setSubmitting(true);
     try {
       const res = await onSendOtp();
@@ -245,17 +238,22 @@ export default function VerificationForm({
   const handleSubmit = async () => {
     if (!runValidation()) return;
 
-    // OTP code validation
-    const otp = form.otp_code?.trim() ?? "";
-    if (!otp) {
-      setErrors((e) => ({ ...e, otp_code: "Enter the 6-digit code" }));
-      setTouched((t) => ({ ...t, otp_code: true }));
-      return;
-    }
-    if (!/^\d{6}$/.test(otp)) {
-      setErrors((e) => ({ ...e, otp_code: "Code must be 6 digits" }));
-      setTouched((t) => ({ ...t, otp_code: true }));
-      return;
+    // OTP code validation — required only for non-school accounts
+    let otp = "";
+    if (!schoolAccount) {
+      otp = form.otp_code?.trim() ?? "";
+      if (!otp) {
+        setErrors((e) => ({ ...e, otp_code: "Enter the 6-digit code" }));
+        setTouched((t) => ({ ...t, otp_code: true }));
+        return;
+      }
+      if (!/^\d{6}$/.test(otp)) {
+        setErrors((e) => ({ ...e, otp_code: "Code must be 6 digits" }));
+        setTouched((t) => ({ ...t, otp_code: true }));
+        return;
+      }
+    } else if (form.otp_code?.trim()) {
+      otp = form.otp_code.trim();
     }
 
     setSubmitting(true);
@@ -609,24 +607,55 @@ export default function VerificationForm({
                       onSubmitEditing={() => {
                         if (nextKey) {
                           textInputRefs.current[nextKey]?.focus();
-                        } else if (otpSent && canEdit && !submitting) {
+                        } else if (!schoolAccount && textInputRefs.current["otp_code"]) {
+                          textInputRefs.current["otp_code"]?.focus();
+                        } else if (canEdit && !submitting) {
+                          void handleSubmit();
+                        }
+                      }}
+                    />
+                  );
+                })}
+
+                {!schoolAccount && (
+                  <View style={{ marginBottom: SPACE.x4 }}>
+                    <TextField
+                      ref={(node) => {
+                        textInputRefs.current["otp_code"] = node;
+                      }}
+                      label="Verification code"
+                      value={form.otp_code ?? ""}
+                      onChangeText={(v) => handleChange("otp_code", v)}
+                      onBlur={() => handleBlur("otp_code")}
+                      placeholder="Enter 6-digit code"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      editable={canEdit}
+                      error={fieldError("otp_code")}
+                      hint={
+                        otpSent
+                          ? "Code sent to your email. Check inbox or spam."
+                          : "Tap Send code to receive a 6-digit verification code."
+                      }
+                      returnKeyType="done"
+                      onSubmitEditing={() => {
+                        if (otpSent && canEdit && !submitting) {
                           void handleSubmit();
                         }
                       }}
                       right={
-                        def.key === "otp_code" && !otpSent ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            label="Send code"
-                            onPress={handleSendOtp}
-                            loading={submitting}
-                          />
-                        ) : null
+                        <Button
+                          size="sm"
+                          variant={otpSent ? "secondary" : "primary"}
+                          label={otpSent ? "Resend code" : "Send code"}
+                          onPress={handleSendOtp}
+                          loading={submitting}
+                          disabled={!canEdit || submitting}
+                        />
                       }
                     />
-                  );
-                })}
+                  </View>
+                )}
 
                 <View style={{ marginTop: SPACE.x2 }}>
                   <Button
@@ -638,12 +667,16 @@ export default function VerificationForm({
                     size="lg"
                     fullWidth
                     loading={submitting}
-                    disabled={!canEdit || submitting || !otpSent}
+                    disabled={
+                      !canEdit ||
+                      submitting ||
+                      (!schoolAccount && (!otpSent || (form.otp_code?.trim()?.length ?? 0) !== 6))
+                    }
                     onPress={handleSubmit}
                   />
                 </View>
 
-                {!otpSent && canEdit && (
+                {!schoolAccount && !otpSent && canEdit && (
                   <Text
                     style={{
                       ...TYPE.caption,
@@ -652,7 +685,7 @@ export default function VerificationForm({
                       marginTop: SPACE.x3,
                     }}
                   >
-                    Tap Send code to receive a 6-digit code at your school email.
+                    Tap Send code to receive a 6-digit code at your email.
                   </Text>
                 )}
 

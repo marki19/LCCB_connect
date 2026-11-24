@@ -346,7 +346,12 @@ const verificationSubmitSchema = z
       const today = new Date();
       return date < today && date > new Date("1900-01-01");
     }, "Birthdate must be a valid calendar date in the past"),
-    otp_code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code we emailed you"),
+    otp_code: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, "Enter the 6-digit code we emailed you")
+      .optional()
+      .or(z.literal("")),
   })
   .strict();
 
