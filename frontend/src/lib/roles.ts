@@ -91,7 +91,16 @@ export function isSuspendedProfile(profile?: {
   return Number.isFinite(until) && until > Date.now();
 }
 
+/**
+ * Roles that can open the administration console at all. Department admins get
+ * a scoped console (announcements and verification); campus admins see the
+ * rest. Every page still re-checks permission on the server.
+ */
+export function canAccessAdminPanel(role?: string | null): boolean {
+  return rankOf(role) >= RANK.departmentAdmin;
+}
+
 /** Roles that can create and manage announcements (departmentAdmin and above). */
 export function canManageAnnouncements(role?: string | null): boolean {
-  return rankOf(role) >= RANK.departmentAdmin;
+  return canAccessAdminPanel(role);
 }

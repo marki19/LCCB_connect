@@ -13,6 +13,7 @@ import { FeedFilterProvider } from "../src/contexts/FeedFilterContext";
 import { ToastProvider } from "../src/contexts/ToastContext";
 import SettingsSidebar from "../src/components/SettingsSidebar";
 import {
+  canAccessAdminPanel,
   isAdminRole,
   isModeratorRole,
   isSuspendedProfile,
@@ -92,6 +93,7 @@ function RouteGuard() {
       const inTabs = segments[0] === "(tabs)";
       const inSuspended = segments[0] === "suspended";
       const adminUser = isAdminRole(profile?.role);
+      const panelUser = canAccessAdminPanel(profile?.role);
       const moderatorUser = isModeratorRole(profile?.role);
       const suspended = !!profile && isSuspendedProfile(profile);
       const isAuthenticated = !!session || isGuest;
@@ -147,9 +149,10 @@ function RouteGuard() {
         // branch above may already have sent the admin to the feed. Catch that
         // case unless they explicitly chose "Back to App".
         router.replace("/(admin)/");
-      } else if (isAuthenticated && inAdmin && (!adminUser || !isDesktop)) {
-        // The panel is a desktop console. Never strand a mobile or non-admin
-        // session on a screen it cannot use.
+      } else if (isAuthenticated && inAdmin && !panelUser) {
+        // The console scopes itself by role: department admins only get
+        // announcements and verification, campus admins get the rest. Anyone
+        // without panel access is sent back to the normal app, on any screen.
         router.replace("/(tabs)/");
       } else if (
         isAuthenticated &&

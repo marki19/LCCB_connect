@@ -1,5 +1,30 @@
 # Fix Announcement Management for All Admin Roles in Mobile View - COMPLETE
 
+## Mobile Entry Point (follow-up)
+
+Department admins could open the console layout but had **no way in**: the root
+guard bounced every mobile session out of `/(admin)`, and the in-app drawer had
+no console link. Fixed with:
+
+1. `frontend/src/lib/roles.ts` — added `canAccessAdminPanel(role)` (rank ≥
+   departmentAdmin); `canManageAnnouncements` now delegates to it.
+2. `frontend/app/_layout.tsx` — the `(admin)` route guard now admits any panel
+   role on any screen size (previously desktop-only). Non-panel roles are still
+   redirected to `/(tabs)`.
+3. `frontend/src/components/HomeHeader.tsx` — megaphone button in the mobile
+   home header for panel roles, jumping straight into the console.
+4. `frontend/src/components/SettingsSidebar.tsx` — new "Administration →
+   Admin console" drawer item for panel roles.
+5. `frontend/app/(admin)/_layout.tsx` — console nav is role-scoped:
+   - Department admins: Verification, Announcements
+   - Campus admins: adds Overview, Users, Reports and content, Catalog
+   - Superadmins: adds Audit log
+
+   Added a mobile console header (safe-area aware) with a "Back to app" action,
+   and short tab labels for narrow screens.
+6. `frontend/app/(admin)/index.tsx` — department admins are redirected from the
+   campus Overview to `/(admin)/announcements` (the overview API is admin-only).
+
 ## Summary of Changes
 
 ### 1. Frontend: Role Helper Added ✓
