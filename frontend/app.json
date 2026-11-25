@@ -44,6 +44,17 @@
       "expo-secure-store",
       "expo-video",
       "@react-native-google-signin/google-signin"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "5c3c35cb-6895-473a-adf6-df5aef868ba2"
+      }
+    },
+    "owner": "geyyb"
   }
 }

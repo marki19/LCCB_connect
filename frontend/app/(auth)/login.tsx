@@ -5,6 +5,7 @@ import { AtSign, Eye, EyeOff, KeyRound, Lock, ShieldCheck } from "lucide-react-n
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { supabase } from "../../src/lib/supabase";
+import { clearSession } from "../../src/lib/session";
 import {
   signInWithIdentifier,
   signInWithGoogle,
@@ -117,9 +118,13 @@ export default function LoginScreen() {
           return;
         }
 
-        // Clean up pending flag so it only runs once per OAuth flow
+        // Clean up pending flag and strip OAuth params from the address bar immediately
+        // so back-navigation or subsequent reloads don't re-read stale tokens
         if (typeof window !== "undefined") {
           window.sessionStorage?.removeItem("oauth_google_pending");
+          if (window.history?.replaceState) {
+            window.history.replaceState(null, "", window.location.pathname);
+          }
         }
 
         // Check if Google / Supabase returned an OAuth error (e.g. domain mismatch / access denied)
@@ -132,10 +137,8 @@ export default function LoginScreen() {
           searchParams.get("error");
 
         if (oauthError) {
-          if (typeof window !== "undefined" && window.history?.replaceState) {
-            window.history.replaceState(null, "", window.location.pathname);
-          }
           await supabase.auth.signOut().catch(() => {});
+          await clearSession().catch(() => {});
           if (active) {
             setIsOAuthReturning(false);
             setGeneralError("Google sign-in was cancelled or failed. Please try again.");
@@ -148,13 +151,8 @@ export default function LoginScreen() {
           accessToken = hashParams.get("access_token");
         }
 
-        if (!accessToken) {
-          const { data } = await supabase.auth.getSession();
-          accessToken = data?.session?.access_token || null;
-        }
-
-        // Wait up to 5 seconds with polling for Supabase to finish PKCE exchange or hash parsing
-        if (!accessToken) {
+        // Wait up to 5 seconds with polling for Supabase to finish PKCE exchange
+        if (!accessToken && (search.includes("code=") || isOAuthPending)) {
           accessToken = await new Promise<string | null>((resolve) => {
             let settled = false;
             const finish = (token: string | null) => {
@@ -259,6 +257,10 @@ export default function LoginScreen() {
 
     try {
       if (Platform.OS === "web") {
+        // Clear any existing session first so previous accounts don't bleed into new sign-in
+        await clearSession().catch(() => {});
+        await supabase.auth.signOut().catch(() => {});
+
         if (typeof window !== "undefined") {
           window.sessionStorage?.setItem("oauth_google_pending", "true");
         }

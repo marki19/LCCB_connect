@@ -104,7 +104,9 @@ export default function OnboardingScreen() {
             role: null,
             fields: null,
             selectable_roles: null,
-            school_account: profile?.email?.endsWith("@lccbonline.edu.ph") ?? false,
+            school_account:
+              profile?.email != null &&
+              (profile.email.endsWith("@lccbonline.edu.ph") || profile.email.endsWith("@lccb.edu.ph")),
           });
         } else {
           console.error("Failed to load verification:", error);
@@ -128,7 +130,9 @@ export default function OnboardingScreen() {
       }
       const isOutsider =
         profile.account_kind === "outsider" ||
-        (profile.email && !profile.email.endsWith("@lccbonline.edu.ph"));
+        (profile.email &&
+          !profile.email.endsWith("@lccbonline.edu.ph") &&
+          !profile.email.endsWith("@lccb.edu.ph"));
       if (profile.role === "user" && isOutsider && !profile.guest_declared_at) {
         router.replace("/guest-declaration" as any);
         return;

@@ -52,6 +52,8 @@ describe("school accounts only", () => {
   it("accepts the school domain, case-insensitively", () => {
     assert.equal(policy.isSchoolAccount("ana@lccbonline.edu.ph"), true);
     assert.equal(policy.isSchoolAccount("Ana@LCCBOnline.EDU.PH"), true);
+    assert.equal(policy.isSchoolAccount("ana@lccb.edu.ph"), true);
+    assert.equal(policy.isSchoolAccount("ANA@LCCB.EDU.PH"), true);
   });
 
   it("rejects everything else", () => {

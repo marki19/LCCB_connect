@@ -25,11 +25,12 @@ function canonicalRole(role) {
 
 /** Only school accounts may verify, so only they can be used in the app. */
 const SCHOOL_EMAIL_DOMAIN = "@lccbonline.edu.ph";
+const SCHOOL_EMAIL_DOMAINS = ["@lccbonline.edu.ph", "@lccb.edu.ph"];
 
 function isSchoolAccount(email) {
-  return (
-    typeof email === "string" && email.trim().toLowerCase().endsWith(SCHOOL_EMAIL_DOMAIN)
-  );
+  if (typeof email !== "string") return false;
+  const normalized = email.trim().toLowerCase();
+  return SCHOOL_EMAIL_DOMAINS.some((domain) => normalized.endsWith(domain));
 }
 
 /**
