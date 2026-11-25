@@ -90,3 +90,8 @@ export function isSuspendedProfile(profile?: {
   const until = new Date(profile.suspended_until).getTime();
   return Number.isFinite(until) && until > Date.now();
 }
+
+/** Roles that can create and manage announcements (departmentAdmin and above). */
+export function canManageAnnouncements(role?: string | null): boolean {
+  return rankOf(role) >= RANK.departmentAdmin;
+}

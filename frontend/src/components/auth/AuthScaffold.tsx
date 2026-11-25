@@ -152,9 +152,10 @@ export default function AuthScaffold({
     </View>
   );
 
+  const { isDark } = useTheme();
   const backgroundLayer = background ? (
     <View style={StyleSheet.absoluteFill}>{background}</View>
-  ) : isFocused ? (
+  ) : isDark ? (
     <InteractiveBackground intensity={backgroundIntensity} />
   ) : null;
 

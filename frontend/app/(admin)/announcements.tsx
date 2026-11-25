@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { Building2, Calendar, CheckCircle2, Megaphone, Send, ShieldCheck, Users, GraduationCap, Pin, Bell } from "lucide-react-native";
 import {
   getAudienceCount,
@@ -103,8 +103,9 @@ export default function AdminAnnouncementsScreen() {
   const { colors } = useTheme();
   const { showToast } = useToast();
   const { profile } = useAuth();
+  const { width } = useWindowDimensions();
   const isCampusAdmin = profile?.role === "admin" || profile?.role === "superadmin";
-  const myDeptId = profile?.department_id;
+  const isMobile = width < 768;
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -155,13 +156,10 @@ export default function AdminAnnouncementsScreen() {
 
   // Load courses when department changes
   useEffect(() => {
+    let cancelled = false;
     if (!departmentId) {
-      setCourses([]);
-      setFilteredCourses([]);
-      setCourseId("");
       return;
     }
-    let cancelled = false;
     fetchCourses(departmentId)
       .then((rows) => {
         if (cancelled) return;
@@ -363,7 +361,7 @@ export default function AdminAnnouncementsScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surfacePage }}
-      contentContainerStyle={{ padding: 32 }}
+      contentContainerStyle={{ padding: isMobile ? 16 : 32 }}
       showsVerticalScrollIndicator={false}
     >
       <PageHeader
@@ -406,17 +404,17 @@ export default function AdminAnnouncementsScreen() {
         </View>
       ) : null}
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 24 }}>
+      <View style={{ flexDirection: isMobile ? "column" : "row", flexWrap: "wrap", gap: isMobile ? 16 : 24 }}>
         {/* Compose panel */}
         <View
           style={{
-            minWidth: 420,
-            flex: 1.3,
+            minWidth: isMobile ? 0 : 420,
+            flex: isMobile ? 1 : 1.3,
             borderRadius: 16,
             borderWidth: 1,
             borderColor: colors.border,
             backgroundColor: colors.surface,
-            padding: 24,
+            padding: isMobile ? 16 : 24,
           }}
         >
           <View style={{ marginBottom: 20, flexDirection: "row", alignItems: "center" }}>
@@ -594,7 +592,7 @@ export default function AdminAnnouncementsScreen() {
                 onChange={setExpiresAt}
                 placeholder="YYYY-MM-DDTHH:MM"
                 minDate={new Date()}
-                containerStyle={{ width: 195 }}
+                containerStyle={{ width: isMobile ? '100%' : 195 }}
               />
             </View>
           </View>
@@ -663,13 +661,13 @@ export default function AdminAnnouncementsScreen() {
         {/* History panel */}
         <View
           style={{
-            minWidth: 360,
+            minWidth: isMobile ? 0 : 360,
             flex: 1,
             borderRadius: 16,
             borderWidth: 1,
             borderColor: colors.border,
             backgroundColor: colors.surface,
-            padding: 24,
+            padding: isMobile ? 16 : 24,
           }}
         >
           <View style={{ marginBottom: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -764,7 +762,7 @@ export default function AdminAnnouncementsScreen() {
                             value={editExpiresAt}
                             onChange={setEditExpiresAt}
                             placeholder="YYYY-MM-DDTHH:MM"
-                            containerStyle={{ width: 180 }}
+                            containerStyle={{ width: isMobile ? '100%' : 180 }}
                           />
                         </View>
                       </View>

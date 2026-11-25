@@ -32,11 +32,12 @@ import {
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { focusRing, RADIUS, sansFamily, SPACE, type ThemeTokens } from "../../src/lib/tokens";
-import { isAdminRole, isSuperAdminRole } from "../../src/lib/roles";
+import { canManageAnnouncements, isSuperAdminRole } from "../../src/lib/roles";
 import { setAdminAppPreview } from "../../src/lib/panelMode";
 import { CONSOLE_TEXT } from "../../src/components/admin/consoleTheme";
 
 const SIDEBAR_ANIMATION_MS = 220;
+const MOBILE_TAB_BAR_HEIGHT = 72;
 
 type NavEntry = {
   label: string;
@@ -123,6 +124,64 @@ function NavItem({ icon: Icon, label, active, collapsed, onPress, colors }: NavI
   );
 }
 
+function MobileTabItem({ icon: Icon, label, active, onPress, colors }: { icon: any; label: string; active: boolean; onPress: () => void; colors: ThemeTokens }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={{
+        flex: 1,
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+        paddingVertical: 8,
+        paddingHorizontal: 4,
+        minHeight: 56,
+      }}
+    >
+      <Icon
+        size={active ? 24 : 22}
+        color={active ? colors.navAccent : colors.navText}
+        strokeWidth={active ? 2.5 : 1.8}
+      />
+      <Text
+        numberOfLines={1}
+        style={{
+          fontFamily: sansFamily,
+          fontSize: 10,
+          lineHeight: 12,
+          fontWeight: active ? "600" : "500",
+          color: active ? colors.navAccent : colors.navText,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function SectionHeading({ label, colors }: { label: string; colors: ThemeTokens }) {
+  return (
+    <Text
+      style={{
+        ...CONSOLE_TEXT.eyebrow,
+        fontSize: 10.5,
+        letterSpacing: 1.1,
+        color: colors.navText,
+        opacity: 0.8,
+        paddingHorizontal: SPACE.x3,
+        marginBottom: SPACE.x2,
+        marginTop: SPACE.x3,
+      }}
+    >
+      {label}
+    </Text>
+  );
+}
+
 function UtilityRow({
   icon: Icon,
   label,
@@ -186,25 +245,6 @@ function UtilityRow({
   );
 }
 
-function SectionHeading({ label, colors }: { label: string; colors: ThemeTokens }) {
-  return (
-    <Text
-      style={{
-        ...CONSOLE_TEXT.eyebrow,
-        fontSize: 10.5,
-        letterSpacing: 1.1,
-        color: colors.navText,
-        opacity: 0.8,
-        paddingHorizontal: SPACE.x3,
-        marginBottom: SPACE.x2,
-        marginTop: SPACE.x3,
-      }}
-    >
-      {label}
-    </Text>
-  );
-}
-
 export default function AdminLayout() {
   const router = useRouter();
   const pathname = usePathname();
@@ -212,7 +252,7 @@ export default function AdminLayout() {
   const { signOut, profile } = useAuth();
   const { colors, preference, cycleTheme } = useTheme();
   const isDesktop = Platform.OS === "web" && width >= 768;
-  const adminUser = isAdminRole(profile?.role);
+  const adminUser = canManageAnnouncements(profile?.role);
   const [collapseOverride, setCollapseOverride] = useState<boolean | null>(null);
   const collapsed = collapseOverride ?? width < 1000;
   const sidebarTargetWidth = collapsed ? 84 : 320;
@@ -234,108 +274,77 @@ export default function AdminLayout() {
     return () => animation.stop();
   }, [collapsed, sidebarTargetWidth, sidebarWidthAnim]);
 
-  // Keep labels in their expanded layout while the rail slides closed, then
-  // swap to the compact icon-only layout once it has landed.
   useEffect(() => {
     if (collapsed) return;
     const frame = requestAnimationFrame(() => setContentCollapsed(false));
     return () => cancelAnimationFrame(frame);
   }, [collapsed]);
 
+  const isActive = (path: string) => {
+    const relative = pathname.replace(/^\/\(admin\)/, "") || "/";
+    if (path === "/(admin)") return relative === "/";
+    const target = path.replace("/(admin)", "");
+    return relative === target || relative.startsWith(`${target}/`);
+  };
+
+  const governance: NavEntry[] = [
+    { label: "Overview", path: "/(admin)", icon: LayoutDashboard },
+    { label: "Users", path: "/(admin)/users", icon: Users },
+    { label: "Verification", path: "/(admin)/verification", icon: UserCheck },
+    { label: "Reports and content", path: "/(admin)/content", icon: FileText },
+    { label: "Announcements", path: "/(admin)/announcements", icon: Megaphone },
+  ];
+
+  const system: NavEntry[] = [
+    { label: "Departments and courses", path: "/(admin)/departments", icon: Building2 },
+  ];
+
+  if (isSuperAdminRole(profile?.role)) {
+    system.unshift({ label: "Audit log", path: "/(admin)/audit", icon: ScrollText });
+  }
+
+  const allNavItems = [...governance, ...system];
+
+  // Mobile layout with bottom tab bar
   if (!isDesktop) {
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          padding: SPACE.x6,
-          backgroundColor: colors.navBg,
-        }}
-      >
-        <View
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: RADIUS.lg,
-            backgroundColor: colors.navHoverBg,
-            borderWidth: 1,
-            borderColor: colors.navLine,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Image
-            source={require("../../assets/images/logo-seal.png")}
-            style={{ width: 44, height: 44 }}
-            resizeMode="contain"
+      <View style={{ flex: 1, flexDirection: "column", backgroundColor: colors.surfacePage }}>
+        {/* Content area */}
+        <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "fade",
+              contentStyle: { backgroundColor: colors.surfacePage },
+            }}
           />
         </View>
-        <Text
+
+        {/* Mobile Bottom Tab Bar */}
+        <View
           style={{
-            ...CONSOLE_TEXT.eyebrow,
-            fontSize: 10,
-            color: colors.navAccent,
-            marginTop: SPACE.x5,
-          }}
-        >
-          LCCB Connect
-        </Text>
-        <Text
-          style={{
-            ...CONSOLE_TEXT.pageTitle,
-            fontSize: 24,
-            lineHeight: 31,
-            color: colors.navTextActive,
-            textAlign: "center",
-            marginTop: SPACE.x2,
-            maxWidth: 380,
-          }}
-        >
-          Open the console on a desktop
-        </Text>
-        <Text
-          style={{
-            ...CONSOLE_TEXT.body,
-            color: colors.navText,
-            textAlign: "center",
-            maxWidth: 380,
-            marginTop: SPACE.x3,
-          }}
-        >
-          Managing accounts, reports and announcements needs the wider layout. Your regular app is
-          still available on this device.
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            setAdminAppPreview(true);
-            router.replace("/(tabs)/");
-          }}
-          style={({ pressed }) => ({
-            marginTop: SPACE.x6,
-            minHeight: 42,
+            height: MOBILE_TAB_BAR_HEIGHT,
             flexDirection: "row",
             alignItems: "center",
-            gap: SPACE.x2,
-            borderRadius: RADIUS.sm,
-            backgroundColor: colors.navAccent,
-            paddingHorizontal: SPACE.x6,
-            paddingVertical: SPACE.x2,
-            opacity: pressed ? 0.9 : 1,
-          })}
+            justifyContent: "space-around",
+            backgroundColor: colors.navBg,
+            borderTopWidth: 1,
+            borderTopColor: colors.navLine,
+            paddingBottom: Platform.OS === "ios" ? 20 : 0, // Safe area for iOS
+            paddingHorizontal: 8,
+          }}
         >
-          <Text
-            style={{
-              ...CONSOLE_TEXT.strong,
-              fontSize: 13,
-              color: colors.navBg,
-            }}
-          >
-            Back to the app
-          </Text>
-          <ExternalLink size={14} color={colors.navBg} />
-        </Pressable>
+          {allNavItems.map((item) => (
+            <MobileTabItem
+              key={item.path}
+              icon={item.icon}
+              label={item.label}
+              active={isActive(item.path)}
+              onPress={() => router.push(item.path as any)}
+              colors={colors}
+            />
+          ))}
+        </View>
       </View>
     );
   }
@@ -390,7 +399,7 @@ export default function AdminLayout() {
             textAlign: "center",
           }}
         >
-          Administrator access required
+          Admin console access required
         </Text>
         <Text
           style={{
@@ -401,7 +410,7 @@ export default function AdminLayout() {
             marginTop: SPACE.x2,
           }}
         >
-          This account cannot open the administration console.
+          This account does not have permission to access the administration console.
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -425,29 +434,6 @@ export default function AdminLayout() {
         </Pressable>
       </View>
     );
-  }
-
-  const isActive = (path: string) => {
-    const relative = pathname.replace(/^\/\(admin\)/, "") || "/";
-    if (path === "/(admin)") return relative === "/";
-    const target = path.replace("/(admin)", "");
-    return relative === target || relative.startsWith(`${target}/`);
-  };
-
-  const governance: NavEntry[] = [
-    { label: "Overview", path: "/(admin)", icon: LayoutDashboard },
-    { label: "Users", path: "/(admin)/users", icon: Users },
-    { label: "Verification", path: "/(admin)/verification", icon: UserCheck },
-    { label: "Reports and content", path: "/(admin)/content", icon: FileText },
-    { label: "Announcements", path: "/(admin)/announcements", icon: Megaphone },
-  ];
-
-  const system: NavEntry[] = [
-    { label: "Departments and courses", path: "/(admin)/departments", icon: Building2 },
-  ];
-
-  if (isSuperAdminRole(profile.role)) {
-    system.unshift({ label: "Audit log", path: "/(admin)/audit", icon: ScrollText });
   }
 
   return (
@@ -534,17 +520,19 @@ export default function AdminLayout() {
             </View>
 
             {!contentCollapsed ? <SectionHeading label="Manage" colors={colors} /> : null}
-            {governance.map((item) => (
-              <NavItem
-                key={item.path}
-                icon={item.icon}
-                label={item.label}
-                active={isActive(item.path)}
-                collapsed={contentCollapsed}
-                onPress={() => router.push(item.path as any)}
-                colors={colors}
-              />
-            ))}
+            <>
+              {governance.map((item) => (
+                <NavItem
+                  key={item.path}
+                  icon={item.icon}
+                  label={item.label}
+                  active={isActive(item.path)}
+                  collapsed={contentCollapsed}
+                  onPress={() => router.push(item.path as any)}
+                  colors={colors}
+                />
+              ))}
+            </>
 
             <View
               style={{
@@ -556,17 +544,19 @@ export default function AdminLayout() {
             />
 
             {!contentCollapsed ? <SectionHeading label="System" colors={colors} /> : null}
-            {system.map((item) => (
-              <NavItem
-                key={item.path}
-                icon={item.icon}
-                label={item.label}
-                active={isActive(item.path)}
-                collapsed={contentCollapsed}
-                onPress={() => router.push(item.path as any)}
-                colors={colors}
-              />
-            ))}
+            <>
+              {system.map((item) => (
+                <NavItem
+                  key={item.path}
+                  icon={item.icon}
+                  label={item.label}
+                  active={isActive(item.path)}
+                  collapsed={contentCollapsed}
+                  onPress={() => router.push(item.path as any)}
+                  colors={colors}
+                />
+              ))}
+            </>
           </View>
 
           <View style={{ marginTop: SPACE.x6 }}>
@@ -696,8 +686,8 @@ export default function AdminLayout() {
                 danger
               />
               <UtilityRow
-                icon={collapsed ? PanelLeftOpen : PanelLeftClose}
-                label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                icon={contentCollapsed ? PanelLeftOpen : PanelLeftClose}
+                label={contentCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                 onPress={() => setCollapseOverride(!collapsed)}
                 collapsed={contentCollapsed}
                 colors={colors}
