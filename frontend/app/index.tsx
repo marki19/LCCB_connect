@@ -80,8 +80,6 @@ export default function SplashScreen() {
             paddingVertical: 5,
             borderRadius: RADIUS.pill,
             backgroundColor: t.navHoverBg,
-            borderWidth: 1,
-            borderColor: t.navLine,
             marginBottom: SPACE.x3,
           }}
         >
