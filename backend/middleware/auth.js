@@ -316,6 +316,10 @@ function requireVerified(req, res, next) {
 }
 
 function requireContentAccess(req, res, next) {
+  // A pending guest must still be able to read their own profile so the client
+  // can detect their role and verification_status and route them to /pending-review.
+  if (req.method === "GET" && req.path === `/${req.user?.id}`) return next();
+
   const role = normalizeRole(getRole(req));
   const isApprovedGuest =
     req.profile?.verification_status === "verified" ||

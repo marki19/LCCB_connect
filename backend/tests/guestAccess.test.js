@@ -89,7 +89,7 @@ describe("POST /auth/guest declaration", () => {
 });
 
 describe("requireContentAccess middleware", () => {
-  it("returns 403 guest_pending for pending guest", () => {
+  it("returns 403 guest_pending for pending guest on general content", () => {
     const req = makeReq({
       profile: { role: "guest", verification_status: "pending" },
     });
@@ -100,6 +100,22 @@ describe("requireContentAccess middleware", () => {
     assert.equal(res.statusCode, 403);
     assert.equal(res.body.code, "guest_pending");
     assert.equal(next.isCalled(), false);
+  });
+
+  it("allows pending guest to read their own profile", () => {
+    const req = {
+      ...makeReq({
+        userId: "guest-123",
+        profile: { role: "guest", verification_status: "pending" },
+      }),
+      method: "GET",
+      path: "/guest-123",
+    };
+    const res = makeRes();
+    const next = makeNext();
+
+    requireContentAccess(req, res, next);
+    assert.equal(next.isCalled(), true);
   });
 
   it("passes approved guest", () => {
