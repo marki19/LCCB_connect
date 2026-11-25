@@ -31,6 +31,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useSettingsSidebar } from "../contexts/SettingsSidebarContext";
+import { canAccessAdminPanel } from "../lib/roles";
 import { elevation, focusRing, SPACE, TYPE } from "../lib/tokens";
 import SecuritySettingsModal from "./settings/SecuritySettingsModal";
 import Avatar from "./Avatar";
@@ -139,6 +140,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
   const [securityModalOpen, setSecurityModalOpen] = useState(false);
 
   const displayName = profile?.full_name || (isGuest ? "Guest Visitor" : "User");
+  const canOpenAdminPanel = canAccessAdminPanel(profile?.role);
 
   useEffect(() => {
     Animated.parallel([
@@ -379,6 +381,17 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
             label="Messaging & presence"
             onPress={() => go("/settings")}
           />
+
+          {canOpenAdminPanel ? (
+            <>
+              <SectionLabel label="Administration" />
+              <MenuItem
+                icon={<Shield size={20} color={colors.brand} />}
+                label="Admin console"
+                onPress={() => go("/(admin)")}
+              />
+            </>
+          ) : null}
 
           {/* App Preferences */}
           <SectionLabel label="Preferences" />

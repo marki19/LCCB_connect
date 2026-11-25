@@ -6,7 +6,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import {
   Activity,
   AlertTriangle,
@@ -27,7 +27,7 @@ import {
 import { getAdminOverview, type AdminOverview } from "../../src/lib/adminApi";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
-import { isSuperAdminRole } from "../../src/lib/roles";
+import { isAdminRole, isSuperAdminRole } from "../../src/lib/roles";
 import {
   focusRing,
   RADIUS,
@@ -824,9 +824,17 @@ export default function AdminOverviewScreen() {
   }, []);
 
   useEffect(() => {
+    // The overview aggregates campus-wide data behind /api/admin, which scoped
+    // roles cannot call. They are redirected below, so skip the request.
+    if (!isAdminRole(profile?.role)) return;
     const timer = setTimeout(() => void load(), 0);
     return () => clearTimeout(timer);
-  }, [load]);
+  }, [load, profile?.role]);
+
+  // Department admins get a scoped console with no campus overview.
+  if (!isAdminRole(profile?.role)) {
+    return <Redirect href="/(admin)/announcements" />;
+  }
 
   const superadmin = isSuperAdminRole(profile?.role);
   const stackColumns = width < 1100;

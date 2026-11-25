@@ -12,6 +12,7 @@ import {
   Image,
 } from "react-native";
 import { Stack, useRouter, usePathname } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   LayoutDashboard,
   Users,
@@ -32,7 +33,7 @@ import {
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { focusRing, RADIUS, sansFamily, SPACE, type ThemeTokens } from "../../src/lib/tokens";
-import { canManageAnnouncements, isSuperAdminRole } from "../../src/lib/roles";
+import { canAccessAdminPanel, isAdminRole, isSuperAdminRole } from "../../src/lib/roles";
 import { setAdminAppPreview } from "../../src/lib/panelMode";
 import { CONSOLE_TEXT } from "../../src/components/admin/consoleTheme";
 
@@ -41,6 +42,8 @@ const MOBILE_TAB_BAR_HEIGHT = 72;
 
 type NavEntry = {
   label: string;
+  /** Shorter label for the compact mobile tab bar. */
+  shortLabel?: string;
   path: string;
   icon: any;
 };
@@ -151,7 +154,7 @@ function MobileTabItem({ icon: Icon, label, active, onPress, colors }: { icon: a
         numberOfLines={1}
         style={{
           fontFamily: sansFamily,
-          fontSize: 10,
+          fontSize: 9.5,
           lineHeight: 12,
           fontWeight: active ? "600" : "500",
           color: active ? colors.navAccent : colors.navText,
@@ -249,10 +252,14 @@ export default function AdminLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { signOut, profile } = useAuth();
   const { colors, preference, cycleTheme } = useTheme();
   const isDesktop = Platform.OS === "web" && width >= 768;
-  const adminUser = canManageAnnouncements(profile?.role);
+  const canSeePanel = canAccessAdminPanel(profile?.role);
+  // Campus-wide tools are backed by /api/admin, which requires admin+. The
+  // server enforces this too; the nav simply avoids dead ends for scoped roles.
+  const canSeeCampusTools = isAdminRole(profile?.role);
   const [collapseOverride, setCollapseOverride] = useState<boolean | null>(null);
   const collapsed = collapseOverride ?? width < 1000;
   const sidebarTargetWidth = collapsed ? 84 : 320;
@@ -288,66 +295,42 @@ export default function AdminLayout() {
   };
 
   const governance: NavEntry[] = [
-    { label: "Overview", path: "/(admin)", icon: LayoutDashboard },
-    { label: "Users", path: "/(admin)/users", icon: Users },
-    { label: "Verification", path: "/(admin)/verification", icon: UserCheck },
-    { label: "Reports and content", path: "/(admin)/content", icon: FileText },
-    { label: "Announcements", path: "/(admin)/announcements", icon: Megaphone },
+    ...(canSeeCampusTools
+      ? [{ label: "Overview", shortLabel: "Home", path: "/(admin)", icon: LayoutDashboard }]
+      : []),
+    ...(canSeeCampusTools
+      ? [{ label: "Users", shortLabel: "Users", path: "/(admin)/users", icon: Users }]
+      : []),
+    { label: "Verification", shortLabel: "Verify", path: "/(admin)/verification", icon: UserCheck },
+    ...(canSeeCampusTools
+      ? [
+          {
+            label: "Reports and content",
+            shortLabel: "Content",
+            path: "/(admin)/content",
+            icon: FileText,
+          },
+        ]
+      : []),
+    { label: "Announcements", shortLabel: "Notices", path: "/(admin)/announcements", icon: Megaphone },
   ];
 
-  const system: NavEntry[] = [
-    { label: "Departments and courses", path: "/(admin)/departments", icon: Building2 },
-  ];
+  const system: NavEntry[] = canSeeCampusTools
+    ? [
+        {
+          label: "Departments and courses",
+          shortLabel: "Catalog",
+          path: "/(admin)/departments",
+          icon: Building2,
+        },
+      ]
+    : [];
 
   if (isSuperAdminRole(profile?.role)) {
-    system.unshift({ label: "Audit log", path: "/(admin)/audit", icon: ScrollText });
+    system.unshift({ label: "Audit log", shortLabel: "Audit", path: "/(admin)/audit", icon: ScrollText });
   }
 
   const allNavItems = [...governance, ...system];
-
-  // Mobile layout with bottom tab bar
-  if (!isDesktop) {
-    return (
-      <View style={{ flex: 1, flexDirection: "column", backgroundColor: colors.surfacePage }}>
-        {/* Content area */}
-        <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: "fade",
-              contentStyle: { backgroundColor: colors.surfacePage },
-            }}
-          />
-        </View>
-
-        {/* Mobile Bottom Tab Bar */}
-        <View
-          style={{
-            height: MOBILE_TAB_BAR_HEIGHT,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-around",
-            backgroundColor: colors.navBg,
-            borderTopWidth: 1,
-            borderTopColor: colors.navLine,
-            paddingBottom: Platform.OS === "ios" ? 20 : 0, // Safe area for iOS
-            paddingHorizontal: 8,
-          }}
-        >
-          {allNavItems.map((item) => (
-            <MobileTabItem
-              key={item.path}
-              icon={item.icon}
-              label={item.label}
-              active={isActive(item.path)}
-              onPress={() => router.push(item.path as any)}
-              colors={colors}
-            />
-          ))}
-        </View>
-      </View>
-    );
-  }
 
   if (!profile) {
     return (
@@ -366,7 +349,7 @@ export default function AdminLayout() {
     );
   }
 
-  if (!adminUser) {
+  if (!canSeePanel) {
     return (
       <View
         style={{
@@ -432,6 +415,134 @@ export default function AdminLayout() {
             Back to the app
           </Text>
         </Pressable>
+      </View>
+    );
+  }
+
+  // Mobile layout: compact console header + role-scoped bottom tab bar.
+  if (!isDesktop) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+        <View
+          style={{
+            paddingTop: insets.top,
+            backgroundColor: colors.navBg,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.navLine,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: SPACE.x3,
+              paddingHorizontal: SPACE.x4,
+              paddingVertical: SPACE.x2,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: SPACE.x2,
+                flexShrink: 1,
+              }}
+            >
+              <Image
+                source={require("../../assets/images/logo-seal.png")}
+                style={{ width: 28, height: 28 }}
+                resizeMode="contain"
+              />
+              <View style={{ flexShrink: 1 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: sansFamily,
+                    fontSize: 15,
+                    fontWeight: "700",
+                    color: colors.navTextActive,
+                  }}
+                >
+                  Admin console
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{ fontFamily: sansFamily, fontSize: 11, color: colors.navText }}
+                >
+                  {canSeeCampusTools ? "Campus" : "Department"} ·{" "}
+                  {profile.department_name || profile.full_name || "Admin"}
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back to the app"
+              onPress={() => {
+                setAdminAppPreview(true);
+                router.push("/(tabs)/");
+              }}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                borderRadius: RADIUS.sm,
+                backgroundColor: colors.navHoverBg,
+                paddingHorizontal: SPACE.x3,
+                paddingVertical: 7,
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <ExternalLink size={14} color={colors.navAccent} />
+              <Text
+                style={{
+                  fontFamily: sansFamily,
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: colors.navAccent,
+                }}
+              >
+                App
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={{ flex: 1, backgroundColor: colors.surfacePage }}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "fade",
+              contentStyle: { backgroundColor: colors.surfacePage },
+            }}
+          />
+        </View>
+
+        <View
+          style={{
+            minHeight: MOBILE_TAB_BAR_HEIGHT,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-around",
+            backgroundColor: colors.navBg,
+            borderTopWidth: 1,
+            borderTopColor: colors.navLine,
+            paddingTop: 4,
+            paddingBottom: Math.max(insets.bottom, 8),
+            paddingHorizontal: 4,
+          }}
+        >
+          {allNavItems.map((item) => (
+            <MobileTabItem
+              key={item.path}
+              icon={item.icon}
+              label={item.shortLabel ?? item.label}
+              active={isActive(item.path)}
+              onPress={() => router.push(item.path as any)}
+              colors={colors}
+            />
+          ))}
+        </View>
       </View>
     );
   }

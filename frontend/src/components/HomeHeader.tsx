@@ -7,10 +7,12 @@ import {
   Platform,
   useWindowDimensions,
 } from "react-native";
-import { Search, MessageSquare, UserPlus } from "lucide-react-native";
+import { Search, MessageSquare, UserPlus, Megaphone } from "lucide-react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
+import { useAuth } from "../contexts/AuthContext";
+import { canAccessAdminPanel } from "../lib/roles";
 import { elevation, RADIUS, SPACE, TYPE } from "../lib/tokens";
 
 type Props = {
@@ -81,8 +83,10 @@ export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { colors } = useTheme();
+  const { profile } = useAuth();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
   const compact = width < 380;
+  const canOpenAdminPanel = canAccessAdminPanel(profile?.role);
 
   // On desktop web, the top navigation bar is already rendered by _layout.tsx
   if (isDesktopWeb) {
@@ -114,6 +118,7 @@ export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
           alignItems: "center",
           gap: SPACE.x2,
           minWidth: 0,
+          flexShrink: 1,
           cursor: "pointer",
           opacity: pressed ? 0.75 : 1,
           transform: [{ scale: pressed ? 0.97 : 1 }],
@@ -175,6 +180,15 @@ export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
           iconColor={colors.inkSoft}
           backgroundColor={colors.panelInset}
         />
+        {canOpenAdminPanel ? (
+          <IconButton
+            onPress={() => router.push("/(admin)" as any)}
+            label="Open admin console"
+            icon={Megaphone}
+            iconColor={colors.brand}
+            backgroundColor={colors.brandWash}
+          />
+        ) : null}
         <IconButton
           onPress={() => router.push("/(tabs)/messages")}
           label={unreadCount > 0 ? `Messages, ${unreadCount} unread` : "Open messages"}
