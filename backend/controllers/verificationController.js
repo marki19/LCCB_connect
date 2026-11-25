@@ -379,10 +379,27 @@ const queue = async (req, res, next) => {
       if (normRole !== "admin" && normRole !== "superadmin") {
         return res.status(403).json({ error: "Forbidden: only admins can review guest requests" });
       }
-      const status = req.query.status || "pending";
+      const rawStatus = req.query.status;
+      const status = rawStatus === "all" ? null : (rawStatus || "pending");
       const limit = Math.min(Math.max(parseInt(req.query.limit || "50", 10) || 50, 1), 100);
       const rows = await guestAccessModel.listRequests({ status, limit });
-      return res.json({ requests: rows });
+      const requests = rows.map((r) => ({
+        id: r.id,
+        user_id: r.user_id,
+        username: r.username,
+        full_name: r.full_name,
+        email: r.email,
+        role: "guest",
+        status: r.status,
+        affiliation_type: r.affiliation_type,
+        affiliation_name: r.affiliation_name,
+        purpose: r.purpose,
+        location: r.location,
+        submitted_at: r.submitted_at,
+        decided_at: r.decided_at,
+        note: r.decision_note || r.note,
+      }));
+      return res.json({ requests });
     }
 
     const context = reviewerContext(req.profile);

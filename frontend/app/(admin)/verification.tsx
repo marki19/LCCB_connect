@@ -13,12 +13,15 @@ import {
   Building2,
   Calendar,
   CheckCircle2,
+  Globe,
   GraduationCap,
   IdCard,
   Inbox,
   Mail,
   Search,
   ShieldAlert,
+  UserCheck,
+  Users,
 } from "lucide-react-native";
 import { apiJson, ApiError } from "../../src/lib/api";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -55,6 +58,11 @@ interface VerificationRequest {
   submitted_at: string;
   decided_at?: string;
   decided_by_name?: string;
+  is_guest?: boolean;
+  affiliation_type?: string;
+  affiliation_name?: string;
+  purpose?: string;
+  location?: string;
 }
 
 const PAGE_SIZE = 20;
@@ -103,16 +111,22 @@ function formatDate(value?: string | null) {
  */
 function normalizeRequest(raw: any): VerificationRequest {
   const email: string = raw.email ?? raw.user_email ?? "";
+  const is_guest = Boolean(
+    raw.role === "guest" ||
+    raw.affiliation_type ||
+    raw.affiliation_name ||
+    raw.purpose
+  );
   return {
     id: raw.id,
     user_id: raw.user_id,
     username: raw.username ?? (email ? email.split("@")[0] : ""),
     email,
-    full_name: raw.full_name ?? "Unnamed account",
-    role: raw.role ?? "user",
+    full_name: raw.full_name ?? (is_guest ? "Guest Applicant" : "Unnamed account"),
+    role: raw.role ?? (is_guest ? "guest" : "user"),
     student_id: raw.student_id ?? "—",
     department_id: raw.department_id ?? "",
-    department_name: raw.department_name ?? "No department",
+    department_name: raw.department_name ?? (is_guest ? (raw.affiliation_name || "Guest Access") : "No department"),
     course_id: raw.course_id ?? "",
     course_name: raw.course_name ?? "Not set",
     year_level: raw.year_level ?? "Not set",
@@ -122,6 +136,11 @@ function normalizeRequest(raw: any): VerificationRequest {
     submitted_at: raw.submitted_at ?? raw.created_at ?? "",
     decided_at: raw.decided_at ?? raw.reviewed_at ?? undefined,
     decided_by_name: raw.decided_by_name ?? undefined,
+    is_guest,
+    affiliation_type: raw.affiliation_type ?? undefined,
+    affiliation_name: raw.affiliation_name ?? undefined,
+    purpose: raw.purpose ?? undefined,
+    location: raw.location ?? undefined,
   };
 }
 
@@ -246,12 +265,12 @@ function RequestCard({
               width: 38,
               height: 38,
               borderRadius: 19,
-              backgroundColor: colors.brandWash,
+              backgroundColor: item.is_guest ? colors.accentWash : colors.brandWash,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Text style={{ ...CONSOLE_TEXT.strong, fontSize: 13, color: colors.brand }}>
+            <Text style={{ ...CONSOLE_TEXT.strong, fontSize: 13, color: item.is_guest ? colors.accentText : colors.brand }}>
               {initials(item.full_name)}
             </Text>
           </View>
@@ -266,7 +285,7 @@ function RequestCard({
               numberOfLines={1}
               style={{ ...CONSOLE_TEXT.caption, color: colors.inkFaint, marginTop: 2 }}
             >
-              @{item.username || "student"} · submitted {formatDate(item.submitted_at)}
+              @{item.username || (item.is_guest ? "guest" : "student")} · {item.is_guest ? "Guest access declaration" : "Campus verification"} · submitted {formatDate(item.submitted_at)}
             </Text>
           </View>
           <StatusBadge label={STATUS_LABEL[item.status]} tone={STATUS_TONE[item.status]} />
@@ -281,17 +300,39 @@ function RequestCard({
           }}
         >
           <Detail icon={Mail} label="Email" value={item.email || "No email on file"} colors={colors} />
-          <Detail icon={IdCard} label="Student ID" value={item.student_id} colors={colors} />
-          <Detail icon={Building2} label="Department" value={item.department_name} colors={colors} />
-          <Detail
-            icon={GraduationCap}
-            label="Course and year"
-            value={`${item.course_name} · ${item.year_level}`}
-            colors={colors}
-          />
-          {item.birthdate ? (
-            <Detail icon={Calendar} label="Birthdate" value={item.birthdate} colors={colors} />
-          ) : null}
+          {item.is_guest ? (
+            <>
+              <Detail
+                icon={Building2}
+                label="Affiliation"
+                value={`${item.affiliation_name || "Not specified"} (${item.affiliation_type || "guest"})`}
+                colors={colors}
+              />
+              <Detail
+                icon={GraduationCap}
+                label="Purpose"
+                value={item.purpose || "Not specified"}
+                colors={colors}
+              />
+              {item.location ? (
+                <Detail icon={Globe} label="Location" value={item.location} colors={colors} />
+              ) : null}
+            </>
+          ) : (
+            <>
+              <Detail icon={IdCard} label="Student ID" value={item.student_id} colors={colors} />
+              <Detail icon={Building2} label="Department" value={item.department_name} colors={colors} />
+              <Detail
+                icon={GraduationCap}
+                label="Course and year"
+                value={`${item.course_name} · ${item.year_level}`}
+                colors={colors}
+              />
+              {item.birthdate ? (
+                <Detail icon={Calendar} label="Birthdate" value={item.birthdate} colors={colors} />
+              ) : null}
+            </>
+          )}
           {!isPending && item.decided_at ? (
             <Detail
               icon={CheckCircle2}
@@ -376,7 +417,10 @@ export default function AdminVerificationScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const canReview = isModeratorRole(profile?.role);
+  const normRole = (profile?.role || "").toLowerCase().replace(/[-_]/g, "");
+  const isFullAdmin = normRole === "admin" || normRole === "superadmin";
 
+  const [queueKind, setQueueKind] = useState<"campus" | "guest">("campus");
   const [requests, setRequests] = useState<VerificationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -395,7 +439,7 @@ export default function AdminVerificationScreen() {
 
   const cursorRef = useRef<string | null>(null);
   const loadedInitialRef = useRef(false);
-  const activeFilterRef = useRef(filterStatus);
+  const activeFilterRef = useRef({ filterStatus, queueKind });
 
   const horizontalPadding = width < 900 ? SPACE.x5 : width < 1400 ? SPACE.x6 : SPACE.x8;
 
@@ -406,6 +450,7 @@ export default function AdminVerificationScreen() {
 
       try {
         const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+        if (queueKind === "guest") params.append("kind", "guest");
         if (filterStatus !== "all") params.append("status", filterStatus);
         if (append && cursorRef.current) params.append("cursor", cursorRef.current);
 
@@ -431,7 +476,7 @@ export default function AdminVerificationScreen() {
         setRefreshing(false);
       }
     },
-    [filterStatus]
+    [filterStatus, queueKind]
   );
 
   useEffect(() => {
@@ -441,14 +486,18 @@ export default function AdminVerificationScreen() {
     }
   }, [canReview, loadQueue]);
 
-  // The backend filters by status, so a filter change refetches from the top.
-  // The ref keeps the mount pass from firing a second initial request.
+  // Refetches when filter status or queue kind changes.
   useEffect(() => {
-    if (activeFilterRef.current === filterStatus) return;
-    activeFilterRef.current = filterStatus;
+    if (
+      activeFilterRef.current.filterStatus === filterStatus &&
+      activeFilterRef.current.queueKind === queueKind
+    ) {
+      return;
+    }
+    activeFilterRef.current = { filterStatus, queueKind };
     cursorRef.current = null;
     void loadQueue(false);
-  }, [filterStatus, loadQueue]);
+  }, [filterStatus, queueKind, loadQueue]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -468,10 +517,16 @@ export default function AdminVerificationScreen() {
   const handleApprove = async (request: VerificationRequest) => {
     setApproving(request.id);
     try {
-      await apiJson(`/verification/${request.id}/approve`, { method: "POST" });
+      const query = request.is_guest ? "?kind=guest" : "";
+      await apiJson(`/verification/${request.id}/approve${query}`, {
+        method: "POST",
+        body: request.is_guest ? JSON.stringify({ kind: "guest" }) : undefined,
+      });
       setNotice({
         title: "Request approved",
-        message: "The student is verified and now has full access.",
+        message: request.is_guest
+          ? "The guest access declaration is approved."
+          : "The student is verified and now has full access.",
       });
       await refreshProfile();
       cursorRef.current = null;
@@ -506,23 +561,29 @@ export default function AdminVerificationScreen() {
     if (!note) {
       setNotice({
         title: "Reason required",
-        message: "Add a short reason so the student knows what to correct.",
+        message: "Add a short reason so the applicant knows what to correct.",
       });
       return;
     }
 
     setDeclining(true);
     try {
-      await apiJson(`/verification/${selectedRequest.id}/decline`, {
+      const query = selectedRequest.is_guest ? "?kind=guest" : "";
+      await apiJson(`/verification/${selectedRequest.id}/decline${query}`, {
         method: "POST",
-        body: JSON.stringify({ note }),
+        body: JSON.stringify({
+          note,
+          kind: selectedRequest.is_guest ? "guest" : undefined,
+        }),
       });
       setShowDeclineModal(false);
       setSelectedRequest(null);
       setDeclineNote("");
       setNotice({
         title: "Request declined",
-        message: "The student has been notified and can resubmit.",
+        message: selectedRequest.is_guest
+          ? "The guest application was declined."
+          : "The student has been notified and can resubmit.",
       });
       await refreshProfile();
       cursorRef.current = null;
@@ -543,9 +604,16 @@ export default function AdminVerificationScreen() {
     return requests.filter((request) => {
       if (filterStatus !== "all" && request.status !== filterStatus) return false;
       if (!query) return true;
-      return [request.full_name, request.username, request.student_id, request.email]
+      return [
+        request.full_name,
+        request.username,
+        request.student_id,
+        request.email,
+        request.affiliation_name,
+        request.purpose,
+      ]
         .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(query));
+        .some((value) => value!.toLowerCase().includes(query));
     });
   }, [requests, filterStatus, searchQuery]);
 
@@ -608,11 +676,103 @@ export default function AdminVerificationScreen() {
             <PageHeader
               eyebrow="Admin console"
               title="Verification"
-              description="Confirm that a student's details match their record. Approving grants full access; declining asks them to correct the submission."
+              description={
+                queueKind === "guest"
+                  ? "Review guest access declarations. Approving grants guest privileges; declining asks them to resubmit."
+                  : "Confirm that a student's details match their record. Approving grants full access; declining asks them to correct the submission."
+              }
               meta={meta}
               onRefresh={handleRefresh}
               refreshing={refreshing || (loading && requests.length > 0)}
             />
+
+            {isFullAdmin ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: SPACE.x2,
+                  marginBottom: SPACE.x4,
+                }}
+              >
+                <Pressable
+                  accessibilityRole="tab"
+                  accessibilityLabel="Campus Members"
+                  accessibilityState={{ selected: queueKind === "campus" }}
+                  onPress={() => {
+                    if (queueKind !== "campus") {
+                      setQueueKind("campus");
+                      cursorRef.current = null;
+                    }
+                  }}
+                  style={[
+                    {
+                      minHeight: 38,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: SPACE.x2,
+                      paddingHorizontal: SPACE.x4,
+                      borderRadius: RADIUS.md,
+                      borderWidth: 1,
+                      borderColor: queueKind === "campus" ? colors.brandSolid : colors.line,
+                      backgroundColor: queueKind === "campus" ? colors.brandSolid : colors.panel,
+                    },
+                  ]}
+                >
+                  <Users
+                    size={16}
+                    color={queueKind === "campus" ? colors.textOnBrandSolid : colors.inkSoft}
+                  />
+                  <Text
+                    style={{
+                      ...CONSOLE_TEXT.caption,
+                      fontWeight: "700",
+                      color: queueKind === "campus" ? colors.textOnBrandSolid : colors.ink,
+                    }}
+                  >
+                    Campus Members
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="tab"
+                  accessibilityLabel="Guest Access Requests"
+                  accessibilityState={{ selected: queueKind === "guest" }}
+                  onPress={() => {
+                    if (queueKind !== "guest") {
+                      setQueueKind("guest");
+                      cursorRef.current = null;
+                    }
+                  }}
+                  style={[
+                    {
+                      minHeight: 38,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: SPACE.x2,
+                      paddingHorizontal: SPACE.x4,
+                      borderRadius: RADIUS.md,
+                      borderWidth: 1,
+                      borderColor: queueKind === "guest" ? colors.brandSolid : colors.line,
+                      backgroundColor: queueKind === "guest" ? colors.brandSolid : colors.panel,
+                    },
+                  ]}
+                >
+                  <Globe
+                    size={16}
+                    color={queueKind === "guest" ? colors.textOnBrandSolid : colors.inkSoft}
+                  />
+                  <Text
+                    style={{
+                      ...CONSOLE_TEXT.caption,
+                      fontWeight: "700",
+                      color: queueKind === "guest" ? colors.textOnBrandSolid : colors.ink,
+                    }}
+                  >
+                    Guest Access Requests
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             <View
               style={{
@@ -641,7 +801,11 @@ export default function AdminVerificationScreen() {
                 <TextInput
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholder="Search name, student ID or email"
+                  placeholder={
+                    queueKind === "guest"
+                      ? "Search name, affiliation or email"
+                      : "Search name, student ID or email"
+                  }
                   placeholderTextColor={colors.inkFaint}
                   accessibilityLabel="Search verification requests"
                   onFocus={() => setSearchFocused(true)}
@@ -715,7 +879,11 @@ export default function AdminVerificationScreen() {
                   searchQuery.trim()
                     ? "Try a different search term or status filter."
                     : filterStatus === "pending"
-                    ? "All caught up. New verification requests will appear here."
+                    ? queueKind === "guest"
+                      ? "All caught up. New guest access declarations will appear here."
+                      : "All caught up. New verification requests will appear here."
+                    : queueKind === "guest"
+                    ? "Requests will appear here once guest applicants submit their details."
                     : "Requests will appear here once students submit their details."
                 }
               />
