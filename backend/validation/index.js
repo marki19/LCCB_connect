@@ -364,6 +364,7 @@ const verificationOtpSchema = z.object({}).strict();
 const verificationDecisionSchema = z
   .object({
     note: z.string().trim().min(3, "Give a reason of at least 3 characters").max(300),
+    kind: z.enum(["campus", "guest"]).optional(),
   })
   .strict();
 

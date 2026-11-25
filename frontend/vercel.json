@@ -5,5 +5,10 @@
   "outputDirectory": "dist",
   "devCommand": "expo",
   "cleanUrls": true,
-  "rewrites": [{ "source": "/:path*", "destination": "/" }]
+  "rewrites": [
+    {
+      "source": "/((?!_expo/|assets/|favicon\\.ico|manifest\\.json|.*\\..*).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
