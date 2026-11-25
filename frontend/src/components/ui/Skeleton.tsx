@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { Animated, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { RADIUS } from "../../lib/tokens";
@@ -16,7 +16,7 @@ type SkeletonProps = {
  */
 export function Skeleton({ width = "100%", height = 16, radius = RADIUS.md, style }: SkeletonProps) {
   const { colors } = useTheme();
-  const opacityAnim = useRef(new Animated.Value(0.55)).current;
+  const opacityAnim = useMemo(() => new Animated.Value(0.55), []);
 
   useEffect(() => {
     const animation = Animated.loop(

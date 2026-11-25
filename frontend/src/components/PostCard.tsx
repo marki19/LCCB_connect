@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { View, Text, TouchableOpacity, Pressable, Linking, Alert, Animated, Platform, type StyleProp, type ViewStyle } from "react-native";
+import { useState, useRef, useCallback, useMemo } from "react";
+import { View, Text, TouchableOpacity, Pressable, Linking, Alert, Animated, Platform, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
 import { Heart, MessageCircle, Share2, ExternalLink, Globe, Users, UserCheck, Lock, MoreVertical, Building2, Megaphone } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Post } from "../types";
@@ -132,11 +132,24 @@ export default function PostCard({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useMemo(() => new Animated.Value(1), []);
+  const menuButtonRef = useRef<any>(null);
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
 
   const { profile } = useAuth();
   const { colors } = useTheme();
   const isOwner = !!profile?.id && profile.id === post.author.id;
+
+  const openMenu = useCallback(() => {
+    if (menuButtonRef.current) {
+      menuButtonRef.current.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+        // pageX/pageY is the top-left of the button in window coordinates
+        setMenuOpen(true);
+      });
+    } else {
+      setMenuOpen(true);
+    }
+  }, []);
 
   const handleEdit = () => {
     if (post.type === "thesis" && post.kind !== "repository") {
@@ -341,7 +354,8 @@ export default function PostCard({
           ) : null}
           <Text style={{ fontSize: 11, color: colors.textTertiary }}>{post.createdAt}</Text>
           <Pressable
-            onPress={() => setMenuOpen(true)}
+            ref={menuButtonRef}
+            onPress={openMenu}
             accessibilityRole="button"
             accessibilityLabel="Post actions"
             hitSlop={8}
@@ -427,12 +441,12 @@ export default function PostCard({
                     width: 40,
                     height: 40,
                     borderRadius: 10,
-                    backgroundColor: "rgba(2, 132, 199, 0.15)",
+                    backgroundColor: colors.infoSurface,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Globe size={22} color="#0284C7" />
+                  <Globe size={22} color={colors.info} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "700", color: colors.textPrimary }}>

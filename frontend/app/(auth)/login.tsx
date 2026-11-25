@@ -434,7 +434,12 @@ export default function LoginScreen() {
   );
 
   return (
-    <AuthScaffold title="Welcome back" subtitle="Sign in to LCCB Connect" footer={footer}>
+    <AuthScaffold 
+      title="Welcome back!" 
+      subtitle="Sign in to LCCB Connect" 
+      footer={footer}
+      backgroundIntensity="high"
+    >
       {successMessage ? <Alert tone="success" message={successMessage} /> : null}
       {errorMessage ? <Alert tone="error" message={errorMessage} /> : null}
 

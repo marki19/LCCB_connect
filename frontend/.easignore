@@ -1,0 +1,47 @@
+# Backend API & Server (Never package backend with the mobile app)
+backend/
+../backend/
+server/
+api/
+
+# Documentation, Diagrams & Implementation Plans
+docs/
+../docs/
+*.drawio
+*.drawio.png
+*.drawio.svg
+implementation_plans/
+../implementation_plans/
+*.md
+
+# Tests, Mock files, & Coverage
+tests/
+__tests__/
+*.test.js
+*.test.ts
+*.test.tsx
+*.spec.js
+*.spec.ts
+*.spec.tsx
+coverage/
+.vitest/
+
+# Git & GitHub
+.git/
+.github/
+
+# Local state & AI tooling
+.desloppify/
+.superpowers/
+.kilo/
+.thinkrail/
+.cursor/
+.vscode/
+.idea/
+
+# Logs & temp files
+*.log
+session.json
+temp_status.json
+*.tmp.*
+*.tmp

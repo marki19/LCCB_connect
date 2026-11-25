@@ -142,6 +142,13 @@ export const LIGHT_TOKENS = {
   bubblePeerText: "#0B1B33",
   textOnActionMuted: "#D8E2F8",
 
+  // Presence (theme-aware)
+  presenceOnline: "#0B7C5C",
+  presenceAway: "#C98A00",
+  presenceBusy: "#C0392B",
+  presenceDnd: "#8B5CF6",
+  presenceInvisible: "#9AA3B2",
+
   // Sidebar (admin)
   sidebarBg: "#0A1830",
   sidebarBorder: "rgba(246, 242, 232, 0.10)",
@@ -180,6 +187,39 @@ export const LIGHT_TOKENS = {
   accentBright: "#F2B21B",
   accentText: "#8A5C00",
   accentWash: "#FBF0D2",
+
+  // ── Theme accent colors (user-selectable) ────────────────────────────────
+  // These provide a modern SaaS personalization system. The default
+  // preserves the existing cobalt branding; users can switch any of
+  // the following to instantly update buttons, links, focus states, badges, etc.
+  accentColor: {
+    light: {
+      default: "#0E3C9C",
+      indigo: "#4F46E5",
+      teal: "#10B981",
+      green: "#22C55E",
+      olive: "#84CC16",
+      yellow: "#F59E0B",
+      orange: "#F97316",
+      red: "#DC2626",
+      rose: "#F43F5E",
+      pink: "#DB2777",
+      purple: "#8B5CF6",
+    },
+    dark: {
+      default: "#6E9BFF",
+      indigo: "#6366F1",
+      teal: "#059669",
+      green: "#14B8A6",
+      olive: "#65D174",
+      yellow: "#FACC15",
+      orange: "#F97316",
+      red: "#FF4D4F",
+      rose: "#FDA4AF",
+      pink: "#EC4899",
+      purple: "#A78BFA",
+    },
+  },
 
   // ── Editorial layer: jade ────────────────────────────────────────────────
   jade: "#0B7C5C",
@@ -268,6 +308,36 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
   action: "#6E9BFF",
   actionSurface: "rgba(110, 155, 255, 0.14)",
   actionSurfaceAlt: "rgba(110, 155, 255, 0.22)",
+
+  // Theme accent color (overridden by user preference in ThemeContext)
+  accentColor: {
+    light: {
+      default: "#0E3C9C",
+      indigo: "#4F46E5",
+      teal: "#10B981",
+      green: "#22C55E",
+      olive: "#84CC16",
+      yellow: "#F59E0B",
+      orange: "#F97316",
+      red: "#DC2626",
+      rose: "#F43F5E",
+      pink: "#DB2777",
+      purple: "#8B5CF6",
+    },
+    dark: {
+      default: "#6E9BFF",
+      indigo: "#6366F1",
+      teal: "#059669",
+      green: "#14B8A6",
+      olive: "#65D174",
+      yellow: "#FACC15",
+      orange: "#F97316",
+      red: "#FF4D4F",
+      rose: "#FDA4AF",
+      pink: "#EC4899",
+      purple: "#A78BFA",
+    },
+  },
 
   // Semantic: Destructive / Danger
   destructive: "#FF8B7E",
@@ -411,6 +481,13 @@ export const DARK_TOKENS: typeof LIGHT_TOKENS = {
 
   // ── Editorial layer: iris (Do Not Disturb presence) ──────────────────────
   irisBright: "#A78BFA",
+
+  // ── Presence (theme-aware) ───────────────────────────────────────────────
+  presenceOnline: "#17A97C",
+  presenceAway: "#F2B21B",
+  presenceBusy: "#FF8B7E",
+  presenceDnd: "#A78BFA",
+  presenceInvisible: "#62748F",
 
   // ── Command sidebar ──────────────────────────────────────────────────────
   navBg: "#060B14",

@@ -8,7 +8,7 @@
  * Outside click / Escape closes the active panel.
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef } from "react";
 import {
   View,
   Text,
@@ -33,11 +33,12 @@ import {
   FolderGit2,
 } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
+import { useNotifications } from "../../contexts/NotificationsContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useFeedFilter, type FeedCategory } from "../../contexts/FeedFilterContext";
 import { RADIUS, SPACE, TYPE, elevation } from "../../lib/tokens";
 import { getSearchSuggestions, apiJson } from "../../lib/api";
-import { onMessage, onConversation, onNotification, onUnreadRefresh } from "../../lib/realtime";
+import { onMessage, onConversation, onUnreadRefresh } from "../../lib/realtime";
 import Avatar from "../Avatar";
 import HoverLabel from "../ui/HoverLabel";
 import MenuPopover from "./MenuPopover";
@@ -58,15 +59,14 @@ const CATEGORY_TABS = [
 
 interface DesktopTopBarProps {
   unreadCount?: number;
-  notificationCount?: number;
 }
 
 export default function DesktopTopBar({
   unreadCount = 0,
-  notificationCount = 0,
 }: DesktopTopBarProps) {
   const { colors } = useTheme();
   const { profile } = useAuth();
+  const { unreadCount: unreadNotifications } = useNotifications();
   const { activeCategory, setCategory } = useFeedFilter();
   const router = useRouter();
   const segments = useSegments();
@@ -76,17 +76,19 @@ export default function DesktopTopBar({
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [liveUnreadCount, setLiveUnreadCount] = useState(unreadCount);
-  const [liveNotificationCount, setLiveNotificationCount] = useState(notificationCount);
   const barRef = useRef<any>(null);
+  const menuAnchorRef = useRef<any>(null);
+  const chatsAnchorRef = useRef<any>(null);
+  const notificationsAnchorRef = useRef<any>(null);
+  const accountAnchorRef = useRef<any>(null);
 
-  // Sync prop changes
-  useEffect(() => {
+  // Adopt a changed prop during render (React's recommended alternative to a
+  // sync effect); the live subscription below then takes over.
+  const [syncedUnreadCount, setSyncedUnreadCount] = useState(unreadCount);
+  if (syncedUnreadCount !== unreadCount) {
+    setSyncedUnreadCount(unreadCount);
     setLiveUnreadCount(unreadCount);
-  }, [unreadCount]);
-
-  useEffect(() => {
-    setLiveNotificationCount(notificationCount);
-  }, [notificationCount]);
+  }
 
   // Initial fetch and Realtime subscriptions
   useEffect(() => {
@@ -103,15 +105,8 @@ export default function DesktopTopBar({
       })
       .catch(() => {});
 
-    // Fetch initial notification unread count
-    apiJson<{ unread: number }>("/notifications/unread-count")
-      .then((data) => {
-        if (!cancelled && typeof data?.unread === "number") {
-          setLiveNotificationCount(data.unread);
-        }
-      })
-      .catch(() => {});
-
+    // Shared resync for anything that changes the authoritative unread count
+    // (new messages, reconnect, seen receipts, local read events).
     const refetchUnread = () => {
       apiJson<{ unread: number }>("/conversations/unread-count")
         .then((data) => {
@@ -145,19 +140,11 @@ export default function DesktopTopBar({
       refetchUnread();
     });
 
-    // Listen for realtime notifications
-    const unsubNotif = onNotification((evt) => {
-      if (evt.action === "INSERT" && !evt.notification.is_read) {
-        setLiveNotificationCount((c) => c + 1);
-      }
-    });
-
     return () => {
       cancelled = true;
       unsubMsg();
       unsubUnread();
       unsubConv();
-      unsubNotif();
     };
   }, [profile?.id, profile?.role]);
 
@@ -413,6 +400,7 @@ export default function DesktopTopBar({
         <View style={styles.right}>
           {/* Grid / Menu */}
           <TopBarButton
+            ref={menuAnchorRef}
             onPress={() => toggle("menu")}
             active={activePopover === "menu"}
             accessibilityLabel="Open menu"
@@ -424,6 +412,7 @@ export default function DesktopTopBar({
 
           {/* Chats */}
           <TopBarButton
+            ref={chatsAnchorRef}
             onPress={() => toggle("chats")}
             active={activePopover === "chats"}
             accessibilityLabel="Open chats"
@@ -436,18 +425,20 @@ export default function DesktopTopBar({
 
           {/* Notifications */}
           <TopBarButton
+            ref={notificationsAnchorRef}
             onPress={() => toggle("notifications")}
             active={activePopover === "notifications"}
             accessibilityLabel="Open notifications"
             label="Notifications"
             colors={colors}
-            badge={liveNotificationCount}
+            badge={unreadNotifications}
           >
             <Bell size={18} color={colors.ink} strokeWidth={2} />
           </TopBarButton>
 
           {/* Account */}
           <Pressable
+            ref={accountAnchorRef}
             onPress={() => toggle("account")}
             onHoverIn={() => setAccountHovered(true)}
             onHoverOut={() => setAccountHovered(false)}
@@ -482,19 +473,19 @@ export default function DesktopTopBar({
 
       {/* ── POPOVERS ── render above the fixed trap layer (zIndex 1001) */}
       {activePopover === "menu" && (
-        <MenuPopover onClose={closeAll} />
+        <MenuPopover onClose={closeAll} anchorRef={menuAnchorRef} />
       )}
       {activePopover === "chats" && (
-        <ChatsPopover onClose={closeAll} unreadCount={liveUnreadCount} />
+        <ChatsPopover onClose={closeAll} anchorRef={chatsAnchorRef} unreadCount={liveUnreadCount} />
       )}
       {activePopover === "notifications" && (
         <NotificationsPopover
           onClose={closeAll}
-          onClearUnread={() => setLiveNotificationCount(0)}
+          anchorRef={notificationsAnchorRef}
         />
       )}
       {activePopover === "account" && (
-        <AccountPopover onClose={closeAll} />
+        <AccountPopover onClose={closeAll} anchorRef={accountAnchorRef} />
       )}
     </>
   );
@@ -514,7 +505,7 @@ interface TopBarButtonProps {
   children: React.ReactNode;
 }
 
-function TopBarButton({
+const TopBarButton = forwardRef<any, TopBarButtonProps>(function TopBarButton({
   onPress,
   active,
   accessibilityLabel,
@@ -522,10 +513,11 @@ function TopBarButton({
   badge,
   colors,
   children,
-}: TopBarButtonProps) {
+}, ref) {
   const [hovered, setHovered] = useState(false);
   return (
     <Pressable
+      ref={ref}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
@@ -555,7 +547,7 @@ function TopBarButton({
       <HoverLabel label={label} visible={hovered} top={TOP_BAR_HEIGHT - 4} />
     </Pressable>
   );
-}
+});
 
 // ── NavTab ───────────────────────────────────────────────────────────────────
 

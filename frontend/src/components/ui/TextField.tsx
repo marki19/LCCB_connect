@@ -99,7 +99,7 @@ const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldProps>(fun
           fontSize: 13,
           lineHeight: 18,
           fontWeight: "600",
-          color: colors.textSecondary,
+          color: colors.textPrimary,
           marginBottom: SPACE.x2,
         }}
       >
@@ -130,7 +130,7 @@ const TextField = forwardRef<ComponentRef<typeof TextInput>, TextFieldProps>(fun
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={colors.textTertiary}
+          placeholderTextColor={colors.textMuted}
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}

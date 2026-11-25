@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
 import {
   Animated,
   Easing,
@@ -33,7 +33,7 @@ function RefreshButton({
   label?: string;
 }) {
   const { colors } = useTheme();
-  const spinAnim = useRef(new Animated.Value(0)).current;
+  const spinAnim = useMemo(() => new Animated.Value(0), []);
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
 

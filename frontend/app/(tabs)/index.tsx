@@ -46,8 +46,8 @@ import {
   type ThemeTokens,
 } from "../../src/lib/tokens";
 import StatusBadge from "../../src/components/admin/StatusBadge";
-import EmptyState from "../../src/components/admin/EmptyState";
 import { Skeleton } from "../../src/components/ui/Skeleton";
+import EmptyState from "../../src/components/ui/EmptyState";
 import IdentityBanner from "../../src/components/IdentityBanner";
 import SuggestionCarousel from "../../src/components/SuggestionCarousel";
 import { resolveFileUrl, resolveFileUrls } from "../../src/lib/files";
@@ -438,14 +438,14 @@ export default function HomeScreen() {
                       gap: SPACE.x3,
                       borderRadius: RADIUS.lg,
                       borderWidth: 1,
-                      borderColor: colors.coral,
-                      backgroundColor: colors.coralWash,
+                      borderColor: colors.destructive,
+                      backgroundColor: colors.destructiveSurface,
                       padding: SPACE.x3,
                     }}
                   >
-                    <WifiOff size={17} color={colors.coralText} />
+                    <WifiOff size={17} color={colors.destructiveText} />
                     <Text
-                      style={{ ...TYPE.caption, fontWeight: "600", color: colors.coralText, flex: 1 }}
+                      style={{ ...TYPE.caption, fontWeight: "600", color: colors.destructiveText, flex: 1 }}
                     >
                       {error}
                     </Text>
@@ -458,13 +458,13 @@ export default function HomeScreen() {
                         justifyContent: "center",
                         borderRadius: RADIUS.pill,
                         borderWidth: 1,
-                        borderColor: colors.coral,
+                        borderColor: colors.destructive,
                         paddingHorizontal: SPACE.x3,
                         opacity: pressed ? 0.8 : 1,
                       })}
                     >
                       <Text
-                        style={{ ...TYPE.caption, fontWeight: "700", color: colors.coralText }}
+                        style={{ ...TYPE.caption, fontWeight: "700", color: colors.destructiveText }}
                       >
                         Retry
                       </Text>

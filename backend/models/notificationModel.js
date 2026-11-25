@@ -67,7 +67,9 @@ const markAllAsRead = async (userId) => {
   const sql = `
     UPDATE public.notifications
     SET is_read = TRUE
-    WHERE user_id = $1 AND is_read = FALSE
+    WHERE user_id = $1
+      AND is_read = FALSE
+      AND type NOT IN ${EXCLUDED_TYPES}
     RETURNING id;
   `;
   const result = await db.query(sql, [userId]);

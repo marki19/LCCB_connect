@@ -423,12 +423,12 @@ export default function CreatePostModal() {
       }
       const finalImageKey = finalImageKeys.length > 0 ? finalImageKeys[0] : null;
 
-      const uploadedDocs: Array<{
+      const uploadedDocs: {
         key: string;
         name: string;
         mime: string;
         size?: number | null;
-      }> = [];
+      }[] = [];
       for (const doc of docList) {
         if (doc.key) {
           uploadedDocs.push({

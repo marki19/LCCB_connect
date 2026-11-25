@@ -156,14 +156,20 @@ describe("POST /api/verification/otp", () => {
     assert.equal(otp.issue.calls.length, 1);
   });
 
-  it("refuses an account that is not a school account", async () => {
+  it("emails a code to other users (non-school accounts)", async () => {
     profile = baseProfile({ email: "ana@gmail.com" });
+    otp.issue.setImpl(async () => ({
+      code: "654321",
+      expiresAt: "2026-11-12T10:10:00.000Z",
+    }));
 
     const res = await request(app).post("/api/verification/otp").set(AUTH).send({});
 
-    assert.equal(res.status, 403);
-    assert.match(res.body.error, /lccbonline/);
-    assert.equal(otp.issue.calls.length, 0);
+    assert.equal(res.status, 202);
+    assert.equal(otp.issue.calls.length, 1);
+    assert.equal(mail.calls.length, 1);
+    assert.equal(mail.calls[0][0].to, "ana@gmail.com");
+    assert.equal(mail.calls[0][0].otpCode, "654321");
   });
 
   it("emails a code to the caller's own school address", async () => {
@@ -183,13 +189,26 @@ describe("POST /api/verification/otp", () => {
 });
 
 describe("POST /api/verification", () => {
-  it("rejects a submission without a code", async () => {
+  it("rejects a submission without a code for other users", async () => {
+    profile = baseProfile({ email: "ana@gmail.com" });
     const { otp_code, ...body } = studentBody;
 
     const res = await request(app).post("/api/verification").set(AUTH).send(body);
 
     assert.equal(res.status, 400);
     assert.equal(model.createPending.calls.length, 0);
+  });
+
+  it("accepts a submission without a code for lccb accounts", async () => {
+    profile = baseProfile({ email: "ana@lccbonline.edu.ph" });
+    model.createPending.setImpl(async () => pendingRequest());
+    model.resolveReviewers.setImpl(async () => [{ id: "dept-admin" }]);
+
+    const { otp_code, ...body } = studentBody;
+    const res = await request(app).post("/api/verification").set(AUTH).send(body);
+
+    assert.equal(res.status, 201);
+    assert.equal(model.createPending.calls.length, 1);
   });
 
   it("rejects a body that tries to set its own role", async () => {
@@ -353,6 +372,18 @@ describe("PUT /api/verification/mine", () => {
     assert.equal(res.status, 200);
     assert.equal(otp.verifyAndConsume.calls.length, 1);
     assert.equal(model.updatePending.calls[0][1].role, "student");
+  });
+
+  it("updates a pending request without a code for lccb accounts", async () => {
+    profile = baseProfile({ email: "ana@lccbonline.edu.ph" });
+    model.getLatestForUser.setImpl(async () => pendingRequest());
+    model.updatePending.setImpl(async () => pendingRequest());
+
+    const { otp_code, ...body } = studentBody;
+    const res = await request(app).put("/api/verification/mine").set(AUTH).send(body);
+
+    assert.equal(res.status, 200);
+    assert.equal(model.updatePending.calls.length, 1);
   });
 
   it("keeps the role the pending request was filed under", async () => {

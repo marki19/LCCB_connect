@@ -126,8 +126,8 @@ export default function DesktopLeftRail() {
               onPress={() => router.push("/(tabs)/friends")}
               style={itemRowStyle(isFriendsActive)}
             >
-              <View style={[styles.iconCircle, { backgroundColor: "#1877F2" }]}>
-                <Users size={20} color="#FFFFFF" />
+              <View style={[styles.iconCircle, { backgroundColor: colors.brand }]}>
+                <Users size={20} color={colors.textOnPrimary} />
               </View>
               <Text style={[styles.itemLabel, { color: colors.textPrimary }]}>
                 Friends
@@ -149,8 +149,8 @@ export default function DesktopLeftRail() {
             onPress={() => router.push("/(tabs)/search")}
             style={itemRowStyle(isSearchActive)}
           >
-            <View style={[styles.iconCircle, { backgroundColor: "#10B981" }]}>
-              <BookOpen size={20} color="#FFFFFF" />
+            <View style={[styles.iconCircle, { backgroundColor: colors.success }]}>
+              <BookOpen size={20} color={colors.textOnPrimary} />
             </View>
             <Text style={[styles.itemLabel, { color: colors.textPrimary }]}>
               Repository
@@ -168,8 +168,8 @@ export default function DesktopLeftRail() {
             onPress={() => router.push("/(tabs)/capstones")}
             style={itemRowStyle(isCapstonesActive)}
           >
-            <View style={[styles.iconCircle, { backgroundColor: "#F59E0B" }]}>
-              <GraduationCap size={20} color="#FFFFFF" />
+            <View style={[styles.iconCircle, { backgroundColor: colors.warning }]}>
+              <GraduationCap size={20} color={colors.textOnPrimary} />
             </View>
             <Text style={[styles.itemLabel, { color: colors.textPrimary }]}>
               Capstones
@@ -184,8 +184,8 @@ export default function DesktopLeftRail() {
               onPress={() => router.push("/(tabs)/notifications")}
               style={itemRowStyle(isNotificationsActive)}
             >
-              <View style={[styles.iconCircle, { backgroundColor: "#8B5CF6" }]}>
-                <Bell size={20} color="#FFFFFF" />
+              <View style={[styles.iconCircle, { backgroundColor: colors.brandDeep }]}>
+                <Bell size={20} color={colors.textOnPrimary} />
               </View>
               <Text style={[styles.itemLabel, { color: colors.textPrimary }]}>
                 Notifications

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, Keyboard } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, Keyboard, Platform } from "react-native";
 import { X, Send, Edit3, Share2 } from "lucide-react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import { RADIUS, SPACE } from "../lib/tokens";
@@ -119,21 +119,63 @@ const createStyles = (colors: any) => StyleSheet.create({
     color: colors.textOnPrimary,
     marginLeft: SPACE.x2,
   },
+  charCountWarning: {
+    color: colors.warning,
+  },
+  charCountDanger: {
+    color: colors.destructive,
+  },
 });
 
 export default function RepostDialog({ postId, isOpen, onClose, onSuccess }: RepostDialogProps) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const containerRef = useRef<any>(null);
+  const previouslyFocused = useRef<any>(null);
 
   const [mode, setMode] = useState<"instant" | "caption">("instant");
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (!isOpen) return null;
+  // Focus management for accessibility
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (Platform.OS === "web") {
+      const doc: any = (globalThis as any).document;
+      previouslyFocused.current = doc?.activeElement ?? null;
+    }
+
+    const timeout = setTimeout(() => {
+      containerRef.current?.focus?.();
+    }, 50);
+    return () => {
+      clearTimeout(timeout);
+      if (Platform.OS === "web" && previouslyFocused.current) {
+        try {
+          previouslyFocused.current.focus?.();
+        } catch {}
+      }
+    };
+  }, [isOpen]);
+
+  // Escape key handler
+  useEffect(() => {
+    if (!isOpen || Platform.OS !== "web") return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   const handlePost = async () => {
     if (loading) return;
-    
+
     if (mode === "caption" && !caption.trim()) {
       Alert.alert("Add a caption", "Please enter a caption or choose \"Repost\" to share without one.");
       return;
@@ -164,42 +206,72 @@ export default function RepostDialog({ postId, isOpen, onClose, onSuccess }: Rep
   const handleBack = () => {
     setMode("instant");
     setCaption("");
-    Keyboard.dismiss();
+    if (Platform.OS !== "web") {
+      Keyboard.dismiss();
+    }
   };
 
+  if (!isOpen) return null;
+
+  const charCount = caption.length;
+  const isNearLimit = charCount > 260;
+  const isOverLimit = charCount > 280;
+
   return (
-    <TouchableOpacity style={styles.overlay} onPress={onClose} accessible={false}>
-      <TouchableOpacity style={styles.container} onPress={() => {}} accessible={false}>
-        <View style={styles.handle} />
-        
+    <TouchableOpacity
+      style={styles.overlay}
+      onPress={onClose}
+      accessible={false}
+      accessibilityRole="button"
+      accessibilityLabel="Close repost dialog"
+    >
+      <TouchableOpacity
+        ref={containerRef}
+        style={[styles.container, { elevation: 20 }]}
+        onPress={() => {}}
+        accessible={false}
+        accessibilityViewIsModal
+        accessibilityRole="dialog"
+        accessibilityLabel="Repost dialog"
+        importantForAccessibility="yes"
+      >
+        <View style={styles.handle} accessible={false} accessibilityElementsHidden={true} importantForAccessibility="no-hide-descendants" />
+
         {mode === "instant" ? (
           <>
             <Text style={styles.title}>Repost</Text>
-            
+
             <TouchableOpacity
               style={[styles.optionButton, styles.optionButtonActive]}
-              onPress={() => handlePost()}
+              onPress={handlePost}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Repost without caption"
+              accessibilityState={{ selected: true }}
             >
               <Share2 size={22} color={colors.primary} style={styles.optionIcon} strokeWidth={2} />
               <Text style={[styles.optionText, styles.optionTextActive]}>Repost</Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={styles.optionButton}
               onPress={() => setMode("caption")}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Repost with caption"
             >
               <Edit3 size={22} color={colors.textSecondary} style={styles.optionIcon} />
               <Text style={styles.optionText}>Repost with Caption</Text>
             </TouchableOpacity>
-            
-            <View style={styles.divider} />
-            
+
+            <View style={styles.divider} accessible={false} accessibilityElementsHidden={true} importantForAccessibility="no-hide-descendants" />
+
             <TouchableOpacity
               style={styles.optionButton}
               onPress={onClose}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel repost"
             >
               <X size={22} color={colors.textTertiary} style={styles.optionIcon} />
               <Text style={[styles.optionText, { color: colors.textTertiary }]}>Cancel</Text>
@@ -211,13 +283,15 @@ export default function RepostDialog({ postId, isOpen, onClose, onSuccess }: Rep
               style={{ flexDirection: "row", alignItems: "center", marginBottom: SPACE.x2 }}
               onPress={handleBack}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Back to repost options"
             >
               <X size={24} color={colors.textSecondary} />
               <Text style={{ fontSize: 16, fontWeight: "600", color: colors.textPrimary, marginLeft: SPACE.x3 }}>Add a caption</Text>
             </TouchableOpacity>
-            
-            <View style={styles.divider} />
-            
+
+            <View style={styles.divider} accessible={false} accessibilityElementsHidden={true} importantForAccessibility="no-hide-descendants" />
+
             <Text style={styles.composerLabel}>Your thoughts (optional)</Text>
             <TextInput
               style={styles.composerInput}
@@ -228,20 +302,34 @@ export default function RepostDialog({ postId, isOpen, onClose, onSuccess }: Rep
               maxLength={280}
               autoFocus
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Caption for repost"
+              accessibilityHint="Optional. Add your thoughts about this post."
             />
-            
+
             <View style={styles.composerFooter}>
-              <Text style={styles.charCount}>{caption.length}/280</Text>
+              <Text
+                style={[
+                  styles.charCount,
+                  isOverLimit && styles.charCountDanger,
+                  isNearLimit && !isOverLimit && styles.charCountWarning,
+                ]}
+                accessibilityLiveRegion="polite"
+              >
+                {charCount}/280
+              </Text>
               <TouchableOpacity
                 style={[
                   styles.postButton,
                   loading || (!caption.trim() && mode === "caption") ? styles.postButtonDisabled : {},
                 ]}
                 onPress={handlePost}
-                disabled={loading}
+                disabled={loading || (!caption.trim() && mode === "caption")}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Post repost with caption"
+                accessibilityState={{ disabled: loading || (!caption.trim() && mode === "caption") }}
               >
-                <Send size={18} color={colors.textOnPrimary} />
+                <Send size={18} color={colors.textOnPrimary}  />
                 <Text style={styles.postButtonText}>
                   {loading ? "Posting..." : "Post"}
                 </Text>

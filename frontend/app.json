@@ -8,7 +8,8 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lccb.connect"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +18,15 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.lccb.connect",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "single"
@@ -33,7 +42,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-video"
+      "expo-video",
+      "@react-native-google-signin/google-signin"
     ]
   }
 }

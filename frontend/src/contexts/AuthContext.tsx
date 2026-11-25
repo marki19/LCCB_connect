@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useTheme } from './ThemeContext';
 import {
   getSession,
   subscribe,
@@ -111,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // because the account no longer exists.
   const [authNotice, setAuthNotice] = useState<string | null>(null);
 
+  const { resetTheme } = useTheme();
   const clearAuthNotice = useCallback(() => setAuthNotice(null), []);
 
   const signInAsGuest = async () => {
@@ -139,6 +141,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
     setProfileStatus("idle");
     await logout();
+    // A new session must not inherit the previous account's appearance.
+    await resetTheme();
   };
 
   const fetchProfile = async (userId: string) => {
@@ -169,6 +173,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         setProfileStatus("error");
         await logout();
+        // Deleted accounts end the session implicitly — reset appearance too.
+        await resetTheme();
         return;
       }
 

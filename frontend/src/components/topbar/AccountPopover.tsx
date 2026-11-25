@@ -5,13 +5,13 @@
  * Choosing "Theme" slides panel 1 in from the right; its back arrow returns.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
-  Platform,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { ArrowLeft, ChevronRight, LogOut, Palette, Settings, Shield } from "lucide-react-native";
@@ -25,7 +25,7 @@ import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import Avatar from "../Avatar";
 import ThemeOptions from "../settings/ThemeOptions";
 import SlideSwitcher from "../ui/SlideSwitcher";
-import { TOP_BAR_HEIGHT } from "./constants";
+import { usePopoverPosition, getArrowStyle, getBorderArrowStyle } from "../../lib/popoverPosition";
 
 /** Outer width of the panel, including its 1px border. */
 const POPOVER_WIDTH = 280;
@@ -37,11 +37,17 @@ type AccountPanel = "menu" | "theme";
 
 interface AccountPopoverProps {
   onClose: () => void;
+  /** Anchor element ref for positioning */
+  anchorRef?: React.RefObject<any>;
 }
 
-export default function AccountPopover({ onClose }: AccountPopoverProps) {
+export default function AccountPopover({ 
+  onClose,
+  anchorRef,
+}: AccountPopoverProps) {
   const { colors, preference } = useTheme();
   const { profile, signOut } = useAuth();
+  const { height: windowHeight } = useWindowDimensions();
   const { openSettingsSidebar } = useSettingsSidebar();
   const router = useRouter();
 
@@ -60,15 +66,34 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
     try { await signOut(); } catch (e) { console.error(e); }
   };
 
-  const popoverStyle =
-    Platform.OS === "web"
-      ? ({
-          position: "fixed" as any,
-          top: TOP_BAR_HEIGHT + 8,
-          right: 8,
-          zIndex: 1001,
-        } as any)
-      : { position: "absolute" as any, top: TOP_BAR_HEIGHT + 8, right: 8, zIndex: 1001 };
+  // The theme sub-panel needs more vertical room than the menu panel. Size the
+  // card to fit all accent swatches at once (no scrolling) while staying inside
+  // short viewports.
+  const maxPopoverHeight = Math.min(640, Math.max(420, windowHeight - 96));
+
+  // Use the new popover positioning hook (anchored to the trigger button)
+  const { position, arrowPosition, arrowOffset, updatePosition } = usePopoverPosition({
+    preferredPosition: "bottom-end",
+    popoverWidth: POPOVER_WIDTH,
+    popoverHeight: maxPopoverHeight,
+    enabled: true,
+  }, anchorRef);
+
+  // Trigger position update when anchor is ready
+  useEffect(() => {
+    updatePosition();
+  }, [updatePosition, anchorRef]);
+
+  if (!position) {
+    return null;
+  }
+
+  const popoverStyle = {
+    position: "absolute" as const,
+    top: position.top,
+    left: position.left,
+    zIndex: 1001,
+  };
 
   return (
     <View
@@ -79,9 +104,28 @@ export default function AccountPopover({ onClose }: AccountPopoverProps) {
           backgroundColor: colors.surface,
           borderColor: colors.border,
           shadowColor: colors.shadow,
+          maxHeight: maxPopoverHeight,
         },
       ]}
     >
+      {/* Arrow indicator */}
+      {arrowPosition && (
+        <>
+          <View
+            style={getBorderArrowStyle(arrowPosition, arrowOffset, colors.border)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+          <View
+            style={getArrowStyle(arrowPosition, arrowOffset, colors.surface)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+        </>
+      )}
+
       <SlideSwitcher index={panel === "theme" ? 1 : 0} width={PANEL_WIDTH}>
         {/* ── Panel 0: account menu ── */}
         <View>

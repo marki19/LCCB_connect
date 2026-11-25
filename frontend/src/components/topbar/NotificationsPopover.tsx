@@ -1,100 +1,76 @@
 /**
  * NotificationsPopover — Bell icon panel.
- * Shows notification list with "Mark all read" and link to full notifications page.
+ * Shows the shared notification page with "Mark all read" and a link to the
+ * full notifications screen.
  */
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import {
   View,
   Text,
   Pressable,
   ScrollView,
   StyleSheet,
-  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Bell } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useAuth } from "../../contexts/AuthContext";
-import { apiJson } from "../../lib/api";
+import { useNotifications } from "../../contexts/NotificationsContext";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
+import { notificationActorName, notificationHref } from "../../lib/notifications";
 import Avatar from "../Avatar";
-import { TOP_BAR_HEIGHT } from "./constants";
+import { usePopoverPosition, getArrowStyle, getBorderArrowStyle } from "../../lib/popoverPosition";
 
 interface NotificationsPopoverProps {
   onClose: () => void;
-  onClearUnread?: () => void;
+  /** Anchor element ref for positioning */
+  anchorRef?: React.RefObject<any>;
 }
 
-export default function NotificationsPopover({ onClose, onClearUnread }: NotificationsPopoverProps) {
+export default function NotificationsPopover({
+  onClose,
+  anchorRef,
+}: NotificationsPopoverProps) {
   const { colors } = useTheme();
-  const { profile, session } = useAuth();
   const router = useRouter();
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const isGuest = profile?.role === "guest";
-
-  useEffect(() => {
-    if (isGuest || !session?.user?.id) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    apiJson<any>("/notifications?limit=20")
-      .then((data) => {
-        if (!cancelled) {
-          const list = Array.isArray(data) ? data : (data?.notifications || []);
-          setNotifications(list);
-        }
-      })
-      .catch(console.error)
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [isGuest, session?.user?.id]);
-
-  const markAllRead = async () => {
-    try {
-      await apiJson("/notifications/read-all", { method: "POST" });
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true, read: true })));
-      onClearUnread?.();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleItemPress = (notif: any) => {
-    if (notif.is_read === false || notif.read === false) {
-      if (notif.id) {
-        apiJson(`/notifications/${notif.id}/read`, { method: "PUT" }).catch(() => {});
-      }
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notif.id ? { ...n, is_read: true, read: true } : n))
-      );
-    }
-    const targetUrl =
-      notif.target_id && notif.type?.includes("post")
-        ? `/post/${notif.target_id}`
-        : notif.action_url ?? "/(tabs)/notifications";
-    navigate(targetUrl);
-  };
+  const { notifications, unreadCount, loading, markAllRead, markRead } =
+    useNotifications();
 
   const navigate = (href: string) => {
     onClose();
     router.push(href as any);
   };
 
-  const popoverStyle =
-    Platform.OS === "web"
-      ? ({
-          position: "fixed" as any,
-          top: TOP_BAR_HEIGHT + 8,
-          right: 104,
-          zIndex: 1001,
-        } as any)
-      : { position: "absolute" as any, top: TOP_BAR_HEIGHT + 8, right: 104, zIndex: 1001 };
+  const handleItemPress = (notif: (typeof notifications)[number]) => {
+    void markRead(notif.id);
+    const href = notificationHref(notif);
+    if (href) navigate(href);
+  };
 
-  const hasUnread = notifications.some((n) => n.is_read === false || n.read === false);
+  // Use the new popover positioning hook (anchored to the trigger button)
+  const { position, arrowPosition, arrowOffset, updatePosition } = usePopoverPosition({
+    preferredPosition: "bottom-end",
+    popoverWidth: 360,
+    popoverHeight: 540,
+    enabled: true,
+  }, anchorRef);
+
+  // Trigger position update when anchor is ready
+  useEffect(() => {
+    updatePosition();
+  }, [updatePosition, anchorRef]);
+
+  if (!position) {
+    // Return null or a loading state while position is calculated
+    return null;
+  }
+
+  const popoverStyle = {
+    position: "absolute" as const,
+    top: position.top,
+    left: position.left,
+    zIndex: 1001,
+  };
 
   return (
     <View
@@ -108,10 +84,28 @@ export default function NotificationsPopover({ onClose, onClearUnread }: Notific
         },
       ]}
     >
+      {/* Arrow indicator */}
+      {arrowPosition && (
+        <>
+          <View
+            style={getBorderArrowStyle(arrowPosition, arrowOffset, colors.border)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+          <View
+            style={getArrowStyle(arrowPosition, arrowOffset, colors.surface)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+        </>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.ink }]}>Notifications</Text>
-        {hasUnread && (
+        {unreadCount > 0 && (
           <Pressable
             onPress={markAllRead}
             accessibilityLabel="Mark all notifications as read"
@@ -141,13 +135,13 @@ export default function NotificationsPopover({ onClose, onClearUnread }: Notific
             </Text>
           </View>
         ) : (
-          notifications.map((notif, idx) => {
-            const isUnread = notif.is_read === false || notif.read === false;
-            const actorName = notif.actor?.full_name ?? notif.actor?.username ?? notif.actor_name ?? notif.actor_username;
-            const actorAvatar = notif.actor?.avatar_url ?? notif.actor_avatar_url;
+          notifications.map((notif) => {
+            const isUnread = !notif.is_read;
+            const actorName = notificationActorName(notif);
+            const actorAvatar = notif.actor?.avatar_url;
             return (
               <Pressable
-                key={notif.id ?? idx}
+                key={notif.id}
                 onPress={() => handleItemPress(notif)}
                 accessibilityRole="button"
                 accessibilityLabel={notif.message ?? "Notification"}

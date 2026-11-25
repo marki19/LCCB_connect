@@ -19,6 +19,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { apiFetch, deleteComment } from "../lib/api";
 import Avatar from "./Avatar";
 import { resolveFileUrl } from "../lib/files";
+import { RADIUS, SPACE, TYPE } from "../lib/tokens";
 
 interface CommentItem {
   id: string;
@@ -174,7 +175,7 @@ export default function InlineCommentsDrawer({
       style={[
         styles.container,
         {
-          backgroundColor: isDark ? colors.surfaceSunken : "#F9FAFB",
+          backgroundColor: colors.surfaceSunken,
           borderTopColor: colors.border,
         },
       ]}
@@ -212,18 +213,18 @@ export default function InlineCommentsDrawer({
             style={[
               styles.sendBtn,
               {
-                backgroundColor: commentText.trim() && !submitting ? colors.action : "transparent",
+                backgroundColor: commentText.trim() && !submitting ? colors.brandSolid : "transparent",
               },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Send comment"
           >
             {submitting ? (
-              <ActivityIndicator size="small" color={colors.action} />
+              <ActivityIndicator size="small" color={colors.textOnPrimary} />
             ) : (
               <Send
                 size={16}
-                color={commentText.trim() ? "#FFFFFF" : colors.textTertiary}
+                color={commentText.trim() ? colors.textOnPrimary : colors.textTertiary}
               />
             )}
           </TouchableOpacity>
@@ -233,7 +234,7 @@ export default function InlineCommentsDrawer({
       {/* 2. Loading State */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color={colors.action} />
+          <ActivityIndicator size="small" color={colors.brand} />
         </View>
       ) : comments.length === 0 ? (
         /* Empty State */
@@ -317,31 +318,32 @@ export default function InlineCommentsDrawer({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 14,
-    borderTopWidth: 1,
+    paddingHorizontal: SPACE.x4,
+    paddingTop: SPACE.x3,
+    paddingBottom: SPACE.x3,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   composerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
-    marginBottom: 10,
+    gap: SPACE.x2,
+    marginBottom: SPACE.x2,
   },
   inputPill: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
+    borderRadius: RADIUS.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: SPACE.x3,
+    paddingVertical: SPACE.x1,
     minHeight: 38,
   },
   input: {
     flex: 1,
+    ...TYPE.body,
     fontSize: 13.5,
-    paddingVertical: 4,
+    paddingVertical: SPACE.x1,
     maxHeight: 100,
   },
   sendBtn: {
@@ -350,39 +352,40 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 6,
+    marginLeft: SPACE.x1,
   },
   loadingContainer: {
-    paddingVertical: 16,
+    paddingVertical: SPACE.x4,
     alignItems: "center",
   },
   emptyContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
+    gap: SPACE.x2,
+    paddingVertical: SPACE.x3,
   },
   emptyText: {
+    ...TYPE.caption,
     fontSize: 12.5,
     fontWeight: "500",
   },
   commentsList: {
-    gap: 12,
-    marginTop: 6,
+    gap: SPACE.x3,
+    marginTop: SPACE.x1,
   },
   commentItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
+    gap: SPACE.x2,
   },
   commentRight: {
     flex: 1,
   },
   commentBubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 14,
+    paddingHorizontal: SPACE.x3,
+    paddingVertical: SPACE.x2,
+    borderRadius: RADIUS.lg,
     borderWidth: StyleSheet.hairlineWidth,
     alignSelf: "flex-start",
     maxWidth: "92%",
@@ -390,28 +393,31 @@ const styles = StyleSheet.create({
   commentHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginBottom: 2,
+    gap: SPACE.x1,
+    marginBottom: SPACE.x1,
   },
   authorName: {
+    ...TYPE.bodyStrong,
     fontSize: 13,
-    fontWeight: "700",
   },
   departmentText: {
+    ...TYPE.caption,
     fontSize: 11,
   },
   commentBody: {
+    ...TYPE.body,
     fontSize: 13,
     lineHeight: 18,
   },
   commentMeta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginTop: 3,
-    paddingLeft: 4,
+    gap: SPACE.x3,
+    marginTop: SPACE.x1,
+    paddingLeft: SPACE.x1,
   },
   metaTime: {
+    ...TYPE.caption,
     fontSize: 11,
   },
   deleteBtn: {

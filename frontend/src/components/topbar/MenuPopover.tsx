@@ -4,6 +4,7 @@
  * Anchored top-right, below the top bar.
  */
 
+import { useEffect } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -22,9 +23,12 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useSettingsSidebar } from "../../contexts/SettingsSidebarContext";
 import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
 import { TOP_BAR_HEIGHT } from "./constants";
+import { usePopoverPosition, getArrowStyle, getBorderArrowStyle } from "../../lib/popoverPosition";
 
 interface MenuPopoverProps {
   onClose: () => void;
+  /** Anchor element ref for positioning */
+  anchorRef?: React.RefObject<any>;
 }
 
 type SocialItem = {
@@ -58,20 +62,13 @@ const CREATE_ITEMS: CreateItem[] = [
   { icon: MessageCircle, label: "Start Discussion", href: "/create?type=discussion" },
 ];
 
-export default function MenuPopover({ onClose }: MenuPopoverProps) {
+export default function MenuPopover({ 
+  onClose, 
+  anchorRef,
+}: MenuPopoverProps) {
   const { colors } = useTheme();
   const { openSettingsSidebar } = useSettingsSidebar();
   const router = useRouter();
-
-  const popoverStyle =
-    Platform.OS === "web"
-      ? ({
-          position: "fixed" as any,
-          top: TOP_BAR_HEIGHT + 8,
-          right: 8,
-          zIndex: 1001,
-        } as any)
-      : { position: "absolute" as any, top: TOP_BAR_HEIGHT + 8, right: 8, zIndex: 1001 };
 
   const handleItemClick = (item: SocialItem | CreateItem) => {
     onClose();
@@ -80,6 +77,30 @@ export default function MenuPopover({ onClose }: MenuPopoverProps) {
     } else if (item.href) {
       router.push(item.href as any);
     }
+  };
+
+  // Use the new popover positioning hook (anchored to the trigger button)
+  const { position, arrowPosition, arrowOffset, updatePosition } = usePopoverPosition({
+    preferredPosition: "bottom-end",
+    popoverWidth: 580,
+    popoverHeight: 520,
+    enabled: true,
+  }, anchorRef);
+
+  // Trigger position update when anchor is ready
+  useEffect(() => {
+    updatePosition();
+  }, [updatePosition, anchorRef]);
+
+  if (!position) {
+    return null;
+  }
+
+  const popoverStyle = {
+    position: "absolute" as const,
+    top: position.top,
+    left: position.left,
+    zIndex: 1001,
   };
 
   return (
@@ -94,6 +115,24 @@ export default function MenuPopover({ onClose }: MenuPopoverProps) {
         },
       ]}
     >
+      {/* Arrow indicator */}
+      {arrowPosition && (
+        <>
+          <View
+            style={getBorderArrowStyle(arrowPosition, arrowOffset, colors.border)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+          <View
+            style={getArrowStyle(arrowPosition, arrowOffset, colors.surface)}
+            accessible={false}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+          />
+        </>
+      )}
+
       {/* Header */}
       <Text style={[styles.header, { color: colors.ink }]}>Menu</Text>
 
@@ -101,7 +140,7 @@ export default function MenuPopover({ onClose }: MenuPopoverProps) {
         {/* LEFT — Social/Campus */}
         <View style={styles.col}>
           <Text style={[styles.colTitle, { color: colors.inkFaint }]}>
-            Campus &amp; Social
+            Campus & Social
           </Text>
           <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
             {SOCIAL_ITEMS.map((item) => {
@@ -195,6 +234,7 @@ export default function MenuPopover({ onClose }: MenuPopoverProps) {
 const styles = StyleSheet.create({
   container: {
     width: 580,
+    maxHeight: 520,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
     shadowOffset: { width: 0, height: 4 },
@@ -288,4 +328,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-

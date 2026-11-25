@@ -37,7 +37,7 @@ interface MentionInputProps extends TextInputProps {
   knownMentions?: MentionToken[];
 }
 
-export const MentionInput = React.forwardRef<ComponentRef<typeof TextInput>, MentionInputProps>(function MentionInput(
+const MentionInput = React.forwardRef<ComponentRef<typeof TextInput>, MentionInputProps>(function MentionInput(
   {
     value = "",
     onChangeText,

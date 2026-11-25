@@ -168,7 +168,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
 
   return (
     <View
-      pointerEvents={visible ? "box-none" : "none"}
+      pointerEvents="box-none"
       style={{
         position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
         top: 0,
@@ -180,6 +180,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
     >
       <TouchableWithoutFeedback onPress={onClose} accessibilityLabel="Close menu">
         <Animated.View
+          pointerEvents={visible ? "auto" : "none"}
           style={{
             position: "absolute",
             top: 0,
