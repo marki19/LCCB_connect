@@ -25,6 +25,7 @@ const getUser = stub(auth.supabase.auth, "getUser", async () => ({
 const getProfile = stub(userModel, "getUserById", async (id) => ({
   id,
   role: "student",
+  verification_status: "verified",
   profile_completed: true,
   status: "active",
 }));
@@ -51,6 +52,7 @@ beforeEach(() => {
   getProfile.setImpl(async (id) => ({
     id,
     role: "student",
+    verification_status: "verified",
     profile_completed: true,
     status: "active",
   }));
@@ -142,6 +144,43 @@ describe("POST /api/upload/:category", () => {
       .attach("file", samplePng, "card.png");
 
     assert.equal(res.status, 502);
+  });
+
+  test("allows unverified user to upload avatar", async () => {
+    asUser("unverified-user");
+    getProfile.setImpl(async (id) => ({
+      id,
+      role: "student",
+      verification_status: "unverified",
+      profile_completed: true,
+      status: "active",
+    }));
+
+    const res = await request(app)
+      .post("/api/upload/avatars")
+      .set("Authorization", "Bearer valid-token")
+      .attach("file", samplePng, "avatar.png");
+
+    assert.equal(res.status, 201);
+  });
+
+  test("blocks unverified user from uploading posts", async () => {
+    asUser("unverified-user");
+    getProfile.setImpl(async (id) => ({
+      id,
+      role: "student",
+      verification_status: "unverified",
+      profile_completed: true,
+      status: "active",
+    }));
+
+    const res = await request(app)
+      .post("/api/upload/posts")
+      .set("Authorization", "Bearer valid-token")
+      .attach("file", samplePng, "card.png");
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.code, "not_verified");
   });
 });
 

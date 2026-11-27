@@ -25,6 +25,15 @@ const declare = async (req, res, next) => {
       });
     }
 
+    const existingPending = await guestAccessModel.getPendingForUser(req.user.id);
+    if (existingPending) {
+      return res.status(200).json({
+        success: true,
+        request_id: existingPending.id,
+        status: "pending",
+      });
+    }
+
     const request = await guestAccessModel.createRequest(req.user.id, {
       purpose,
       affiliationType: affiliation_type,

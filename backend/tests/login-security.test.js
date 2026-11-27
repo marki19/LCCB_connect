@@ -53,12 +53,12 @@ const requireAuthStub = stub(authMiddleware, "requireAuth", (req, res, next) => 
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : null;
   if (token === "superadmin-token") {
-    req.user = { id: SUPERADMIN_ID, email: "superadmin@lccbonline.edu.ph", role: "superadmin" };
+    req.user = { id: SUPERADMIN_ID, email: "superadmin@lccbonline.edu.ph", role: "superadmin", aal: "aal2" };
     req.accessToken = token;
     return next();
   }
   if (token === "admin-token") {
-    req.user = { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", email: "admin@lccbonline.edu.ph", role: "admin" };
+    req.user = { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", email: "admin@lccbonline.edu.ph", role: "admin", aal: "aal2" };
     req.accessToken = token;
     return next();
   }

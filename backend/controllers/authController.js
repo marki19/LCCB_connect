@@ -1006,15 +1006,14 @@ async function googleAuth(req, res, next) {
       const emailLocalPart = email.split("@")[0] || null;
       const fullName = user.user_metadata?.full_name || user.user_metadata?.name || emailLocalPart;
       const username = await identityService.deriveUsername(fullName, user.id);
-      const isSchool = isSchoolAccount(email);
       await userModel.createUser({
         id: user.id,
         email: user.email,
         full_name: fullName,
         username,
         avatar_url: googleAvatar,
-        role: isSchool ? "user" : "guest",
-        verification_status: isSchool ? "unverified" : "pending",
+        role: "user",
+        verification_status: "unverified",
       });
       profile = await userModel.getUserById(user.id);
     }

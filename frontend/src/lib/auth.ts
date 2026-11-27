@@ -217,8 +217,8 @@ export async function verifyMfaEnrollment(
   factorId: string,
   code: string,
   tempToken?: string
-): Promise<{ message: string; factor_id: string; verified_at: string }> {
-  return apiJson<{ message: string; factor_id: string; verified_at: string }>(
+): Promise<{ message: string; factor_id: string; verified_at: string; session?: SessionTokens }> {
+  const result = await apiJson<{ message: string; factor_id: string; verified_at: string; session?: SessionTokens }>(
     "/auth/mfa/enroll/verify",
     {
       method: "POST",
@@ -226,6 +226,10 @@ export async function verifyMfaEnrollment(
       body: JSON.stringify({ factor_id: factorId, code }),
     }
   );
+  if (result?.session) {
+    await installSession(result.session);
+  }
+  return result;
 }
 
 /**

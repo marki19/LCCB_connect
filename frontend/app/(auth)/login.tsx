@@ -262,6 +262,8 @@ export default function LoginScreen() {
         await supabase.auth.signOut().catch(() => {});
 
         if (typeof window !== "undefined") {
+          window.localStorage?.removeItem("lccb_auth_session");
+          window.sessionStorage?.clear();
           window.sessionStorage?.setItem("oauth_google_pending", "true");
         }
         const redirectUri =

@@ -33,7 +33,7 @@ const create = async ({ name, code, sort_order = 0 }) => {
   return result.rows[0];
 };
 
-const update = async (id, { name, code, sort_order, active }) => {
+const update = async (id, { name, code, sort_order, active, is_active }) => {
   const updates = [];
   const values = [id];
 
@@ -49,8 +49,9 @@ const update = async (id, { name, code, sort_order, active }) => {
     values.push(Number(sort_order) || 0);
     updates.push(`sort_order = $${values.length}`);
   }
-  if (active !== undefined) {
-    values.push(Boolean(active));
+  const resolvedActive = active !== undefined ? active : is_active;
+  if (resolvedActive !== undefined) {
+    values.push(Boolean(resolvedActive));
     updates.push(`active = $${values.length}`);
   }
 

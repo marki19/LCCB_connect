@@ -311,6 +311,7 @@ const updateAcademicLevelSchema = z
     code: optionalText(50),
     sort_order: z.number().int().min(0).max(100000).optional(),
     active: z.boolean().optional(),
+    is_active: z.boolean().optional(),
   })
   .strict();
 

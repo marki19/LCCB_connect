@@ -24,7 +24,7 @@ stub(auth, "requireAuth", (req, res, next) => {
   if (!(req.headers.authorization || "").startsWith("Bearer ")) {
     return res.status(401).json({ error: "Authentication required" });
   }
-  req.user = { id: session.id };
+  req.user = { id: session.id, aal: session.aal || "aal2" };
   return next();
 });
 stub(auth, "loadProfile", (req, res, next) => {

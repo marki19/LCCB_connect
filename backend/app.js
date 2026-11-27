@@ -141,7 +141,6 @@ app.use(
   auth.loadProfile,
   auth.requireActiveAccount,
   auth.requireContentAccess,
-  auth.requireVerified,
   uploadRouter
 );
 

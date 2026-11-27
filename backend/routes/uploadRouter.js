@@ -3,6 +3,9 @@ const router = express.Router();
 const { uploadFor, uploadConcurrencyGuard, respondToUploadError } = require("../middleware/upload");
 const { CATEGORIES } = require("../services/filePolicy");
 const { storeUpload } = require("../services/uploadService");
+const auth = require("../middleware/auth");
+
+const UNVERIFIED_ALLOWED_CATEGORIES = new Set(["avatars", "covers"]);
 
 /**
  * POST /api/upload/:category
@@ -13,7 +16,6 @@ const { storeUpload } = require("../services/uploadService");
  */
 router.post(
   "/:category",
-  uploadConcurrencyGuard,
   (req, res, next) => {
     const category = (req.params.category || "").toLowerCase();
 
@@ -22,6 +24,15 @@ router.post(
         error: `Invalid storage category "${req.params.category}". Allowed: ${CATEGORIES.join(", ")}`,
       });
     }
+
+    if (!UNVERIFIED_ALLOWED_CATEGORIES.has(category)) {
+      return auth.requireVerified(req, res, next);
+    }
+    next();
+  },
+  uploadConcurrencyGuard,
+  (req, res, next) => {
+    const category = (req.params.category || "").toLowerCase();
 
     uploadFor(category).single("file")(req, res, (err) => {
       if (err) {
