@@ -320,11 +320,14 @@ function requireVerified(req, res, next) {
 function requireContentAccess(req, res, next) {
   // A pending guest must still be able to read their own profile so the client
   // can detect their role and verification_status and route them to /pending-review.
-  const cleanPath = (req.path || "").replace(/\/+$/, "");
-  const firstSegment = cleanPath.split("/")[1] || "";
+  const cleanPath = (req.path || "").replace(/\/+$/, "").toLowerCase();
+  const userId = req.user?.id?.toLowerCase();
   const isOwnProfile =
-    Boolean(req.user?.id) &&
-    (firstSegment.toLowerCase() === req.user.id.toLowerCase() || firstSegment.toLowerCase() === "me");
+    Boolean(userId) &&
+    (cleanPath === `/${userId}` ||
+     cleanPath === `/${userId}/profile` ||
+     cleanPath === "/me" ||
+     cleanPath === "/me/profile");
   if (req.method === "GET" && isOwnProfile) return next();
 
   const email = req.profile?.email || req.user?.email || "";
@@ -350,9 +353,6 @@ function requireContentAccess(req, res, next) {
 function requireAal2(req, res, next) {
   const role = normalizeRole(getRole(req));
   if (role !== "admin" && role !== "superadmin") {
-    return next();
-  }
-  if (process.env.NODE_ENV === "test" && req.user && req.user.aal === undefined) {
     return next();
   }
   const tokenAal = req.user?.aal || req.user?.app_metadata?.aal || "aal1";

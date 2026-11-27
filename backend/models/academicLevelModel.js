@@ -1,22 +1,24 @@
 const db = require("../db");
 
+const ACADEMIC_LEVEL_COLUMNS = "id, name, code, sort_order, active, active AS is_active, created_at";
+
 const listActive = async () => {
   const result = await db.query(
-    "SELECT id, name, code, sort_order, active, created_at FROM academic_levels WHERE active = true ORDER BY sort_order ASC, name ASC"
+    `SELECT ${ACADEMIC_LEVEL_COLUMNS} FROM academic_levels WHERE active = true ORDER BY sort_order ASC, name ASC`
   );
   return result.rows;
 };
 
 const listAll = async () => {
   const result = await db.query(
-    "SELECT id, name, code, sort_order, active, created_at FROM academic_levels ORDER BY sort_order ASC, name ASC"
+    `SELECT ${ACADEMIC_LEVEL_COLUMNS} FROM academic_levels ORDER BY sort_order ASC, name ASC`
   );
   return result.rows;
 };
 
 const getById = async (id) => {
   const result = await db.query(
-    "SELECT id, name, code, sort_order, active, created_at FROM academic_levels WHERE id = $1",
+    `SELECT ${ACADEMIC_LEVEL_COLUMNS} FROM academic_levels WHERE id = $1`,
     [id]
   );
   return result.rows[0] || null;
@@ -27,7 +29,7 @@ const create = async ({ name, code, sort_order = 0 }) => {
   const result = await db.query(
     `INSERT INTO academic_levels (name, code, sort_order, active)
      VALUES ($1, $2, $3, true)
-     RETURNING id, name, code, sort_order, active, created_at`,
+     RETURNING ${ACADEMIC_LEVEL_COLUMNS}`,
     [name.trim(), generatedCode, Number(sort_order) || 0]
   );
   return result.rows[0];
@@ -61,7 +63,7 @@ const update = async (id, { name, code, sort_order, active, is_active }) => {
     `UPDATE academic_levels
      SET ${updates.join(", ")}
      WHERE id = $1
-     RETURNING id, name, code, sort_order, active, created_at`,
+     RETURNING ${ACADEMIC_LEVEL_COLUMNS}`,
     values
   );
   return result.rows[0] || null;

@@ -118,6 +118,24 @@ describe("requireContentAccess middleware", () => {
     assert.equal(next.isCalled(), true);
   });
 
+  it("blocks pending guest from reading subresources like photos or friends", () => {
+    const req = {
+      ...makeReq({
+        userId: "guest-123",
+        profile: { role: "guest", verification_status: "pending" },
+      }),
+      method: "GET",
+      path: "/guest-123/photos",
+    };
+    const res = makeRes();
+    const next = makeNext();
+
+    requireContentAccess(req, res, next);
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.body.code, "guest_pending");
+    assert.equal(next.isCalled(), false);
+  });
+
   it("passes approved guest", () => {
     const req = makeReq({
       profile: { role: "guest", verification_status: "approved" },
