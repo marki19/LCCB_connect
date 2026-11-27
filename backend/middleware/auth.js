@@ -3,6 +3,7 @@ const userModel = require("../models/userModel");
 const mfaService = require("../services/mfaService");
 const nativeAuth = require("../services/nativeAuth");
 const { normalizeRole, ROLES, ADMIN_ROLES, DEPARTMENT_ADMIN_ROLES, FACULTY_ROLES, ALL_ROLES } = require("../utils/roles");
+const { isSchoolAccount } = require("../services/verificationPolicy");
 
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
   if (process.env.NODE_ENV !== "test") {
@@ -320,14 +321,36 @@ function requireContentAccess(req, res, next) {
   // can detect their role and verification_status and route them to /pending-review.
   if (req.method === "GET" && req.path === `/${req.user?.id}`) return next();
 
+  const email = req.profile?.email || req.user?.email || "";
+  const isSchool = isSchoolAccount(email);
   const role = normalizeRole(getRole(req));
-  const isApprovedGuest =
+  const isApproved =
     req.profile?.verification_status === "verified" ||
     req.profile?.verification_status === "approved";
-  if (role === "guest" && !isApprovedGuest) {
+
+  // Outsiders (non-school email with user role, or declared guest role) must be approved before accessing campus content
+  if (role === "guest" || (role === "user" && !isSchool)) {
+    if (!isApproved) {
+      return res.status(403).json({
+        error: "Guest access is pending approval",
+        code: "guest_pending",
+      });
+    }
+  }
+
+  return next();
+}
+
+function requireAal2(req, res, next) {
+  const role = normalizeRole(getRole(req));
+  if (role !== "admin" && role !== "superadmin") {
+    return next();
+  }
+  const tokenAal = req.user?.aal || req.user?.app_metadata?.aal || "aal1";
+  if (tokenAal !== "aal2") {
     return res.status(403).json({
-      error: "Guest access is pending approval",
-      code: "guest_pending",
+      error: "MFA elevation required to access admin console",
+      code: "mfa_required",
     });
   }
   return next();
@@ -346,6 +369,7 @@ module.exports = {
   loadProfile,
   requireActiveAccount,
   requireRole,
+  requireAal2,
   // Role constants and normalization
   ROLES,
   normalizeRole,

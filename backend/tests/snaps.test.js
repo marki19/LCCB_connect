@@ -24,7 +24,7 @@ stub(auth, "loadProfile", (req, res, next) => {
     id: session.id,
     role: session.role,
     department_id: "00000000-0000-0000-0000-000000000001",
-    verification_status: session.verified ? "verified" : "pending",
+    verification_status: session.verified ? (session.role === "guest" ? "approved" : "verified") : "pending",
   };
   return next();
 });
@@ -188,7 +188,7 @@ describe("Quick Snap endpoints", () => {
 
 describe("Quick Snap guest read-only rule", () => {
   beforeEach(() => {
-    session = { id: "test-guest-1", role: "guest", verified: false };
+    session = { id: "test-guest-1", role: "guest", verified: true };
   });
 
   it("refuses a guest creating a snap", async () => {
@@ -247,6 +247,16 @@ describe("Quick Snap guest read-only rule", () => {
     } finally {
       snapModel.getRailSnaps = origGetRail;
     }
+  });
+
+  it("refuses a pending guest reading the rail", async () => {
+    session = { id: "test-guest-pending", role: "guest", verified: false };
+    const res = await request(app)
+      .get("/api/snaps/rail")
+      .set("Authorization", "Bearer token");
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.code, "guest_pending");
   });
 });
 
@@ -397,7 +407,7 @@ describe("Quick Snap comments", () => {
   });
 
   it("refuses a guest writing a comment", async () => {
-    session = { id: "test-guest-2", role: "guest", verified: false };
+    session = { id: "test-guest-2", role: "guest", verified: true };
 
     const res = await request(app)
       .post("/api/snaps/snap-1/comments")

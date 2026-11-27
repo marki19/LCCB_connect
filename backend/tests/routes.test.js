@@ -64,7 +64,14 @@ const defaultRequireAuth = (req, res, next) => {
   return next();
 };
 const defaultLoadProfile = (req, res, next) => {
-  req.profile = { id: session.id, role: session.role, department_id: session.department_id, profile_completed: true, identity_complete: true };
+  req.profile = {
+    id: session.id,
+    email: "student@lccbonline.edu.ph",
+    role: session.role,
+    department_id: session.department_id,
+    profile_completed: true,
+    identity_complete: true,
+  };
   return next();
 };
 

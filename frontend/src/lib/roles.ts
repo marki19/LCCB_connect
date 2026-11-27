@@ -95,3 +95,11 @@ export function isSuspendedProfile(profile?: {
 export function canManageAnnouncements(role?: string | null): boolean {
   return rankOf(role) >= RANK.departmentAdmin;
 }
+
+export const SCHOOL_EMAIL_DOMAINS = ["@lccbonline.edu.ph", "@lccb.edu.ph"];
+
+export function isSchoolEmail(email?: string | null): boolean {
+  if (!email || typeof email !== "string") return false;
+  const normalized = email.trim().toLowerCase();
+  return SCHOOL_EMAIL_DOMAINS.some((domain) => normalized.endsWith(domain));
+}

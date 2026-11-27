@@ -29,7 +29,7 @@ stub(auth, "requireAuth", (req, res, next) => {
   if (!(req.headers.authorization || "").startsWith("Bearer ")) {
     return res.status(401).json({ error: "Authentication required" });
   }
-  req.user = { id: session.id };
+  req.user = { id: session.id, aal: session.aal || "aal2" };
   return next();
 });
 stub(auth, "loadProfile", (req, res, next) => {
@@ -116,6 +116,13 @@ describe("admin console gate", () => {
     session.role = "student";
     const res = await request(app).get("/api/admin/overview").set(AUTH);
     assert.equal(res.status, 403);
+  });
+
+  it("403 for an admin without AAL2 elevation", async () => {
+    session.aal = "aal1";
+    const res = await request(app).get("/api/admin/overview").set(AUTH);
+    assert.equal(res.status, 403);
+    assert.equal(res.body.code, "mfa_required");
   });
 
   it("403 for a suspended account", async () => {

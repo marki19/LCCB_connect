@@ -133,13 +133,15 @@ app.use("/api/public", publicRouter);
 const fileRouter = require("./routes/fileRouter");
 app.use("/api/files", fileRouter);
 
-// Local file uploads (authenticated users)
+// Local file uploads (authenticated and verified users)
 const uploadRouter = require("./routes/uploadRouter");
 app.use(
   "/api/upload",
   auth.requireAuth,
   auth.loadProfile,
   auth.requireActiveAccount,
+  auth.requireContentAccess,
+  auth.requireVerified,
   uploadRouter
 );
 
@@ -254,7 +256,14 @@ app.use(
   socialRouter
 );
 
-app.use("/api/snaps", snapRouter);
+app.use(
+  "/api/snaps",
+  auth.requireAuth,
+  auth.loadProfile,
+  auth.requireActiveAccount,
+  auth.requireContentAccess,
+  snapRouter
+);
 
 // Superadmin console API. Keep this mount before the catalog router so its
 // specific paths win; unmatched paths fall through.
@@ -265,6 +274,7 @@ const adminMiddleware = [
   auth.loadProfile,
   auth.requireActiveAccount,
   auth.requireRole("admin", "superadmin"),
+  auth.requireAal2,
 ];
 
 app.use("/api/admin", ...adminMiddleware, adminRouter);

@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Switch,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -200,6 +201,7 @@ export default function MessagingSettings() {
   };
 
   const chooseContactScope = async (scope: "public" | "organization" | "private") => {
+    const prev = contactScope;
     setContactScope(scope);
     if (!profile?.id) return;
     setSavingScope(true);
@@ -209,8 +211,10 @@ export default function MessagingSettings() {
         body: JSON.stringify({ contact_scope: scope }),
       });
       await refreshProfile();
-    } catch (e) {
+    } catch (e: any) {
+      setContactScope(prev);
       console.error("Failed to update contact visibility:", e);
+      Alert.alert("Update failed", "Could not save your contact visibility setting. Please try again.");
     } finally {
       setSavingScope(false);
     }

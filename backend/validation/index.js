@@ -297,6 +297,23 @@ const updateCourseSchema = z
   })
   .strict();
 
+const createAcademicLevelSchema = z
+  .object({
+    name: z.string().trim().min(1, "Name is required").max(100),
+    code: optionalText(50),
+    sort_order: z.number().int().min(0).max(100000).optional(),
+  })
+  .strict();
+
+const updateAcademicLevelSchema = z
+  .object({
+    name: z.string().trim().min(1, "Name is required").max(100).optional(),
+    code: optionalText(50),
+    sort_order: z.number().int().min(0).max(100000).optional(),
+    active: z.boolean().optional(),
+  })
+  .strict();
+
 // ---- identity verification (migrations 016, 042) -----------------------------
 // Student ID: 4-20 chars of [A-Za-z0-9-], stored uppercased. No roster exists
 // to validate against, so the admin review *is* the identity check.
@@ -501,6 +518,7 @@ const profileFields = {
   twitter_url: optionalText(255),
   relationship_status: optionalText(50),
   gender: optionalText(50),
+  contact_scope: z.enum(["public", "organization", "private"]).optional(),
 };
 
 // Self-provisioning: no `role`/`id` accepted (server assigns them).
@@ -792,6 +810,8 @@ const validate = (schema) => (req, res, next) => {
   updateDepartmentSchema,
   createCourseSchema,
   updateCourseSchema,
+  createAcademicLevelSchema,
+  updateAcademicLevelSchema,
   createConversationSchema,
   sendMessageSchema,
   markReadSchema,

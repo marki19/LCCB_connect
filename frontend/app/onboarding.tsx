@@ -7,6 +7,7 @@ import { useTheme } from "../src/contexts/ThemeContext";
 import { useToast } from "../src/contexts/ToastContext";
 import { apiJson, ApiError } from "../src/lib/api";
 import { RADIUS, SPACE, TYPE } from "../src/lib/tokens";
+import { isSchoolEmail } from "../src/lib/roles";
 import Button from "../src/components/ui/Button";
 import Card from "../src/components/ui/Card";
 import Modal from "../src/components/ui/Modal";
@@ -105,8 +106,7 @@ export default function OnboardingScreen() {
             fields: null,
             selectable_roles: null,
             school_account:
-              profile?.email != null &&
-              (profile.email.endsWith("@lccbonline.edu.ph") || profile.email.endsWith("@lccb.edu.ph")),
+              profile?.email != null && isSchoolEmail(profile.email),
           });
         } else {
           console.error("Failed to load verification:", error);

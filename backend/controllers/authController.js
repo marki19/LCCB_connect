@@ -455,19 +455,22 @@ async function mfaChallenge(req, res, next) {
       });
     }
 
-    // Record successful login with AAL2 elevation
-    await mfaService.recordLogin({
-      userId,
-      req,
-      aal: "aal2",
-      mfaChallenged: true,
-    });
+    // Mint elevated session with AAL2
+    const elevatedSession = await nativeAuth.signTokens(profile, { aal: "aal2" });
+
+    // Revoke the un-elevated pending session refresh token if present
+    if (pending.session?.refresh_token) {
+      const decodedPending = nativeAuth.verifyRefreshToken(pending.session.refresh_token);
+      if (decodedPending?.jti) {
+        await nativeAuth.revokeRefreshToken(decodedPending.jti).catch(() => {});
+      }
+    }
 
     // Record audit event
     await mfaService.recordMfaChallenge({ userId, req, success: true });
     await accountService.enforceSessionCap(userId, { role: profile?.role }).catch(() => undefined);
 
-    return sendTokens(res, pending.session);
+    return sendTokens(res, elevatedSession);
   } catch (err) {
     next(err);
   }
@@ -799,6 +802,8 @@ async function mfaEnrollVerify(req, res, next) {
       mfaChallenged: true,
     });
 
+    const elevatedSession = await nativeAuth.signTokens(req.profile || { id: userId, role: "admin" }, { aal: "aal2" });
+
     // Audit
     await mfaService.recordMfaEnroll({ userId, req, factorId: factor.id });
 
@@ -806,6 +811,7 @@ async function mfaEnrollVerify(req, res, next) {
       message: "MFA enrolled successfully",
       factor_id: factor.id,
       verified_at: factor.verified_at,
+      session: elevatedSession,
     });
   } catch (err) {
     if (err.status === 401) {
@@ -922,7 +928,9 @@ async function logout(req, res, next) {
       await mfaService.recordLogout({ userId, req }).catch(() => {});
 
       // Revoke all native refresh tokens for this user
-      await nativeAuth.revokeAllUserRefreshTokens(userId).catch(() => {});
+      await nativeAuth.revokeAllUserRefreshTokens(userId).catch((err) => {
+        console.warn(`[auth] Failed to revoke refresh tokens on logout for user ${userId}:`, err?.message || err);
+      });
     }
 
     return res.json({ message: "Logged out successfully" });
@@ -998,14 +1006,15 @@ async function googleAuth(req, res, next) {
       const emailLocalPart = email.split("@")[0] || null;
       const fullName = user.user_metadata?.full_name || user.user_metadata?.name || emailLocalPart;
       const username = await identityService.deriveUsername(fullName, user.id);
+      const isSchool = isSchoolAccount(email);
       await userModel.createUser({
         id: user.id,
         email: user.email,
         full_name: fullName,
         username,
         avatar_url: googleAvatar,
-        role: "user",
-        verification_status: "unverified",
+        role: isSchool ? "user" : "guest",
+        verification_status: isSchool ? "unverified" : "pending",
       });
       profile = await userModel.getUserById(user.id);
     }
@@ -1238,19 +1247,14 @@ async function refreshSession(req, res, next) {
         return res.status(401).json({ error: "Account locked" });
       }
       if (isSuspendedProfile(profile)) {
-        await nativeAuth.revokeAllUserRefreshTokens(profile.id).catch(() => {});
+        await nativeAuth.revokeAllUserRefreshTokens(profile.id).catch((err) => {
+          console.warn(`[auth] Failed to revoke refresh tokens on suspension for user ${profile.id}:`, err?.message || err);
+        });
         return res.status(403).json({ error: "Account suspended" });
       }
 
-      // Check admin MFA / AAL2 state
-      const role = normalizeRole(profile.role);
-      let aal = "aal1";
-      if (role === "admin" || role === "superadmin") {
-        const hasTotp = await mfaService.hasVerifiedTotp(profile.id).catch(() => false);
-        if (hasTotp) {
-          aal = "aal2";
-        }
-      }
+      // Maintain the authenticated AAL level of the rotating token; never auto-elevate
+      const aal = decoded?.aal === "aal2" ? "aal2" : "aal1";
 
       // Rotate: revoke the used refresh token and mint fresh tokens
       await nativeAuth.revokeRefreshToken(decoded.jti).catch(() => {});

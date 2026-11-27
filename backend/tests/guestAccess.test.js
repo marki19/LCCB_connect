@@ -139,6 +139,20 @@ describe("requireContentAccess middleware", () => {
     requireContentAccess(req, res, next);
     assert.equal(next.isCalled(), true);
   });
+
+  it("blocks unapproved non-school account even if role is still user", () => {
+    const req = makeReq({
+      email: "outsider@gmail.com",
+      profile: { email: "outsider@gmail.com", role: "user", verification_status: "unverified" },
+    });
+    const res = makeRes();
+    const next = makeNext();
+
+    requireContentAccess(req, res, next);
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.body.code, "guest_pending");
+    assert.equal(next.isCalled(), false);
+  });
 });
 
 describe("requireVerified copy for guests", () => {

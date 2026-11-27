@@ -46,6 +46,11 @@ const PROFILE_COLUMNS = [
   "email_bounced",
   "bounce_reason",
   "bounced_at",
+  "guest_declared_at",
+  "guest_purpose",
+  "guest_affiliation_type",
+  "guest_affiliation_name",
+  "guest_location",
   "created_at",
   "updated_at",
 ];

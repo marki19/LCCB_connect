@@ -7,6 +7,8 @@ const {
   updateDepartmentSchema,
   createCourseSchema,
   updateCourseSchema,
+  createAcademicLevelSchema,
+  updateAcademicLevelSchema,
 } = require("../validation");
 
 // Mounted at /api/admin behind requireAuth + loadProfile + requireRole(admin).
@@ -28,8 +30,8 @@ router.post("/courses/:id/deactivate", catalogController.deactivateCourse);
 
 // Academic Levels (customizable year levels)
 router.get("/academic-levels", catalogController.adminListAcademicLevels);
-router.post("/academic-levels", catalogController.adminCreateAcademicLevel);
-router.put("/academic-levels/:id", catalogController.adminUpdateAcademicLevel);
+router.post("/academic-levels", validate(createAcademicLevelSchema), catalogController.adminCreateAcademicLevel);
+router.put("/academic-levels/:id", validate(updateAcademicLevelSchema), catalogController.adminUpdateAcademicLevel);
 router.delete("/academic-levels/:id", catalogController.adminDeleteAcademicLevel);
 
 module.exports = router;

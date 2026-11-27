@@ -146,6 +146,7 @@ async function signTokens(user, { aal = "aal1" } = {}) {
   const refreshPayload = {
     sub: user.id,
     jti,
+    aal,
     token_type: "refresh",
     iat: nowSec,
     exp: refreshExpiresSec,

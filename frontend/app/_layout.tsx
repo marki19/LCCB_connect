@@ -16,6 +16,7 @@ import {
   isAdminRole,
   isModeratorRole,
   isSuspendedProfile,
+  isSchoolEmail,
 } from "../src/lib/roles";
 import {
   isAdminAppPreview,
@@ -122,7 +123,7 @@ function RouteGuard() {
           router.replace("/pending-review" as any);
         } else if (
           profile?.role === "user" &&
-          (profile.account_kind === "outsider" || (profile.email && !profile.email.endsWith("@lccbonline.edu.ph")))
+          (profile.account_kind === "outsider" || (profile.email && !isSchoolEmail(profile.email)))
         ) {
           router.replace("/guest-declaration" as any);
         } else if (

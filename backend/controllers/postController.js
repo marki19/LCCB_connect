@@ -446,7 +446,7 @@ const generatePreview = async (req, res, next) => {
     const preview = await previewService.fetchLinkPreview(url);
     res.json(preview);
   } catch (err) {
-    res.status(400).json({ error: err.message || "Failed to generate link preview" });
+    res.status(400).json({ error: "Failed to generate link preview" });
   }
 };
 
