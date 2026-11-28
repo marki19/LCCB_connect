@@ -15,6 +15,9 @@ paths = [
   '''backend/tests/''',
   # Lockfiles carry integrity hashes, not credentials.
   '''package-lock\.json''',
-  # EAS configuration contains client-side public anon key
-  '''frontend/eas\.json''',
+]
+
+regexes = [
+  # Supabase public anon key is safe for client-side inclusion
+  '''sb_publishable_[A-Za-z0-9_-]+''',
 ]

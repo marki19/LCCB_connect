@@ -5,7 +5,13 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gazmudflyntrlvmemkrc.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_JPcfA5Wg06LKC2ho2GADgg_ghjp6aeW",
+        "EXPO_PUBLIC_API_URL": "https://lccb-connect.onrender.com/api",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "433156229202-6rn0jidd204jmnqr0pbupibma62cn8eu.apps.googleusercontent.com"
+      }
     },
     "preview": {
       "distribution": "internal",
