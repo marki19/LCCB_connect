@@ -47,6 +47,15 @@
       [
         "expo-build-properties",
         {
+          "android": {
+            "packagingOptions": {
+              "exclude": [
+                "**/lib/armeabi-v7a/*",
+                "**/lib/x86/*",
+                "**/lib/x86_64/*"
+              ]
+            }
+          },
           "ios": {
             "extraPods": [
               { "name": "GoogleUtilities", "modular_headers": true },
