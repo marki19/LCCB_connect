@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ComponentRef } from "react";
 import { Pressable, Text, View, TextInput, Platform, ActivityIndicator } from "react-native";
 import { Link, useRouter, useLocalSearchParams } from "expo-router";
-import { AtSign, Eye, EyeOff, KeyRound, Lock, ShieldCheck } from "lucide-react-native";
+import { AtSign, Eye, EyeOff, Globe, KeyRound, Lock, ShieldCheck } from "lucide-react-native";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
 import { supabase } from "../../src/lib/supabase";
@@ -586,26 +586,78 @@ export default function LoginScreen() {
 
           <Divider />
 
-          <Button
-            label="Continue with Google"
-            variant="secondary"
-            icon={GoogleIcon}
+          {/* Dedicated Branded Google Button */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Google"
             onPress={() => void signInWithGoogleHandler()}
             disabled={loading}
-            fullWidth
-            size="lg"
-          />
+            style={({ pressed }) => ({
+              minHeight: 50,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.surfaceElevated || "#FFFFFF",
+              borderRadius: RADIUS.md,
+              borderWidth: 1,
+              borderColor: colors.borderStrong || "#CBD5E1",
+              paddingHorizontal: SPACE.x4,
+              opacity: loading ? 0.6 : pressed ? 0.88 : 1,
+              transform: [{ scale: pressed && !loading ? 0.98 : 1 }],
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 2,
+              elevation: 1,
+            })}
+          >
+            <GoogleIcon size={20} />
+            <Text
+              style={{
+                marginLeft: SPACE.x3,
+                fontSize: 15,
+                fontWeight: "600",
+                color: colors.textPrimary,
+              }}
+            >
+              Continue with Google
+            </Text>
+          </Pressable>
 
           <View style={{ height: SPACE.x3 }} />
 
-          <Button
-            label="Explore as guest"
-            variant="ghost"
+          {/* Styled Guest Button */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Explore as guest"
             onPress={signInAsGuest}
             disabled={loading}
-            fullWidth
-            size="lg"
-          />
+            style={({ pressed }) => ({
+              minHeight: 46,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.surfaceSunken || "#F1F5F9",
+              borderRadius: RADIUS.md,
+              borderWidth: 1,
+              borderColor: colors.border,
+              paddingHorizontal: SPACE.x4,
+              opacity: loading ? 0.6 : pressed ? 0.85 : 1,
+              transform: [{ scale: pressed && !loading ? 0.98 : 1 }],
+            })}
+          >
+            <Globe size={16} color={colors.textSecondary} strokeWidth={2} />
+            <Text
+              style={{
+                marginLeft: SPACE.x2,
+                fontSize: 14,
+                fontWeight: "600",
+                color: colors.textSecondary,
+              }}
+            >
+              Explore as guest
+            </Text>
+          </Pressable>
         </View>
       )}
 

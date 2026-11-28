@@ -85,33 +85,38 @@ export default function AuthScaffold({
         <View style={{ alignItems: "center", marginBottom: SPACE.x6 }}>
           <View
             style={{
-              width: 60,
-              height: 60,
-              borderRadius: RADIUS.lg,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
+              width: 76,
+              height: 76,
+              borderRadius: 38,
+              backgroundColor: "#FFFFFF",
+              borderWidth: 1.5,
               borderColor: colors.border,
               alignItems: "center",
               justifyContent: "center",
               marginBottom: SPACE.x3,
+              shadowColor: colors.shadowStrong || "rgba(0,0,0,0.12)",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 10,
+              elevation: 3,
             }}
           >
             <Image
               source={require("../../../assets/images/logo-seal.png")}
-              style={{ width: 44, height: 44 }}
+              style={{ width: 62, height: 62 }}
               resizeMode="contain"
             />
           </View>
-          <Text style={{ fontSize: 18, fontWeight: "700", letterSpacing: -0.3, color: colors.textPrimary }}>
+          <Text style={{ fontSize: 20, fontWeight: "800", letterSpacing: -0.4, color: colors.textPrimary }}>
             LCCB Connect
           </Text>
-          <Text style={{ fontSize: 13, color: colors.textTertiary, marginTop: 2 }}>
+          <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: 2, fontWeight: "500" }}>
             La Consolacion College Bacolod
           </Text>
         </View>
       ) : null}
 
-      <Card padding={isDesktop ? SPACE.x8 : SPACE.x6} elevated={isDesktop}>
+      <Card padding={isDesktop ? SPACE.x8 : SPACE.x6} elevated={true}>
         {backLink}
         <Text
           style={{
