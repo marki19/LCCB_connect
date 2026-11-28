@@ -570,15 +570,6 @@ export default function LoginScreen() {
             }
           />
 
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel="Forgot password"
-            onPress={() => router.push("/(auth)/forgot-password")}
-            style={({ pressed }) => ({ alignSelf: "flex-end", marginTop: -SPACE.x2, marginBottom: SPACE.x5, opacity: pressed ? 0.6 : 1 })}
-          >
-            <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 13 }}>Forgot password?</Text>
-          </Pressable>
-
           <Button
             label={loading ? "Signing in..." : "Sign in"}
             onPress={() => void signInWithEmail()}
@@ -587,6 +578,20 @@ export default function LoginScreen() {
             fullWidth
             size="lg"
           />
+
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Forgot password"
+            onPress={() => router.push("/(auth)/forgot-password")}
+            style={({ pressed }) => ({
+              alignSelf: "flex-end",
+              marginTop: SPACE.x5,
+              paddingVertical: SPACE.x1,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 13 }}>Forgot password?</Text>
+          </Pressable>
 
           <Divider />
 
