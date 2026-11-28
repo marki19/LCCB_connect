@@ -46,6 +46,8 @@ temp_status.json
 *.tmp.*
 *.tmp
 
-# Generated native directories (ensures clean EAS cloud prebuild without Windows absolute paths)
-android/
-ios/
+# Generated native build outputs
+android/.gradle/
+android/build/
+android/app/build/
+android/.cxx/
