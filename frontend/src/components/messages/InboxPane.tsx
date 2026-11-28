@@ -9,7 +9,10 @@ import {
   ActivityIndicator,
   TextInput,
   StyleSheet,
+  Platform,
+  StatusBar,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ArrowLeft,
   SquarePen,
@@ -80,6 +83,11 @@ export default function InboxPane({
   const { colors } = useTheme();
   const { profile } = useAuth();
   const { showToast } = useToast();
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0
+  );
 
   const [tabChoice, setTabChoice] = useState<"chats" | "requests" | null>(null);
 
@@ -696,6 +704,7 @@ const handleTabChange = (value: string) => {
           {
             backgroundColor: colors.surface,
             borderBottomColor: colors.line,
+            paddingTop: topInset + SPACE.x3,
           },
         ]}
       >

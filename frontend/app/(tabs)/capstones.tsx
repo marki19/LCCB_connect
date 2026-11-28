@@ -11,7 +11,9 @@ import {
   Platform,
   useWindowDimensions,
   StyleSheet,
+  StatusBar,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   GraduationCap,
   Search as SearchIcon,
@@ -33,6 +35,11 @@ export default function CapstonesScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 768;
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0
+  );
 
   const [theses, setTheses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,7 +193,16 @@ export default function CapstonesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.surfacePage }]}>
       {/* Header Banner */}
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+            paddingTop: isDesktop ? 16 : topInset + 12,
+          },
+        ]}
+      >
         <View style={styles.headerTitleRow}>
           <View style={[styles.headerIconCircle, { backgroundColor: colors.surfaceSunken }]}>
             <GraduationCap size={24} color={colors.action} />

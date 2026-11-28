@@ -55,8 +55,8 @@ export default function TabsLayout() {
         <Tabs.Screen name="index" />
         <Tabs.Screen name="messages" />
         <Tabs.Screen name="notifications" />
-        <Tabs.Screen name="profile" options={{ href: null }} />
-        <Tabs.Screen name="discussions" options={{ href: null }} />
+        <Tabs.Screen name="profile" />
+        <Tabs.Screen name="discussions" />
         {/*
           Friends renders inside the shell (rail + top bar stay mounted), like
           Notifications, but is reached from the rail, the menu and
@@ -151,7 +151,7 @@ function MobileTabBar({
       style={[
         styles.mobileBar,
         {
-          paddingBottom: Math.max(insets.bottom, 8),
+          paddingBottom: Math.max(insets.bottom, Platform.OS === "android" ? 18 : 8),
           backgroundColor: colors.tabBarBg || colors.surface,
           borderTopColor: colors.line,
         },

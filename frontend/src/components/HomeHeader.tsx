@@ -6,6 +6,7 @@ import {
   Image,
   Platform,
   useWindowDimensions,
+  StatusBar,
 } from "react-native";
 import { Search, MessageSquare, UserPlus } from "lucide-react-native";
 import { router } from "expo-router";
@@ -83,6 +84,10 @@ export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
   const { colors } = useTheme();
   const isDesktopWeb = Platform.OS === "web" && width >= 768;
   const compact = width < 380;
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0
+  );
 
   // On desktop web, the top navigation bar is already rendered by _layout.tsx
   if (isDesktopWeb) {
@@ -93,7 +98,7 @@ export default function HomeHeader({ onMenuPress, unreadCount = 0 }: Props) {
     <View
       style={{
         backgroundColor: colors.surface,
-        paddingTop: insets.top + 6,
+        paddingTop: topInset + (Platform.OS === "android" ? 8 : 6),
         paddingBottom: SPACE.x2,
         paddingHorizontal: SPACE.x3,
         flexDirection: "row",

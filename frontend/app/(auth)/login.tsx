@@ -591,77 +591,28 @@ export default function LoginScreen() {
           <Divider />
 
           {/* Dedicated Branded Google Button */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Continue with Google"
+          <Button
+            label="Continue with Google"
+            icon={GoogleIcon}
+            variant="secondary"
+            size="lg"
+            fullWidth
             onPress={() => void signInWithGoogleHandler()}
             disabled={loading}
-            style={({ pressed }) => ({
-              minHeight: 50,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: colors.surfaceElevated || "#FFFFFF",
-              borderRadius: RADIUS.md,
-              borderWidth: 1,
-              borderColor: colors.borderStrong || "#CBD5E1",
-              paddingHorizontal: SPACE.x4,
-              opacity: loading ? 0.6 : pressed ? 0.88 : 1,
-              transform: [{ scale: pressed && !loading ? 0.98 : 1 }],
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.05,
-              shadowRadius: 2,
-              elevation: 1,
-            })}
-          >
-            <GoogleIcon size={20} />
-            <Text
-              style={{
-                marginLeft: SPACE.x3,
-                fontSize: 15,
-                fontWeight: "600",
-                color: colors.textPrimary,
-              }}
-            >
-              Continue with Google
-            </Text>
-          </Pressable>
+          />
 
           <View style={{ height: SPACE.x3 }} />
 
           {/* Styled Guest Button */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Explore as guest"
+          <Button
+            label="Explore as guest"
+            icon={Globe}
+            variant="ghost"
+            size="md"
+            fullWidth
             onPress={signInAsGuest}
             disabled={loading}
-            style={({ pressed }) => ({
-              minHeight: 46,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: colors.surfaceSunken || "#F1F5F9",
-              borderRadius: RADIUS.md,
-              borderWidth: 1,
-              borderColor: colors.border,
-              paddingHorizontal: SPACE.x4,
-              opacity: loading ? 0.6 : pressed ? 0.85 : 1,
-              transform: [{ scale: pressed && !loading ? 0.98 : 1 }],
-            })}
-          >
-            <Globe size={16} color={colors.textSecondary} strokeWidth={2} />
-            <Text
-              style={{
-                marginLeft: SPACE.x2,
-                fontSize: 14,
-                fontWeight: "600",
-                color: colors.textSecondary,
-              }}
-            >
-              Explore as guest
-            </Text>
-          </Pressable>
+          />
         </View>
       )}
 

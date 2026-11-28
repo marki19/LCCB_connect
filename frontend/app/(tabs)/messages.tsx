@@ -1,4 +1,5 @@
 import { View, Platform, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import InboxPane from "../../src/components/messages/InboxPane";
 import MessagesSplit from "../../src/components/messages/MessagesSplit";
@@ -15,6 +16,11 @@ export default function ChatsTabScreen() {
   const conversationId = Array.isArray(params.id) ? params.id[0] : params.id ?? null;
   const { width } = useWindowDimensions();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(
+    insets.bottom,
+    Platform.OS === "android" ? 18 : 8
+  );
 
   const isSplit = Platform.OS === "web" && width >= 900;
 
@@ -27,7 +33,7 @@ export default function ChatsTabScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surfacePage, paddingBottom: 64 }}>
+    <View style={{ flex: 1, backgroundColor: colors.surfacePage, paddingBottom: 56 + bottomInset }}>
       <InboxPane
         onSelect={(id) => router.push(`/messages/${id}`)}
         showBack={false}

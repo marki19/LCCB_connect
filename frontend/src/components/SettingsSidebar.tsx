@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   Linking,
   Alert,
+  StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -67,12 +68,10 @@ function MenuItem({ icon, label, danger, onPress }: MenuItemProps) {
       accessibilityLabel={label}
       style={({ pressed }: any) => [
         {
-          flexDirection: "row",
-          alignItems: "center",
+          width: "100%",
           minHeight: 46,
           paddingVertical: SPACE.x2,
           paddingHorizontal: SPACE.x4,
-          gap: SPACE.x3,
           cursor: "pointer",
           backgroundColor: pressed
             ? colors.hoverOverlay
@@ -84,18 +83,29 @@ function MenuItem({ icon, label, danger, onPress }: MenuItemProps) {
         focusRing(colors, focused),
       ]}
     >
-      {icon}
-      <Text
+      <View
         style={{
-          flex: 1,
-          ...TYPE.bodyStrong,
-          fontWeight: "500",
-          color: danger ? colors.destructive : colors.ink,
+          flexDirection: "row",
+          alignItems: "center",
+          width: "100%",
+          gap: SPACE.x3,
         }}
       >
-        {label}
-      </Text>
-      {!danger && <ChevronRight size={16} color={colors.inkFaint} />}
+        {icon}
+        <Text
+          numberOfLines={1}
+          style={{
+            flex: 1,
+            flexShrink: 1,
+            ...TYPE.bodyStrong,
+            fontWeight: "500",
+            color: danger ? colors.destructive : colors.ink,
+          }}
+        >
+          {label}
+        </Text>
+        {!danger && <ChevronRight size={16} color={colors.inkFaint} />}
+      </View>
     </Pressable>
   );
 }
@@ -124,6 +134,10 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
   const onClose = props.onClose || sidebarContext.closeSettingsSidebar;
 
   const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0
+  );
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { colors } = useTheme();
@@ -212,7 +226,7 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
           style={{
             position: "relative",
             overflow: "hidden",
-            paddingTop: insets.top + SPACE.x3,
+            paddingTop: topInset + SPACE.x3,
             paddingHorizontal: SPACE.x4,
             paddingBottom: SPACE.x5,
             backgroundColor: colors.brandSolid,
@@ -292,45 +306,52 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
               }
             }}
             style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              gap: SPACE.x3,
+              width: "100%",
               opacity: pressed ? 0.8 : 1,
             })}
           >
             <View
               style={{
-                width: 62,
-                height: 62,
-                borderRadius: 31,
+                flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: colors.heroLine,
-                borderWidth: 1,
-                borderColor: colors.heroLine,
+                width: "100%",
+                gap: SPACE.x3,
               }}
             >
-              <Avatar
-                name={displayName}
-                avatarUrl={profile?.avatar_url}
-                size={54}
-              />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                numberOfLines={1}
-                style={{ ...TYPE.title, color: colors.heroText, fontWeight: "700" }}
+              <View
+                style={{
+                  width: 62,
+                  height: 62,
+                  borderRadius: 31,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: colors.heroLine,
+                  borderWidth: 1,
+                  borderColor: colors.heroLine,
+                }}
               >
-                {displayName}
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={{ ...TYPE.caption, color: colors.heroTextMuted, marginTop: 2 }}
-              >
-                {profile?.department_name || "No department"} · {profile?.year_level || "—"}
-              </Text>
+                <Avatar
+                  name={displayName}
+                  avatarUrl={profile?.avatar_url}
+                  size={54}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ ...TYPE.title, color: colors.heroText, fontWeight: "700" }}
+                >
+                  {displayName}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{ ...TYPE.caption, color: colors.heroTextMuted, marginTop: 2 }}
+                >
+                  {profile?.department_name || "No department"} · {profile?.year_level || "—"}
+                </Text>
+              </View>
+              <ChevronRight size={18} color={colors.heroTextMuted} />
             </View>
-            <ChevronRight size={18} color={colors.heroTextMuted} />
           </Pressable>
         </View>
 

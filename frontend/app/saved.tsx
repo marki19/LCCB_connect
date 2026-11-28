@@ -13,7 +13,9 @@ import {
   TextInput,
   Pressable,
   Alert,
+  StatusBar,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppImage } from "../src/components/AppImage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -63,6 +65,11 @@ export default function SavedPostsScreen() {
   const { openSettingsSidebar } = useSettingsSidebar();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 768;
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0
+  );
 
   // Saved posts state
   const [posts, setPosts] = useState<Post[]>([]);
@@ -483,7 +490,13 @@ export default function SavedPostsScreen() {
         {/* Center / Right Column: Main Content Feed */}
         <View style={styles.mainFeedColumn}>
           {/* Header Row: Filter Title + Filter Button */}
-          <View style={[styles.feedHeaderRow, { borderBottomColor: colors.border }]}>
+          <View
+            style={[
+              styles.feedHeaderRow,
+              { borderBottomColor: colors.border },
+              !isDesktop && { paddingTop: topInset + 12 },
+            ]}
+          >
             {!isDesktop && (
               <TouchableOpacity
                 onPress={() => router.back()}

@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { ArrowRight } from "lucide-react-native";
 import { useTheme } from "../../contexts/ThemeContext";
-import { focusRing, RADIUS, SPACE, TYPE } from "../../lib/tokens";
+import { RADIUS, SPACE, TYPE } from "../../lib/tokens";
+import Button from "./Button";
 
 type EmptyStateProps = {
   title: string;
@@ -51,7 +51,6 @@ export default function EmptyState({
   };
 
   const palette = getPalette(tone);
-  const [actionFocused, setActionFocused] = useState(false);
   const glyph = compact ? 46 : 56;
 
   return (
@@ -103,35 +102,14 @@ export default function EmptyState({
       ) : null}
 
       {actionLabel && onAction ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={actionLabel}
+        <Button
+          variant="primary"
+          size="sm"
+          label={actionLabel}
+          iconRight={ArrowRight}
           onPress={onAction}
-          onFocus={() => setActionFocused(true)}
-          onBlur={() => setActionFocused(false)}
-          style={({ pressed }) => [
-            {
-              marginTop: SPACE.x5,
-              minHeight: 38,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: SPACE.x2,
-              borderRadius: RADIUS.sm,
-              backgroundColor: colors.brandSolid,
-              paddingHorizontal: SPACE.x4,
-              paddingVertical: SPACE.x2,
-              opacity: pressed ? 0.88 : 1,
-            },
-            focusRing(colors, actionFocused),
-          ]}
-        >
-          <Text
-            style={{ ...TYPE.caption, fontWeight: "700", fontSize: 13, color: colors.textOnBrandSolid }}
-          >
-            {actionLabel}
-          </Text>
-          <ArrowRight size={14} color={colors.textOnBrandSolid} />
-        </Pressable>
+          style={{ marginTop: SPACE.x5 }}
+        />
       ) : null}
     </View>
   );
