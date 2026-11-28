@@ -221,60 +221,64 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
           ...elevation("lg", colors),
         }}
       >
-        {/* Profile header */}
+        {/* Streamlined Profile Header on panel background */}
         <View
           style={{
-            position: "relative",
-            overflow: "hidden",
             paddingTop: topInset + SPACE.x3,
             paddingHorizontal: SPACE.x4,
-            paddingBottom: SPACE.x5,
-            backgroundColor: colors.brandSolid,
+            paddingBottom: SPACE.x3,
             borderBottomWidth: 1,
-            borderBottomColor: colors.heroLine,
+            borderBottomColor: colors.line,
           }}
         >
-          {/* Soft brand blooms — mirrors the profile hero band so the drawer
-              reads as part of the same family rather than a flat blue bar. */}
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              width: 220,
-              height: 220,
-              borderRadius: 110,
-              backgroundColor: colors.heroGlow,
-              opacity: 0.22,
-              top: -120,
-              right: -70,
-            }}
-          />
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              width: 150,
-              height: 150,
-              borderRadius: 75,
-              backgroundColor: colors.accentBright,
-              opacity: 0.12,
-              bottom: -100,
-              left: -40,
-            }}
-          />
-
-          {/* Context row: names the drawer, keeps the close button in reach */}
           <View
             style={{
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
-              marginBottom: SPACE.x4,
+              gap: SPACE.x3,
             }}
           >
-            <Text style={{ ...TYPE.micro, color: colors.heroTextMuted }}>
-              Settings &amp; privacy
-            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="View your profile"
+              onPress={() => {
+                if (profile?.id) {
+                  go(`/profile/${profile.id}`);
+                } else {
+                  go("/(tabs)/profile");
+                }
+              }}
+              style={({ pressed }) => ({
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: SPACE.x3,
+                minWidth: 0,
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <Avatar
+                name={displayName}
+                avatarUrl={profile?.avatar_url}
+                size={42}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ ...TYPE.bodyStrong, color: colors.ink, fontWeight: "700" }}
+                >
+                  {displayName}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{ ...TYPE.caption, color: colors.inkSoft, marginTop: 1 }}
+                >
+                  {profile?.department_name || "No department"} · {profile?.year_level || "—"}
+                </Text>
+              </View>
+            </Pressable>
+
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
@@ -285,74 +289,13 @@ export default function SettingsSidebar(props: SettingsSidebarProps) {
                 borderRadius: 17,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: colors.heroLine,
-                borderWidth: 1,
-                borderColor: colors.heroLine,
+                backgroundColor: colors.surfaceSunken,
                 opacity: pressed ? 0.7 : 1,
               })}
             >
-              <X size={18} color={colors.heroText} />
+              <X size={18} color={colors.ink} />
             </Pressable>
           </View>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="View your profile"
-            onPress={() => {
-              if (profile?.id) {
-                go(`/profile/${profile.id}`);
-              } else {
-                go("/(tabs)/profile");
-              }
-            }}
-            style={({ pressed }) => ({
-              width: "100%",
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                width: "100%",
-                gap: SPACE.x3,
-              }}
-            >
-              <View
-                style={{
-                  width: 62,
-                  height: 62,
-                  borderRadius: 31,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: colors.heroLine,
-                  borderWidth: 1,
-                  borderColor: colors.heroLine,
-                }}
-              >
-                <Avatar
-                  name={displayName}
-                  avatarUrl={profile?.avatar_url}
-                  size={54}
-                />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text
-                  numberOfLines={1}
-                  style={{ ...TYPE.title, color: colors.heroText, fontWeight: "700" }}
-                >
-                  {displayName}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={{ ...TYPE.caption, color: colors.heroTextMuted, marginTop: 2 }}
-                >
-                  {profile?.department_name || "No department"} · {profile?.year_level || "—"}
-                </Text>
-              </View>
-              <ChevronRight size={18} color={colors.heroTextMuted} />
-            </View>
-          </Pressable>
         </View>
 
         <ScrollView

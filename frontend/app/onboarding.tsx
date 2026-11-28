@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { ScrollView, View, Text, SafeAreaView, Pressable, StyleSheet } from "react-native";
+import { ScrollView, View, Text, SafeAreaView, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { ChevronRight } from "lucide-react-native";
+import { ChevronRight, ArrowLeft } from "lucide-react-native";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useTheme } from "../src/contexts/ThemeContext";
 import { useToast } from "../src/contexts/ToastContext";
@@ -243,18 +243,13 @@ export default function OnboardingScreen() {
             flex: 1,
             alignItems: "center",
             justifyContent: "center",
+            padding: SPACE.x6,
           }}
         >
-          <Reveal style={{ width: "100%", maxWidth: 540, alignSelf: "center" }}>
-            <Card style={{ padding: SPACE.x8, alignItems: "center" }}>
-              <Text style={{ ...TYPE.h1, color: colors.ink, textAlign: "center", marginBottom: SPACE.x4 }}>
-                {isSuperadmin ? "Superadmin access" : "Verify your identity"}
-              </Text>
-              <Text style={{ ...TYPE.body, color: colors.inkSoft, textAlign: "center" }}>
-                Loading your verification status…
-              </Text>
-            </Card>
-          </Reveal>
+          <ActivityIndicator size="small" color={colors.inkSoft} style={{ marginBottom: SPACE.x3 }} />
+          <Text style={{ ...TYPE.body, color: colors.inkSoft, textAlign: "center" }}>
+            Checking your verification status…
+          </Text>
         </View>
       </OnboardingWrapper>
     );
@@ -427,6 +422,24 @@ export default function OnboardingScreen() {
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: SPACE.x6 }}>
           <View style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
             <Reveal>
+              <Pressable
+                onPress={handleSkip}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                hitSlop={8}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: SPACE.x2,
+                  marginBottom: SPACE.x4,
+                  alignSelf: "flex-start",
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <ArrowLeft size={20} color={colors.ink} />
+                <Text style={{ ...TYPE.bodyStrong, color: colors.ink }}>Back</Text>
+              </Pressable>
+
               <Text style={{ ...TYPE.h1, color: colors.ink }}>What are you at LCCB?</Text>
               <Text style={{ ...TYPE.body, color: colors.inkSoft, marginTop: SPACE.x2, marginBottom: SPACE.x6 }}>
                 This decides who reviews your request.

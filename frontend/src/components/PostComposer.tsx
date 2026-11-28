@@ -46,7 +46,7 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
       ]}
     >
       {/* Top row: Avatar + Pill Input */}
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x4 }}>
         <Avatar name={activeName} avatarUrl={profile?.avatar_url} size={40} />
         <Pressable
           onPress={handlePrompt}
@@ -64,7 +64,6 @@ export default function PostComposer({ style, onPressPrompt }: PostComposerProps
               borderColor: colors.line,
               justifyContent: "center",
               paddingHorizontal: SPACE.x4,
-              marginLeft: SPACE.x3,
               cursor: "pointer",
               opacity: pressed ? 0.85 : 1,
               transform: [{ scale: pressed ? 0.98 : 1 }],

@@ -607,8 +607,8 @@ export default function LoginScreen() {
           <Button
             label="Explore as guest"
             icon={Globe}
-            variant="ghost"
-            size="md"
+            variant="secondary"
+            size="lg"
             fullWidth
             onPress={signInAsGuest}
             disabled={loading}

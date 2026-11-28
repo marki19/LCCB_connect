@@ -39,10 +39,10 @@ function palette(variant: ButtonVariant, colors: ThemeTokens) {
   switch (variant) {
     case "secondary":
       return {
-        bg: colors.surface,
+        bg: colors.surfaceElevated || colors.surface,
         bgHover: colors.surfaceSunken,
         bgPressed: colors.panelInset || colors.surfaceSunken,
-        border: colors.borderStrong,
+        border: colors.borderStrong || colors.border,
         text: colors.textPrimary,
         icon: colors.textSecondary,
       };
@@ -128,47 +128,51 @@ export default function Button({
         style,
       ]}
     >
-      <View
-        style={[
-          {
-            minHeight: height,
-            width: "100%",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: SPACE.x2,
-            borderRadius: RADIUS.md,
-            borderWidth: variant === "secondary" ? 1 : 0,
-            borderColor: p.border,
-            backgroundColor: inactive
-              ? colors.surfaceSunken
-              : hovered
-              ? p.bgHover
-              : p.bg,
-            paddingHorizontal: size === "sm" ? SPACE.x3 : SPACE.x4,
-            ...(variant === "primary" || variant === "danger" ? elevation("sm", colors) : {}),
-          },
-          focusRing(colors, focused),
-        ]}
-      >
-        {loading ? (
-          <ActivityIndicator accessibilityLabel="Loading" size="small" color={p.text} />
-        ) : Icon ? (
-          <Icon size={iconSize} color={inactive ? colors.textDisabled : p.icon} strokeWidth={2.2} />
-        ) : null}
-        <Text
-          style={{
-            ...(size === "sm" ? TYPE.caption : TYPE.bodyStrong),
-            fontWeight: "600",
-            color: inactive ? colors.textDisabled : p.text,
-          }}
+      {({ pressed }) => (
+        <View
+          style={[
+            {
+              minHeight: height,
+              width: "100%",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: SPACE.x2,
+              borderRadius: RADIUS.md,
+              borderWidth: variant === "secondary" ? 1 : 0,
+              borderColor: p.border,
+              backgroundColor: inactive
+                ? colors.surfaceSunken
+                : pressed
+                ? p.bgPressed
+                : hovered
+                ? p.bgHover
+                : p.bg,
+              paddingHorizontal: size === "sm" ? SPACE.x3 : SPACE.x4,
+              ...(variant === "primary" || variant === "danger" ? elevation("sm", colors) : {}),
+            },
+            focusRing(colors, focused),
+          ]}
         >
-          {label}
-        </Text>
-        {IconRight && !loading ? (
-          <IconRight size={iconSize} color={inactive ? colors.textDisabled : p.icon} strokeWidth={2.2} />
-        ) : null}
-      </View>
+          {loading ? (
+            <ActivityIndicator accessibilityLabel="Loading" size="small" color={p.text} />
+          ) : Icon ? (
+            <Icon size={iconSize} color={inactive ? colors.textDisabled : p.icon} strokeWidth={2.2} />
+          ) : null}
+          <Text
+            style={{
+              ...(size === "sm" ? TYPE.caption : TYPE.bodyStrong),
+              fontWeight: "600",
+              color: inactive ? colors.textDisabled : p.text,
+            }}
+          >
+            {label}
+          </Text>
+          {IconRight && !loading ? (
+            <IconRight size={iconSize} color={inactive ? colors.textDisabled : p.icon} strokeWidth={2.2} />
+          ) : null}
+        </View>
+      )}
     </Pressable>
   );
 }

@@ -26,7 +26,6 @@ import HomeHeader from "../../src/components/HomeHeader";
 import PostComposer from "../../src/components/PostComposer";
 import PostCard from "../../src/components/PostCard";
 import RepostCard from "../../src/components/RepostCard";
-import SettingsSidebar from "../../src/components/SettingsSidebar";
 import Avatar from "../../src/components/Avatar";
 import SnapRail from "../../src/components/snaps/SnapRail";
 import SnapViewer from "../../src/components/snaps/SnapViewer";
@@ -35,6 +34,7 @@ import { getSnapRail, type SnapGroup } from "../../src/lib/snaps";
 import { usePrefetchImages } from "../../src/hooks/usePrefetchImages";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useTheme } from "../../src/contexts/ThemeContext";
+import { useSettingsSidebar } from "../../src/contexts/SettingsSidebarContext";
 import { useFocusEffect, useRouter } from "expo-router";
 import { apiFetch, apiJson } from "../../src/lib/api";
 import {
@@ -103,6 +103,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { profile } = useAuth();
   const { colors } = useTheme();
+  const { openSettingsSidebar } = useSettingsSidebar();
   const isGuest = profile?.role === "guest";
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 1200;
@@ -112,7 +113,6 @@ export default function HomeScreen() {
   const [activePeers, setActivePeers] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { activeCategory: filter, setCategory: setFilter } = useFeedFilter();
@@ -361,7 +361,7 @@ export default function HomeScreen() {
       const deltaX = touch.pageX - touchStartRef.current.x;
       const deltaY = Math.abs(touch.pageY - touchStartRef.current.y);
       if (deltaX > 40 && deltaY < 60) {
-        setSidebarOpen(true);
+        openSettingsSidebar();
       }
     }
     touchStartRef.current = null;
@@ -374,7 +374,7 @@ export default function HomeScreen() {
       onTouchEnd={handleTouchEnd}
     >
       <HomeHeader
-        onMenuPress={() => setSidebarOpen(true)}
+        onMenuPress={openSettingsSidebar}
         unreadCount={unreadCount}
       />
 
@@ -548,8 +548,6 @@ export default function HomeScreen() {
           />
         </View>
       </View>
-
-      <SettingsSidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <QuickSnapComposer
         visible={snapComposerOpen}

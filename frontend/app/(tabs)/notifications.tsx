@@ -16,6 +16,7 @@ import {
   Bell,
   Megaphone,
   AtSign,
+  ArrowLeft,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/contexts/ThemeContext";
@@ -116,6 +117,32 @@ export default function NotificationsScreen() {
           paddingBottom: SPACE.x3,
         }}
       >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.x2, marginBottom: SPACE.x3 }}>
+          <Pressable
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/(tabs)/");
+              }
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            hitSlop={8}
+            style={({ pressed }) => ({
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.surfaceSunken,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <ArrowLeft size={20} color={colors.ink} />
+          </Pressable>
+        </View>
+
         <View
           style={{
             flexDirection: "row",

@@ -178,9 +178,7 @@ function MobileTabBar({
               },
             ]}
           >
-            {focused && (
-              <View style={[styles.mobileActiveIndicator, { backgroundColor: colors.brand }]} />
-            )}
+            {/* Tab icon in bubble */}
             <View
               style={[
                 styles.iconBubble,
@@ -237,18 +235,11 @@ const styles = StyleSheet.create({
     minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
-  },
-  mobileActiveIndicator: {
-    position: "absolute",
-    top: -6,
-    width: 24,
-    height: 3,
-    borderRadius: 1.5,
+    gap: 4,
   },
   iconBubble: {
-    width: 40,
-    height: 30,
+    width: 44,
+    height: 28,
     borderRadius: RADIUS.md,
     alignItems: "center",
     justifyContent: "center",
@@ -270,6 +261,6 @@ const styles = StyleSheet.create({
   },
   mobileLabel: {
     fontSize: 10,
-    letterSpacing: -0.2,
+    textAlign: "center",
   },
 });
