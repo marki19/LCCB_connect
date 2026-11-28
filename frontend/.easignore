@@ -46,6 +46,11 @@ temp_status.json
 *.tmp.*
 *.tmp
 
+# Environment variables (defined securely in eas.json or EAS secrets)
+.env
+.env.*
+!.env.example
+
 # Generated native build outputs
 android/.gradle/
 android/build/
