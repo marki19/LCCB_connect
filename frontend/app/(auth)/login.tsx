@@ -137,8 +137,8 @@ export default function LoginScreen() {
           searchParams.get("error");
 
         if (oauthError) {
-          await supabase.auth.signOut().catch(() => {});
-          await clearSession().catch(() => {});
+          await supabase.auth.signOut().catch(() => { });
+          await clearSession().catch(() => { });
           if (active) {
             setIsOAuthReturning(false);
             setGeneralError("Google sign-in was cancelled or failed. Please try again.");
@@ -180,7 +180,7 @@ export default function LoginScreen() {
                 if (data?.session?.access_token) {
                   finish(data.session.access_token);
                 }
-              } catch {}
+              } catch { }
             }, 250);
           });
         }
@@ -223,7 +223,7 @@ export default function LoginScreen() {
           return;
         } else {
           // No access token received - OAuth did not produce a session
-          await supabase.auth.signOut().catch(() => {});
+          await supabase.auth.signOut().catch(() => { });
           if (active) {
             setIsOAuthReturning(false);
             setGeneralError("Google sign-in was cancelled or failed. Please try again.");
@@ -231,7 +231,7 @@ export default function LoginScreen() {
         }
       } catch (err: any) {
         // Sign out of Supabase client on error (e.g. personal email rejected)
-        await supabase.auth.signOut().catch(() => {});
+        await supabase.auth.signOut().catch(() => { });
         if (active) {
           setIsOAuthReturning(false);
           setGeneralError(err?.message || "Google sign-in failed. Please try again.");
@@ -258,8 +258,8 @@ export default function LoginScreen() {
     try {
       if (Platform.OS === "web") {
         // Clear any existing session first so previous accounts don't bleed into new sign-in
-        await clearSession().catch(() => {});
-        await supabase.auth.signOut().catch(() => {});
+        await clearSession().catch(() => { });
+        await supabase.auth.signOut().catch(() => { });
 
         if (typeof window !== "undefined") {
           window.localStorage?.removeItem("lccb_auth_session");
@@ -442,9 +442,9 @@ export default function LoginScreen() {
   );
 
   return (
-    <AuthScaffold 
-      title="Welcome back!" 
-      subtitle="Sign in to LCCB Connect" 
+    <AuthScaffold
+      title="Welcome back!"
+      subtitle="Sign in to LCCB Connect"
       footer={footer}
       backgroundIntensity="high"
     >
@@ -579,19 +579,35 @@ export default function LoginScreen() {
             size="lg"
           />
 
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel="Forgot password"
-            onPress={() => router.push("/(auth)/forgot-password")}
-            style={({ pressed }) => ({
-              alignSelf: "flex-end",
-              marginTop: SPACE.x5,
-              paddingVertical: SPACE.x1,
-              opacity: pressed ? 0.6 : 1,
-            })}
+          <View
+            style={{
+              width: "100%",
+              alignItems: "flex-end",
+              marginTop: SPACE.x4,
+            }}
           >
-            <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 13 }}>Forgot password?</Text>
-          </Pressable>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Forgot password"
+              onPress={() => router.push("/(auth)/forgot-password")}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                paddingVertical: SPACE.x1,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontWeight: "600",
+                  fontSize: 13,
+                  textAlign: "right",
+                }}
+              >
+                Forgot password?
+              </Text>
+            </Pressable>
+          </View>
 
           <Divider />
 
