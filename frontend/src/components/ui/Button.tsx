@@ -119,12 +119,24 @@ export default function Button({
       onHoverOut={() => setHovered(false)}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
+      android_ripple={
+        inactive
+          ? undefined
+          : {
+              color:
+                variant === "primary" || variant === "danger"
+                  ? "rgba(255, 255, 255, 0.2)"
+                  : "rgba(100, 100, 100, 0.14)",
+              borderless: false,
+              foreground: true,
+            }
+      }
       style={({ pressed }) => [
         {
           alignSelf: fullWidth ? "stretch" : "flex-start",
           width: fullWidth ? "100%" : undefined,
-          opacity: inactive ? 0.7 : pressed ? 0.88 : 1,
-          transform: [{ scale: pressed && !inactive ? 0.98 : 1 }],
+          opacity: inactive ? 0.65 : pressed ? 0.92 : 1,
+          transform: [{ scale: pressed && !inactive ? 0.965 : 1 }],
           cursor: Platform.OS === "web" ? (inactive ? "default" : "pointer") : undefined,
         } as any,
         style,
@@ -142,7 +154,7 @@ export default function Button({
               gap: SPACE.x2,
               borderRadius: RADIUS.md,
               borderWidth: variant === "secondary" ? 1 : 0,
-              borderColor: p.border,
+              borderColor: pressed && variant === "secondary" ? (colors.primary || colors.brand) : p.border,
               backgroundColor: inactive
                 ? colors.surfaceSunken
                 : pressed
@@ -151,7 +163,7 @@ export default function Button({
                 ? p.bgHover
                 : p.bg,
               paddingHorizontal: size === "sm" ? SPACE.x3 : SPACE.x4,
-              ...(variant === "primary" || variant === "danger" ? elevation("sm", colors) : {}),
+              ...((variant === "primary" || variant === "danger") && !pressed ? elevation("sm", colors) : {}),
             },
             focusRing(colors, focused),
           ]}

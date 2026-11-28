@@ -288,18 +288,23 @@ export default function LoginScreen() {
       }
 
       // Native Google Sign-In
+      console.log("[GoogleAuth] Initializing Google Sign-In...");
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      console.log("[GoogleAuth] Play Services check passed.");
 
       const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
       if (!webClientId) {
         throw new Error("Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID configuration");
       }
 
+      console.log("[GoogleAuth] Configuring with webClientId:", webClientId);
       GoogleSignin.configure({
         webClientId,
       });
 
+      console.log("[GoogleAuth] Calling GoogleSignin.signIn()...");
       const response = await GoogleSignin.signIn();
+      console.log("[GoogleAuth] signIn response:", JSON.stringify(response));
 
       if (response.type !== "success" || !response.data?.idToken) {
         throw new Error("No ID token received from Google");
@@ -319,6 +324,7 @@ export default function LoginScreen() {
         return;
       }
     } catch (err: any) {
+      console.error("[GoogleAuthError]", err, "code:", err?.code, "message:", err?.message);
       if (err.code === "SIGN_IN_CANCELLED") {
         setLoading(false);
         return;
