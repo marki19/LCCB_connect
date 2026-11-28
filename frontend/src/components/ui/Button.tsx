@@ -4,6 +4,7 @@ import {
   Pressable,
   Text,
   View,
+  Platform,
   type ViewStyle,
 } from "react-native";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -124,7 +125,8 @@ export default function Button({
           width: fullWidth ? "100%" : undefined,
           opacity: inactive ? 0.7 : pressed ? 0.88 : 1,
           transform: [{ scale: pressed && !inactive ? 0.98 : 1 }],
-        },
+          cursor: Platform.OS === "web" ? (inactive ? "default" : "pointer") : undefined,
+        } as any,
         style,
       ]}
     >
