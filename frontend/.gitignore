@@ -48,6 +48,10 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Continuous Native Generation (CNG)
+android/
+ios/
+
 # native build artifacts
 .gradle/
 android/.gradle/

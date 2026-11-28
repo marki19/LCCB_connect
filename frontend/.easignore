@@ -51,6 +51,10 @@ temp_status.json
 .env.*
 !.env.example
 
+# Native generated directories (Continuous Native Generation)
+android/
+ios/
+
 # Generated native build outputs
 android/.gradle/
 android/build/

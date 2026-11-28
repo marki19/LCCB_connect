@@ -7,11 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.lccb.connect"
@@ -52,15 +47,6 @@
       [
         "expo-build-properties",
         {
-          "android": {
-            "packagingOptions": {
-              "exclude": [
-                "**/lib/armeabi-v7a/*",
-                "**/lib/x86/*",
-                "**/lib/x86_64/*"
-              ]
-            }
-          },
           "ios": {
             "extraPods": [
               {
@@ -79,7 +65,16 @@
           }
         }
       ],
-      "expo-splash-screen"
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
+        }
+      ],
+      "expo-image"
     ],
     "extra": {
       "router": {

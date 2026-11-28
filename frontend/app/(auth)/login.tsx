@@ -291,9 +291,10 @@ export default function LoginScreen() {
 
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
-      const webClientId =
-        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
-        "433156229202-6rn0jidd204jmnqr0pbupibma62cn8eu.apps.googleusercontent.com";
+      const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+      if (!webClientId) {
+        throw new Error("Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID configuration");
+      }
 
       GoogleSignin.configure({
         webClientId,
