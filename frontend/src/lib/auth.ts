@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { GoogleSignin } from "./googleAuth";
 import {
   clearSession,
   getRefreshToken,
@@ -37,13 +38,10 @@ export async function logout(): Promise<void> {
       supabase.auth.signOut(),
     ]);
   } finally {
-    if (Platform.OS !== "web") {
-      try {
-        const { GoogleSignin } = await import("@react-native-google-signin/google-signin");
-        await GoogleSignin.signOut();
-      } catch {
-        // Ignored if not signed in via Google or module unavailable
-      }
+    try {
+      await GoogleSignin.signOut();
+    } catch {
+      // Ignored if not signed in via Google or module unavailable
     }
     await clearSession();
   }

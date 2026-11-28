@@ -19,6 +19,7 @@ import Alert from "../../src/components/ui/Alert";
 import Button from "../../src/components/ui/Button";
 import TextField from "../../src/components/ui/TextField";
 import GoogleIcon from "../../src/components/icons/GoogleIcon";
+import { GoogleSignin } from "../../src/lib/googleAuth";
 import { RADIUS, SPACE } from "../../src/lib/tokens";
 
 function Divider() {
@@ -286,9 +287,7 @@ export default function LoginScreen() {
         return;
       }
 
-      // Dynamic import to avoid breaking Expo Go (requires dev build)
-      const { GoogleSignin } = await import("@react-native-google-signin/google-signin");
-
+      // Native Google Sign-In
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
       const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
