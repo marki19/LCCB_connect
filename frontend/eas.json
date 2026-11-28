@@ -9,6 +9,11 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gazmudflyntrlvmemkrc.supabase.co",
+        "EXPO_PUBLIC_API_URL": "https://lccb-connect.onrender.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "433156229202-6rn0jidd204jmnqr0pbupibma62cn8eu.apps.googleusercontent.com"
+      },
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
@@ -18,7 +23,12 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gazmudflyntrlvmemkrc.supabase.co",
+        "EXPO_PUBLIC_API_URL": "https://lccb-connect.onrender.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "433156229202-6rn0jidd204jmnqr0pbupibma62cn8eu.apps.googleusercontent.com"
+      }
     }
   },
   "submit": {
